@@ -1,0 +1,43 @@
+%define _enable_debug_packages 0
+%define _unpackaged_files_terminate_build 0
+
+Summary: A miscallaneous set of Nokia OHM plugins.
+Name: ohm-plugins-misc
+Version: ##__VERSION__##
+Release: 1
+License: Proprietary
+Group: System Environment/Daemons
+URL: http://127.0.0.1
+Source0: %{name}-%{version}.tar.gz
+BuildArch: ##__ARCH__##
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
+BuildRequires: ohm-devel, dres-devel
+Requires: ohm, ohm-plugin-core, dres
+
+%description
+A miscallaneous set of OHM plugins by Nokia.
+
+%prep
+%setup -q -n ##__TARDIR__##
+
+%build
+export CFLAGS="-O0 -g3"
+%configure --disable-static
+make
+
+%install
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
+%makeinstall
+
+
+%clean
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
+
+%files
+%defattr(-,root,root,-)
+%{_libdir}/ohm/libohm_*.so
+
+%changelog
+* Wed Jul 9 2008 Krisztian Litkey <kli@localhost.localdomain> - 
+- Initial build.
+

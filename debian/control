@@ -1,0 +1,15 @@
+Source: ohm-plugins-misc
+Section: utils
+Priority: optional
+Maintainer: Krisztian Litkey <krisztian.litkey@nokia.com>
+Standards-Version: 3.7.2
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm, ohm-dev
+
+Package: ohm-plugins-misc
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, ohm-plugin-core
+Description: Miscallaneous OHM Nokia plugins.
+ OHM Nokia miscallaneous plugins.
+ .
+ OHM Nokia miscallaneous plugins.
+
