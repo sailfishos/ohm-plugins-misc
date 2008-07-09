@@ -41,7 +41,8 @@ $(TARBALL):
 	pushd $(TOPDIR) && make distclean || : && ./autogen.sh && popd && \
 	pushd $(TOPDIR)/.. && \
 	tar -cvzf /tmp/$(notdir $@) \
-	    --exclude '.*/fedora/.*.tar.gz' $(notdir $(TARDIR)) && \
+	    --exclude '*/fedora' \
+	    --exclude '*/.git' $(notdir $(TARDIR)) && \
 	mv /tmp/$(notdir $@) $@
 
 rmtar:
