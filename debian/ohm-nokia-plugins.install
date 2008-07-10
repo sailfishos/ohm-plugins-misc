@@ -1,5 +1,5 @@
-debian/tmp/usr/lib/ohm/libohm_console.so /usr/lib/ohm
-debian/tmp/usr/lib/ohm/libohm_playback.so /usr/lib/ohm
-debian/tmp/usr/lib/ohm/libohm_signaling.so /usr/lib/ohm
-debian/tmp/usr/lib/ohm/libohm_hal.so /usr/lib/oh
-debian/tmp/usr/lib/ohm/libohm_accessories.so /usr/lib/ohm
+usr/lib/ohm/libohm_console.so
+usr/lib/ohm/libohm_playback.so
+usr/lib/ohm/libohm_signaling.so
+usr/lib/ohm/libohm_hal.so
+usr/lib/ohm/libohm_accessories.so
