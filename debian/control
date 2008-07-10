@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: Krisztian Litkey <krisztian.litkey@nokia.com>
 Standards-Version: 3.7.2
-Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev, libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev, libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev, libtrace-dev
 
 Package: ohm-plugins-misc
 Architecture: any
