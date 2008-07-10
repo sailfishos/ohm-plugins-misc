@@ -27,7 +27,7 @@ AC_PATH_PROG(GLIB_GENMARSHAL, glib-genmarshal)
 
 # Enable extra GCC flags.
 if test "$GCC" = "yes"; then
-    CPPFLAGS="$CPPFLAGS -Wall -Wformat"
+    CPPFLAGS="$CPPFLAGS -Wall -Wformat -Wextra"
 fi
 
 # Checks for header files.
