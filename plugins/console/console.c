@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -253,7 +254,7 @@ OHM_EXPORTABLE(int, console_open, (char *address,
     console_t          *c = NULL;
     struct sockaddr_in  sin;
     char                addr[64], *portp, *end;
-    int                 len, reuse;
+    int                 len, reuse, flags;
     GIOCondition        events;
 
     if ((portp = strchr(address, ':')) == NULL)
@@ -286,6 +287,11 @@ OHM_EXPORTABLE(int, console_open, (char *address,
     
     reuse = 1;
     setsockopt(c->sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+
+    if ((flags = fcntl(c->sock, F_GETFD, 0)) == 0) {
+        flags |= FD_CLOEXEC;
+        fcntl(c->sock, F_SETFD, flags);
+    }
     
     if (c->endpoint == NULL || c->sock < 0)
         goto fail;
@@ -568,13 +574,18 @@ console_accept(GIOChannel *source, GIOCondition condition, gpointer data)
     console_t          *c;
     struct sockaddr_in  addr;
     socklen_t           addrlen = sizeof(addr);
-    int                 sock;
+    int                 sock, flags;
 
     if (condition != G_IO_IN)
         return TRUE;
     
     if ((sock = accept(lc->sock, (struct sockaddr *)&addr, &addrlen)) < 0)
         return TRUE;
+    
+    if ((flags = fcntl(lc->sock, F_GETFD, 0)) == 0) {
+        flags |= FD_CLOEXEC;
+        fcntl(lc->sock, F_SETFD, flags);
+    }
     
     if (lc->nchild > 1 && !(lc->flags & CONSOLE_MULTIPLE)) {
         write(sock, BUSY_MESSAGE, sizeof(BUSY_MESSAGE) - 1);
