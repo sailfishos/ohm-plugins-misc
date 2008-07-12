@@ -27,8 +27,10 @@
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin-debug.h>
 
+#if 0
 #include <dres/dres.h>
 #include <dres/variables.h>
+#endif
 
 typedef struct _hal_plugin {
     LibHalContext *hal_ctx;
