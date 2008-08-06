@@ -183,7 +183,7 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi, LibHalProperty
 static gboolean process_decoration(hal_plugin *plugin, decorator *dec, gboolean added, gboolean removed, const gchar *udi)
 {
     gboolean match = FALSE;
-    printf("> process_decoration\n");
+    OHM_DEBUG(DBG_FACTS,"> process_decoration\n");
 
     if (has_udi(dec, udi)) {
         DBusError error;
@@ -230,7 +230,7 @@ static void
 hal_capability_added_cb (LibHalContext *ctx,
         const char *udi, const char *capability)
 {
-    printf( "> hal_capability_added_cb: udi '%s', capability: '%s'\n", udi, capability);
+    OHM_DEBUG(DBG_FACTS, "> hal_capability_added_cb: udi '%s', capability: '%s'\n", udi, capability);
     /* TODO */
 }
 
@@ -238,7 +238,7 @@ static void
 hal_capability_lost_cb (LibHalContext *ctx,
         const char *udi, const char *capability)
 {
-    printf( "> hal_capability_lost_cb: udi '%s', capability: '%s'\n", udi, capability);
+    OHM_DEBUG(DBG_FACTS, "> hal_capability_lost_cb: udi '%s', capability: '%s'\n", udi, capability);
     /* TODO */
 }
 
@@ -254,7 +254,7 @@ hal_device_added_cb (LibHalContext *ctx,
     GSList *e;
     gboolean match = FALSE;
 
-    printf( "> hal_device_added_cb: udi '%s'\n", udi);
+    OHM_DEBUG(DBG_FACTS, "> hal_device_added_cb: udi '%s'\n", udi);
     dbus_error_init(&error);
 
 #if OPTIMIZED
@@ -268,7 +268,7 @@ hal_device_added_cb (LibHalContext *ctx,
     }
 
     /* see if the device has a capability that someone is interested in */
-    printf("decorators: '%u'\n", g_slist_length(plugin->decorators));
+    OHM_DEBUG(DBG_FACTS,"decorators: '%u'\n", g_slist_length(plugin->decorators));
     
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
@@ -277,13 +277,13 @@ hal_device_added_cb (LibHalContext *ctx,
 #else
         if (libhal_device_query_capability(plugin->hal_ctx, udi, dec->capability, &error)) {
 #endif
-            printf("device '%s' has capability '%s'\n", udi, dec->capability);
+            OHM_DEBUG(DBG_FACTS,"device '%s' has capability '%s'\n", udi, dec->capability);
             match = TRUE;
             dec->devices = g_slist_prepend(dec->devices, g_strdup(udi));
             process_decoration(plugin, dec, TRUE, FALSE, udi);
         }
         else {
-            printf("device '%s' doesn't have capability '%s'\n", udi, dec->capability);
+            OHM_DEBUG(DBG_FACTS,"device '%s' doesn't have capability '%s'\n", udi, dec->capability);
         }
     }
 
@@ -305,7 +305,7 @@ hal_device_removed_cb (LibHalContext *ctx,
     GSList *orig = NULL;
     GSList *e;
 
-    printf( "> hal_device_removed_cb: udi '%s'\n", udi);
+    OHM_DEBUG(DBG_FACTS, "> hal_device_removed_cb: udi '%s'\n", udi);
     
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
@@ -316,7 +316,7 @@ hal_device_removed_cb (LibHalContext *ctx,
                 /* FIXME: free the UDI? */
             }
             else {
-                printf( "Device was not found from the decorator list!\n");
+                OHM_DEBUG(DBG_FACTS, "Device was not found from the decorator list!\n");
             }
         }
     }
@@ -335,7 +335,7 @@ static gboolean process_modified_properties(gpointer data)
     hal_plugin *plugin = (hal_plugin *) data;
     GSList *e = NULL;
 
-    printf( "> process_modified_properties\n");
+    OHM_DEBUG(DBG_FACTS, "> process_modified_properties\n");
 
     for (e = plugin->modified_properties; e != NULL; e = g_slist_next(e)) {
 
@@ -370,7 +370,7 @@ hal_property_modified_cb (LibHalContext *ctx,
     hal_modified_property *modified_property = NULL;
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
 
-    printf("> hal_property_modified_cb: udi '%s', key '%s', %s, %s\n",
+    OHM_DEBUG(DBG_FACTS,"> hal_property_modified_cb: udi '%s', key '%s', %s, %s\n",
               udi, key,
               is_removed ? "removed" : "not removed",
               is_added ? "added" : "not added");
@@ -455,7 +455,7 @@ hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
     DBG_HAL   = flag_hal;
     DBG_FACTS = flag_facts;
 
-    printf( "Initializing the HAL plugin\n");
+    OHM_DEBUG(DBG_FACTS, "Initializing the HAL plugin\n");
     
     if (!plugin) {
         return NULL;
@@ -494,11 +494,11 @@ hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
 error:
 
     if (dbus_error_is_set(&error)) {
-        printf( "Error initializing the HAL plugin. '%s': '%s'\n",
+        OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin. '%s': '%s'\n",
                   error.name, error.message);
     }
     else {
-        printf( "Error initializing the HAL plugin\n");
+        OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin\n");
     }
 
     return NULL;
