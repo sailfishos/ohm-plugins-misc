@@ -104,7 +104,7 @@ static gboolean has_udi(decorator *dec, const gchar *udi)
     return FALSE;
 }
 
-static OhmFact * create_fact(hal_plugin *plugin, const char *udi, LibHalPropertySet *properties)
+static OhmFact * create_fact(hal_plugin *plugin, const char *udi, const char *capability, LibHalPropertySet *properties)
 {
     /* Create an OhmFact based on the properties of a HAL object */
 
@@ -114,12 +114,16 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi, LibHalProperty
     gchar *escaped_udi = escape_udi(udi);
     GValue *val = NULL;
 
+#if 0
     if (escaped_udi == NULL)
         return NULL;
 
     fact = ohm_fact_new(escaped_udi);
     OHM_DEBUG(DBG_FACTS, "created fact '%s' at '%p'", escaped_udi, fact);
     g_free(escaped_udi);
+#else
+    fact = ohm_fact_new(capability);
+#endif
 
     if (!fact)
         return NULL;
@@ -204,7 +208,7 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec, gboolean 
 
         }
 
-        fact = create_fact(plugin, udi, properties);
+        fact = create_fact(plugin, udi, dec->capability, properties);
         dec->cb(fact, dec->capability, added, removed, dec->user_data);
 
         libhal_free_property_set(properties);

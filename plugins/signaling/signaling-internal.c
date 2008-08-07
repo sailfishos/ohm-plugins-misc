@@ -478,7 +478,7 @@ send_ipc_signal(gpointer data)
         gchar *f = i->data;
         GSList *ohm_facts = ohm_fact_store_get_facts_by_name(fs, f);
         
-        printf("key: %s, facts: %s\n", f, ohm_facts ? "yes" : "ERROR: NO FACTS!");
+        /* printf("key: %s, facts: %s\n", f, ohm_facts ? "yes" : "ERROR: NO FACTS!"); */
 
         if (!ohm_facts)
             continue;
@@ -508,7 +508,7 @@ send_ipc_signal(gpointer data)
             OhmFact *of = j->data;
             GSList *fields = NULL;
 
-            printf("starting to process OhmFact '%p'\n", of);
+            /* printf("starting to process OhmFact '%p'\n", of); */
         
             /* open fact_struct_iter */
             if (!dbus_message_iter_open_container(&fact_iter, DBUS_TYPE_ARRAY,
@@ -531,7 +531,7 @@ send_ipc_signal(gpointer data)
 
                 sig[0] = sig_c;
                 
-                printf("Field name: %s\n", field_name);
+                /* printf("Field name: %s\n", field_name); */
 
                 if (dbus_type == DBUS_TYPE_INVALID) {
                     /* unsupported data type */
