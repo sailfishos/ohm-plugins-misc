@@ -8,10 +8,14 @@
 
 #include "signaling.h"
 
+#define ONLY_ONE_TRANSACTION 1
+
 GSList         *enforcement_points = NULL;
 DBusConnection *connection;
 GHashTable     *transactions;
 GQueue         *inq = NULL;
+    
+static gboolean process_inq(gpointer data);
 
     static Transaction *
 transaction_lookup(guint txid)
@@ -1232,8 +1236,12 @@ transaction_complete(Transaction *self)
     
 #ifdef ONLY_ONE_TRANSACTION
     /* go on and process the next transaction */
-    if (!g_queue_is_empty(inq))
-        g_idle_add(process_inq, NULL);
+    if (!g_queue_is_empty(inq)) {
+        g_print("transaction queue '%p' not empty (%i left), scheduling processing\n",
+                inq, g_queue_get_length(inq));
+        /* Let's not delay the processing because of test issues :-) */
+        process_inq(NULL);
+    }
 #endif
 }
 
@@ -1249,12 +1257,13 @@ timeout_transaction(gpointer data)
 process_inq(gpointer data)
 {
     /*
-     * Runs in the idle loop, sends out the decisions, checks if the
+     * Runs (mostly) in the idle loop, sends out the decisions, checks if the
      * transactions have been completed 
      */
 
     GSList           *e = NULL;
     gboolean        ret = TRUE;
+    Transaction *t      = NULL;
 
     g_print("> process_inq\n");
 
@@ -1263,10 +1272,18 @@ process_inq(gpointer data)
      */
 #ifndef ONLY_ONE_TRANSACTION
     while (!g_queue_is_empty(inq)) {
-#else
-
 #endif
-    Transaction *t = g_queue_pop_head(inq);
+
+    /* printf("Before popping, inq: '%p', length: '%i'\n", inq, g_queue_get_length(inq)); */
+
+    if (inq == NULL || g_queue_is_empty(inq)) {
+        printf("Error! Nothing to process, even though processing was scheduled.\n");
+        return FALSE;
+    }
+
+    t = g_queue_pop_head(inq);
+    
+    /* printf("After popping, inq: '%p', length: '%i'\n", inq, g_queue_get_length(inq)); */
 
     g_hash_table_insert(transactions, &t->txid, t);
 

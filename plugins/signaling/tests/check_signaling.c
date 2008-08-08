@@ -301,7 +301,7 @@ static void test_register_complete(Transaction *t, gpointer data) {
     static gboolean
 test_transaction(gpointer data) {
     
-    g_print("test transaction\n");
+    g_print("> test transaction\n");
 
     if (test_transaction_object == NULL) {
         g_print("ERROR: NULL transaction");
@@ -316,8 +316,11 @@ test_transaction(gpointer data) {
         }
     }
 
+    g_print("9\n");
+
     deinit_signaling();
 
+    g_print("< test transaction\n");
     return FALSE;
 }
 
@@ -350,15 +353,23 @@ START_TEST (test_signaling_register_unregister)
 
     g_signal_connect(test_transaction_object, "on-transaction-complete", G_CALLBACK(test_register_complete), NULL);
 
+    printf("1\n");
     /* unregister one EP */
     ret = unregister_enforcement_point("external");
+    printf("2\n");
     fail_unless(ret, "Failed to unregister EP");
+    printf("3\n");
 
     g_idle_add(test_transaction, NULL);
+    printf("4\n");
 
     g_main_loop_run(loop);
+    printf("5\n");
 
     g_object_unref(test_transaction_object);
+    printf("6\n");
+
+    deinit_signaling();
 
 END_TEST
 
@@ -471,11 +482,11 @@ Suite *ohm_signaling_suite(void)
     TCase *tc_all = tcase_create("All");
     tcase_add_checked_fixture(tc_all, setup, teardown);
 
-    tcase_add_test(tc_all, test_signaling_init_deinit);
+    /* tcase_add_test(tc_all, test_signaling_init_deinit); */
     tcase_add_test(tc_all, test_signaling_register_unregister);
-    tcase_add_test(tc_all, test_signaling_internal_ep_1);
+    /* tcase_add_test(tc_all, test_signaling_internal_ep_1);
     tcase_add_test(tc_all, test_signaling_internal_ep_2);
-    tcase_add_test(tc_all, test_signaling_timeout);
+    tcase_add_test(tc_all, test_signaling_timeout); */
     
     tcase_set_timeout(tc_all, 120);
     suite_add_tcase(suite, tc_all);
