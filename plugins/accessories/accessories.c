@@ -20,12 +20,12 @@ static const char *get_field(OhmFact *, char *);
 
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
 
-OHM_IMPORTABLE(gboolean, set_decorator, (gchar *capability, hal_cb cb, void *user_data));
-OHM_IMPORTABLE(gboolean, unset_decorator, (void *user_data));
+OHM_IMPORTABLE(gboolean, set_observer, (gchar *capability, hal_cb cb, void *user_data));
+OHM_IMPORTABLE(gboolean, unset_observer, (void *user_data));
 
 OHM_PLUGIN_REQUIRES_METHODS(accessories, 2, 
-   OHM_IMPORT("hal.set_decorator", set_decorator),
-   OHM_IMPORT("hal.unset_decorator", unset_decorator)
+   OHM_IMPORT("hal.set_observer", set_observer),
+   OHM_IMPORT("hal.unset_observer", unset_observer)
 );
 
 static void plugin_init(OhmPlugin *plugin)
@@ -149,12 +149,12 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
 
 static gboolean headset_deinit(OhmPlugin *plugin)
 {
-    unset_decorator(token);
+    unset_observer(token);
 }
 
 static gboolean headset_init(OhmPlugin *plugin)
 {
-    set_decorator("headset", headset_cb, token);
+    set_observer("headset", headset_cb, token);
 }
 
 /* headset part ends */

@@ -34,15 +34,15 @@ plugin_init(OhmPlugin * plugin)
 }
 
 
-OHM_EXPORTABLE(gboolean, set_decorator, (gchar *capability, hal_cb cb, void *user_data))
+OHM_EXPORTABLE(gboolean, set_observer, (gchar *capability, hal_cb cb, void *user_data))
 {
-    printf("> set_decorator\n");
+    printf("> set_observer\n");
     return decorate(hal_plugin_p, capability, cb, user_data);
 }
 
-OHM_EXPORTABLE(gboolean, unset_decorator, (void *user_data))
+OHM_EXPORTABLE(gboolean, unset_observer, (void *user_data))
 {
-    printf("> unset_decorator\n");
+    printf("> unset_observer\n");
     return undecorate(hal_plugin_p, user_data);
 }
 
@@ -63,8 +63,8 @@ OHM_PLUGIN_DESCRIPTION("hal",
         NULL);
 
 OHM_PLUGIN_PROVIDES_METHODS(hal, 2,
-        OHM_EXPORT(unset_decorator, "unset_decorator"),
-        OHM_EXPORT(set_decorator, "set_decorator"));
+        OHM_EXPORT(unset_observer, "unset_observer"),
+        OHM_EXPORT(set_observer, "set_observer"));
 
 /*
  * Local Variables:
