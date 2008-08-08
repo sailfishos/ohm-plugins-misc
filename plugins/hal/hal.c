@@ -16,7 +16,7 @@ OHM_DEBUG_PLUGIN(hal,
 
 hal_plugin *hal_plugin_p = NULL;
 
-
+#define OPTIMIZED
 
 static void
 plugin_init(OhmPlugin * plugin)

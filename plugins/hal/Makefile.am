@@ -6,4 +6,4 @@ libohm_hal_la_LIBADD = @OHM_PLUGIN_LIBS@ @HAL_LIBS@
 libohm_hal_la_LDFLAGS = -module -avoid-version
 libohm_hal_la_CFLAGS = @OHM_PLUGIN_CFLAGS@ @HAL_CFLAGS@
 
-# SUBDIRS = . tests
+SUBDIRS = . tests
