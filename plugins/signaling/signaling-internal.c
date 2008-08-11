@@ -8,10 +8,14 @@
 
 #include "signaling.h"
 
+#define ONLY_ONE_TRANSACTION 1
+
 GSList         *enforcement_points = NULL;
 DBusConnection *connection;
 GHashTable     *transactions;
-GSList         *inq = NULL;
+GQueue         *inq = NULL;
+    
+static gboolean process_inq(gpointer data);
 
     static Transaction *
 transaction_lookup(guint txid)
@@ -27,6 +31,13 @@ init_signaling(DBusConnection *c)
         g_error("Failed to create transaction hash table.");
         return FALSE;
     }
+
+    inq = g_queue_new();
+    if (inq == NULL) {
+        g_error("Failed to create incoming queue.");
+        return FALSE;
+    }
+    
     connection = c;
     return TRUE;
 }
@@ -48,6 +59,9 @@ deinit_signaling()
      * are actually stopped when all enforcement points are gone) */
     if (transactions)
         g_hash_table_destroy(transactions);
+
+    if (inq)
+        g_queue_free(inq);
 
     return TRUE;
 }
@@ -468,7 +482,7 @@ send_ipc_signal(gpointer data)
         gchar *f = i->data;
         GSList *ohm_facts = ohm_fact_store_get_facts_by_name(fs, f);
         
-        printf("key: %s, facts: %s\n", f, ohm_facts ? "yes" : "ERROR: NO FACTS!");
+        /* printf("key: %s, facts: %s\n", f, ohm_facts ? "yes" : "ERROR: NO FACTS!"); */
 
         if (!ohm_facts)
             continue;
@@ -498,7 +512,7 @@ send_ipc_signal(gpointer data)
             OhmFact *of = j->data;
             GSList *fields = NULL;
 
-            printf("starting to process OhmFact '%p'\n", of);
+            /* printf("starting to process OhmFact '%p'\n", of); */
         
             /* open fact_struct_iter */
             if (!dbus_message_iter_open_container(&fact_iter, DBUS_TYPE_ARRAY,
@@ -521,7 +535,7 @@ send_ipc_signal(gpointer data)
 
                 sig[0] = sig_c;
                 
-                printf("Field name: %s\n", field_name);
+                /* printf("Field name: %s\n", field_name); */
 
                 if (dbus_type == DBUS_TYPE_INVALID) {
                     /* unsupported data type */
@@ -1219,6 +1233,16 @@ transaction_complete(Transaction *self)
         g_source_remove(self->timeout_id);
 
     g_object_unref(self);
+    
+#ifdef ONLY_ONE_TRANSACTION
+    /* go on and process the next transaction */
+    if (!g_queue_is_empty(inq)) {
+        g_print("transaction queue '%p' not empty (%i left), scheduling processing\n",
+                inq, g_queue_get_length(inq));
+        /* Let's not delay the processing because of test issues :-) */
+        process_inq(NULL);
+    }
+#endif
 }
 
     static gboolean
@@ -1233,67 +1257,78 @@ timeout_transaction(gpointer data)
 process_inq(gpointer data)
 {
     /*
-     * Runs in the idle loop, sends out the decisions, checks if the
+     * Runs (mostly) in the idle loop, sends out the decisions, checks if the
      * transactions have been completed 
      */
 
-    GSList         *i = NULL,
-                   *e = NULL;
+    GSList           *e = NULL;
     gboolean        ret = TRUE;
+    Transaction *t      = NULL;
 
     g_print("> process_inq\n");
 
     /*
      * incoming queue (from OHM to this plugin) 
      */
-    for (i = inq; i != NULL; i = g_slist_next(i)) {
-        Transaction *t = i->data;
+#ifndef ONLY_ONE_TRANSACTION
+    while (!g_queue_is_empty(inq)) {
+#endif
 
-        g_hash_table_insert(transactions, &t->txid, t);
+    /* printf("Before popping, inq: '%p', length: '%i'\n", inq, g_queue_get_length(inq)); */
 
-        for (e = enforcement_points; e != NULL; e = g_slist_next(e)) {
-            EnforcementPoint *ep = e->data;
-            g_print("process: ep 0x%p\n", ep);
+    if (inq == NULL || g_queue_is_empty(inq)) {
+        printf("Error! Nothing to process, even though processing was scheduled.\n");
+        return FALSE;
+    }
 
-            transaction_add_ep(t, ep);
-            ret = enforcement_point_send_decision(ep, t);
-            if (!ret) {
-                g_print("Error sending the decision\n");
-                /* TODO; signal that the transaction failed? NAK? */
-            }
-        }
+    t = g_queue_pop_head(inq);
+    
+    /* printf("After popping, inq: '%p', length: '%i'\n", inq, g_queue_get_length(inq)); */
 
-        /* all enforcement points are notified, the transaction is now
-         * ready to be handled */
+    g_hash_table_insert(transactions, &t->txid, t);
 
-        g_print("transaction '%u' is now built\n", t->txid);
+    for (e = enforcement_points; e != NULL; e = g_slist_next(e)) {
+        EnforcementPoint *ep = e->data;
+        g_print("process: ep 0x%p\n", ep);
 
-        t->built_ready = TRUE;
-
-        if (t->txid == 0 || transaction_done(t)) {
-            /* If txid == 0, the transaction doesn't require any acks
-             * and the enforcement points won't send them, so we can
-             * complete right away. Also, the internal EP:s are ready by
-             * now, and if there are only those*/
-            transaction_complete(t);
-        }
-
-        else {
-            /* attach a timer to the transaction and make it call all the
-             * receive_ack functions on the enforcement_points in nacked queue with
-             * an error value when it triggers */
-
-            guint timeout = 0;
-
-            g_object_get(t, "timeout", &timeout, NULL);
-
-            printf("setting timeout: %u\n", timeout);
-            t->timeout_id = g_timeout_add(timeout, timeout_transaction, t);
+        transaction_add_ep(t, ep);
+        ret = enforcement_point_send_decision(ep, t);
+        if (!ret) {
+            g_print("Error sending the decision\n");
+            /* TODO; signal that the transaction failed? NAK? */
         }
     }
 
-    g_slist_free(inq);
-    inq = NULL;
+    /* all enforcement points are notified, the transaction is now
+     * ready to be handled */
+
+    g_print("transaction '%u' is now built\n", t->txid);
+
+    t->built_ready = TRUE;
+
+    if (t->txid == 0 || transaction_done(t)) {
+        /* If txid == 0, the transaction doesn't require any acks
+         * and the enforcement points won't send them, so we can
+         * complete right away. Also, the internal EP:s are ready by
+         * now, and if there are only those*/
+        transaction_complete(t);
+    }
+
+    else {
+        /* attach a timer to the transaction and make it call all the
+         * receive_ack functions on the enforcement_points in nacked queue with
+         * an error value when it triggers */
+
+        guint timeout = 0;
+
+        g_object_get(t, "timeout", &timeout, NULL);
+
+        printf("setting timeout: %u\n", timeout);
+        t->timeout_id = g_timeout_add(timeout, timeout_transaction, t);
+    }
+#ifndef ONLY_ONE_TRANSACTION
+    }
+#endif
 
     return FALSE;
 }
@@ -1578,10 +1613,10 @@ queue_decision(GSList *facts, gint proposed_txid, gboolean need_transaction, gui
             NULL);
 
     /* if the list is empty, there is no processing already pending */
-    if (inq == NULL)
+    if (g_queue_is_empty(inq))
         needs_processing = TRUE;
 
-    inq = g_slist_append(inq, transaction);
+    g_queue_push_tail(inq, transaction);
 
     if (needs_processing) {
         /* add the policy decision to the queue to be processed later */

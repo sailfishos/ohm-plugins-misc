@@ -6,33 +6,18 @@
  * Copyright (C) 2008, Nokia. All rights reserved.
  */
 
-#include <ohm/ohm-plugin-debug.h>
+#include "hal.h"
 
 static int DBG_HAL, DBG_FACTS;
 
-/* this uses libhal (for now) */
-
-#include "hal.h"
-
 /* FIXME:
  *
- * - How are the OhmFacts reference counted? We don't want to remove
- *   them if they are scheduled to be signaled or something
  * - Add support to adding/removing device capabilities (new fields in
  *   OhmFacts
  * - How do the 64-bit uints map to any allowed OhmFact types?
- * - Refactor the "interesting" list as a map and add reference counting
- *   to it
- *
- * FIXED:
- * - How is the "interestingness" defined? Who sets it?
- *     - If a module is interested in a key, it needs to call the
- *       "interested" function with the UDI to get it mapped to the
- *       factstore. Calling "uninterested" is supposed to be the
- *       symmetric counterpart, but it currently doesn't delete the
- *       existing OhmFact (for safety reasons).
  */
 
+/* this uses libhal (for now) */
 
 typedef struct _hal_modified_property {
     char *udi;
@@ -40,6 +25,13 @@ typedef struct _hal_modified_property {
     dbus_bool_t is_removed;
     dbus_bool_t is_added;
 } hal_modified_property;
+
+typedef struct _decorator {
+    gchar *capability;
+    GSList *devices;
+    hal_cb cb;
+    void *user_data;
+} decorator;
 
 static gchar * escape_udi(const char *hal_udi)
 {
@@ -78,125 +70,41 @@ static gchar * escape_udi(const char *hal_udi)
 
 }
 
-static GValue * get_value_from_property(hal_plugin *plugin, const char *udi, const char *key) {
-    /* this assumes implicit mapping between dbus and glib types */
-    
-    GValue *value = NULL;
-    LibHalPropertyType type = libhal_device_get_property_type(plugin->hal_ctx, udi, key, NULL);
+#if OPTIMIZED
+static gboolean property_has_capability(LibHalPropertySet *properties, gchar *capability)
+{
 
-    switch (type) {
-        case LIBHAL_PROPERTY_TYPE_STRING:
-            {
-                char *hal_value = libhal_device_get_property_string(
-                        plugin->hal_ctx,
-                        udi,
-                        key,
-                        NULL);
+    LibHalPropertySetIterator iter;
+    int len, i;
 
-                value = ohm_value_from_string(hal_value);
-                libhal_free_string(hal_value);
-                break;
-            }
-        case LIBHAL_PROPERTY_TYPE_INT32:
-            {
-                dbus_int32_t hal_value = libhal_device_get_property_int(
-                        plugin->hal_ctx,
-                        udi,
-                        key,
-                        NULL);
+    libhal_psi_init(&iter, properties);
 
-                value = ohm_value_from_int(hal_value);
-                break;
-            }
-#if 0
-#if DBUS_HAVE_INT64
-        case LIBHAL_PROPERTY_TYPE_UINT64:
-            {
-                dbus_uint64_t hal_value = libhal_device_get_property_uint64(
-                        plugin->hal_ctx,
-                        udi,
-                        key,
-                        NULL);
+    len = libhal_property_set_get_num_elems(properties);
 
-                value = g_new(GValue, 1);
-                g_value_init(value, G_TYPE_UINT64);
-                g_value_set_uint64(value, hal_value);
-                break;
-            }
-#endif
-        case LIBHAL_PROPERTY_TYPE_DOUBLE:
-            {
-                gdouble hal_value = libhal_device_get_property_double(
-                        plugin->hal_ctx,
-                        udi,
-                        key,
-                        NULL);
-
-                value = g_new(GValue, 1);
-                g_value_init(value, G_TYPE_DOUBLE);
-                g_value_set_double(value, hal_value);
-                break;
-            }
-        case LIBHAL_PROPERTY_TYPE_BOOLEAN:
-            {
-                dbus_bool_t hal_value = libhal_device_get_property_bool(
-                        plugin->hal_ctx,
-                        udi,
-                        key,
-                        NULL);
-
-                value = g_new(GValue, 1);
-                g_value_init(value, G_TYPE_BOOLEAN);
-                g_value_set_boolean(value, hal_value);
-                break;
-            }
-        case LIBHAL_PROPERTY_TYPE_STRLIST:
-            /* TODO */
-            break;
-#endif
-        default:
-            /* error case */
-            break;
+    for (i = 0; i < len; i++, libhal_psi_next(&iter)) {
+        char *key = libhal_psi_get_key(&iter);
+        if (strdup(key, "info.capabilities") == 0) {
+            /* TODO: check if the capability is there */
+        
+        }
     }
 
-    return value;
+    return TRUE;
 }
+#endif
 
-/* Helper functions to access the FactStore */
-
-static OhmFact * get_fact(hal_plugin *plugin, const char *udi)
+static gboolean has_udi(decorator *dec, const gchar *udi)
 {
-    /* Get an OhmFact that corresponds to the UDI from the 
-     * FactStore. Returns NULL if the fact is not present. */
-
-    gchar *escaped_udi = NULL;
-    GSList *list = NULL;
-    
-    escaped_udi = escape_udi(udi);
-    if (escaped_udi == NULL)
-        return NULL;
-
-    list = ohm_fact_store_get_facts_by_name(plugin->fs, escaped_udi);
-    g_free(escaped_udi);
-
-    if (g_slist_length(list) != 1) {
-        /* What to do? */
-        OHM_DEBUG(DBG_FACTS, "The requested fact was not found");
-        return NULL;
+    GSList *e = NULL;
+    for (e = dec->devices; e != NULL; e = g_slist_next(e)) {
+        gchar *device_udi = e->data;
+        if (strcmp(device_udi, udi) == 0)
+            return TRUE;
     }
-
-    return list->data;
+    return FALSE;
 }
 
-static gboolean set_fact(hal_plugin *plugin, OhmFact *fact)
-{
-    /* Inserts the OhmFact to the FactStore */
-
-    OHM_DEBUG(DBG_FACTS, "inserting fact '%p' to FactStore", fact);
-    return ohm_fact_store_insert(plugin->fs, fact);
-}
-
-static OhmFact * create_fact(hal_plugin *plugin, const char *udi, LibHalPropertySet *properties)
+static OhmFact * create_fact(hal_plugin *plugin, const char *udi, const char *capability, LibHalPropertySet *properties)
 {
     /* Create an OhmFact based on the properties of a HAL object */
 
@@ -204,16 +112,25 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi, LibHalProperty
     OhmFact *fact = NULL;
     int i, len;
     gchar *escaped_udi = escape_udi(udi);
+    GValue *val = NULL;
 
+#if 0
     if (escaped_udi == NULL)
         return NULL;
 
     fact = ohm_fact_new(escaped_udi);
     OHM_DEBUG(DBG_FACTS, "created fact '%s' at '%p'", escaped_udi, fact);
     g_free(escaped_udi);
+#else
+    fact = ohm_fact_new(capability);
+#endif
 
     if (!fact)
         return NULL;
+
+    /* set the identity field with the original UDI value */
+    val = ohm_value_from_string(udi);
+    ohm_fact_set(fact, "udi", val);
 
     libhal_psi_init(&iter, properties);
     
@@ -224,7 +141,6 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi, LibHalProperty
     for (i = 0; i < len; i++, libhal_psi_next(&iter)) {
         char *key = libhal_psi_get_key(&iter);
         LibHalPropertyType type = libhal_psi_get_type(&iter);
-        GValue *val = NULL;
 
         /* Not good to duplicate the switch, consider strategy pattern. Still,
          * it is a good idea to fetch the properties only once. */
@@ -242,6 +158,17 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi, LibHalProperty
                     val = ohm_value_from_string(hal_value);
                     break;
                 }
+            case LIBHAL_PROPERTY_TYPE_STRLIST:
+                {
+#define STRING_DELIMITER "\\"
+                    /* freed with propertyset*/
+                    char **strlist = libhal_psi_get_strlist(&iter);
+                    gchar *escaped_string = g_strjoinv(STRING_DELIMITER, strlist);
+                    val = ohm_value_from_string(escaped_string);
+                    g_free(escaped_string);
+                    break;
+#undef STRING_DELIMITER
+                }
             default:
                 /* error case, currently means that FactStore doesn't
                  * support the type yet */
@@ -256,77 +183,155 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi, LibHalProperty
     return fact;
 }
 
-static gboolean delete_fact(hal_plugin *plugin, OhmFact *fact) 
+
+static gboolean process_decoration(hal_plugin *plugin, decorator *dec, gboolean added, gboolean removed, const gchar *udi)
 {
-    /* Remove the OhmFact from the FactStore */
+    gboolean match = FALSE;
+    OHM_DEBUG(DBG_FACTS,"> process_decoration\n");
 
-    ohm_fact_store_remove(plugin->fs, fact);
-    OHM_DEBUG(DBG_FACTS, "deleted fact '%p' from FactStore", fact);
-    g_object_unref(fact);
+    if (has_udi(dec, udi)) {
+        DBusError error;
+        LibHalPropertySet *properties = NULL;
+        OhmFact *fact = NULL;
 
-    /* we don't get a return value fro ohm_fact_store_unref */
-    return TRUE;
+        match = TRUE;
+        dbus_error_init(&error);
+        
+        if (!removed) {
+            /* get the fact from the HAL */
+            properties = libhal_device_get_all_properties(plugin->hal_ctx, udi, &error);
+
+            if (dbus_error_is_set(&error)) {
+                g_print("Error getting data for HAL object %s. '%s': '%s'\n", udi, error.name, error.message);
+                return FALSE;
+            }
+
+        }
+
+        fact = create_fact(plugin, udi, dec->capability, properties);
+        dec->cb(fact, dec->capability, added, removed, dec->user_data);
+
+        libhal_free_property_set(properties);
+    }
+
+    return match;
 }
 
-static gboolean interesting(hal_plugin *plugin, const char *udi)
+static gboolean process_udi(hal_plugin *plugin, gboolean added, gboolean removed, const gchar *udi)
 {
-    /* see if we are interested in the OhmFact */ 
     GSList *e = NULL;
+    gboolean match = FALSE;
 
-    for (e = plugin->interesting; e != NULL; e = g_slist_next(e)) {
-        gchar *interesting_udi = e->data;
-        if (strcmp(interesting_udi, udi) == 0)
-            return TRUE;
+    for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
+        decorator *dec = e->data;
+        if (process_decoration(plugin, dec, added, removed, udi))
+            match = TRUE;
     }
-    return FALSE;
+    return match;
+}
+
+static void
+hal_capability_added_cb (LibHalContext *ctx,
+        const char *udi, const char *capability)
+{
+    OHM_DEBUG(DBG_FACTS, "> hal_capability_added_cb: udi '%s', capability: '%s'\n", udi, capability);
+    /* TODO */
+}
+
+static void
+hal_capability_lost_cb (LibHalContext *ctx,
+        const char *udi, const char *capability)
+{
+    OHM_DEBUG(DBG_FACTS, "> hal_capability_lost_cb: udi '%s', capability: '%s'\n", udi, capability);
+    /* TODO */
 }
 
 static void
 hal_device_added_cb (LibHalContext *ctx,
         const char *udi)
 {
-    LibHalPropertySet *properties = NULL;
-    OhmFact *fact = NULL;
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
+    DBusError error;
+#if OPTIMIZED
+    LibHalPropertySet *properties = NULL;
+#endif
+    GSList *e;
+    gboolean match = FALSE;
 
-    OHM_DEBUG(DBG_HAL, "> hal_device_added_cb: udi '%s'", udi);
-    
-    if (!interesting(plugin, udi))
+    OHM_DEBUG(DBG_FACTS, "> hal_device_added_cb: udi '%s'\n", udi);
+    dbus_error_init(&error);
+
+#if OPTIMIZED
+    /* get the fact from the HAL */
+    properties = libhal_device_get_all_properties(plugin->hal_ctx, udi, &error);
+#endif
+
+    if (dbus_error_is_set(&error)) {
+        g_print("Error getting data for HAL object %s. '%s': '%s'\n", udi, error.name, error.message);
         return;
+    }
 
-    /* if yes, go fetch the object */
-    properties = libhal_device_get_all_properties(ctx, udi, NULL);
-
-    fact = create_fact(plugin, udi, properties);
-    if (fact)
-        set_fact(plugin, fact);
-
-    libhal_free_property_set(properties);
+    /* see if the device has a capability that someone is interested in */
+    OHM_DEBUG(DBG_FACTS,"decorators: '%u'\n", g_slist_length(plugin->decorators));
     
-    /* start watching the properties */
-    libhal_device_add_property_watch(ctx, udi, NULL);
+    for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
+        decorator *dec = e->data;
+#if OPTIMIZED
+        if (property_has_capability(properties, dec->capability)) {
+#else
+        if (libhal_device_query_capability(plugin->hal_ctx, udi, dec->capability, &error)) {
+#endif
+            OHM_DEBUG(DBG_FACTS,"device '%s' has capability '%s'\n", udi, dec->capability);
+            match = TRUE;
+            dec->devices = g_slist_prepend(dec->devices, g_strdup(udi));
+            process_decoration(plugin, dec, TRUE, FALSE, udi);
+        }
+        else {
+            OHM_DEBUG(DBG_FACTS,"device '%s' doesn't have capability '%s'\n", udi, dec->capability);
+        }
+    }
+
+#if OPTIMIZED
+    libhal_free_property_set(properties);
+#endif
+
+    if (match)
+        libhal_device_add_property_watch(ctx, udi, NULL);
+
+    return;
 }
 
 static void
 hal_device_removed_cb (LibHalContext *ctx,
         const char *udi)
 {
-    OhmFact *fact = NULL;
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
+    GSList *orig = NULL;
+    GSList *e;
 
-    OHM_DEBUG(DBG_HAL, "> hal_device_removed_cb: udi '%s'", udi);
+    OHM_DEBUG(DBG_FACTS, "> hal_device_removed_cb: udi '%s'\n", udi);
     
-    fact = get_fact(plugin, udi);
-        
-    /* TODO: see if we want to remove the OhmFact? */
-
-    if (fact)
-        delete_fact(plugin, fact);
-    
-    if (interesting(plugin, udi)) {
-        /* we were watching this object */
-        libhal_device_remove_property_watch(ctx, udi, NULL);
+    for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
+        decorator *dec = e->data;
+        if (has_udi(dec, udi)) {
+            orig = g_slist_find_custom(dec->devices, udi, g_str_equal);
+            if (orig) {
+                dec->devices = g_slist_remove(dec->devices, orig->data);
+                /* FIXME: free the UDI? */
+            }
+            else {
+                OHM_DEBUG(DBG_FACTS, "Device was not found from the decorator list!\n");
+            }
+        }
     }
+
+    /* g_free(orig->data); */
+    /* FIXME: free the found element? */
+
+    if (process_udi(plugin, FALSE, TRUE, udi))
+        libhal_device_remove_property_watch(ctx, udi, NULL);
+
+    return;
 }
 
 static gboolean process_modified_properties(gpointer data) 
@@ -334,44 +339,18 @@ static gboolean process_modified_properties(gpointer data)
     hal_plugin *plugin = (hal_plugin *) data;
     GSList *e = NULL;
 
-    OHM_DEBUG(DBG_HAL, "> process_modified_properties");
-
-    ohm_fact_store_transaction_push(plugin->fs); /* begin transaction */
+    OHM_DEBUG(DBG_FACTS, "> process_modified_properties\n");
 
     for (e = plugin->modified_properties; e != NULL; e = g_slist_next(e)) {
 
         hal_modified_property *modified_property = e->data;
-        OhmFact *fact = get_fact(plugin, modified_property->udi);
-        GValue *value = NULL;
-
-        if (!fact) {
-            OHM_DEBUG(DBG_HAL,
-                      "No fact found to be modified, "
-                      "most likely unsupported type");
-        }
-        else {
-            if (modified_property->is_removed) {
-                /* remove the field by setting its value to NULL */
-                ohm_fact_set(fact, modified_property->key, NULL);
-            }
-            else {
-                value = get_value_from_property(plugin,
-                        modified_property->udi,
-                        modified_property->key);
-                /* FIXED: Do we need to free the original value or does the
-                 * setter do it automatically? Apparently the setter
-                 * does it. */
-                ohm_fact_set(fact, modified_property->key, value);
-            }
-        }
+        process_udi(plugin, FALSE, FALSE, modified_property->udi);
 
         g_free(modified_property->udi);
         g_free(modified_property->key);
         g_free(modified_property);
         e->data = NULL;
     }
-
-    ohm_fact_store_transaction_pop(plugin->fs, FALSE); /* commit */
 
     g_slist_free(plugin->modified_properties);
     plugin->modified_properties = NULL;
@@ -395,8 +374,7 @@ hal_property_modified_cb (LibHalContext *ctx,
     hal_modified_property *modified_property = NULL;
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
 
-    OHM_DEBUG(DBG_HAL,
-              "> hal_property_modified_cb: udi '%s', key '%s', %s, %s",
+    OHM_DEBUG(DBG_FACTS,"> hal_property_modified_cb: udi '%s', key '%s', %s, %s\n",
               udi, key,
               is_removed ? "removed" : "not removed",
               is_added ? "added" : "not added");
@@ -419,68 +397,54 @@ hal_property_modified_cb (LibHalContext *ctx,
     return;
 }
 
-gboolean mark_interesting(hal_plugin *plugin, gchar *udi)
+gboolean decorate(hal_plugin *plugin, const gchar *capability, hal_cb cb, void *user_data)
 {
-    GSList *e = NULL;
-    gchar *new_udi = NULL;
+    decorator *dec = NULL;
     DBusError error;
-    LibHalPropertySet *properties = NULL;
-    OhmFact *fact;
-    
-    if (!plugin)
-        return FALSE;
+    int n_devices = 0, i;
+    char **devices = NULL;
     
     dbus_error_init(&error);
 
-    /* check if we are already interested in the udi */
-    for (e = plugin->interesting; e != NULL; e = g_slist_next(e)) {
-        gchar *interesting_udi = e->data;
-        if (strcmp(interesting_udi, udi) == 0)
-            return TRUE;
+    if (!plugin)
+        goto error;
+
+    devices = libhal_find_device_by_capability(plugin->hal_ctx, capability, &n_devices, &error);
+
+    /* create the decorator object */
+    if ((dec = g_new0(decorator, 1)) == NULL)
+        goto error;
+
+    dec->cb = cb;
+    dec->user_data = user_data;
+    dec->capability = g_strdup(capability);
+
+    for (i = 0; i < n_devices; i++) {
+        dec->devices = g_slist_prepend(dec->devices, g_strdup(devices[i]));
+        process_decoration(plugin, dec, FALSE, FALSE, devices[i]);
     }
 
-    /* ok, start processing the request */
+    libhal_free_string_array(devices);
 
-    new_udi = g_strdup(udi);
-    
-    if (!new_udi)
-        return FALSE;
+    /* put the object to decorator list */
+    plugin->decorators = g_slist_prepend(plugin->decorators, dec);
 
-    /* get the fact from the HAL */
-    properties = libhal_device_get_all_properties(plugin->hal_ctx, new_udi, &error);
-    
-    if (dbus_error_is_set(&error)) {
-        g_print("Error getting data for HAL object %s. '%s': '%s'\n", new_udi, error.name, error.message);
-        g_free(new_udi);
-        return FALSE;
-    }
-
-    fact = create_fact(plugin, udi, properties);
-    if (fact)
-        set_fact(plugin, fact);
-
-    libhal_free_property_set(properties);
-
-    /* mark the HAL object as interesting */
-    plugin->interesting = g_slist_append(plugin->interesting, new_udi);
-    
     return TRUE;
+
+error:
+
+    return FALSE;
 }
 
-gboolean mark_uninteresting(hal_plugin *plugin, gchar *udi)
-{
+gboolean undecorate(hal_plugin *plugin, void *user_data) {
+    /* identify the decorator by user data */
     GSList *e = NULL;
-    
-    if (!plugin)
-        return FALSE;
-    
-    /* check if we are already interested in the udi */
-    for (e = plugin->interesting; e != NULL; e = g_slist_next(e)) {
-        gchar *interesting_udi = e->data;
-        if (strcmp(interesting_udi, udi) == 0) {
-            g_free(e->data);
-            /* is this really O(n**2) now? :-P */
-            plugin->interesting = g_slist_delete_link(plugin->interesting, e);
+
+    for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
+        decorator *dec = e->data;
+        if (dec->user_data == user_data) {
+            plugin->decorators = g_slist_remove(plugin->decorators, dec);
+            g_free(dec);
             return TRUE;
         }
     }
@@ -491,12 +455,12 @@ hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
 {
     DBusError error;
     hal_plugin *plugin = g_new0(hal_plugin, 1);
-    int i = 0, num_devices = 0;
-    char **all_devices;
 
     DBG_HAL   = flag_hal;
     DBG_FACTS = flag_facts;
 
+    OHM_DEBUG(DBG_FACTS, "Initializing the HAL plugin\n");
+    
     if (!plugin) {
         return NULL;
     }
@@ -516,6 +480,10 @@ hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
         goto error;
     if (!libhal_ctx_set_device_removed(plugin->hal_ctx, hal_device_removed_cb))
         goto error;
+    if (!libhal_ctx_set_device_new_capability(plugin->hal_ctx, hal_capability_added_cb))
+        goto error;
+    if (!libhal_ctx_set_device_lost_capability(plugin->hal_ctx, hal_capability_lost_cb))
+        goto error;
     if (!libhal_ctx_set_device_property_modified(plugin->hal_ctx, hal_property_modified_cb))
         goto error;
 
@@ -525,57 +493,16 @@ hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
     if (!libhal_ctx_init(plugin->hal_ctx, &error))
         goto error;
 
-    /* get all devices */
-
-    all_devices = libhal_get_all_devices(plugin->hal_ctx, &num_devices, &error);
-
-    for (i = 0; i < num_devices; i++) {
-        /* see if the device is interesting or not */
-
-        /* for all interesting devices */
-        LibHalPropertySet *properties;
-        char *udi = all_devices[i];
-        OhmFact *fact = NULL;
-
-        if (!udi || !interesting(plugin, udi))
-            continue;
-
-        properties = libhal_device_get_all_properties(plugin->hal_ctx, udi, &error);
-
-        if (properties) {
-
-            /* We got properties, so let's start listening for them */
-            libhal_device_add_property_watch(plugin->hal_ctx, udi, &error);
-
-            /* create an OhmFact based on the properties */
-            fact = get_fact(plugin, udi);
-
-            if (!fact) {
-                fact = create_fact(plugin, udi, properties);
-                set_fact(plugin, fact);
-            }
-            else {
-                /* TODO: There already is a fact of this name. Add the properties to it.
-                 * Do this when the add_device_capability support actually
-                 * comes in. Do we honor the values already in the fact or
-                 * overwrite them? */
-            }
-            libhal_free_property_set(properties);
-        }
-
-        libhal_free_string(udi);
-    }
-
     return plugin;
 
 error:
 
     if (dbus_error_is_set(&error)) {
-        OHM_DEBUG(DBG_HAL, "Error initializing the HAL plugin. '%s': '%s'",
+        OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin. '%s': '%s'\n",
                   error.name, error.message);
     }
     else {
-        OHM_DEBUG(DBG_HAL, "Error initializing the HAL plugin");
+        OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin\n");
     }
 
     return NULL;
@@ -583,16 +510,10 @@ error:
 
 void deinit_hal(hal_plugin *plugin)
 {
-    GSList *e = NULL;
+    /* FIXME: free the decorators */
 
     libhal_ctx_shutdown(plugin->hal_ctx, NULL);
     libhal_ctx_free(plugin->hal_ctx);
-
-    for (e = plugin->interesting; e != NULL; e = g_slist_next(e)) {
-        g_free(e->data);
-    }
-    g_slist_free(plugin->interesting);
-
     return;
 }
 
