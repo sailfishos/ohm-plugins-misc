@@ -62,8 +62,9 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
         fact = list->data;
         if (fact) {
             /* a field is removed if the value is set to NULL */
-            GList *e = NULL, *fields = ohm_fact_get_fields(fact);
-            for (e = fields; e != NULL; e = g_list_next(e)) {
+            GSList *e = NULL;
+            GSList *fields = ohm_fact_get_fields(fact);
+            for (e = fields; e != NULL; e = g_slist_next(e)) {
                 /* Factstore magic! */
                 GQuark qk = (GQuark)GPOINTER_TO_INT(e->data);
                 const gchar *field_name = g_quark_to_string(qk);
@@ -160,6 +161,7 @@ profile_plugin * init_profile()
 {
     profile_plugin *plugin = g_new0(profile_plugin, 1);
     char *profile = NULL;
+    profileval_t *values = NULL;
 
     if (!plugin) {
         return NULL;
@@ -190,7 +192,7 @@ profile_plugin * init_profile()
     
     /* get the initial values */
     
-    profileval_t *values = profile_get_values(profile);
+    values = profile_get_values(profile);
 
     if (!profile_create_fact(profile, values)) {
         g_free(plugin);

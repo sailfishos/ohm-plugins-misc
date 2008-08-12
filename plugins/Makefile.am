@@ -3,6 +3,7 @@ SUBDIRS = 	     \
 	hal          \
 	playback     \
 	accessories  \
+	profile  \
 	console 
 
 clean-local:
