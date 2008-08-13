@@ -49,6 +49,7 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
         return FALSE;
 
     /* get the previous fact with the profile name */
+    /* printf("fs plugin: '%p'\n", fs); */
 
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
 
@@ -112,6 +113,8 @@ static void profile_value_change(const char *profile, const char *key, const cha
     /* get the previous fact with the profile name */
     GSList *list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
 
+    /* printf("> profile value change\n"); */
+
     if (g_slist_length(list) != 1) {
         g_print("Error: there isn't an unique profile fact\n");
         return;
@@ -141,6 +144,8 @@ static void profile_name_change(const char *profile)
     /* get values for the new profile */
 
     profileval_t *values = NULL;
+
+    /* printf("> profile name change\n"); */
 
     if (!profile)
         return;
@@ -212,6 +217,8 @@ void deinit_profile(profile_plugin *plugin)
 {
     /* unregister to the notifications */
     profile_tracker_quit();
+
+    /* TODO: delete the previously created fact */
 }
 
 
