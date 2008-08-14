@@ -4,6 +4,20 @@
 AC_PREREQ(2.61)
 AC_INIT(ohm-plugins-misc, 0.1)
 AC_CONFIG_SRCDIR([plugins/profile/profile.c])
+
+
+# inherited stuff that should be cleaned up later
+DX_HTML_FEATURE(OFF)
+DX_CHM_FEATURE(OFF)
+DX_CHI_FEATURE(OFF)
+DX_MAN_FEATURE(OFF)
+DX_RTF_FEATURE(OFF)
+DX_XML_FEATURE(ON)
+DX_PDF_FEATURE(OFF)
+DX_PS_FEATURE(OFF)
+DX_INIT_DOXYGEN(ohm-plugins-misc-doc, doxygen.cfg, doxygen)
+
+
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AC_CONFIG_HEADER([include/config.h])
 
@@ -83,6 +97,13 @@ PKG_CHECK_MODULES(LIBDRES, libdres)
 AC_SUBST(LIBDRES_CFLAGS)
 AC_SUBST(LIBDRES_LIBS)
 
+#PKG_CHECK_MODULES(DOXYGEN, doxygen >= 1.5.6)
+#AC_SUBST(DOXYGEN_CFLAGS)
+#AC_SUBST(DOXYGEN_LIBS)
+
+PKG_CHECK_MODULES(LIBXSLT, libxslt >= 1.1.22)
+AC_SUBST(LIBXSLT_CFLAGS)
+AC_SUBST(LIBXSLT_LIBS)
 
 # OHM build compatibility variables.
 AC_SUBST(OHM_PLUGIN_CFLAGS, "$LIBOHMPLUGIN_CFLAGS $LIBOHMFACT_CFLAGS $GLIB_CFLAGS $DBUS_CFLAGS $GMODULE_CFLAGS")
@@ -92,6 +113,8 @@ AC_SUBST(OHM_CONF_DIR, "\$(sysconfdir)/ohm")
 AC_SUBST(OHM_PLUGIN_CONF_DIR, "\$(OHM_CONF_DIR)/plugins.d")
 AC_SUBST(OHM_PLUGIN_DIR, "\$(libdir)/ohm")
 
+
+
 AC_CONFIG_FILES([Makefile
                  plugins/Makefile
                  plugins/accessories/Makefile
@@ -100,5 +123,6 @@ AC_CONFIG_FILES([Makefile
                  plugins/playback/Makefile
                  plugins/profile/Makefile
                  plugins/signaling/Makefile
-                 plugins/signaling/tests/Makefile])
+                 plugins/signaling/tests/Makefile
+		 doc/Makefile])
 AC_OUTPUT

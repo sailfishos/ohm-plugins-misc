@@ -5,6 +5,7 @@ all-local:
 	        TOPDIR=$(abs_top_srcdir) MODULEDIR=$$f $(DX_DOXYGEN) Doxyfile;\
 	        doxydir=$$f/doxygen ; \
 	        doxmldir=$$doxydir/xml ; \
+	        mkdir -p $$doxmldir ; \
 	        dxfiles=`cd $$doxmldir; echo *_8c.xml`; \
 	        for df in $$dxfiles ; do \
 	            module=`echo $$df | sed -e s/_8c.xml//`; \

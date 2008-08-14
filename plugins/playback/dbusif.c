@@ -1,3 +1,5 @@
+/*! \defgroup pubif Public Interfaces */
+
 typedef struct {
     char                 *dbusid;
     char                 *object;
@@ -35,6 +37,11 @@ static void set_property_cb(DBusPendingCall *, void *);
 static void free_set_property_cb_data(void *);
 static void initialize_notification_registry(void);
 static prop_notif_t *find_property_notifier(char *);
+
+/*! \addtogroup pubif
+ *  Functions
+ *  @{
+ */
 
 static void dbusif_init(OhmPlugin *plugin)
 {
@@ -143,7 +150,15 @@ static void dbusif_init(OhmPlugin *plugin)
     initialize_notification_registry();
 }
 
-
+/*!
+ * \brief Convenience function to reply to a client issued
+ *        \em state \em change \em request.
+ *
+ * This supposed to be the long description for the function
+ *
+ * \param msg Pointer to the D-Bus message to be replied.
+ * \param state The state granted to the client.
+ */
 static void dbusif_reply_to_req_state(DBusMessage *msg, const char *state)
 {
     DBusMessage    *reply;
@@ -394,6 +409,10 @@ static void dbusif_send_info_to_pep(char *oper, char *group, char *pidstr,
 
     dbus_message_unref(msg);
 }
+
+/*!
+ * @}
+ */
 
 static DBusHandlerResult name_changed(DBusConnection *conn, DBusMessage *msg,
                                       void *user_data)
