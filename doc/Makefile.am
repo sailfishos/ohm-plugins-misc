@@ -1,8 +1,9 @@
 
 all-local:
+	@echo "stylesheet $(PD_DOXML2DB_STY)"
 	@for f in *; do \
 	    if [ -d $$f ] ; then \
-	        TOPDIR=$(abs_top_srcdir) MODULEDIR=$$f $(DX_DOXYGEN) Doxyfile;\
+	        TOPDIR=$(abs_top_srcdir) MODULEDIR=$$f $(PD_DOXYGEN) Doxyfile;\
 	        doxydir=$$f/doxygen ; \
 	        doxmldir=$$doxydir/xml ; \
 	        mkdir -p $$doxmldir ; \
@@ -10,7 +11,8 @@ all-local:
 	        for df in $$dxfiles ; do \
 	            module=`echo $$df | sed -e s/_8c.xml//`; \
 	            echo "xsltproc $$module"; \
-	            /usr/bin/xsltproc /usr/share/policy/doc-tools/doxygen/dbdoxml.sty $$doxmldir/$$df > $$doxydir/$$f_$$module.xml ; \
+	            $(PD_XSLTPROC) $(PD_DOXML2DB_STY) $$doxmldir/$$df \
+	                > $$doxydir/$$f_$$module.xml ; \
 	        done ; \
 	        rm -rf $$doxmldir; \
 	    fi; \

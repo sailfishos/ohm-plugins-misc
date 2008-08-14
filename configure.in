@@ -5,18 +5,7 @@ AC_PREREQ(2.61)
 AC_INIT(ohm-plugins-misc, 0.1)
 AC_CONFIG_SRCDIR([plugins/profile/profile.c])
 
-
-# inherited stuff that should be cleaned up later
-DX_HTML_FEATURE(OFF)
-DX_CHM_FEATURE(OFF)
-DX_CHI_FEATURE(OFF)
-DX_MAN_FEATURE(OFF)
-DX_RTF_FEATURE(OFF)
-DX_XML_FEATURE(ON)
-DX_PDF_FEATURE(OFF)
-DX_PS_FEATURE(OFF)
-DX_INIT_DOXYGEN(ohm-plugins-misc-doc, doxygen.cfg, doxygen)
-
+DOC_SUPPORT_INIT()
 
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AC_CONFIG_HEADER([include/config.h])
