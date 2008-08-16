@@ -6,6 +6,13 @@ AC_DEFUN([DOC_SUPPORT_INIT], [
 PD_DOC_SUPPORT_DEFVAL=true
 PD_DOCTOOL_PATH=/usr/share/policy-doc-tools
 
+AC_PATH_TOOL([PD_LYX], lyx)
+
+AS_IF([test x$PD_LYX = x],
+      [PD_DOC_SUPPORT_DEFVAL=false
+       AC_MSG_WARN([Can't find lyx. doc-support is going to be disabled])]
+)
+
 AC_PATH_TOOL([PD_DOXYGEN], doxygen)
 
 AS_IF([test x$PD_DOXYGEN = x],

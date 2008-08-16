@@ -1,8 +1,17 @@
 
 all-local:
-	@echo "stylesheet $(PD_DOXML2DB_STY)"
 	@for f in *; do \
 	    if [ -d $$f ] ; then \
+	        echo "===== building doc's for '$$f' module ====="; \
+	        pushd $$f/lyx ; \
+	        lyxfiles=`echo *.lyx` ;\
+		for lf in $$lyxfiles ; do \
+	            xf=$(sunst %.lyx, %.xml, $$lf); \
+	            echo "export $$lf"; \
+	            rm -f $$xf; \
+	            $(PD_LYX) --export docbook-xml $$lf ; \
+	        done ; \
+	        popd ;\
 	        TOPDIR=$(abs_top_srcdir) MODULEDIR=$$f $(PD_DOXYGEN) Doxyfile;\
 	        doxydir=$$f/doxygen ; \
 	        doxmldir=$$doxydir/xml ; \
