@@ -11,6 +11,7 @@
     
 #include <check.h>
 #include "../profile.h"
+#include "../profile.c"
 
 GMainLoop *loop;
 int user_data = 0;
@@ -49,13 +50,27 @@ END_TEST
 
 static void test_fact_inserted(OhmFactStore *fs, OhmFact *fact, gpointer data)
 {
-    /* printf("> test_fact_inserted\n"); */
+#if 1
+    printf("> test_fact_inserted\n");
+#endif
+    g_main_loop_quit(loop);
 }
 
 static void test_fact_updated(OhmFactStore *fs, OhmFact *fact, gchar *field, GValue *value, gpointer data)
 {
-    /* printf("> test_fact_updated: '%s', '%s'\n", field, g_value_get_string(value)); */
+#if 0
+    fail_unless (G_VALUE_TYPE(value) == G_TYPE_STRING, "value for key '%s' is wrong type", field);
+#endif
+    printf("> test_fact_updated\n");
     g_main_loop_quit(loop);
+}
+
+gboolean set_value(gpointer data)
+{
+    gchar *value = (gchar *) data;
+    printf("setting key RINGTONE to '%s'\n", value);
+    profile_set_value("silent", "RINGTONE", value);
+    return FALSE;
 }
 
 gboolean set_profile(gpointer data)
@@ -70,36 +85,40 @@ START_TEST (test_profile_name_change)
     
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
     OhmFact *fact = NULL;
-    OhmFactStoreView *view;
 
     GValue  *gv;
     GSList *list = NULL, *fields = NULL;
     GSList *e = NULL;
-    gchar *strval;
+    gchar *strval, *profile_name;
      
     DBusError error;
     DBusConnection *c;
+    profile_plugin *plugin = NULL;
     
+    dbus_error_init(&error);
+
+    c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
+    plugin = init_profile(c, 0, 0);
+    fail_if(plugin == NULL, "Plugin not initialized correctly");
+    
+    printf("fs test: '%p'\n", fs);
+
+#if 1
     /* start from the silent profile */
-    profile_set_profile("silent");
-
-    view = ohm_fact_store_new_view(fs, NULL);
-    fail_if (view == NULL, "could not make fact store view");
-
-    e = g_slist_prepend(NULL, ohm_pattern_new(FACTSTORE_PROFILE));
-    ohm_fact_store_view_set_interested(view, e);
+    profile_name = profile_get_profile();
+    if (strcmp(profile_name, "silent") != 0) {
+        g_idle_add(set_profile, "silent");
+        g_main_loop_run(loop);
+        free(profile_name);
+    }
+#endif
 
     /* register the signal handlers */
     g_signal_connect(fs, "inserted", G_CALLBACK(test_fact_inserted), NULL);
     g_signal_connect(fs, "updated", G_CALLBACK(test_fact_updated), NULL);
-    dbus_error_init(&error);
 
-    printf("fs test: '%p'\n", fs);
-    c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-    profile_plugin *plugin = init_profile(c, 0, 0);
-    fail_if(plugin == NULL, "Plugin not initialized correctly");
-    
     /* 1. read the initial value, check it */
+#if 1
 
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
     fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
@@ -119,6 +138,7 @@ START_TEST (test_profile_name_change)
         GQuark qk = (GQuark)GPOINTER_TO_INT(e->data);
         const gchar *field_name = g_quark_to_string(qk);
 
+        printf("field '%s'\n", field_name);
         gv = ohm_fact_get(fact, field_name);
         fail_if (gv == NULL, "value error");
         fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
@@ -129,14 +149,10 @@ START_TEST (test_profile_name_change)
     }
     
     /* 2. call libprofile to change the profile and check it */
-    
-#if 0
-    ret = system("/usr/bin/profileclient -p general");
-    fail_if (ret != 0, "profileclient failed");
 #endif
-
     g_idle_add(set_profile, "general");
     g_main_loop_run(loop);
+#if 1
     
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
     fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
@@ -168,10 +184,6 @@ START_TEST (test_profile_name_change)
 
     fail_unless(strcmp(strval, "general") == 0, "profile not 'general': '%s'", strval);
 
-#if 0
-    ret = system("/usr/bin/profileclient -p silent");
-    fail_if (ret != 0, "profileclient failed");
-#endif
     g_idle_add(set_profile, "silent");
     g_main_loop_run(loop);
 
@@ -186,29 +198,167 @@ START_TEST (test_profile_name_change)
     strval = g_value_get_string(gv);
 
     fail_unless(strcmp(strval, "silent") == 0, "profile not 'silent': '%s'", strval);
+#endif
+    deinit_profile(plugin);
+
+END_TEST
+
+START_TEST (find_segfault)
+
+    profileval_t *values = NULL;
+    DBusConnection *c;
+    profile_plugin *plugin = NULL;
+    DBusError error;
+    OhmFactStore *fs = ohm_fact_store_get_fact_store();
     
+    dbus_error_init(&error);
+    c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
+    
+    plugin = init_profile(c, 0, 0);
+    fail_if(plugin == NULL, "Plugin not initialized correctly");
+    
+    values = profile_get_values("silent");
+    profile_create_fact("silent", values);
+    profile_free_values(values);
+    
+    values = profile_get_values("general");
+    profile_create_fact("general", values);
+    profile_free_values(values);
+    
+    values = profile_get_values("silent");
+    profile_create_fact("silent", values);
+    profile_free_values(values);
+    
+    values = profile_get_values("general");
+    profile_create_fact("general", values);
+    profile_free_values(values);
+
+    values = profile_get_values("silent");
+    profile_create_fact("silent", values);
+    profile_free_values(values);
+    
+    deinit_profile(plugin);
+
+END_TEST
+
+START_TEST (find_segfault_2)
+    
+    profileval_t *values = NULL;
+    DBusConnection *c;
+    profile_plugin *plugin = NULL;
+    DBusError error;
+    
+    OhmFactStore *fs = ohm_fact_store_get_fact_store();
+
+    dbus_error_init(&error);
+    c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
+    
+    plugin = init_profile(c, 0, 0);
+    fail_if(plugin == NULL, "Plugin not initialized correctly");
+    
+    /* register the signal handlers */
+    g_signal_connect(fs, "inserted", G_CALLBACK(test_fact_inserted), NULL);
+    g_signal_connect(fs, "updated", G_CALLBACK(test_fact_updated), NULL);
+
+    g_idle_add(set_profile, "general");
+    g_main_loop_run(loop);
+    
+    g_idle_add(set_profile, "silent");
+    g_main_loop_run(loop);
+
     deinit_profile(plugin);
 
 END_TEST
 
 START_TEST (test_profile_value_change)
     
+    OhmFactStore *fs = ohm_fact_store_get_fact_store();
+    OhmFact *fact = NULL;
+
+    GValue  *gv;
+    GSList *list = NULL;
+    gchar *strval;
+     
     DBusError error;
     DBusConnection *c;
+    
+    /* start from the silent profile */
+    profile_set_profile("silent");
+
+    /* register the signal handlers */
+    g_signal_connect(fs, "inserted", G_CALLBACK(test_fact_inserted), NULL);
+    g_signal_connect(fs, "updated", G_CALLBACK(test_fact_updated), NULL);
     dbus_error_init(&error);
 
+    printf("fs test: '%p'\n", fs);
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
     profile_plugin *plugin = init_profile(c, 0, 0);
     fail_if(plugin == NULL, "Plugin not initialized correctly");
+    
+    /* 1. read the initial value, check it */
 
-    /* TODO: 
-     *
-     * 1. read the initial value, check it
-     * 2. call the command line utility to change a particular value in
-     *    the profile
-     * 3. read the new value, check it
-     *
-     * */
+    list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
+    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+            g_slist_length(list));
+
+    fact = list->data;
+    fail_if (fact == NULL, "fact not in fact store");
+    /* a field is removed if the value is set to NULL */
+    
+    /* there is a field called RINGTONE */
+    gv = ohm_fact_get(fact, "RINGTONE");
+
+    fail_if (gv == NULL, "value error");
+    fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
+
+    strval = g_value_get_string(gv);
+    
+    fail_unless (strval != NULL, "incorrect string");
+    
+    /* 2. call libprofile to change the value and check it */
+
+#define TEST_RINGTONE_1 "test_1.mp3"
+#define TEST_RINGTONE_2 "test_2.mp3"
+
+    g_idle_add(set_value, TEST_RINGTONE_1);
+    g_main_loop_run(loop);
+    
+    list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
+    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+            g_slist_length(list));
+
+    fact = list->data;
+    fail_if (fact == NULL, "fact not in fact store");
+
+    gv = ohm_fact_get(fact, "RINGTONE");
+
+    fail_if (gv == NULL, "value error");
+    fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
+
+    strval = g_value_get_string(gv);
+    
+    fail_unless (strval != NULL && strcmp(strval, TEST_RINGTONE_1) == 0,  "incorrect string '%s', should be '%s'", strval, TEST_RINGTONE_1);
+
+    g_idle_add(set_value, TEST_RINGTONE_2);
+    g_main_loop_run(loop);
+
+    list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
+    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+            g_slist_length(list));
+
+    fact = list->data;
+    fail_if (fact == NULL, "fact not in fact store");
+
+    gv = ohm_fact_get(fact, "RINGTONE");
+
+    fail_if (gv == NULL, "value error");
+    fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
+
+    strval = g_value_get_string(gv);
+    
+    fail_unless (strval != NULL && strcmp(strval, TEST_RINGTONE_2) == 0,  "incorrect string '%s', should be '%s'", strval, TEST_RINGTONE_2);
+#undef TEST_RINGTONE_2
+#undef TEST_RINGTONE_1
 
     deinit_profile(plugin);
 
@@ -222,8 +372,10 @@ Suite *ohm_profile_suite(void)
     tcase_add_checked_fixture(tc_all, setup, teardown);
 
     tcase_add_test(tc_all, test_profile_init_deinit);
+    tcase_add_test(tc_all, find_segfault);
+    tcase_add_test(tc_all, find_segfault_2);
     tcase_add_test(tc_all, test_profile_name_change);
-    /* tcase_add_test(tc_all, test_profile_value_change); */
+    tcase_add_test(tc_all, test_profile_value_change);
     
     tcase_set_timeout(tc_all, 120);
     suite_add_tcase(suite, tc_all);

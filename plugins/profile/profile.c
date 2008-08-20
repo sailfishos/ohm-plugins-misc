@@ -36,7 +36,6 @@ OHM_PLUGIN_DESCRIPTION("profile",
         OHM_LICENSE_NON_FREE, plugin_init, plugin_exit,
         NULL);
 
-
 static gboolean profile_create_fact(const char *profile, profileval_t *values)
 {
 
@@ -49,7 +48,6 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
         return FALSE;
 
     /* get the previous fact with the profile name */
-    /* printf("fs plugin: '%p'\n", fs); */
 
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
 
@@ -58,20 +56,34 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
         return FALSE;
     }
     else if (g_slist_length(list) == 1) {
-        g_print("A profile exists already, modifying it\n");
-        /* remove existing fields */
         fact = list->data;
+
         if (fact) {
-            /* a field is removed if the value is set to NULL */
-            GSList *e = NULL;
-            GSList *fields = ohm_fact_get_fields(fact);
-            for (e = fields; e != NULL; e = g_slist_next(e)) {
-                /* Factstore magic! */
-                GQuark qk = (GQuark)GPOINTER_TO_INT(e->data);
-                const gchar *field_name = g_quark_to_string(qk);
-                /* FIXME: do we need to free the current field value? */
-                ohm_fact_set(fact, field_name, NULL);
-            }
+            GSList *fields = NULL, *e = NULL;
+            gboolean process = TRUE; 
+
+            /* remove existing fields */
+#if 0
+            g_print("A profile exists already, modifying it\n");
+            g_print("reseting fact: fs: %p, fact: %p\n", fs, fact);
+#endif
+
+            do {
+                fields = ohm_fact_get_fields(fact);
+                gboolean found = FALSE;
+
+                for (e = fields; e != NULL; e = g_slist_next(e)) {
+                    GQuark qk = (GQuark)GPOINTER_TO_INT(e->data);
+                    const gchar *field_name = g_quark_to_string(qk);
+                    ohm_fact_del(fact, field_name);
+                    found = TRUE;
+                    break;
+                }
+
+                if (!found)
+                    process = FALSE;
+
+            } while (process);
         }
     }
     else {
@@ -83,7 +95,7 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
     /* fill the fact with the profile name and the values */
 
     g_print("setting key %s with value %s\n", PROFILE_NAME_KEY, profile);
-    gval = ohm_value_from_string(profile);
+    gval = ohm_value_from_string(g_strdup(profile));
     ohm_fact_set(fact, PROFILE_NAME_KEY, gval);
 
     if (values) {
@@ -97,6 +109,7 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
         }
     }
 
+    g_print("created fact: fs: %p, fact: %p\n", fs, fact);
     /* put the fact in the factstore */
 
     return ohm_fact_store_insert(fs, fact);
@@ -113,21 +126,34 @@ static void profile_value_change(const char *profile, const char *key, const cha
     /* get the previous fact with the profile name */
     GSList *list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
 
-    /* printf("> profile value change\n"); */
+#if 1
+    printf("> profile value change: '%s', '%s'\n", key, val);
+#endif
 
     if (g_slist_length(list) != 1) {
-        g_print("Error: there isn't an unique profile fact\n");
+        g_print("Error: there isn't a unique profile fact\n");
         return;
     }
     fact = list->data;
     if (fact && key) {
         GValue *gval = NULL;
+        
+        gval = ohm_fact_get(fact, key);
+        if (gval &&
+                G_VALUE_TYPE(gval) == G_TYPE_STRING &&
+                strcmp(val, g_value_get_string(gval)) == 0) {
+        
+            /* the value is already there, no need to trigger an update */
+            return;
+        }
+
+        gval = NULL;
 
         /* change the value */
         if (val)
             gval = ohm_value_from_string(val);
 
-        g_print("setting key %s with value %s\n", key, val);
+        g_print("changing key %s with value %s\n", key, val);
         ohm_fact_set(fact, key, gval);
     }
     else {
@@ -145,12 +171,14 @@ static void profile_name_change(const char *profile)
 
     profileval_t *values = NULL;
 
-    /* printf("> profile name change\n"); */
+#if 0
+    printf("> profile name change: '%s'\n", profile);
+#endif
 
     if (!profile)
         return;
 
-    profile_get_values(profile);
+    values = profile_get_values(profile);
 
     /* empty 'values' means that the profile is empty */
 
@@ -180,7 +208,7 @@ profile_plugin * init_profile()
         g_free(plugin);
         return NULL;
     }
-
+    
     /* subscribe to the profile change notification */
     
     profile_track_set_profile_cb(profile_name_change);
