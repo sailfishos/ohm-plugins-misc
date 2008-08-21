@@ -13,10 +13,10 @@ profile_plugin *profile_plugin_p;
 static void
 plugin_init(OhmPlugin * plugin)
 {
-    g_print("> Profile plugin init\n");
+    /* g_print("> Profile plugin init\n"); */
     /* should we ref the connection? */
     profile_plugin_p = init_profile();
-    g_print("< Profile plugin init\n");
+    /* g_print("< Profile plugin init\n"); */
     return;
 }
 
@@ -26,7 +26,7 @@ plugin_exit(OhmPlugin * plugin)
     if (profile_plugin_p) {
         deinit_profile(profile_plugin_p);
     }
-    g_free(profile_plugin_p);
+    profile_plugin_p = NULL;
     return;
 }
 
@@ -55,7 +55,8 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
         g_print("Error: multiple profile facts\n");
         return FALSE;
     }
-    else if (g_slist_length(list) == 1) {
+
+    if (g_slist_length(list) == 1) {
         fact = list->data;
 
         if (fact) {
@@ -90,12 +91,15 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
         /* no previous fact */
         g_print("Creating a new profile fact\n");
         fact = ohm_fact_new(FACTSTORE_PROFILE);
+        /* put the fact in the factstore -- this way we have the same
+         * update semantics (update called on each key) */
+        ohm_fact_store_insert(fs, fact); /* TODO: check return */
     }
 
     /* fill the fact with the profile name and the values */
 
     g_print("setting key %s with value %s\n", PROFILE_NAME_KEY, profile);
-    gval = ohm_value_from_string(g_strdup(profile));
+    gval = ohm_value_from_string(profile);
     ohm_fact_set(fact, PROFILE_NAME_KEY, gval);
 
     if (values) {
@@ -110,9 +114,8 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
     }
 
     g_print("created fact: fs: %p, fact: %p\n", fs, fact);
-    /* put the fact in the factstore */
 
-    return ohm_fact_store_insert(fs, fact);
+    return TRUE;
 }
 
 static void profile_value_change(const char *profile, const char *key, const char *val, const char *type)
@@ -245,8 +248,9 @@ void deinit_profile(profile_plugin *plugin)
 {
     /* unregister to the notifications */
     profile_tracker_quit();
+    g_free(profile_plugin_p);
 
-    /* TODO: delete the previously created fact */
+    /* TODO: delete the previously created fact? */
 }
 
 

@@ -56,12 +56,13 @@ static void test_fact_inserted(OhmFactStore *fs, OhmFact *fact, gpointer data)
     g_main_loop_quit(loop);
 }
 
-static void test_fact_updated(OhmFactStore *fs, OhmFact *fact, gchar *field, GValue *value, gpointer data)
+static void test_fact_updated(OhmFactStore *fs, OhmFact *fact, GQuark field, GValue *value, gpointer data)
 {
-#if 0
-    fail_unless (G_VALUE_TYPE(value) == G_TYPE_STRING, "value for key '%s' is wrong type", field);
+    printf("> test_fact_updated: %p, %p, %i, %p\n", fs, fact, field, value);
+#if 1
+    if (value)
+        fail_unless (G_VALUE_TYPE(value) == G_TYPE_STRING, "value for key '%u' is wrong type", field);
 #endif
-    printf("> test_fact_updated\n");
     g_main_loop_quit(loop);
 }
 
