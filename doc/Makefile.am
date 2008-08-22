@@ -20,7 +20,7 @@ all-local:
 	        for df in $$dxfiles ; do \
 	            module=`echo $$df | sed -e s/_8c.xml//`; \
 	            echo "xsltproc $$module"; \
-	            echo $(PD_XSLTPROC) $(PD_DOXML2DB_STY) $$doxmldir/$$df \
+	            $(PD_XSLTPROC) $(PD_DOXML2DB_STY) $$doxmldir/$$df \
 	                > $${doxydir}/$${f}_$${module}.xml ; \
 	        done ; \
 	        rm -rf $$doxmldir; \
