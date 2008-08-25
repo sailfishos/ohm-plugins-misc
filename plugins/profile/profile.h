@@ -25,13 +25,11 @@
 
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
-
-#include <dres/dres.h>
-#include <dres/variables.h>
+#include <ohm/ohm-plugin-debug.h>
 
 #define FACTSTORE_PREFIX "com.nokia.policy"
-#define FACTSTORE_PROFILE             FACTSTORE_PREFIX ".profile"
-#define PROFILE_NAME_KEY "profile_name"
+#define FACTSTORE_PROFILE             FACTSTORE_PREFIX ".current_profile"
+#define PROFILE_NAME_KEY "value"
 
 typedef struct _profile_plugin {
     gchar *current_profile;

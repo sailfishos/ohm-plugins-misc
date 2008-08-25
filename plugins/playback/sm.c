@@ -312,7 +312,7 @@ static int sm_process_event(sm_t *sm, sm_evdata_t *evdata)
         return FALSE;
     }
 
-    if (stid_invalid == stid || stid >= stid_max) {
+    if (stid < stid_invalid || stid >= stid_max) {
         OHM_ERROR("[%s] current state %d is out of range (0 - %d)",
                   sm->name, stid, stid_max-1);
         return FALSE;

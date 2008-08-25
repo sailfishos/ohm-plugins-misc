@@ -7,7 +7,12 @@
  */
 
 #include "signaling.h"
-#include <ohm/ohm-plugin.h>
+
+static int DBG_SIGNALING, DBG_FACTS;
+
+OHM_DEBUG_PLUGIN(signaling,
+    OHM_DEBUG_FLAG("signaling", "Signaling events" , &DBG_SIGNALING),
+    OHM_DEBUG_FLAG("facts"    , "fact manipulation", &DBG_FACTS));
 
 /* completion cb type */
 typedef void (*completion_cb_t)(int transid, int success);
@@ -130,7 +135,7 @@ plugin_init(OhmPlugin * plugin)
 {
     DBusConnection *c = ohm_plugin_dbus_get_connection();
     /* should we ref the connection? */
-    init_signaling(c);
+    init_signaling(c, DBG_SIGNALING, DBG_FACTS);
     return;
 }
 

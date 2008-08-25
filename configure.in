@@ -4,6 +4,9 @@
 AC_PREREQ(2.61)
 AC_INIT(ohm-plugins-misc, 0.1)
 AC_CONFIG_SRCDIR([plugins/profile/profile.c])
+
+DOC_SUPPORT_INIT()
+
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AC_CONFIG_HEADER([include/config.h])
 
@@ -83,6 +86,10 @@ PKG_CHECK_MODULES(LIBDRES, libdres)
 AC_SUBST(LIBDRES_CFLAGS)
 AC_SUBST(LIBDRES_LIBS)
 
+# PKG_CHECK_MODULES(LIBXSLT, libxslt >= 1.1.19)
+# AC_SUBST(LIBXSLT_CFLAGS)
+# AC_SUBST(LIBXSLT_LIBS)
+
 # OHM build compatibility variables.
 AC_SUBST(OHM_PLUGIN_CFLAGS, "$LIBOHMPLUGIN_CFLAGS $LIBOHMFACT_CFLAGS $GLIB_CFLAGS $DBUS_CFLAGS $GMODULE_CFLAGS")
 AC_SUBST(OHM_PLUGIN_LIBS, "$LIBOHMPLUGIN_LIBS $LIBOHMFACT_LIBS $GLIB_LIBS $DBUS_LIBS $GMODULE_LIBS")
@@ -90,6 +97,8 @@ AC_SUBST(OHM_PLUGIN_LIBS, "$LIBOHMPLUGIN_LIBS $LIBOHMFACT_LIBS $GLIB_LIBS $DBUS_
 AC_SUBST(OHM_CONF_DIR, "\$(sysconfdir)/ohm")
 AC_SUBST(OHM_PLUGIN_CONF_DIR, "\$(OHM_CONF_DIR)/plugins.d")
 AC_SUBST(OHM_PLUGIN_DIR, "\$(libdir)/ohm")
+
+
 
 AC_CONFIG_FILES([Makefile
                  plugins/Makefile
@@ -101,5 +110,6 @@ AC_CONFIG_FILES([Makefile
                  plugins/profile/Makefile
                  plugins/profile/tests/Makefile
                  plugins/signaling/Makefile
-                 plugins/signaling/tests/Makefile])
+                 plugins/signaling/tests/Makefile
+		 doc/Makefile])
 AC_OUTPUT

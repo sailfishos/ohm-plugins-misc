@@ -24,11 +24,9 @@
 
 #include "signaling_marshal.h"
 
-#if 0
-#include <dres/dres.h>
-#include <dres/variables.h>
-#endif
+#include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
+#include <ohm/ohm-plugin-debug.h>
 
 
 #define DBUS_INTERFACE_POLICY    "com.nokia.policy"
