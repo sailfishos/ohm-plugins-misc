@@ -23,7 +23,7 @@
 #include <gmodule.h>
 #include <dbus/dbus.h>
 
-#include <libhal.h>
+#include <hal/libhal.h>
 
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin.h>

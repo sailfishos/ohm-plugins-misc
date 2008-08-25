@@ -83,7 +83,6 @@ PKG_CHECK_MODULES(LIBDRES, libdres)
 AC_SUBST(LIBDRES_CFLAGS)
 AC_SUBST(LIBDRES_LIBS)
 
-
 # OHM build compatibility variables.
 AC_SUBST(OHM_PLUGIN_CFLAGS, "$LIBOHMPLUGIN_CFLAGS $LIBOHMFACT_CFLAGS $GLIB_CFLAGS $DBUS_CFLAGS $GMODULE_CFLAGS")
 AC_SUBST(OHM_PLUGIN_LIBS, "$LIBOHMPLUGIN_LIBS $LIBOHMFACT_LIBS $GLIB_LIBS $DBUS_LIBS $GMODULE_LIBS")
@@ -97,8 +96,10 @@ AC_CONFIG_FILES([Makefile
                  plugins/accessories/Makefile
                  plugins/console/Makefile
                  plugins/hal/Makefile
+                 plugins/hal/tests/Makefile
                  plugins/playback/Makefile
                  plugins/profile/Makefile
+                 plugins/profile/tests/Makefile
                  plugins/signaling/Makefile
                  plugins/signaling/tests/Makefile])
 AC_OUTPUT

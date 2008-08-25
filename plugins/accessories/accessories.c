@@ -57,12 +57,13 @@ static void plugin_exit(OhmPlugin *plugin)
 
 gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data) {
 
-    gchar *fact_name = "com.nokia.policy.accessories", *udi_hal, *udi_fs;
+    gchar *fact_name = "com.nokia.policy.accessories";
+    const gchar *udi_hal, *udi_fs;
     OhmFact *fact = NULL;
     /* OhmFactStore *fs = ohm_fact_store_get_fact_store(); */
     GSList *list = NULL;
     GValue *udi_val_hal, *udi_val_fs;
-    GValue *val_s = NULL, *val_i = NULL;
+    GValue *val_i = NULL;
     GSList *fields = NULL, *k = NULL, *i = NULL;
     /* gchar *udi = NULL; */
 
@@ -80,7 +81,7 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
 
             GQuark qk = (GQuark)GPOINTER_TO_INT(k->data);
             const gchar *field_name = g_quark_to_string(qk);
-            gchar *value;
+            const gchar *value;
             GValue *gval = ohm_fact_get(of, field_name);
 
             if (G_VALUE_TYPE(gval) == G_TYPE_STRING) {
@@ -149,12 +150,12 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
 
 static gboolean headset_deinit(OhmPlugin *plugin)
 {
-    unset_observer(token);
+    return unset_observer(token);
 }
 
 static gboolean headset_init(OhmPlugin *plugin)
 {
-    set_observer("headset", headset_cb, token);
+    return set_observer("headset", headset_cb, token);
 }
 
 /* headset part ends */

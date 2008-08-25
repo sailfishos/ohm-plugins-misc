@@ -8,12 +8,12 @@
 
 #include "hal.h"
 
+#undef OPTIMIZED
+
 static int DBG_HAL, DBG_FACTS;
 
 /* FIXME:
  *
- * - Add support to adding/removing device capabilities (new fields in
- *   OhmFacts
  * - How do the 64-bit uints map to any allowed OhmFact types?
  */
 
@@ -33,6 +33,7 @@ typedef struct _decorator {
     void *user_data;
 } decorator;
 
+#if 0
 static gchar * escape_udi(const char *hal_udi)
 {
     /* returns an escaped copy of the udi:
@@ -69,8 +70,9 @@ static gchar * escape_udi(const char *hal_udi)
     return escaped_udi;
 
 }
+#endif
 
-#if OPTIMIZED
+#ifdef OPTIMIZED
 static gboolean property_has_capability(LibHalPropertySet *properties, gchar *capability)
 {
 
@@ -83,13 +85,22 @@ static gboolean property_has_capability(LibHalPropertySet *properties, gchar *ca
 
     for (i = 0; i < len; i++, libhal_psi_next(&iter)) {
         char *key = libhal_psi_get_key(&iter);
-        if (strdup(key, "info.capabilities") == 0) {
-            /* TODO: check if the capability is there */
-        
+
+        if (strcmp(key, "info.capabilities") == 0) {
+            if (libhal_psi_get_type(&iter) == LIBHAL_PROPERTY_TYPE_STRLIST) {
+                char **strlist = libhal_psi_get_strlist(&iter);
+
+                while (strlist) {
+                    char *str = *strlist;
+                    if (strcmp(str, capability) == 0) {
+                        return TRUE;
+                    }
+                    strlist++;
+                }
+            }
         }
     }
-
-    return TRUE;
+    return FALSE;
 }
 #endif
 
@@ -111,7 +122,9 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi, const char *ca
     LibHalPropertySetIterator iter;
     OhmFact *fact = NULL;
     int i, len;
+#if 0
     gchar *escaped_udi = escape_udi(udi);
+#endif
     GValue *val = NULL;
 
 #if 0
@@ -230,21 +243,72 @@ static gboolean process_udi(hal_plugin *plugin, gboolean added, gboolean removed
     return match;
 }
 
+#if 1
+/* WIP! */
+
 static void
 hal_capability_added_cb (LibHalContext *ctx,
         const char *udi, const char *capability)
 {
+    hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
+    GSList *e = NULL;
+
     OHM_DEBUG(DBG_FACTS, "> hal_capability_added_cb: udi '%s', capability: '%s'\n", udi, capability);
-    /* TODO */
+
+    for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
+        decorator *dec = e->data;
+
+        if (strcmp(dec->capability, capability) == 0) {
+            gchar *dup_udi = g_strdup(udi);
+            /* printf("allocated udi string '%s' at '%p'\n", dup_udi, dup_udi); */
+            dec->devices = g_slist_prepend(dec->devices, dup_udi);
+            process_decoration(plugin, dec, TRUE, FALSE, dup_udi);
+        }
+    }
+
+    return;
 }
 
 static void
 hal_capability_lost_cb (LibHalContext *ctx,
         const char *udi, const char *capability)
 {
+    hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
+    GSList *e;
+
     OHM_DEBUG(DBG_FACTS, "> hal_capability_lost_cb: udi '%s', capability: '%s'\n", udi, capability);
-    /* TODO */
+    
+#if 0
+    if (process_udi(plugin, FALSE, TRUE, udi))
+        libhal_device_remove_property_watch(ctx, udi, NULL);
+#else
+    for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
+        decorator *dec = e->data;
+
+        if (has_udi(dec, udi)) {
+
+            /* we are currently interested in the device that lost a
+             * capability */
+
+            if (strcmp(dec->capability, capability) == 0) {
+                GSList *orig = g_slist_find_custom(dec->devices, udi, g_str_equal);
+                if (orig) {
+                    /* printf("freed(1) udi string '%s' at '%p'\n", (gchar *) orig->data, orig->data); */
+                    dec->devices = g_slist_remove_link(dec->devices, orig);
+                    g_free(orig->data);
+                    g_slist_free_1(orig);
+                }
+                else {
+                    OHM_DEBUG(DBG_FACTS, "Device was not found from the decorator list!\n");
+                }
+                process_decoration(plugin, dec, FALSE, TRUE, udi);
+            }
+        }
+    }
+#endif
+    return;
 }
+#endif
 
 static void
 hal_device_added_cb (LibHalContext *ctx,
@@ -252,7 +316,7 @@ hal_device_added_cb (LibHalContext *ctx,
 {
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
     DBusError error;
-#if OPTIMIZED
+#ifdef OPTIMIZED
     LibHalPropertySet *properties = NULL;
 #endif
     GSList *e;
@@ -261,7 +325,7 @@ hal_device_added_cb (LibHalContext *ctx,
     OHM_DEBUG(DBG_FACTS, "> hal_device_added_cb: udi '%s'\n", udi);
     dbus_error_init(&error);
 
-#if OPTIMIZED
+#ifdef OPTIMIZED
     /* get the fact from the HAL */
     properties = libhal_device_get_all_properties(plugin->hal_ctx, udi, &error);
 #endif
@@ -276,7 +340,7 @@ hal_device_added_cb (LibHalContext *ctx,
     
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
-#if OPTIMIZED
+#ifdef OPTIMIZED
         if (property_has_capability(properties, dec->capability)) {
 #else
         if (libhal_device_query_capability(plugin->hal_ctx, udi, dec->capability, &error)) {
@@ -291,7 +355,7 @@ hal_device_added_cb (LibHalContext *ctx,
         }
     }
 
-#if OPTIMIZED
+#ifdef OPTIMIZED
     libhal_free_property_set(properties);
 #endif
 
@@ -316,17 +380,16 @@ hal_device_removed_cb (LibHalContext *ctx,
         if (has_udi(dec, udi)) {
             orig = g_slist_find_custom(dec->devices, udi, g_str_equal);
             if (orig) {
-                dec->devices = g_slist_remove(dec->devices, orig->data);
-                /* FIXME: free the UDI? */
+                /* printf("freed(2) udi string '%s' at '%p'\n", (gchar *) orig->data, orig->data); */
+                dec->devices = g_slist_remove_link(dec->devices, orig);
+                g_free(orig->data);
+                g_slist_free_1(orig);
             }
             else {
                 OHM_DEBUG(DBG_FACTS, "Device was not found from the decorator list!\n");
             }
         }
     }
-
-    /* g_free(orig->data); */
-    /* FIXME: free the found element? */
 
     if (process_udi(plugin, FALSE, TRUE, udi))
         libhal_device_remove_property_watch(ctx, udi, NULL);
@@ -414,13 +477,19 @@ gboolean decorate(hal_plugin *plugin, const gchar *capability, hal_cb cb, void *
     /* create the decorator object */
     if ((dec = g_new0(decorator, 1)) == NULL)
         goto error;
-
+ 
+    /* printf("allocated decorator '%p'\n", dec); */
     dec->cb = cb;
     dec->user_data = user_data;
     dec->capability = g_strdup(capability);
 
     for (i = 0; i < n_devices; i++) {
-        dec->devices = g_slist_prepend(dec->devices, g_strdup(devices[i]));
+        /* FIXME: check if already decorated? */
+
+        gchar *udi = g_strdup(devices[i]);
+        /* printf("allocated udi string '%s' at '%p'\n", udi, udi); */
+        
+        dec->devices = g_slist_prepend(dec->devices, udi);
         process_decoration(plugin, dec, FALSE, FALSE, devices[i]);
     }
 
@@ -436,6 +505,22 @@ error:
     return FALSE;
 }
 
+static void free_decorator(decorator *dec) {
+
+    GSList *f = NULL;
+
+    printf("freeing decorator '%p'\n", dec);
+    
+    g_free(dec->capability);
+    for (f = dec->devices; f != NULL; f = g_slist_next(f)) {
+        /* printf("freed(3) udi string '%s' at '%p'\n", (gchar *) f->data, f->data); */
+        g_free(f->data);
+    }
+    g_slist_free(dec->devices);
+    g_free(dec);
+
+}
+
 gboolean undecorate(hal_plugin *plugin, void *user_data) {
     /* identify the decorator by user data */
     GSList *e = NULL;
@@ -444,7 +529,7 @@ gboolean undecorate(hal_plugin *plugin, void *user_data) {
         decorator *dec = e->data;
         if (dec->user_data == user_data) {
             plugin->decorators = g_slist_remove(plugin->decorators, dec);
-            g_free(dec);
+            free_decorator(dec);
             return TRUE;
         }
     }
@@ -510,10 +595,18 @@ error:
 
 void deinit_hal(hal_plugin *plugin)
 {
-    /* FIXME: free the decorators */
+    GSList *e = NULL;
+
+    for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
+        decorator *dec = e->data;
+        plugin->decorators = g_slist_remove(plugin->decorators, dec);
+        free_decorator(dec);
+    }
 
     libhal_ctx_shutdown(plugin->hal_ctx, NULL);
     libhal_ctx_free(plugin->hal_ctx);
+
+    g_free(plugin);
     return;
 }
 
