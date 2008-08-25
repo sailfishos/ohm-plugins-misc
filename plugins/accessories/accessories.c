@@ -8,21 +8,157 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
 
+static gchar *token = "headset";
+
 static OhmFactStore  *fs;
+
+static gboolean headset_init(OhmPlugin *plugin);
+static gboolean headset_deinit(OhmPlugin *plugin);
 
 static void update_factstore_entry(char *, char *, char *);
 static const char *get_field(OhmFact *, char *);
 
+typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
+
+OHM_IMPORTABLE(gboolean, set_observer, (gchar *capability, hal_cb cb, void *user_data));
+OHM_IMPORTABLE(gboolean, unset_observer, (void *user_data));
+
+OHM_PLUGIN_REQUIRES_METHODS(accessories, 2, 
+   OHM_IMPORT("hal.set_observer", set_observer),
+   OHM_IMPORT("hal.unset_observer", unset_observer)
+);
 
 static void plugin_init(OhmPlugin *plugin)
 {
     fs = ohm_fact_store_get_fact_store();
+
+    /* headset */
+    headset_init(plugin);
 }
 
 
 static void plugin_exit(OhmPlugin *plugin)
 {
+    /* headset */
+    headset_deinit(plugin);
 }
+
+
+/* headset part */
+
+/* The purpose for this part is to do listen to the headset events from
+ * wired and USB headsets and change the factstore state accordingly.
+ *
+ * 1. Whenever a headset is available, change the virtual headset fact
+ *    to indicate that
+ * 2. Map each headset to their own fact in the factstore, add or remove
+ *    if neccessary
+ **/
+
+gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data) {
+
+    gchar *fact_name = "com.nokia.policy.accessories";
+    const gchar *udi_hal, *udi_fs;
+    OhmFact *fact = NULL;
+    /* OhmFactStore *fs = ohm_fact_store_get_fact_store(); */
+    GSList *list = NULL;
+    GValue *udi_val_hal, *udi_val_fs;
+    GValue *val_i = NULL;
+    GSList *fields = NULL, *k = NULL, *i = NULL;
+    /* gchar *udi = NULL; */
+
+    /* printf("Hal headset event received!\n"); */
+
+    /* find the virtual fact */
+
+    list = ohm_fact_store_get_facts_by_name(fs, fact_name);
+
+    for (i = list; i != NULL; i = g_slist_next(i)) {
+        OhmFact *of = i->data;
+        fields = ohm_fact_get_fields(of);
+
+        for (k = fields; k != NULL; k = g_slist_next(k)) {
+
+            GQuark qk = (GQuark)GPOINTER_TO_INT(k->data);
+            const gchar *field_name = g_quark_to_string(qk);
+            const gchar *value;
+            GValue *gval = ohm_fact_get(of, field_name);
+
+            if (G_VALUE_TYPE(gval) == G_TYPE_STRING) {
+                value = g_value_get_string(gval);
+                /* printf("field/value: '%s'/'%s'\n", field_name, value); */
+                if (strcmp(value, "headset") == 0) {
+                    fact = of; 
+                    break;
+                }
+            }
+        }
+    } 
+
+
+    if (!(added || removed) || added) {
+        /* during decoration or added later */
+        printf("Headset inserted!\n");
+
+        /* change the virtual fact */
+        val_i = ohm_value_from_int(1);
+        ohm_fact_set(fact, "state", val_i);
+
+        /* insert the HAL fact */
+
+        return ohm_fact_store_insert(fs, hal_fact);
+    }
+    else {
+        /* removed */
+        /* printf("Headset removal event!\n"); */
+        
+        /* change the virtual fact */
+        val_i = ohm_value_from_int(0);
+        ohm_fact_set(fact, "state", val_i);
+
+        /* delete the actual fact */
+
+        list = ohm_fact_store_get_facts_by_name(fs, capability);
+
+        udi_val_hal = ohm_fact_get(hal_fact, "udi");
+        if (G_VALUE_TYPE(udi_val_hal) == G_TYPE_STRING) {
+            udi_hal = g_value_get_string(udi_val_hal);
+        }
+        else {
+            return FALSE;
+        }
+
+        for (i = list; i != NULL; i = g_slist_next(i)) {
+            OhmFact *of = i->data;
+            udi_val_fs = ohm_fact_get(of, "udi");
+            if (G_VALUE_TYPE(udi_val_fs) == G_TYPE_STRING) {
+                udi_fs = g_value_get_string(udi_val_fs);
+
+                if (strcmp(udi_hal, udi_fs) == 0) {
+                    /* printf("Found the fact to remove (%s)!\n", udi_fs); */
+                    ohm_fact_store_remove(fs, of);
+                    printf("Headset removed!\n");
+                    return TRUE;
+                }
+            }
+        } 
+    }
+
+    /* not found */
+    return FALSE;
+}
+
+static gboolean headset_deinit(OhmPlugin *plugin)
+{
+    return unset_observer(token);
+}
+
+static gboolean headset_init(OhmPlugin *plugin)
+{
+    return set_observer("headset", headset_cb, token);
+}
+
+/* headset part ends */
 
 static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 {
@@ -125,7 +261,6 @@ OHM_PLUGIN_DESCRIPTION("accessories",
 OHM_PLUGIN_DBUS_SIGNALS(
      {NULL, "com.nokia.policy", "info", "/com/nokia/policy/info", info, NULL}
 );
-
 
 /* 
  * Local Variables:

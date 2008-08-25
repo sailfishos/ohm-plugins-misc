@@ -301,7 +301,7 @@ static void test_register_complete(Transaction *t, gpointer data) {
     static gboolean
 test_transaction(gpointer data) {
     
-    g_print("test transaction\n");
+    g_print("> test transaction\n");
 
     if (test_transaction_object == NULL) {
         g_print("ERROR: NULL transaction");
@@ -316,8 +316,9 @@ test_transaction(gpointer data) {
         }
     }
 
-    deinit_signaling();
+    /* deinit_signaling(); */
 
+    g_print("< test transaction\n");
     return FALSE;
 }
 
@@ -359,6 +360,8 @@ START_TEST (test_signaling_register_unregister)
     g_main_loop_run(loop);
 
     g_object_unref(test_transaction_object);
+
+    deinit_signaling();
 
 END_TEST
 

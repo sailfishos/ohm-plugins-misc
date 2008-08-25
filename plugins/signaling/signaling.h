@@ -24,8 +24,6 @@
 
 #include "signaling_marshal.h"
 
-#include <dres/dres.h>
-#include <dres/variables.h>
 #include <ohm/ohm-fact.h>
 
 #define DBUS_INTERFACE_POLICY    "com.nokia.policy"

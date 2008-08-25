@@ -16,6 +16,8 @@ OHM_DEBUG_PLUGIN(hal,
 
 hal_plugin *hal_plugin_p = NULL;
 
+#define OPTIMIZED
+
 static void
 plugin_init(OhmPlugin * plugin)
 {
@@ -31,21 +33,17 @@ plugin_init(OhmPlugin * plugin)
     return;
 }
 
-/**
- * Marks the udi as interesting. Interesting HAL devices are mapped to
- * factstore.
- */
-OHM_EXPORTABLE(gboolean, interested, (gchar *udi))
+
+OHM_EXPORTABLE(gboolean, set_observer, (gchar *capability, hal_cb cb, void *user_data))
 {
-    return mark_interesting(hal_plugin_p, udi);
+    printf("> set_observer\n");
+    return decorate(hal_plugin_p, capability, cb, user_data);
 }
 
-/**
- * Marks the udi as uninteresting.
- */
-OHM_EXPORTABLE(gboolean, uninterested, (gchar *udi))
+OHM_EXPORTABLE(gboolean, unset_observer, (void *user_data))
 {
-    return mark_uninteresting(hal_plugin_p, udi);
+    printf("> unset_observer\n");
+    return undecorate(hal_plugin_p, user_data);
 }
 
 static void
@@ -65,8 +63,9 @@ OHM_PLUGIN_DESCRIPTION("hal",
         NULL);
 
 OHM_PLUGIN_PROVIDES_METHODS(hal, 2,
-        OHM_EXPORT(interested, "interested"),
-        OHM_EXPORT(uninterested, "uninterested"));
+        OHM_EXPORT(unset_observer, "unset_observer"),
+        OHM_EXPORT(set_observer, "set_observer"));
+
 /*
  * Local Variables:
  * c-basic-offset: 4

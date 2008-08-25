@@ -86,10 +86,6 @@ PKG_CHECK_MODULES(LIBDRES, libdres)
 AC_SUBST(LIBDRES_CFLAGS)
 AC_SUBST(LIBDRES_LIBS)
 
-#PKG_CHECK_MODULES(DOXYGEN, doxygen >= 1.5.6)
-#AC_SUBST(DOXYGEN_CFLAGS)
-#AC_SUBST(DOXYGEN_LIBS)
-
 PKG_CHECK_MODULES(LIBXSLT, libxslt >= 1.1.22)
 AC_SUBST(LIBXSLT_CFLAGS)
 AC_SUBST(LIBXSLT_LIBS)
@@ -109,8 +105,10 @@ AC_CONFIG_FILES([Makefile
                  plugins/accessories/Makefile
                  plugins/console/Makefile
                  plugins/hal/Makefile
+                 plugins/hal/tests/Makefile
                  plugins/playback/Makefile
                  plugins/profile/Makefile
+                 plugins/profile/tests/Makefile
                  plugins/signaling/Makefile
                  plugins/signaling/tests/Makefile
 		 doc/Makefile])
