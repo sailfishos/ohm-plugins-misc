@@ -4,11 +4,10 @@ all-local:
 	    if [ -d $$f ] ; then \
 	        echo "===== building doc's for '$$f' module ====="; \
 	        pushd $$f/lyx ; \
+	        rm *.xml ; \
 	        lyxfiles=`echo *.lyx` ;\
 		for lf in $$lyxfiles ; do \
-	            xf="$(subst %.lyx, %.xml, $$lf)" ; \
 	            echo "export $$lf"; \
-	            rm -f $$xf; \
 	            $(PD_LYX) --export docbook-xml $$lf ; \
 	        done ; \
 	        popd ;\
