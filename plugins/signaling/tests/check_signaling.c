@@ -44,6 +44,7 @@ START_TEST (test_signaling_init_deinit)
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
     ret = init_signaling(c);
+
     fail_unless(ret == TRUE, "Init failed");
     ret = deinit_signaling();
     fail_unless(ret == TRUE, "Deinit failed");
@@ -89,6 +90,7 @@ START_TEST (test_signaling_internal_ep_1)
     
     printf("> test_signaling_internal_ep_1\n");
 
+    c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
     ret = init_signaling(c);
     fail_unless(ret == TRUE, "Init failed");
     
@@ -173,6 +175,7 @@ START_TEST (test_signaling_internal_ep_2)
     
     printf("> test_signaling_internal_ep_2\n");
 
+    c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
     ret = init_signaling(c);
     fail_unless(ret == TRUE, "Init failed");
     
@@ -331,7 +334,6 @@ START_TEST (test_signaling_register_unregister)
     dbus_error_init(&error);
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-
     init_signaling(c);
 
     acked_count = 0;
@@ -446,7 +448,6 @@ START_TEST (test_signaling_timeout)
     dbus_error_init(&error);
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-
     init_signaling(c);
 
     register_enforcement_point("external", FALSE);
