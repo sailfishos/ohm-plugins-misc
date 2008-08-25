@@ -25,6 +25,7 @@
 
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
+#include <ohm/ohm-plugin-debug.h>
 
 #define FACTSTORE_PREFIX "com.nokia.policy"
 #define FACTSTORE_PROFILE             FACTSTORE_PREFIX ".current_profile"

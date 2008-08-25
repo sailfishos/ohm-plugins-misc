@@ -24,7 +24,9 @@
 
 #include "signaling_marshal.h"
 
+#include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
+#include <ohm/ohm-plugin-debug.h>
 
 #define DBUS_INTERFACE_POLICY    "com.nokia.policy"
 #define DBUS_INTERFACE_FDO       "org.freedesktop.DBus"
