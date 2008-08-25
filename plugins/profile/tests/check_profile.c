@@ -271,6 +271,45 @@ START_TEST (find_segfault_2)
 
 END_TEST
 
+static void test_view_updated(OhmFactStoreView *view, OhmFactStoreChangeSet *cs)
+{
+    printf("> test_view_updated: %p, %p\n", view, cs);
+    g_main_loop_quit(loop);
+}
+
+START_TEST (test_profile_view)
+
+    DBusConnection *c;
+    profile_plugin *plugin = NULL;
+    DBusError error;
+    GSList *l;
+    
+    OhmFactStore *fs = ohm_fact_store_get_fact_store();
+    OhmFactStoreView *view = NULL;
+    dbus_error_init(&error);
+    c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
+    
+    plugin = init_profile(c, 0, 0);
+    fail_if(plugin == NULL, "Plugin not initialized correctly");
+
+    printf("before\n");
+    
+    view = ohm_fact_store_new_view(fs, fs);
+    
+    printf("after\n");
+
+    l = g_slist_prepend(NULL, ohm_pattern_new(FACTSTORE_PROFILE));
+    ohm_fact_store_view_set_interested(view, l);
+
+    g_idle_add(set_profile, "general");
+    g_main_loop_run(loop);
+    
+    g_idle_add(set_profile, "silent");
+    g_main_loop_run(loop);
+
+    deinit_profile(plugin);
+END_TEST
+
 START_TEST (test_profile_value_change)
     
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
@@ -372,12 +411,16 @@ Suite *ohm_profile_suite(void)
     TCase *tc_all = tcase_create("All");
     tcase_add_checked_fixture(tc_all, setup, teardown);
 
+#if 1
+    tcase_add_test(tc_all, test_profile_view);
+#else
     tcase_add_test(tc_all, test_profile_init_deinit);
     tcase_add_test(tc_all, find_segfault);
     tcase_add_test(tc_all, find_segfault_2);
     tcase_add_test(tc_all, test_profile_name_change);
     tcase_add_test(tc_all, test_profile_value_change);
-    
+#endif
+
     tcase_set_timeout(tc_all, 120);
     suite_add_tcase(suite, tc_all);
 

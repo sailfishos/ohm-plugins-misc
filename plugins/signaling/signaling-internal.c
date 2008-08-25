@@ -404,6 +404,7 @@ send_ipc_signal(gpointer data)
     GSList         *k = NULL;
     char           *path = DBUS_PATH_POLICY "/decision";
     char           *interface = DBUS_INTERFACE_POLICY;
+    gchar *base;
 
     DBusMessage    *dbus_signal = NULL;
     
@@ -427,7 +428,7 @@ send_ipc_signal(gpointer data)
     }
 
 /**
- * This is really complicatad and nasty. Idea is that the message is
+ * This is really complicated and nasty. Idea is that the message is
  * supposed to look something like this:
  *
  * uint32 0
@@ -494,8 +495,17 @@ send_ipc_signal(gpointer data)
             goto fail;
         }
 
+        /* get rid of the path prefix */
+
+        base = g_strrstr(f, ".");
+
+        if (!base)
+            base = f;
+        else
+            base = base + 1;
+
         if (!dbus_message_iter_append_basic
-                (&command_array_entry_iter, DBUS_TYPE_STRING, &f)) {
+                (&command_array_entry_iter, DBUS_TYPE_STRING, &base)) {
             printf("error appending OhmFact key\n");
             goto fail;
         }
@@ -1051,14 +1061,15 @@ transaction_get_type(void)
     if (type == 0) {
         static const GTypeInfo info = {
             sizeof(TransactionClass),
-            NULL,
-            NULL,		/* base_finalize */
-            transaction_class_init,		/* class_init */
-            NULL,		/* class_finalize */
+            (GBaseInitFunc) NULL,
+            (GBaseFinalizeFunc) NULL,		/* base_finalize */
+            (GClassInitFunc) transaction_class_init,		/* class_init */
+            (GClassFinalizeFunc) NULL,		/* class_finalize */
             NULL,		/* class_data */
             sizeof(Transaction),
             0,			/* n_preallocs */
-            transaction_instance_init	/* instance_init */
+            (GInstanceInitFunc) transaction_instance_init,	/* instance_init */
+            NULL
         };
         type = g_type_register_static(G_TYPE_OBJECT,
                 "Transaction", &info, 0);
@@ -1080,7 +1091,8 @@ enforcement_point_get_type(void)
             NULL,		/* class_data */
             0,
             0,			/* n_preallocs */
-            NULL		/* instance_init */
+            NULL,		/* instance_init */
+            NULL
         };
         type = g_type_register_static(G_TYPE_INTERFACE,
                 "EnforcementPoint", &info, 0);
@@ -1103,7 +1115,8 @@ external_ep_get_type(void)
             NULL,		/* class_data */
             sizeof(ExternalEPStrategy),
             0,			/* n_preallocs */
-            external_ep_strategy_instance_init	/* instance_init */
+            external_ep_strategy_instance_init,	/* instance_init */
+            NULL
         };
         static const GInterfaceInfo interface_info = {
             (GInterfaceInitFunc) external_ep_strategy_interface_init,
@@ -1133,7 +1146,8 @@ internal_ep_get_type(void)
             NULL,		/* class_data */
             sizeof(InternalEPStrategy),
             0,			/* n_preallocs */
-            internal_ep_strategy_instance_init	/* instance_init */
+            internal_ep_strategy_instance_init,	/* instance_init */
+            NULL
         };
         static const GInterfaceInfo interface_info = {
             (GInterfaceInitFunc) internal_ep_strategy_interface_init,
