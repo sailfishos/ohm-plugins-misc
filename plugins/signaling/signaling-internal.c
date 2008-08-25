@@ -404,7 +404,6 @@ send_ipc_signal(gpointer data)
     GSList         *k = NULL;
     char           *path = DBUS_PATH_POLICY "/decision";
     char           *interface = DBUS_INTERFACE_POLICY;
-    gchar *base;
 
     DBusMessage    *dbus_signal = NULL;
     
@@ -495,17 +494,8 @@ send_ipc_signal(gpointer data)
             goto fail;
         }
 
-        /* get rid of the path prefix */
-
-        base = g_strrstr(f, ".");
-
-        if (!base)
-            base = f;
-        else
-            base = base + 1;
-
         if (!dbus_message_iter_append_basic
-                (&command_array_entry_iter, DBUS_TYPE_STRING, &base)) {
+                (&command_array_entry_iter, DBUS_TYPE_STRING, &f)) {
             printf("error appending OhmFact key\n");
             goto fail;
         }
