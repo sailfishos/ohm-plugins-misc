@@ -55,17 +55,20 @@ static void plugin_exit(OhmPlugin *plugin)
  *    if neccessary
  **/
 
-gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data) {
-
-    gchar *fact_name = "com.nokia.policy.accessories";
+gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data)
+{
+#if 0
     const gchar *udi_hal, *udi_fs;
-    OhmFact *fact = NULL;
-    /* OhmFactStore *fs = ohm_fact_store_get_fact_store(); */
-    GSList *list = NULL;
     GValue *udi_val_hal, *udi_val_fs;
-    GValue *val_i = NULL;
-    GSList *fields = NULL, *k = NULL, *i = NULL;
-    /* gchar *udi = NULL; */
+    GSList *fields = NULL, *k = NULL, 
+    gchar *udi = NULL;
+#endif
+
+    GValue *val_i = NULL, *capabilities = NULL;
+    OhmFact *fact = NULL;
+    gchar *fact_name = "com.nokia.policy.accessories";
+    GSList *i = NULL, *list = NULL;
+    int state = 0;
 
     /* printf("Hal headset event received!\n"); */
 
@@ -75,27 +78,65 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
 
     for (i = list; i != NULL; i = g_slist_next(i)) {
         OhmFact *of = i->data;
-        fields = ohm_fact_get_fields(of);
 
-        for (k = fields; k != NULL; k = g_slist_next(k)) {
+        GValue *gval = ohm_fact_get(of, "device");
 
-            GQuark qk = (GQuark)GPOINTER_TO_INT(k->data);
-            const gchar *field_name = g_quark_to_string(qk);
-            const gchar *value;
-            GValue *gval = ohm_fact_get(of, field_name);
+        if (G_VALUE_TYPE(gval) == G_TYPE_STRING) {
+            const gchar *value = g_value_get_string(gval);
+            /* printf("field/value: '%s'/'%s'\n", field_name, value); */
+            if (strcmp(value, "headset") == 0) {
+                GValue *headset_state = ohm_fact_get(of, "state");
+                
+                if (G_VALUE_TYPE(headset_state) != G_TYPE_INT)
+                    break; /* error case */
 
-            if (G_VALUE_TYPE(gval) == G_TYPE_STRING) {
-                value = g_value_get_string(gval);
-                /* printf("field/value: '%s'/'%s'\n", field_name, value); */
-                if (strcmp(value, "headset") == 0) {
-                    fact = of; 
-                    break;
-                }
+                state = g_value_get_int(headset_state);
+                fact = of; 
+                break; /* success case */
             }
         }
     } 
+    
+    if (!fact) {
+        /* no virtual fact found, which is quite surprising */
+        return FALSE;
+    }
 
+    capabilities = ohm_fact_get(hal_fact, "info.capabilities");
+    gboolean found = FALSE;
 
+    if (capabilities == NULL) {
+        printf("Headset removed or something\n");
+    }
+    else if (G_VALUE_TYPE(capabilities) == G_TYPE_STRING) {
+        const gchar *escaped_caps = g_value_get_string(capabilities);
+#define STRING_DELIMITER "\\"
+        gchar **caps = g_strsplit(escaped_caps, STRING_DELIMITER, 0);
+#undef STRING_DELIMITER
+        gchar **caps_iter = caps;
+        
+        for (; *caps_iter != NULL; caps_iter++) {
+            gchar *cap = *caps_iter;
+
+            if (cap && strcmp(cap, "headset") == 0) {
+                printf("Fact has the headset capability\n");
+                found = TRUE;
+                break;
+            }
+        }
+
+        g_strfreev(caps);
+
+#if 0
+        if (!found)
+            printf("There were capabilities (but not headset)\n");
+#endif
+
+    }
+
+    printf("Headset state in FS: '%i', found: %s\n", state, found ? "TRUE" : "FALSE");
+
+#if 0
     if (!(added || removed) || added) {
         /* during decoration or added later */
         printf("Headset inserted!\n");
@@ -143,6 +184,33 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
             }
         } 
     }
+
+#else
+    
+    if (state && !found) {
+        printf("Headset removed!\n");
+
+        /* change the virtual fact */
+        val_i = ohm_value_from_int(0);
+        ohm_fact_set(fact, "state", val_i);
+
+        return TRUE;
+    }
+
+    else if (!state && found) {
+        printf("Headset inserted!\n");
+
+        /* change the virtual fact */
+        val_i = ohm_value_from_int(1);
+        ohm_fact_set(fact, "state", val_i);
+
+        /* insert the HAL fact */
+
+        return TRUE;
+        /* return ohm_fact_store_insert(fs, hal_fact); */
+    }
+
+#endif
 
     /* not found */
     return FALSE;
