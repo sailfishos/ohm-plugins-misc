@@ -4,12 +4,20 @@ all-local:
 	    if [ -d $$f ] ; then \
 	        echo "===== building doc's for '$$f' module ====="; \
 	        pushd $$f/lyx ; \
+	        rm *.xml ; \
 	        lyxfiles=`echo *.lyx` ;\
 		for lf in $$lyxfiles ; do \
-	            xf="$(subst %.lyx, %.xml, $$lf)" ; \
 	            echo "export $$lf"; \
-	            rm -f $$xf; \
 	            $(PD_LYX) --export docbook-xml $$lf ; \
+	        done ; \
+	        figfiles=`echo *.fig` ;\
+	        for fig in $$figfiles ; do \
+	            pdf=$${fig/.fig/.pdf} ; \
+	            png=$${fig/.fig/.png} ; \
+	            rm -f $$pdf $$png ; \
+	            echo "export $$fig to pdf and png"; \
+	            $(PD_FIG2DEV) -L pdf -m 0.75 $$fig $$pdf ; \
+	            $(PD_FIG2DEV) -L png $$fig $$png ; \
 	        done ; \
 	        popd ;\
 	        TOPDIR=$(abs_top_srcdir) MODULEDIR=$$f $(PD_DOXYGEN) Doxyfile;\

@@ -1,0 +1,531 @@
+#LyX 1.5.4 created this file. For more info see http://www.lyx.org/
+\lyxformat 276
+\begin_document
+\begin_header
+\textclass docbook-chapter
+\language english
+\inputencoding auto
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+\graphics default
+\paperfontsize default
+\spacing single
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\cite_engine basic
+\use_bibtopic false
+\paperorientation portrait
+\secnumdepth 2
+\tocdepth 3
+\paragraph_separation skip
+\defskip medskip
+\quotes_language english
+\papercolumns 1
+\papersides 2
+\paperpagestyle fancy
+\bullet 0 0 15 -1
+\bullet 1 0 8 -1
+\bullet 2 0 9 -1
+\bullet 3 0 0 -1
+\tracking_changes false
+\output_changes false
+\author "" 
+\author "" 
+\end_header
+
+\begin_body
+
+\begin_layout Title
+
+\emph on
+OHMng
+\emph default
+ Playback Plugin
+\end_layout
+
+\begin_layout Section
+Overview
+\end_layout
+
+\begin_layout Subsection
+Functionality
+\end_layout
+
+\begin_layout Standard
+Policy aware 
+\emph on
+Media Players
+\emph default
+ use the 
+\emph on
+libplayback
+\emph default
+ library to negotiate their state with the 
+\emph on
+Policy Framework 
+\emph default
+over 
+\emph on
+D-Bus
+\emph default
+.
+ The counterpart of the 
+\emph on
+libplayback
+\emph default
+ library in OHMng is the 
+\emph on
+playback
+\emph default
+ plugin.
+\end_layout
+
+\begin_layout Subsection
+Interfaces
+\end_layout
+
+\begin_layout Subsection
+Design
+\end_layout
+
+\begin_layout Subsection
+Architecture
+\end_layout
+
+\begin_layout Subsection
+Signalling flows
+\end_layout
+
+\begin_layout Section
+Modules
+\end_layout
+
+\begin_layout Subsection
+
+\emph on
+client
+\emph default
+, client tracking module
+\end_layout
+
+\begin_layout Subsection
+
+\emph on
+dbusif
+\emph default
+, the
+\emph on
+ D-Bus 
+\emph default
+interface module
+\end_layout
+
+\begin_layout Subsubsection
+Functionality
+\end_layout
+
+\begin_layout Subsubsection
+Interfaces
+\end_layout
+
+\begin_layout Standard
+\begin_inset Include \input{../doxygen/playback_dbusif.xml}
+preview false
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+
+\emph on
+dresif
+\emph default
+, the 
+\emph on
+Dependency Resolver
+\emph default
+ interface module
+\end_layout
+
+\begin_layout Subsection
+
+\emph on
+fsif
+\emph default
+, the 
+\emph on
+FactStore
+\emph default
+ interface module
+\end_layout
+
+\begin_layout Subsection
+
+\emph on
+pbreq
+\emph default
+, playback request tracking and queueing module
+\end_layout
+
+\begin_layout Subsection
+
+\emph on
+playback
+\emph default
+, the main module of the 
+\emph on
+playback
+\emph default
+ plugin
+\end_layout
+
+\begin_layout Subsection
+
+\emph on
+sm
+\emph default
+, the state machine of the 
+\emph on
+playback
+\emph default
+ plugin
+\end_layout
+
+\begin_layout Subsubsection
+Functionality
+\end_layout
+
+\begin_layout Standard
+The 
+\emph on
+State Machine
+\emph default
+ is used to sequencialize the various playback related events rather than
+ actually process them.
+ The actual processing, i.e.
+ the policy decision making, is done in the 
+\emph on
+Dependency Resolver
+\emph default
+ (
+\emph on
+dres
+\emph default
+) and the 
+\emph on
+Prolog
+\emph default
+ 
+\emph on
+OHMng
+\emph default
+ plugins.
+\end_layout
+
+\begin_layout Standard
+In one direction the 
+\emph on
+State Machine
+\emph default
+ assures on a client basis that no policy decision request is issued before
+ the previous playback request is not complete.
+ For details see section 
+\emph on
+Maintaining System Consistency
+\emph default
+ in chapter 
+\emph on
+Introduction
+\emph default
+.
+\end_layout
+
+\begin_layout Standard
+In the other direction the 
+\emph on
+State Machine 
+\emph default
+assures that state property settings of clients over 
+\emph on
+D-Bus
+\emph default
+ are deferred until the possible pending playback requests are completed.
+\end_layout
+
+\begin_layout Subsubsection
+Infrastructure
+\end_layout
+
+\begin_layout Subsubsection
+The actual state machine
+\end_layout
+
+\begin_layout Paragraph
+State machine diagram
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename playback_state_machine.png
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Caption
+
+\begin_layout Standard
+The state machine diagram
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Paragraph
+States
+\end_layout
+
+\begin_layout Standard
+The states of the state machine are as follows:
+\end_layout
+
+\begin_layout Subparagraph
+
+\emph on
+initial
+\emph default
+ state
+\end_layout
+
+\begin_layout Standard
+When the state machine is created it is in 
+\emph on
+initial
+\emph default
+ state.
+\end_layout
+
+\begin_layout Subparagraph
+
+\emph on
+setup
+\emph default
+ state
+\end_layout
+
+\begin_layout Standard
+The 
+\emph on
+setup
+\emph default
+ state is used to wait for the answer(s) of the client property queries.
+\end_layout
+
+\begin_layout Subparagraph
+
+\emph on
+idle
+\emph default
+ state
+\end_layout
+
+\begin_layout Standard
+In 
+\emph on
+idle
+\emph default
+ state there is no any active, ongoing sequence.
+ The state machine waits for events to start a sequence i.e.
+ either a client issued setstate request or a policy decision triggered
+ setstate change event.
+\end_layout
+
+\begin_layout Subparagraph
+
+\emph on
+pbreq,
+\emph default
+ playback request state
+\end_layout
+
+\begin_layout Subparagraph
+
+\emph on
+acked_pbreq,
+\emph default
+ acknowledged playback request state
+\end_layout
+
+\begin_layout Subparagraph
+
+\emph on
+waitack,
+\emph default
+ wait for acknowledgement state
+\end_layout
+
+\begin_layout Subparagraph
+
+\emph on
+streq,
+\emph default
+ set state request state
+\end_layout
+
+\begin_layout Paragraph
+Events
+\end_layout
+
+\begin_layout Subparagraph
+hello_signal
+\end_layout
+
+\begin_layout Standard
+D-Bus hello signal received, i.e.
+ a client is registering to the policy framework.
+\end_layout
+
+\begin_layout Subparagraph
+state_signal
+\end_layout
+
+\begin_layout Standard
+D-Bus property notify: State property
+\end_layout
+
+\begin_layout Subparagraph
+property_received
+\end_layout
+
+\begin_layout Standard
+D-Bus reply for get property method call
+\end_layout
+
+\begin_layout Subparagraph
+setup_complete
+\end_layout
+
+\begin_layout Standard
+all requested properties has been received
+\end_layout
+
+\begin_layout Subparagraph
+setup_state_denied
+\end_layout
+
+\begin_layout Standard
+player's initial state is unacceptable
+\end_layout
+
+\begin_layout Subparagraph
+playback_request
+\end_layout
+
+\begin_layout Standard
+D-Bus incoming set state method call
+\end_layout
+
+\begin_layout Subparagraph
+playback_complete
+\end_layout
+
+\begin_layout Standard
+audio policies are successfully set
+\end_layout
+
+\begin_layout Subparagraph
+playback_failed
+\end_layout
+
+\begin_layout Standard
+audio policy setting failed
+\end_layout
+
+\begin_layout Subparagraph
+setstate_changed
+\end_layout
+
+\begin_layout Standard
+internal request to change player's state
+\end_layout
+
+\begin_layout Subparagraph
+setprop_succeeded
+\end_layout
+
+\begin_layout Standard
+outgoing set property method succeeded
+\end_layout
+
+\begin_layout Subparagraph
+setprop_failed
+\end_layout
+
+\begin_layout Standard
+outgoing set property method failed
+\end_layout
+
+\begin_layout Subparagraph
+client_gone
+\end_layout
+
+\begin_layout Standard
+D-Bus peer (i.e.
+ the client) is gone 
+\end_layout
+
+\begin_layout Section
+Development environment
+\end_layout
+
+\begin_layout Subsection
+Directory structure, files
+\end_layout
+
+\begin_layout Subsection
+Packaging
+\end_layout
+
+\begin_layout Section
+Run-time environment
+\end_layout
+
+\begin_layout Subsection
+Installation
+\end_layout
+
+\begin_layout Subsection
+Configuration
+\end_layout
+
+\begin_layout Section
+Testing
+\end_layout
+
+\end_body
+\end_document
