@@ -252,6 +252,7 @@ hal_capability_added_cb (LibHalContext *ctx,
 {
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
     GSList *e = NULL;
+    gboolean match = FALSE;
 
     OHM_DEBUG(DBG_FACTS, "> hal_capability_added_cb: udi '%s', capability: '%s'\n", udi, capability);
 
@@ -263,8 +264,12 @@ hal_capability_added_cb (LibHalContext *ctx,
             /* printf("allocated udi string '%s' at '%p'\n", dup_udi, dup_udi); */
             dec->devices = g_slist_prepend(dec->devices, dup_udi);
             process_decoration(plugin, dec, TRUE, FALSE, dup_udi);
+            match = TRUE;
         }
     }
+
+    if (match)
+        libhal_device_add_property_watch(ctx, udi, NULL);
 
     return;
 }
@@ -305,6 +310,9 @@ hal_capability_lost_cb (LibHalContext *ctx,
             }
         }
     }
+
+    libhal_device_remove_property_watch(ctx, udi, NULL);
+
 #endif
     return;
 }
