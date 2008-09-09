@@ -147,6 +147,8 @@ static void
 plugin_init(OhmPlugin *plugin)
 {
     return;
+
+    (void)plugin;
 }
 
 
@@ -157,6 +159,8 @@ static void
 plugin_exit(OhmPlugin *plugin)
 {
     return;
+
+    (void)plugin;
 }
 
 
@@ -166,7 +170,7 @@ plugin_exit(OhmPlugin *plugin)
 static console_t *
 new_console(void)
 {
-    int i;
+    unsigned int i;
 
     for (i = 0; i < nconsole; i++)
         if (consoles[i] == NULL)
@@ -190,7 +194,7 @@ new_console(void)
 static void
 del_console(console_t *c)
 {
-    int i;
+    unsigned int i;
 
     for (i = 0; i < MAX_GRABS; i++) {
         if (c->grabs[i] != 0) {
@@ -228,7 +232,7 @@ del_console(console_t *c)
 static console_t *
 lookup_console(int id)
 {
-    int i;
+    unsigned int i;
 
     for (i = 0; i < nconsole; i++)
         if (consoles[i] != NULL && consoles[i]->gid == (guint)id)
@@ -632,6 +636,8 @@ console_accept(GIOChannel *source, GIOCondition condition, gpointer data)
     c->sock    = -1;
 
     return TRUE;
+
+    (void)source;
 }
 
 
@@ -666,8 +672,9 @@ console_read(console_t *c)
 static gboolean
 console_handler(GIOChannel *source, GIOCondition condition, gpointer data)
 {
-    console_t *c = (console_t *)data;
-    int        i, left = c->size - c->used - 1;
+    console_t    *c = (console_t *)data;
+    int           left = c->size - c->used - 1;
+    unsigned int  i;
 
     if (condition & G_IO_IN) {
         switch (console_read(c)) {
@@ -708,6 +715,8 @@ console_handler(GIOChannel *source, GIOCondition condition, gpointer data)
  closed:
     shutdown_console(c);
     return FALSE;
+
+    (void)source;
 }
 
 
