@@ -9,6 +9,8 @@
 #include <check.h>
 #include "../signaling.h"
 
+extern int DBG_SIGNALING, DBG_FACTS;
+
 GMainLoop *loop;
 
 /* test globals */
@@ -43,7 +45,7 @@ START_TEST (test_signaling_init_deinit)
     gboolean ret;
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-    ret = init_signaling(c);
+    ret = init_signaling(c, 0, 0);
 
     fail_unless(ret == TRUE, "Init failed");
     ret = deinit_signaling();
@@ -91,7 +93,7 @@ START_TEST (test_signaling_internal_ep_1)
     printf("> test_signaling_internal_ep_1\n");
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-    ret = init_signaling(c);
+    ret = init_signaling(c, 0, 0);
     fail_unless(ret == TRUE, "Init failed");
     
     EnforcementPoint *ep = register_enforcement_point("internal", TRUE);
@@ -176,7 +178,7 @@ START_TEST (test_signaling_internal_ep_2)
     printf("> test_signaling_internal_ep_2\n");
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-    ret = init_signaling(c);
+    ret = init_signaling(c, 0, 0);
     fail_unless(ret == TRUE, "Init failed");
     
     EnforcementPoint *ep = register_enforcement_point("internal", TRUE);
@@ -334,7 +336,7 @@ START_TEST (test_signaling_register_unregister)
     dbus_error_init(&error);
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-    init_signaling(c);
+    init_signaling(c, 0, 0);
 
     acked_count = 0;
     nacked_count = 0;
@@ -448,7 +450,7 @@ START_TEST (test_signaling_timeout)
     dbus_error_init(&error);
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
-    init_signaling(c);
+    init_signaling(c, 0, 0);
 
     register_enforcement_point("external", FALSE);
     register_enforcement_point("external-2", FALSE);
