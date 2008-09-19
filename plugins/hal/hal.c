@@ -36,13 +36,13 @@ plugin_init(OhmPlugin * plugin)
 
 OHM_EXPORTABLE(gboolean, set_observer, (gchar *capability, hal_cb cb, void *user_data))
 {
-    printf("> set_observer\n");
+    OHM_DEBUG(DBG_HAL, "> set_observer");
     return decorate(hal_plugin_p, capability, cb, user_data);
 }
 
 OHM_EXPORTABLE(gboolean, unset_observer, (void *user_data))
 {
-    printf("> unset_observer\n");
+    OHM_DEBUG(DBG_HAL, "> unset_observer");
     return undecorate(hal_plugin_p, user_data);
 }
 

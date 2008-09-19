@@ -517,8 +517,6 @@ static void free_decorator(decorator *dec) {
 
     GSList *f = NULL;
 
-    printf("freeing decorator '%p'\n", dec);
-    
     g_free(dec->capability);
     for (f = dec->devices; f != NULL; f = g_slist_next(f)) {
         /* printf("freed(3) udi string '%s' at '%p'\n", (gchar *) f->data, f->data); */
