@@ -480,12 +480,12 @@ gboolean decorate(hal_plugin *plugin, const gchar *capability, hal_cb cb, void *
     if (!plugin)
         goto error;
 
-    devices = libhal_find_device_by_capability(plugin->hal_ctx, capability, &n_devices, &error);
+    devices = libhal_find_device_by_capability(plugin->hal_ctx, capability, &n_devices, NULL);
 
     /* create the decorator object */
     if ((dec = g_new0(decorator, 1)) == NULL)
         goto error;
- 
+
     /* printf("allocated decorator '%p'\n", dec); */
     dec->cb = cb;
     dec->user_data = user_data;
