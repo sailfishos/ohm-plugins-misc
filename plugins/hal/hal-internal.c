@@ -612,7 +612,6 @@ void deinit_hal(hal_plugin *plugin)
     libhal_ctx_shutdown(plugin->hal_ctx, NULL);
     libhal_ctx_free(plugin->hal_ctx);
 
-    g_free(plugin);
     return;
 }
 
