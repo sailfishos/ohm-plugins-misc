@@ -588,6 +588,13 @@ hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
 
 error:
 
+    if (plugin) {
+        if (plugin->hal_ctx) {
+            libhal_ctx_free(plugin->hal_ctx);
+        }
+        g_free(plugin);
+    }
+
     if (dbus_error_is_set(&error)) {
         OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin. '%s': '%s'\n",
                   error.name, error.message);
