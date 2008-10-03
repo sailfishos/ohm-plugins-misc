@@ -51,8 +51,8 @@ plugin_exit(OhmPlugin * plugin)
 {
     if (hal_plugin_p) {
         deinit_hal(hal_plugin_p);
+        hal_plugin_p = NULL;
     }
-    g_free(hal_plugin_p);
     return;
 }
 
