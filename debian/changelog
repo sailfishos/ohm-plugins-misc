@@ -1,3 +1,15 @@
+ohm-plugins-misc (0.4) unstable; urgency=low
+
+  * Compatible for new OHM
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 02 Oct 2008 14:06:30 +0300
+
+ohm-plugins-misc (0.3) unstable; urgency=low
+
+  * Memory leak fixes.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Mon, 29 Sep 2008 14:23:52 +0300
+
 ohm-plugins-misc (0.2) unstable; urgency=low
 
   * Added support for headsets in accessories plugin.

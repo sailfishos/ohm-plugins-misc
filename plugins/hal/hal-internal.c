@@ -480,12 +480,12 @@ gboolean decorate(hal_plugin *plugin, const gchar *capability, hal_cb cb, void *
     if (!plugin)
         goto error;
 
-    devices = libhal_find_device_by_capability(plugin->hal_ctx, capability, &n_devices, &error);
+    devices = libhal_find_device_by_capability(plugin->hal_ctx, capability, &n_devices, NULL);
 
     /* create the decorator object */
     if ((dec = g_new0(decorator, 1)) == NULL)
         goto error;
- 
+
     /* printf("allocated decorator '%p'\n", dec); */
     dec->cb = cb;
     dec->user_data = user_data;
@@ -588,6 +588,13 @@ hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
 
 error:
 
+    if (plugin) {
+        if (plugin->hal_ctx) {
+            libhal_ctx_free(plugin->hal_ctx);
+        }
+        g_free(plugin);
+    }
+
     if (dbus_error_is_set(&error)) {
         OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin. '%s': '%s'\n",
                   error.name, error.message);
@@ -612,7 +619,6 @@ void deinit_hal(hal_plugin *plugin)
     libhal_ctx_shutdown(plugin->hal_ctx, NULL);
     libhal_ctx_free(plugin->hal_ctx);
 
-    g_free(plugin);
     return;
 }
 
