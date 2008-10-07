@@ -35,32 +35,6 @@ DBUS_METHOD_HANDLER(call_request);
 static DBusConnection *bus;
 
 
-#define EVENT_COMMON                                                    \
-    int         type;                          /* event type */         \
-    const char *path;                          /* call path */          \
-    call_t     *call                           /* call */               \
-
-
-typedef struct {                               /* generic event */
-    EVENT_COMMON;
-} event_any_t;
-
-typedef struct {
-    EVENT_COMMON;
-    int direction;
-} event_create_t;
-
-typedef struct {
-    EVENT_COMMON;
-} event_status_t;
-
-typedef union {
-    int            type;                       /* event type */ 
-    event_any_t    any;                        /* common/generic event */
-    event_create_t create;                     /* call create event */
-    event_status_t status;                     /* call progress/status change */
-} event_t;
-
 
 static void event_handler(event_t *event);
 
@@ -192,6 +166,16 @@ bus_add_match(char *type, char *interface, char *member, char *path)
         return TRUE;
 
 #undef MATCH
+}
+
+
+/********************
+ * bus_send
+ ********************/
+int
+bus_send(DBusMessage *msg, dbus_uint32_t *serial)
+{
+    return dbus_connection_send(bus, msg, serial);
 }
 
 
@@ -344,8 +328,11 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
         event_handler(&event);
     }
     else if (nlocalpend != 0) {
+#if 0
         event.type = EVENT_ALERTING;
         event_handler(&event);
+#endif
+        OHM_INFO("Betcha call %s is coming in...", event.any.path);
     }
     else if (nremoved != 0 && nlocalpend == 0 && nremotepend == 0) {
         /*
@@ -421,6 +408,27 @@ dispatch_method(DBusConnection *c, DBusMessage *msg, void *data)
 static DBusHandlerResult
 call_request(DBusConnection *c, DBusMessage *msg, void *data)
 {
+#if 1
+    event_t event;
+    int     incoming, n;
+
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_STRING, &event.any.path,
+                               DBUS_TYPE_BOOLEAN, &incoming,
+                               DBUS_TYPE_INT32, &n,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse MC call request.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    event.type             = EVENT_CALLREQ;
+    event.create.call      = call_lookup(event.create.path);
+    event.create.req       = msg;
+    event.create.direction = incoming ? DIR_INCOMING : DIR_OUTGOING;
+    event_handler(&event);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+#else
     DBusMessage  *reply;
     event_t       event;
     int           incoming, n;
@@ -454,10 +462,34 @@ call_request(DBusConnection *c, DBusMessage *msg, void *data)
         OHM_ERROR("Failed to allocate D-BUS reply.");
     
     return DBUS_HANDLER_RESULT_HANDLED;
+#endif
 
     (void)c;
     (void)msg;
     (void)data;
+}
+
+
+/********************
+ * call_reply
+ ********************/
+void
+call_reply(DBusMessage *msg, int may_proceed)
+{
+    DBusMessage *reply;
+    dbus_bool_t  allow = may_proceed;
+
+    if ((reply = dbus_message_new_method_return(msg)) != NULL) {
+        if (!dbus_message_append_args(reply, DBUS_TYPE_BOOLEAN, &allow,
+                                      DBUS_TYPE_INVALID)) {
+            OHM_ERROR("Failed to create D-BUS reply.");
+            dbus_message_unref(reply);
+        }
+        else
+            dbus_connection_send(bus, reply, NULL);
+    }
+    else
+        OHM_ERROR("Failed to allocate D-BUS reply.");
 }
 
 
@@ -536,30 +568,45 @@ event_handler(event_t *event)
             call = call_register(event->any.path);
             call->direction = event->create.direction;
             policy_call_export(call);
+            event->any.call = call;
         }
         else {
             call->direction = event->create.direction;
             policy_call_update(call);
         }
-        state = STATE_PROCEEDING;
+        if (call->direction == DIR_INCOMING)
+            state = STATE_ALERTING;
+        else
+            state = STATE_PROCEEDING;
         break;
-                
     
-    case EVENT_ALERTING: state = STATE_ALERTING;    break;
+    case EVENT_ALERTING:
+        state = STATE_ALERTING;
+        if (call->direction == DIR_UNKNOWN) {
+            call->direction = DIR_INCOMING;
+            policy_call_update(call);
+        }
+        break;
+        
     case EVENT_ACCEPTED: state = STATE_ACTIVE;      break;
     case EVENT_RELEASED: state = STATE_RELEASED;    break;
     case EVENT_CALLEND:  state = STATE_RELEASED;    break;
     default:            /* ignored */               return;
     }
     
-    if (call == NULL)
+    if (call == NULL) {
+        OHM_INFO("No call for event.");
         return;
-
-    callid = call->id;
-    status = policy_actions(callid, state);
+    }
+    
+    if (state == STATE_RELEASED)                    /* cannot be denied */
+        call->state = STATE_RELEASED;
+    
+    event->any.state = state;
+    status = policy_actions(event);
 
     if (status == 0) {
-        status = policy_enforce(callid, state);
+        status = policy_enforce(event);
     }
     else {
         OHM_ERROR("Failed to get policy decisions for event.");
@@ -571,6 +618,11 @@ event_handler(event_t *event)
     
     return;
 }
+
+
+
+
+
 
 #if 0
 

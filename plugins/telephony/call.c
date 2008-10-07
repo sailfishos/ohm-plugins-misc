@@ -156,13 +156,51 @@ call_destroy(call_t *call)
  * call_release
  ********************/
 static int
-call_release(call_t *call)
+call_release(event_t *event)
 {
+    call_t *call    = event->any.call;
+    int     rqstate = event->any.state;
+    
     OHM_INFO("RELEASE call %s", call->path);
-
-    /*call->state = STATE_RELEASED;*/
+    
+    if (rqstate == STATE_PROCEEDING)
+        call_reply(event->create.req, FALSE);
+    
+    policy_call_delete(call);
+    call_unregister(call->path);
     
     return 0;
+}
+
+
+/********************
+ * hold
+ ********************/
+static int
+hold(call_t *call, int status)
+{
+    DBusMessage *msg;
+    const char  *name, *path, *iface, *method;
+    dbus_bool_t  held = status;
+    
+    path   = call->path;
+    iface  = TP_INTERFACE_HOLD;
+    method = TP_HOLD;
+    msg    = dbus_message_new_method_call(NULL, path, iface, method);
+
+    if (msg == NULL) {
+        OHM_ERROR("Failed to allocate D-BUS Hold message.");
+        return ENOMEM;
+    }
+    
+    if (!dbus_message_append_args(msg, DBUS_TYPE_BOOLEAN, &held,
+                                  DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to create D-BUS Hold message.");
+        dbus_message_unref(msg);
+        return EINVAL;
+    }
+
+    return bus_send(msg, NULL) ? 0 : EIO;
 }
 
 
@@ -170,13 +208,18 @@ call_release(call_t *call)
  * call_hold
  ********************/
 static int
-call_hold(call_t *call)
-{
+call_hold(event_t *event)
+{    
+    call_t *call = event->any.call;
+    int     status;
+
     OHM_INFO("HOLD call %s", call->path);
+    
+    status = hold(call, TRUE);
+    call->state = STATE_ON_HOLD;
+    policy_call_update(call);
 
-    /*call->state = STATE_ON_HOLD;*/
-
-    return 0;
+    return status;
 }
 
 
@@ -184,14 +227,19 @@ call_hold(call_t *call)
  * call_activate
  ********************/
 static int
-call_activate(call_t *call)
+call_activate(event_t *event)
 {
-    if (call->state == STATE_ON_HOLD)
+    call_t *call = event->any.call;
+    
+    if (call->state == STATE_ON_HOLD) {
+        hold(call, FALSE);
         OHM_INFO("REACTIVATE call %s", call->path);
+    }
     else
         OHM_INFO("ACCEPT call %s", call->path);
-
+    
     call->state = STATE_ACTIVE;
+    policy_call_update(call);
 
     return 0;
 }
@@ -201,11 +249,15 @@ call_activate(call_t *call)
  * call_proceed
  ********************/
 static int
-call_proceed(call_t *call)
+call_proceed(event_t *event)
 {
+    call_t *call = event->any.call;
+
     OHM_INFO("PROCEED call %s", call->path);
 
     call->state = STATE_PROCEEDING;
+    call_reply(event->create.req, TRUE);
+    policy_call_update(call);
     
     return 0;
 }
@@ -215,12 +267,17 @@ call_proceed(call_t *call)
  * call_alerting
  ********************/
 static int
-call_alerting(call_t *call)
+call_alerting(event_t *event)
 {
+    call_t *call = event->any.call;
+    
     OHM_INFO("ALERTING call %s", call->path);
 
+    if (event->type == EVENT_CALLREQ)
+        call_reply(event->create.req, TRUE);
     call->state = STATE_ALERTING;
-
+    policy_call_update(call);    
+    
     return 0;
 }
 
@@ -230,13 +287,15 @@ call_alerting(call_t *call)
  * call_action
  ********************/
 int
-call_action(call_t *call, const char *action)
+call_action(event_t *event, const char *action)
 {
-    if      (!strcmp(action, "released"))   return call_release(call);
-    else if (!strcmp(action, "onhold"))     return call_hold(call);
-    else if (!strcmp(action, "active"))     return call_activate(call);
-    else if (!strcmp(action, "proceeding")) return call_proceed(call);
-    else if (!strcmp(action, "alerting"))   return call_alerting(call);
+    call_t *call = event->any.call;
+    
+    if      (!strcmp(action, "released"))   return call_release(event);
+    else if (!strcmp(action, "onhold"))     return call_hold(event);
+    else if (!strcmp(action, "active"))     return call_activate(event);
+    else if (!strcmp(action, "proceeding")) return call_proceed(event);
+    else if (!strcmp(action, "alerting"))   return call_alerting(event);
     else {
         OHM_ERROR("Unknown action %s for call #%d.", action, call->id);
         return EINVAL;

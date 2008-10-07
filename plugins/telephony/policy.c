@@ -70,10 +70,11 @@ state_name(int state)
  * policy_actions
  ********************/
 int
-policy_actions(int callid, int callstate)
+policy_actions(event_t *event)
 {
-    char *vars[2 * 2 + 1];
-    char  id[16], state[32];
+    int  callid    = event->any.call->id;
+    int  callstate = event->any.state;
+    char id[16], state[32], *vars[2 * 2 + 1];
 
     snprintf(id, sizeof(id), "%d", callid);
     snprintf(state, sizeof(state), "%s", state_name(callstate));
@@ -84,7 +85,7 @@ policy_actions(int callid, int callstate)
     vars[3] = state;
     vars[4] = NULL;
 
-    OHM_INFO("Resolving telephony_request with %s=%s, %s=%s.",
+    OHM_INFO("resolve(telephony_request, &%s=%s, &%s=%s.",
              vars[0], vars[1], vars[2], vars[3]);
 
     return resolve("telephony_request", vars);
@@ -95,8 +96,10 @@ policy_actions(int callid, int callstate)
  * policy_enforce
  ********************/
 int
-policy_enforce(int callid, int callstate)
+policy_enforce(event_t *event)
 {
+    call_t     *call = event->any.call;
+    
     OhmFact    *actions;
     GValue     *value;
     GQuark      quark;
@@ -104,7 +107,9 @@ policy_enforce(int callid, int callstate)
     char       *field, *end;
     const char *action;
     int         id, status, err;
-    call_t     *call;
+    call_t     *c;
+
+    OHM_INFO("Enforcing policy decisions.");
 
     if ((l = ohm_fact_store_get_facts_by_name(store, FACT_ACTIONS)) == NULL)
         return ENOENT;
@@ -140,23 +145,26 @@ policy_enforce(int callid, int callstate)
             continue;
         }
 
-        if ((call = call_find(id)) == NULL) {
+        if ((c = call_find(id)) == NULL) {
             OHM_ERROR("Action %s for unknown call #%d.", action, id);
             status = EINVAL;
         }
 
-        OHM_INFO("Action %s for call %d (%s).", action, call->id, call->path);
+        OHM_INFO("Action %s for call %d (%s).", action, call->id,
+                 call->path);
         
-        if ((err = call_action(call, action)) != 0)
+#if 0
+        if (call == c && callstate == STATE_RELEASED)
+            continue;
+#endif     
+   
+        if ((err = call_action(event, action)) != 0)
             status = err;
     }
     
     ohm_fact_store_remove(store, actions);
 
     return status;
-
-    (void)callid;
-    (void)callstate;
 }
 
 
@@ -255,8 +263,10 @@ policy_call_update(call_t *call)
 
     OHM_INFO("Updating fact for call %s.", call->path);
 
-    if ((fact = call->fact) == NULL)
+    if ((fact = call->fact) == NULL) {
+        OHM_INFO("No fact for call %s.", call->path);
         return ENOENT;
+    }
     
     if ((value = ohm_value_from_string(state_name(call->state))) == NULL)
         return ENOMEM;
@@ -266,7 +276,6 @@ policy_call_update(call_t *call)
         G_VALUE_TYPE(value) != G_TYPE_STRING)
         return EINVAL;
     
-    OHM_INFO("Updating call direction.");
     if (!strcmp(g_value_get_string(value), dir_name(DIR_UNKNOWN))) {
         if ((value = ohm_value_from_string(dir_name(call->direction))) == NULL)
             return ENOMEM;
