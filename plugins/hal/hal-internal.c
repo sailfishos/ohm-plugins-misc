@@ -33,47 +33,9 @@ typedef struct _decorator {
     void *user_data;
 } decorator;
 
-#if 0
-static gchar * escape_udi(const char *hal_udi)
-{
-    /* returns an escaped copy of the udi:
-     *
-     * /org/freedesktop/key becomes
-     * org.freedesktop.key
-     *
-     * */
-    gchar *escaped_udi;
-
-    /* escape the udi  */
-    int i, len;
-    
-    if (strlen(hal_udi) < 2)
-        return NULL;
-
-    escaped_udi = g_strdup(hal_udi + 1);
-    
-    if (escaped_udi == NULL)
-        return NULL;
-
-    len = strlen(escaped_udi);
-    
-    if (len < 2) {
-        g_free(escaped_udi);
-        return NULL;
-    }
-
-    for (i = 1; i < len; i++) {
-        if (escaped_udi[i] == '/')
-            escaped_udi[i] = '.';
-    }
-
-    return escaped_udi;
-
-}
-#endif
-
 #ifdef OPTIMIZED
-static gboolean property_has_capability(LibHalPropertySet *properties, gchar *capability)
+static gboolean property_has_capability(LibHalPropertySet *properties,
+        gchar *capability)
 {
 
     LibHalPropertySetIterator iter;
@@ -115,28 +77,17 @@ static gboolean has_udi(decorator *dec, const gchar *udi)
     return FALSE;
 }
 
-static OhmFact * create_fact(hal_plugin *plugin, const char *udi, const char *capability, LibHalPropertySet *properties)
+static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
+        const char *capability, LibHalPropertySet *properties)
 {
     /* Create an OhmFact based on the properties of a HAL object */
 
     LibHalPropertySetIterator iter;
     OhmFact *fact = NULL;
     int i, len;
-#if 0
-    gchar *escaped_udi = escape_udi(udi);
-#endif
     GValue *val = NULL;
 
-#if 0
-    if (escaped_udi == NULL)
-        return NULL;
-
-    fact = ohm_fact_new(escaped_udi);
-    OHM_DEBUG(DBG_FACTS, "created fact '%s' at '%p'", escaped_udi, fact);
-    g_free(escaped_udi);
-#else
     fact = ohm_fact_new(capability);
-#endif
 
     if (!fact)
         return NULL;
@@ -197,7 +148,8 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi, const char *ca
 }
 
 
-static gboolean process_decoration(hal_plugin *plugin, decorator *dec, gboolean added, gboolean removed, const gchar *udi)
+static gboolean process_decoration(hal_plugin *plugin, decorator *dec, 
+        gboolean added, gboolean removed, const gchar *udi)
 {
     gboolean match = FALSE;
     OHM_DEBUG(DBG_FACTS,"> process_decoration\n");
@@ -215,7 +167,8 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec, gboolean 
             properties = libhal_device_get_all_properties(plugin->hal_ctx, udi, &error);
 
             if (dbus_error_is_set(&error)) {
-                g_print("Error getting data for HAL object %s. '%s': '%s'\n", udi, error.name, error.message);
+                g_print("Error getting data for HAL object %s. '%s': '%s'\n", 
+                        udi, error.name, error.message);
                 return FALSE;
             }
 
@@ -230,7 +183,8 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec, gboolean 
     return match;
 }
 
-static gboolean process_udi(hal_plugin *plugin, gboolean added, gboolean removed, const gchar *udi)
+static gboolean process_udi(hal_plugin *plugin, gboolean added, gboolean removed,
+        const gchar *udi)
 {
     GSList *e = NULL;
     gboolean match = FALSE;
@@ -243,18 +197,18 @@ static gboolean process_udi(hal_plugin *plugin, gboolean added, gboolean removed
     return match;
 }
 
-#if 1
-/* WIP! */
 
-static void
-hal_capability_added_cb (LibHalContext *ctx,
+/* TODO: this part needs rigorous testing */
+
+static void hal_capability_added_cb (LibHalContext *ctx,
         const char *udi, const char *capability)
 {
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
     GSList *e = NULL;
     gboolean match = FALSE;
 
-    OHM_DEBUG(DBG_FACTS, "> hal_capability_added_cb: udi '%s', capability: '%s'\n", udi, capability);
+    OHM_DEBUG(DBG_FACTS, "> hal_capability_added_cb: udi '%s', capability: '%s'\n",
+            udi, capability);
 
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
@@ -274,14 +228,14 @@ hal_capability_added_cb (LibHalContext *ctx,
     return;
 }
 
-static void
-hal_capability_lost_cb (LibHalContext *ctx,
+static void hal_capability_lost_cb (LibHalContext *ctx, 
         const char *udi, const char *capability)
 {
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
     GSList *e;
 
-    OHM_DEBUG(DBG_FACTS, "> hal_capability_lost_cb: udi '%s', capability: '%s'\n", udi, capability);
+    OHM_DEBUG(DBG_FACTS, "> hal_capability_lost_cb: udi '%s', capability: '%s'\n",
+            udi, capability);
     
 #if 0
     if (process_udi(plugin, FALSE, TRUE, udi))
@@ -298,7 +252,6 @@ hal_capability_lost_cb (LibHalContext *ctx,
             if (strcmp(dec->capability, capability) == 0) {
                 GSList *orig = g_slist_find_custom(dec->devices, udi, g_str_equal);
                 if (orig) {
-                    /* printf("freed(1) udi string '%s' at '%p'\n", (gchar *) orig->data, orig->data); */
                     dec->devices = g_slist_remove_link(dec->devices, orig);
                     g_free(orig->data);
                     g_slist_free_1(orig);
@@ -316,11 +269,8 @@ hal_capability_lost_cb (LibHalContext *ctx,
 #endif
     return;
 }
-#endif
 
-static void
-hal_device_added_cb (LibHalContext *ctx,
-        const char *udi)
+static void hal_device_added_cb (LibHalContext *ctx, const char *udi)
 {
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
     DBusError error;
@@ -339,7 +289,8 @@ hal_device_added_cb (LibHalContext *ctx,
 #endif
 
     if (dbus_error_is_set(&error)) {
-        g_print("Error getting data for HAL object %s. '%s': '%s'\n", udi, error.name, error.message);
+        g_print("Error getting data for HAL object %s. '%s': '%s'\n",
+                udi, error.name, error.message);
         return;
     }
 
@@ -359,7 +310,8 @@ hal_device_added_cb (LibHalContext *ctx,
             process_decoration(plugin, dec, TRUE, FALSE, udi);
         }
         else {
-            OHM_DEBUG(DBG_FACTS,"device '%s' doesn't have capability '%s'\n", udi, dec->capability);
+            OHM_DEBUG(DBG_FACTS,"device '%s' doesn't have capability '%s'\n",
+                    udi, dec->capability);
         }
     }
 
@@ -373,9 +325,7 @@ hal_device_added_cb (LibHalContext *ctx,
     return;
 }
 
-static void
-hal_device_removed_cb (LibHalContext *ctx,
-        const char *udi)
+static void hal_device_removed_cb (LibHalContext *ctx, const char *udi)
 {
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
     GSList *orig = NULL;
@@ -388,7 +338,6 @@ hal_device_removed_cb (LibHalContext *ctx,
         if (has_udi(dec, udi)) {
             orig = g_slist_find_custom(dec->devices, udi, g_str_equal);
             if (orig) {
-                /* printf("freed(2) udi string '%s' at '%p'\n", (gchar *) orig->data, orig->data); */
                 dec->devices = g_slist_remove_link(dec->devices, orig);
                 g_free(orig->data);
                 g_slist_free_1(orig);
@@ -430,8 +379,7 @@ static gboolean process_modified_properties(gpointer data)
     return FALSE;
 }
 
-    static void
-hal_property_modified_cb (LibHalContext *ctx,
+static void hal_property_modified_cb (LibHalContext *ctx,
         const char *udi,
         const char *key,
         dbus_bool_t is_removed,
@@ -519,7 +467,6 @@ static void free_decorator(decorator *dec) {
 
     g_free(dec->capability);
     for (f = dec->devices; f != NULL; f = g_slist_next(f)) {
-        /* printf("freed(3) udi string '%s' at '%p'\n", (gchar *) f->data, f->data); */
         g_free(f->data);
     }
     g_slist_free(dec->devices);
