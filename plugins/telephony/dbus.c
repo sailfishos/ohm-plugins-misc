@@ -38,7 +38,7 @@ static DBusConnection *bus;
 
 static void event_handler(event_t *event);
 
-
+o
 
 /********************
  * bus_init
