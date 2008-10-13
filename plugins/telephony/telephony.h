@@ -66,6 +66,7 @@ typedef enum {
 
 typedef struct {
     int           id;                          /* our call ID */
+    char         *name;                        /* channel D-BUS name */
     char         *path;                        /* channel object path */
     char         *peer;                        /* URI of peer if known */
     call_dir_t    dir;                         /* incoming/outgoing */
@@ -93,6 +94,7 @@ typedef enum {
 
 #define EVENT_COMMON                                                     \
     event_id_t    type;                        /* event type */          \
+    const char   *name;                        /* channel D-BUS name */  \
     const char   *path;                        /* channel object path */ \
     call_t       *call;                        /* call for event */      \
     call_state_t  state                        /* requested state */

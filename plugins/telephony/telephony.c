@@ -62,7 +62,7 @@ static int         ncscall;                      /* number of CS calls */
 static int         nipcall;                      /* number of ohter calls */
 static int         callid;
 
-call_t *call_register(const char *path);
+call_t *call_register(const char *path, const char *name);
 call_t *call_lookup(const char *path);
 void    call_destroy(call_t *);
 
@@ -284,6 +284,7 @@ channel_new(DBusConnection *c, DBusMessage *msg, void *data)
                               DBUS_TYPE_INVALID)) {
         if (!strcmp(type, TP_CHANNEL_MEDIA)) {
             event.type = EVENT_NEW_CHANNEL;
+            event.name = dbus_message_get_sender(msg);
             event.path = path;
             event.call = call_lookup(path);
             event_handler((event_t *)&event);
@@ -655,14 +656,14 @@ event_handler(event_t *event)
     switch (event->type) {
     case EVENT_NEW_CHANNEL:
         if (call == NULL) {
-            call = call_register(event->channel.path);
+            call = call_register(event->channel.path, event->channel.name);
             policy_call_export(call);
         }
         return;
 
     case EVENT_CALL_REQUEST:
         if (call == NULL)
-            call = event->any.call = call_register(event->call.path);
+            call = event->any.call = call_register(event->call.path, NULL);
         
         call->dir = event->call.dir;
         policy_call_update(call);
@@ -724,7 +725,7 @@ call_init(void)
  * call_register
  ********************/
 call_t *
-call_register(const char *path)
+call_register(const char *path, const char *name)
 {
     call_t *call;
 
@@ -740,6 +741,15 @@ call_register(const char *path)
         OHM_ERROR("Failed to initialize new call %s.", path);
         g_free(call);
         return NULL;
+    }
+
+    if (name != NULL) {
+        if ((call->name = g_strdup(name)) == NULL) {
+        OHM_ERROR("Failed to initialize new call %s.", path);
+        g_free(call->path);
+        g_free(call);
+        return NULL;
+        }
     }
 
     call->id    = callid++;
@@ -828,6 +838,7 @@ call_destroy(call_t *call)
 {
     if (call != NULL) {
         OHM_INFO("Destroying call %s.", call->path);
+        g_free(call->name);
         g_free(call->path);
         g_free(call);
     }
@@ -839,20 +850,22 @@ call_destroy(call_t *call)
  * tp_disconnect
  ********************/
 static int
-tp_disconnect(const char *path)
+tp_disconnect(const char *name, const char *path)
 {
     DBusMessage *msg;
     const char  *iface, *method;
     
-    iface  = TP_CHANNEL_HOLD;
+    iface  = TP_CHANNEL;
     method = CLOSE;
-    msg    = dbus_message_new_method_call(NULL, path, iface, method);
+    msg    = dbus_message_new_method_call(name, path, iface, method);
 
     if (msg == NULL) {
         OHM_ERROR("Failed to allocate D-BUS Close request.");
         return ENOMEM;
     }
     
+    OHM_INFO("##### Requesting %s.%s from %s... #####", iface, method, path);
+
     return bus_send(msg, NULL) ? 0 : EIO;
 }
 
@@ -880,7 +893,7 @@ call_disconnect(call_t *call, const char *action, event_t *event)
     }
 
     /* disconnect and wait for the Close signal before removing */
-    if (tp_disconnect(call->path) != 0) {
+    if (tp_disconnect(call->name, call->path) != 0) {
         OHM_ERROR("Failed to disconnect call %s.", call->path);
         return EIO;
     }
