@@ -14,6 +14,7 @@
 #define TP_CHANNEL_HOLD   TP_CHANNEL".Interface.Hold"
 #define TP_CHANNEL_MEDIA  TP_CHANNEL".Type.StreamedMedia"
 
+#define TP_CONN_PATH      "/org/freedesktop/Telepathy/Connection"
 #define TP_RING           "/org/freedesktop/Telepathy/Connection/ring/tel/ring"
 
 #define NEW_CHANNEL        "NewChannel"

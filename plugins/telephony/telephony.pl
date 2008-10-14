@@ -1,6 +1,7 @@
-:- module(telephony, [call_request/3]).
+:- module(telephony, [call_request/3, call_audio_update/1]).
 
 call_request(Id, State, [Actions]) :- call_actions(Id, State, Actions).
+call_audio_update(Groups) :- active_audio_groups(Groups).
 
 
 /*
@@ -12,13 +13,13 @@ call_actions(Id, disconnected, [call_action, [Id, disconnected]]) :- !.
 
 
 /*
- * A new call can be created if none is alerting and we have less than 3 calls.
+ * A new call can be created if none is alerting and we have few enough calls.
  */
 
 call_actions(Id, created, [call_action, [Id, created]]) :-
     \+ has_alerting,
     number_of_calls(N),
-    N < 3,
+    N < 2,
     !.
 
 
@@ -29,6 +30,18 @@ call_actions(Id, created, [call_action, [Id, created]]) :-
 call_actions(Id, active, [call_action, [Id, active]]) :-
     \+ has_active, !.
 
+
+/* for testing: disconnect any active calls when accepting a new one
+call_actions(Id, active, Actions) :-
+    \+ has_alerting,
+    number_of_calls(N),
+    N > 0,
+    find_calls(active, ActiveCalls),
+    maplist(disconnect_call, ActiveCalls, DisconnectActions),
+    activate_call(Id, ActivateActions),
+    append(DisconnectActions, [ActivateActions], CallActions),
+    append([call_action], CallActions, Actions), !.    
+*/
 
 /*
  * Otherwise the active call must be put on hold first.
@@ -90,7 +103,8 @@ is_cellular_path(P) :-
                '/org/freedesktop/Telepathy/Connection/ring/tel/ring/').
 
 has_alerting :-
-    fact_exists('com.nokia.policy.call', [state, dir], [created, incoming]).
+    fact_exists('com.nokia.policy.call',
+		[state, direction], [created, incoming]).
 
 has_active :- 
     fact_exists('com.nokia.policy.call', [state], [active]).
@@ -104,9 +118,33 @@ has_active_ip_call :-
     \+ is_cellular_path(Path).
 
 
+
+/*
+ * active audio group updating
+ */
+
+active_audio_groups(Groups) :-
+    \+ has_active,
+    has_alerting,
+    audio_group_on(othermedia, Other),
+    audio_group_on(ringtone, Ringtone),
+    append([Other], [Ringtone], Groups), !.
+
+active_audio_groups(Groups) :-
+    audio_group_on(othermedia, Other),
+    audio_group_off(ringtone, Ringtone),
+    append([Other], [Ringtone], Groups), !.
+
+audio_group_on(Group, [audio_active_policy_group, [group, Group], [state, 1]]).
+audio_group_off(Group, [audio_active_policy_group, [group, Group], [state, 0]]).
+
+
 /* basic list manipulation */
 head([H|_], H).
 tail([_|T], T).
+
+
+
 
 
 
@@ -115,7 +153,7 @@ tail([_|T], T).
  * fake facts for testing
  */
 
-/*
+
 fact(10, 'org/freedesktop/Telepathy/Connection/ring/tel/ring/Channel0',
 	active, incoming).
 fact(11, '/a/pesky/skype/call/Channel2' , onhold,  outgoing).
@@ -126,7 +164,6 @@ fact_exists(_, [id, path], [Id, Path]) :- fact(Id, Path, _, _).
 fact_exists(_, [id, state, path], [Id, State, Path]) :-
     fact(_, Id, State, Path).
 fact_exists(_, [state, path], [State, Path]) :- fact(_, Path, State, _).
-fact_exists(_, [state, dir], [State, Dir]) :- fact(_, _, State, Dir).
+fact_exists(_, [state, direction], [State, Dir]) :- fact(_, _, State, Dir).
 fact_exists(_, [state], [State]) :- fact(_, _, State, _).
 fact_exists(_, [path], [Path]) :- fact(_, Path, _, _).
-*/

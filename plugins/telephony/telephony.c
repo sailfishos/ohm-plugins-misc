@@ -232,6 +232,28 @@ bus_send(DBusMessage *msg, dbus_uint32_t *serial)
 
 
 /********************
+ * short_path
+ ********************/
+static const char *
+short_path(const char *path)
+{
+    const char *spath = path;
+    int         pflen = sizeof(TP_CONN_PATH) - 1;
+
+    if (!strncmp(path, TP_CONN_PATH, pflen)) {
+        if (*(spath = path + pflen) == '/')
+            spath = strchr(spath + 1, '/');
+        else
+            spath = path;
+        if (spath && *spath == '/')
+            spath++;
+    }
+
+    return spath ? spath : path;
+}
+
+
+/********************
  * dispatch_signal
  ********************/
 static DBusHandlerResult
@@ -434,7 +456,7 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
         break;
     case TP_PENDING_HOLD:
     case TP_PENDING_UNHOLD:
-        OHM_INFO("Call %s is pending to be %s.", event.path,
+        OHM_INFO("Call %s is pending to be %s.", short_path(event.path),
                  state == TP_PENDING_HOLD ? "hold" : "unheld");
     default:
         return DBUS_HANDLER_RESULT_HANDLED;
@@ -506,8 +528,6 @@ dispatch_method(DBusConnection *c, DBusMessage *msg, void *data)
 static DBusHandlerResult
 call_request(DBusConnection *c, DBusMessage *msg, void *data)
 {
-#if 1
-
     call_event_t event;
     int          incoming, n;
 
@@ -527,43 +547,6 @@ call_request(DBusConnection *c, DBusMessage *msg, void *data)
     event_handler((event_t *)&event);
     
     return DBUS_HANDLER_RESULT_HANDLED;
-
-#else
-
-    DBusMessage  *reply;
-    event_t       event;
-    int           incoming, n;
-
-    if (!dbus_message_get_args(msg, NULL,
-                               DBUS_TYPE_STRING, &event.any.path,
-                               DBUS_TYPE_BOOLEAN, &incoming,
-                               DBUS_TYPE_INT32, &n,
-                               DBUS_TYPE_INVALID)) {
-        OHM_ERROR("Failed to parse MC call request.");
-        return DBUS_HANDLER_RESULT_HANDLED;
-    }
-
-    event.type = EVENT_CALL_REQUEST;
-    
-    event.create.call      = call_lookup(event.create.path);
-    event.create.direction = incoming ? DIR_INCOMING : DIR_OUTGOING;
-    event_handler(&event);
-
-    if ((reply = dbus_message_new_method_return(msg)) != NULL) {
-        dbus_bool_t allow = TRUE;
-        if (!dbus_message_append_args(reply, DBUS_TYPE_BOOLEAN, &allow,
-                                      DBUS_TYPE_INVALID)) {
-            OHM_ERROR("Failed to fill D-BUS reply.");
-            dbus_message_unref(reply);
-        }            
-        else
-            dbus_connection_send(c, reply, NULL);
-    }
-    else
-        OHM_ERROR("Failed to allocate D-BUS reply.");
-    
-    return DBUS_HANDLER_RESULT_HANDLED;
-#endif
 
     (void)c;
     (void)msg;
@@ -627,9 +610,9 @@ static void
 event_print(event_t *event)
 {
     const char *name = event_name(event->any.type);
-    const char *id   = event->any.path ? event->any.path : "<UNKNOWN>";
+    const char *path = event->any.path ? event->any.path : "<UNKNOWN>";
 
-    OHM_INFO("event %s for %s", name, id);
+    OHM_INFO("event %s for %s", name, short_path(path));
     switch (event->any.type) {
     case EVENT_CALL_REQUEST:
         OHM_INFO("call direction: %s",
@@ -683,11 +666,13 @@ event_handler(event_t *event)
     
     status = policy_actions(event);
 
-    if (status == 0)
+    if (status == 0) {
         policy_enforce(event);
+        policy_audio_update();
+    }
     else {
         OHM_ERROR("Failed to get policy actions for event %s of call %s.",
-                  event_name(event->any.type), call->path);
+                  event_name(event->any.type), short_path(call->path));
         /* policy_fallback(call, event); */
         return;
     }
@@ -780,7 +765,7 @@ call_unregister(const char *path)
     if (path == NULL || (call = call_lookup(path)) == NULL)
         return ENOENT;
     
-    OHM_INFO("Unregistering call %s (#%d).", path, call->id);
+    OHM_INFO("Unregistering call %s (#%d).", short_path(path), call->id);
     
     cs = !strncmp(path, TP_RING, sizeof(TP_RING) - 1);
     g_hash_table_remove(calls, path);
@@ -837,7 +822,7 @@ void
 call_destroy(call_t *call)
 {
     if (call != NULL) {
-        OHM_INFO("Destroying call %s.", call->path);
+        OHM_INFO("Destroying call %s.", short_path(call->path));
         g_free(call->name);
         g_free(call->path);
         g_free(call);
@@ -845,16 +830,17 @@ call_destroy(call_t *call)
 }
 
 
-
 /********************
  * tp_disconnect
  ********************/
 static int
-tp_disconnect(const char *name, const char *path)
+tp_disconnect(call_t *call)
 {
     DBusMessage *msg;
-    const char  *iface, *method;
+    const char  *name, *path, *iface, *method;
     
+    name   = call->name;
+    path   = call->path;
     iface  = TP_CHANNEL;
     method = CLOSE;
     msg    = dbus_message_new_method_call(name, path, iface, method);
@@ -864,8 +850,6 @@ tp_disconnect(const char *name, const char *path)
         return ENOMEM;
     }
     
-    OHM_INFO("##### Requesting %s.%s from %s... #####", iface, method, path);
-
     return bus_send(msg, NULL) ? 0 : EIO;
 }
 
@@ -876,7 +860,7 @@ tp_disconnect(const char *name, const char *path)
 static int
 call_disconnect(call_t *call, const char *action, event_t *event)
 {
-    OHM_INFO("DISCONNECT %s.", call->path);
+    OHM_INFO("DISCONNECT %s.", short_path(call->path));
     
     if (call == event->any.call) {
         switch (event->any.state) {
@@ -893,7 +877,7 @@ call_disconnect(call_t *call, const char *action, event_t *event)
     }
 
     /* disconnect and wait for the Close signal before removing */
-    if (tp_disconnect(call->name, call->path) != 0) {
+    if (tp_disconnect(call) != 0) {
         OHM_ERROR("Failed to disconnect call %s.", call->path);
         return EIO;
     }
@@ -911,13 +895,14 @@ static int
 tp_hold(call_t *call, int status)
 {
     DBusMessage *msg;
-    const char  *path, *iface, *method;
+    const char  *name, *path, *iface, *method;
     dbus_bool_t  held = status;
     
+    name   = call->name;
     path   = call->path;
     iface  = TP_CHANNEL_HOLD;
     method = REQUEST_HOLD;
-    msg    = dbus_message_new_method_call(NULL, path, iface, method);
+    msg    = dbus_message_new_method_call(name, path, iface, method);
 
     if (msg == NULL) {
         OHM_ERROR("Failed to allocate D-BUS Hold message.");
@@ -941,7 +926,7 @@ tp_hold(call_t *call, int status)
 static int
 call_hold(call_t *call, const char *action, event_t *event)
 {    
-    OHM_INFO("HOLD %s.", call->path);
+    OHM_INFO("HOLD %s.", short_path(call->path));
     
     if (call == event->any.call && event->any.state == STATE_ON_HOLD) {
         call->state = STATE_ON_HOLD;
@@ -966,7 +951,7 @@ call_hold(call_t *call, const char *action, event_t *event)
 static int
 call_activate(call_t *call, const char *action, event_t *event)
 {
-    OHM_INFO("ACTIVATE %s.", call->path);
+    OHM_INFO("ACTIVATE %s.", short_path(call->path));
     
     if (call == event->any.call && event->any.state == STATE_ACTIVE) {
         call->state = STATE_ACTIVE;
@@ -991,13 +976,12 @@ call_activate(call_t *call, const char *action, event_t *event)
 static int
 call_create(call_t *call, const char *action, event_t *event)
 {
-    OHM_INFO("CREATE call %s.", call->path);
+    OHM_INFO("CREATE call %s.", short_path(call->path));
 
     call->state = STATE_CREATED;
     policy_call_update(call);
     
     call_reply(event->call.req, TRUE);
-    OHM_INFO("call reply sent...");
     return 0;
 
     (void)action;
@@ -1120,8 +1104,6 @@ policy_enforce(event_t *event)
     int         id, status, err;
     call_t     *call;
 
-    OHM_INFO("Enforcing policy decisions.");
-
     if ((l = ohm_fact_store_get_facts_by_name(store, FACT_ACTIONS)) == NULL)
         return ENOENT;
     
@@ -1162,7 +1144,7 @@ policy_enforce(event_t *event)
         }
         
         OHM_INFO("Policy decision for call #%d (%s): %s.",
-                 call->id, call->path, action);
+                 call->id, short_path(call->path), action);
         
         if ((err = call_action(call, action, event)) != 0)
             status = err;
@@ -1171,6 +1153,16 @@ policy_enforce(event_t *event)
     ohm_fact_store_remove(store, actions);
 
     return status;
+}
+
+
+/********************
+ * policy_audio_update
+ ********************/
+int
+policy_audio_update(void)
+{
+    return resolve("telephony_audio_update", NULL);
 }
 
 
@@ -1214,7 +1206,7 @@ policy_call_export(call_t *call)
     if (call == NULL)
         return EINVAL;
 
-    OHM_INFO("Exporting fact for call %s.", call->path);
+    OHM_INFO("Exporting fact for call %s.", short_path(call->path));
 
     if (call->fact != NULL)
         return 0;
@@ -1271,7 +1263,7 @@ policy_call_update(call_t *call)
     if (call == NULL)
         return ENOMEM;
 
-    OHM_INFO("Updating fact for call %s.", call->path);
+    OHM_INFO("Updating fact for call %s.", short_path(call->path));
 
     if ((fact = call->fact) == NULL)
         return policy_call_export(call);
@@ -1301,7 +1293,7 @@ void
 policy_call_delete(call_t *call)
 {
     if (call != NULL && call->fact != NULL) {
-        OHM_INFO("Removing fact for call %s.", call->path);
+        OHM_INFO("Removing fact for call %s.", short_path(call->path));
         ohm_fact_store_remove(store, call->fact);
         call->fact = NULL;
     }
