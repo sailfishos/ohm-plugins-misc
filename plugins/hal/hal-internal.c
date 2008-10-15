@@ -478,6 +478,9 @@ gboolean undecorate(hal_plugin *plugin, void *user_data) {
     /* identify the decorator by user data */
     GSList *e = NULL;
 
+    if (plugin == NULL)
+        return FALSE;
+
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
         if (dec->user_data == user_data) {
@@ -559,10 +562,11 @@ void deinit_hal(hal_plugin *plugin)
 
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
-        plugin->decorators = g_slist_remove(plugin->decorators, dec);
         free_decorator(dec);
     }
 
+    g_slist_free(plugin->decorators);
+    plugin->decorators = NULL;
     libhal_ctx_shutdown(plugin->hal_ctx, NULL);
     libhal_ctx_free(plugin->hal_ctx);
 
