@@ -17,7 +17,7 @@ call_actions(Id, disconnected, [call_action, [Id, disconnected]]) :- !.
  */
 
 call_actions(Id, created, [call_action, [Id, created]]) :-
-    \+ has_alerting,
+    \+ has_alerting_call,
     number_of_calls(N),
     N < 2,
     !.
@@ -28,20 +28,8 @@ call_actions(Id, created, [call_action, [Id, created]]) :-
  */
 
 call_actions(Id, active, [call_action, [Id, active]]) :-
-    \+ has_active, !.
+    \+ has_active_call, !.
 
-
-/* for testing: disconnect any active calls when accepting a new one
-call_actions(Id, active, Actions) :-
-    \+ has_alerting,
-    number_of_calls(N),
-    N > 0,
-    find_calls(active, ActiveCalls),
-    maplist(disconnect_call, ActiveCalls, DisconnectActions),
-    activate_call(Id, ActivateActions),
-    append(DisconnectActions, [ActivateActions], CallActions),
-    append([call_action], CallActions, Actions), !.    
-*/
 
 /*
  * Otherwise the active call must be put on hold first.
@@ -102,11 +90,11 @@ is_cellular_path(P) :-
                0, 52, _,
                '/org/freedesktop/Telepathy/Connection/ring/tel/ring/').
 
-has_alerting :-
+has_alerting_call :-
     fact_exists('com.nokia.policy.call',
 		[state, direction], [created, incoming]).
 
-has_active :- 
+has_active_call :- 
     fact_exists('com.nokia.policy.call', [state], [active]).
 
 has_active_cellular_call :-
@@ -120,12 +108,26 @@ has_active_ip_call :-
 
 
 /*
- * active audio group updating
+ * Call channel is active if we have an active call. Ringtone channel is
+ * active if and only if we have an alerting call and no active calls.
  */
 
 active_audio_groups(Groups) :-
-    \+ has_active,
-    has_alerting,
+    (has_active_call ->
+     (audio_group_on(cscall, Call),
+      audio_group_off(ringtone, Ringtone))
+     ;
+     (audio_group_off(cscall, Call),
+      (has_alerting_call ->
+       audio_group_on(ringtone, Ringtone)
+       ;
+       audio_group_off(ringtone, Ringtone)))),
+    append([Call], [Ringtone], Groups).
+    
+/*
+active_audio_groups(Groups) :-
+    \+ has_active_call,
+    has_alerting_call,
     audio_group_on(othermedia, Other),
     audio_group_on(ringtone, Ringtone),
     append([Other], [Ringtone], Groups), !.
@@ -135,25 +137,17 @@ active_audio_groups(Groups) :-
     audio_group_off(ringtone, Ringtone),
     append([Other], [Ringtone], Groups), !.
 
+*/
+
 audio_group_on(Group, [audio_active_policy_group, [group, Group], [state, 1]]).
 audio_group_off(Group, [audio_active_policy_group, [group, Group], [state, 0]]).
-
-
-/* basic list manipulation */
-head([H|_], H).
-tail([_|T], T).
-
-
-
-
-
 
 
 /*
  * fake facts for testing
  */
 
-
+/*
 fact(10, 'org/freedesktop/Telepathy/Connection/ring/tel/ring/Channel0',
 	active, incoming).
 fact(11, '/a/pesky/skype/call/Channel2' , onhold,  outgoing).
@@ -167,3 +161,4 @@ fact_exists(_, [state, path], [State, Path]) :- fact(_, Path, State, _).
 fact_exists(_, [state, direction], [State, Dir]) :- fact(_, _, State, Dir).
 fact_exists(_, [state], [State]) :- fact(_, _, State, _).
 fact_exists(_, [path], [Path]) :- fact(_, Path, _, _).
+*/
