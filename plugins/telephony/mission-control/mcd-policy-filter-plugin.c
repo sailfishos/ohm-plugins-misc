@@ -2,7 +2,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include <libosso.h>
+#include <dbus/dbus.h>
 
 #include <telepathy-glib/interfaces.h>
 #include <telepathy-glib/channel.h>
