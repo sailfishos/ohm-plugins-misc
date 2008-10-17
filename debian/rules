@@ -14,8 +14,8 @@ include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/autotools.mk
 
 # Omit *.la files but warn about other missing things.
-binary-post-install/ohm::
-	rm -f debian/tmp/usr/lib/*.la
+binary-post-install/%::
+	rm -f debian/*/usr/lib/*/*.la
 common-binary-post-install-arch:: list-missing
 
 post-patches:: debian/stamp-autogen
