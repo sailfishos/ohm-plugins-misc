@@ -98,6 +98,23 @@ AC_SUBST(OHM_CONF_DIR, "\$(sysconfdir)/ohm")
 AC_SUBST(OHM_PLUGIN_CONF_DIR, "\$(OHM_CONF_DIR)/plugins.d")
 AC_SUBST(OHM_PLUGIN_DIR, "\$(libdir)/ohm")
 
+# temporarily pulled in mission-control policy filter
+PKG_CHECK_MODULES(TELEPATHY, telepathy-glib >= 0.7.6)
+AC_SUBST(TELEPATHY_LIBS)
+AC_SUBST(TELEPATHY_CFLAGS)
+
+MISSION_CONTROL_REQUIRED=5
+PKG_CHECK_MODULES(MISSION_CONTROL, mission-control >= $MISSION_CONTROL_REQUIRED)
+AC_SUBST(MISSION_CONTROL_CFLAGS)
+AC_SUBST(MISSION_CONTROL_LIBS)
+
+PKG_CHECK_MODULES(LIBMISSIONCONTROL, libmissioncontrol >= $MISSION_CONTROL_REQUIRED)
+AC_SUBST(LIBMISSIONCONTROL_CFLAGS)
+AC_SUBST(LIBMISSIONCONTROL_LIBS)
+
+pluginlibdir="`$PKG_CONFIG --variable=pluginlibdir mission-control`"
+AC_SUBST(pluginlibdir)
+
 
 
 AC_CONFIG_FILES([Makefile
@@ -111,5 +128,8 @@ AC_CONFIG_FILES([Makefile
                  plugins/profile/tests/Makefile
                  plugins/signaling/Makefile
                  plugins/signaling/tests/Makefile
+                 plugins/telephony/Makefile
+                 plugins/telephony/ohm/Makefile
+                 plugins/telephony/mission-control/Makefile
 		 doc/Makefile])
 AC_OUTPUT
