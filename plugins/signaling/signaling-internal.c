@@ -232,6 +232,7 @@ transaction_set_property(GObject *object,
             /* free the old list */
             free_facts(g_value_get_pointer(value));
 #else
+            free_facts(t->facts);
             t->facts = g_value_get_pointer(value);
 #endif
             break;
