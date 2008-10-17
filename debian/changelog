@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.5) unstable; urgency=low
+
+  * Cleanups
+  * Bug fixes (memory leaks, compatibility with new plugin unloading)
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 17 Oct 2008 15:04:55 +0300
+
 ohm-plugins-misc (0.4) unstable; urgency=low
 
   * Compatible for new OHM
