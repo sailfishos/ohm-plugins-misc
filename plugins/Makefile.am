@@ -3,8 +3,9 @@ SUBDIRS = 	     \
 	hal          \
 	playback     \
 	accessories  \
-	profile  \
-	console 
+	profile      \
+	console      \
+	telephony
 
 clean-local:
 	rm -f *~
