@@ -178,6 +178,7 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec,
         dec->cb(fact, dec->capability, added, removed, dec->user_data);
 
         libhal_free_property_set(properties);
+        g_object_unref(fact);
     }
 
     return match;

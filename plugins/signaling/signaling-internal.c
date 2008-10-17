@@ -73,7 +73,7 @@ deinit_signaling()
 
 /* copy-paste from policy library */
 
-void free_facts(GSList *facts) 
+static void free_facts(GSList *facts) 
 {
 
     GSList *i;
@@ -86,7 +86,7 @@ void free_facts(GSList *facts)
     return;
 }
 
-GSList *copy_facts(GSList *facts)
+static GSList *copy_facts(GSList *facts)
 {
 
     GSList *new_facts = NULL, *i = NULL;
@@ -226,8 +226,14 @@ transaction_set_property(GObject *object,
             t->timeout = g_value_get_uint(value);
             break;
         case PROP_FACTS:
+#if 0
             free_facts(t->facts);
             t->facts = copy_facts(g_value_get_pointer(value));
+            /* free the old list */
+            free_facts(g_value_get_pointer(value));
+#else
+            t->facts = g_value_get_pointer(value);
+#endif
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
