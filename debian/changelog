@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.5) unstable; urgency=low
+
+  * Added a telepathy-based telephony plugin. 
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 17 Oct 2008 16:05:22 +0300
+
 ohm-plugins-misc (0.4) unstable; urgency=low
 
   * Compatible for new OHM
