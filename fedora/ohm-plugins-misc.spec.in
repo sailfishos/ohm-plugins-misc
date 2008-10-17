@@ -11,8 +11,8 @@ URL: http://127.0.0.1
 Source0: %{name}-%{version}.tar.gz
 BuildArch: ##__ARCH__##
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
-BuildRequires: ohm-devel, dres-devel
-Requires: ohm, ohm-plugin-core, dres
+BuildRequires: ohm-devel, libdres-devel
+Requires: ohm, ohm-plugin-core, libdres
 
 %description
 A miscallaneous set of OHM plugins by Nokia.

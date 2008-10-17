@@ -1,5 +1,5 @@
 PACKAGE := ohm-plugins-misc
-VERSION := 0.1
+VERSION := 0.5
 
 TOPDIR  := $(shell while [ ! -d fedora -a "`pwd`" != "/" ]; do cd ..; done; \
 		   [ -d fedora ] && pwd || exit 1)
