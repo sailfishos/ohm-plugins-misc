@@ -19,22 +19,26 @@ typedef void (*completion_cb_t)(int transid, int success);
 
 /* public API (inside OHM) */
 
-OHM_EXPORTABLE(EnforcementPoint *, register_internal_enforcement_point, (gchar *uri))
+OHM_EXPORTABLE(GObject *, register_internal_enforcement_point, (gchar *uri))
 {
     EnforcementPoint *ep = register_enforcement_point(uri, TRUE);
 
     /* ref so that the ep won't be deleted before caller has unreffed it */
     g_object_ref(ep);
-    return ep;
+    return (GObject *) ep;
 }
     
-OHM_EXPORTABLE(gboolean, unregister_internal_enforcement_point, (EnforcementPoint *ep))
+OHM_EXPORTABLE(gboolean, unregister_internal_enforcement_point, (GObject *ep))
 {
+    EnforcementPoint *ep_in = (EnforcementPoint *) ep;
+
     gchar *uri;
     gboolean ret;
-    g_object_get(ep, "id", &uri, NULL);
+
+    g_object_get(ep_in, "id", &uri, NULL);
     ret = unregister_enforcement_point(uri);
     g_free(uri);
+    
     return ret;
 }
 
