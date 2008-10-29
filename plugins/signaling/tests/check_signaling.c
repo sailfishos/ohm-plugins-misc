@@ -62,26 +62,76 @@ END_TEST
 int key_changed_count = 0;
 int decision_count = 0;
 
-static gboolean test_internal_decision(Transaction *t, guint txid, gpointer data) {
+static gboolean test_internal_decision(EnforcementPoint *e, Transaction *t, gpointer data) {
+    guint txid;
+    
     printf("on-decision!\n");
+
+    g_object_get(t, "txid", &txid, NULL);
     fail_unless(txid != 0, "Wrong txid");
     decision_count++;
+    
+    g_main_loop_quit(loop);
+    
+    return TRUE;
+}
+
+static gboolean test_internal_decision_gobject(EnforcementPoint *e, GObject *o, gpointer data) {
+
+    GSList *facts, *list;
+    guint txid;
+
+    printf("on-decision (GObject)!\n");
+
+    g_object_get(o, "txid", &txid, NULL);
+    printf("txid: %d\n", txid);
+    fail_unless(txid != 0, "Wrong txid");
+    decision_count++;
+
+    g_object_get(o,
+            "facts",
+            &facts,
+            NULL);
+
+    for (list = facts; list != NULL; list = g_slist_next(list)) {
+        printf("fact: '%s'\n", list->data);
+    }
+
     g_main_loop_quit(loop);
     return TRUE;
+}
+
+static void test_internal_key_change(EnforcementPoint *e, Transaction *t, gpointer data) {
+    
+    guint txid;
+    GSList *facts, *list;
+    
+    printf("on-key-change!\n");
+
+    g_object_get(G_OBJECT(t), "txid", &txid, NULL);
+
+    g_object_get(t,
+            "facts",
+            &facts,
+            NULL);
+
+    key_changed_count++;
+    fail_unless(txid == 0, "Wrong txid");
+    printf("txid: %d\n", txid);
+    
+    for (list = facts; list != NULL; list = g_slist_next(list)) {
+        printf("fact: '%s'\n", list->data);
+    }
+
+    g_main_loop_quit(loop);
+}
+
 /*
  * test_signaling_internal_ep_1
  *
  * Test if making decisions and key changes actually causes signals to
  * be sent.
  * */
-}
-
-static void test_internal_key_change(Transaction *t, guint txid, gpointer data) {
-    printf("on-key-change!\n");
-    key_changed_count++;
-    fail_unless(txid == 0, "Wrong txid");
-    g_main_loop_quit(loop);
-}
 
 START_TEST (test_signaling_internal_ep_1)
 
@@ -109,6 +159,50 @@ START_TEST (test_signaling_internal_ep_1)
     g_main_loop_run(loop);
     
     test_transaction_object = queue_decision(NULL, 0, TRUE, 2000);
+    g_object_unref(test_transaction_object);
+
+    g_main_loop_run(loop);
+
+    fail_unless(key_changed_count == 1, "Key changed %i times", key_changed_count);
+    fail_unless(decision_count == 1, "Decision sent %i times", decision_count);
+
+END_TEST
+
+START_TEST (test_signaling_internal_ep_gobject)
+
+    DBusError error;
+    DBusConnection *c;
+    dbus_error_init(&error);
+    gboolean ret;
+    GSList *facts = NULL;
+    GObject *ep;
+    
+    printf("> test_signaling_internal_ep_gobject\n");
+
+    c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
+    ret = init_signaling(c, 0, 0);
+    fail_unless(ret == TRUE, "Init failed");
+    
+    ep = register_enforcement_point("internal", TRUE);
+
+    facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_1"));
+    facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_2"));
+    
+    g_signal_connect(ep, "on-decision", G_CALLBACK(test_internal_decision_gobject), NULL);
+    g_signal_connect(ep, "on-key-change", G_CALLBACK(test_internal_key_change), NULL);
+    
+    key_changed_count = 0;
+    decision_count = 0;
+
+    queue_decision(facts, 0, FALSE, 0);
+
+    g_main_loop_run(loop);
+
+    facts = NULL;
+    facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_3"));
+    facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_4"));
+
+    test_transaction_object = queue_decision(facts, 0, TRUE, 2000);
     g_object_unref(test_transaction_object);
 
     g_main_loop_run(loop);
@@ -151,13 +245,15 @@ static void test_internal_2_complete(Transaction *t, gpointer data) {
     g_main_loop_quit(loop);
 }
 
-static gboolean test_internal_2_decision(Transaction *t, guint txid, gpointer data) {
+static gboolean test_internal_2_decision(EnforcementPoint *e, Transaction *t, gpointer data) {
 
     /* the first call to this function returns false, the second true */
 
     gboolean ret = TRUE;
+    guint txid;
 
     printf("test_internal_2_decision, going to %s!\n", counter ? "ack" : "nack");
+    g_object_get(t, "txid", &txid, NULL);
     fail_unless(txid != 0, "Wrong txid");
 
     if (counter == 0) 
@@ -481,6 +577,7 @@ Suite *ohm_signaling_suite(void)
     tcase_add_test(tc_all, test_signaling_register_unregister);
     tcase_add_test(tc_all, test_signaling_internal_ep_1);
     tcase_add_test(tc_all, test_signaling_internal_ep_2);
+    tcase_add_test(tc_all, test_signaling_internal_ep_gobject);
     tcase_add_test(tc_all, test_signaling_timeout);
     
     tcase_set_timeout(tc_all, 120);

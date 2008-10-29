@@ -302,9 +302,9 @@ enforcement_point_base_init(gpointer g_class)
                     0,
                     NULL,
                     NULL,
-                    signaling_marshal_BOOLEAN__UINT,
+                    signaling_marshal_BOOLEAN__OBJECT,
                     G_TYPE_BOOLEAN,
-                    1, G_TYPE_UINT);
+                    1, G_TYPE_OBJECT);
         
         signals [ON_KEY_CHANGE] =
             g_signal_new ("on-key-change",
@@ -313,9 +313,9 @@ enforcement_point_base_init(gpointer g_class)
                     0,
                     NULL,
                     NULL,
-                    signaling_marshal_VOID__UINT,
+                    signaling_marshal_VOID__OBJECT,
                     G_TYPE_NONE,
-                    1, G_TYPE_UINT);
+                    1, G_TYPE_OBJECT);
 
         g_object_interface_install_property(g_class,
                 g_param_spec_string ("id",
@@ -348,10 +348,10 @@ internal_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
     OHM_DEBUG(DBG_SIGNALING, "Internal EP send decision, txid '%u'\n", txid);
     
     if (txid == 0) {
-        g_signal_emit (INTERNAL_EP_STRATEGY(self), signals [ON_KEY_CHANGE], 0, txid);
+        g_signal_emit (INTERNAL_EP_STRATEGY(self), signals [ON_KEY_CHANGE], 0, transaction);
     }
     else {
-        g_signal_emit (INTERNAL_EP_STRATEGY(self), signals [ON_DECISION], 0, txid, &ret);
+        g_signal_emit (INTERNAL_EP_STRATEGY(self), signals [ON_DECISION], 0, transaction, &ret);
 
         /* we can receive the ack instantly */
 
@@ -764,7 +764,7 @@ internal_ep_receive_ack(EnforcementPoint * self, Transaction *transaction, guint
 
     /* internal reference count */
     s->ongoing_transactions = g_slist_remove(s->ongoing_transactions, transaction);
-    
+
     transaction_ack_ep(transaction, self, status);
     if (transaction_done(transaction)) {
         transaction_complete(transaction);
@@ -857,7 +857,7 @@ transaction_dispose(GObject *object) {
         EnforcementPoint *ep = i->data;
         g_object_unref(ep);
     }
-    
+
     free_facts(self->facts);
     self->facts = NULL;
 }
@@ -1339,7 +1339,7 @@ process_inq(gpointer data)
 
         g_object_get(t, "timeout", &timeout, NULL);
 
-        printf("setting timeout: %u\n", timeout);
+        /* printf("setting timeout: %u\n", timeout); */
         t->timeout_id = g_timeout_add(timeout, timeout_transaction, t);
     }
 #ifndef ONLY_ONE_TRANSACTION
