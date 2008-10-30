@@ -4,31 +4,39 @@
 #include <dbus/dbus.h>
 
 /* D-Bus errors */
-#define DBUS_MAEMO_ERROR_PREFIX        "org.maemo.Error"
+#define DBUS_MAEMO_ERROR_PREFIX       "org.maemo.Error"
 
 #define DBUS_MAEMO_ERROR_FAILED        DBUS_MAEMO_ERROR_PREFIX ".Failed"
 #define DBUS_MAEMO_ERROR_DENIED        DBUS_MAEMO_ERROR_PREFIX ".RequestDenied"
 
 /* D-Bus service names */
-#define DBUS_PLAYBACK_SERVICE          "org.maemo.Playback"
+#define DBUS_PLAYBACK_SERVICE           "org.maemo.Playback"
 
 /* D-Bus interface names */
-#define DBUS_ADMIN_INTERFACE            "org.freedesktop.DBus"
-#define DBUS_PLAYBACK_INTERFACE         "org.maemo.Playback"
-#define DBUS_PLAYBACK_MANAGER_INTERFACE DBUS_PLAYBACK_INTERFACE ".Manager"
-#define DBUS_POLICY_DECISION_INTERFACE  "com.nokia.policy"
+#define DBUS_ADMIN_INTERFACE             "org.freedesktop.DBus"
+#define DBUS_PLAYBACK_INTERFACE          "org.maemo.Playback"
+#define DBUS_PLAYBACK_MANAGER_INTERFACE  DBUS_PLAYBACK_INTERFACE ".Manager"
+#define DBUS_POLICY_DECISION_INTERFACE   "com.nokia.policy"
 
 /* D-Bus signal & method names */
-#define DBUS_NAME_OWNER_CHANGED_SIGNAL  "NameOwnerChanged"
-#define DBUS_HELLO_SIGNAL               "Hello"
-#define DBUS_NOTIFY_SIGNAL              "Notify"
+#define DBUS_NAME_OWNER_CHANGED_SIGNAL   "NameOwnerChanged"
+#define DBUS_HELLO_SIGNAL                "Hello"
+#define DBUS_NOTIFY_SIGNAL               "Notify"
+#define DBUS_PRIVACY_SIGNAL              "PrivacyOverride"
+#define DBUS_MUTE_SIGNAL                 "Mute"
 
-#define DBUS_PLAYBACK_REQ_STATE_METHOD  "RequestState"
+#define DBUS_PLAYBACK_REQ_STATE_METHOD   "RequestState"
+#define DBUS_PLAYBACK_REQ_PRIVACY_METHOD "RequestPrivacyOverride"
+
+#define DBUS_PLAYBACK_REQ_MUTE_METHOD    "RequestMute"
+#define DBUS_PLAYBACK_GET_ALLOWED_METHOD "GetAllowedState"
+#define DBUS_PLAYBACK_GET_PRIVACY_METHOD "GetPrivacyOverride"
+#define DBUS_PLAYBACK_GET_MUTE_METHOD    "GetMute"
 
 
 /* D-Bus pathes */
-#define DBUS_PLAYBACK_MANAGER_PATH      "/org/maemo/Playback/Manager"
-#define DBUS_POLICY_DECISION_PATH       "/com/nokia/policy/decision"
+#define DBUS_PLAYBACK_MANAGER_PATH       "/org/maemo/Playback/Manager"
+#define DBUS_POLICY_DECISION_PATH        "/com/nokia/policy/decision"
 
 typedef void  (*get_property_cb_t)(char *, char *, char *, char *);
 typedef void  (*set_property_cb_t)(char *, char *, char *, char *,
@@ -38,11 +46,14 @@ typedef void  (*hello_cb_t)(char *, char *);
 
 static void dbusif_init(OhmPlugin *);
 static void dbusif_reply_to_req_state(DBusMessage *, const char *);
+static void dbusif_reply(DBusMessage *);
 static void dbusif_reply_with_error(DBusMessage *, const char *, const char *);
 static void dbusif_get_property(char *, char *, char *, get_property_cb_t);
 static void dbusif_set_property(char *, char *, char *, char *,
                                 set_property_cb_t);
 static void dbusif_add_property_notification(char *, notify_property_cb_t);
+static void dbusif_privacy_override_changed(int);
+static void dbusif_mute_changed(int);
 static void dbusif_add_hello_notification(hello_cb_t);
 static void dbusif_send_info_to_pep(char *, char *, char *, char *);
 

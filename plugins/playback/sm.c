@@ -217,6 +217,8 @@ static void  fire_state_signal_event(char *, char *, char *, char *);
 static void  read_property_cb(char *, char *, char *, char *);
 static void  write_property_cb(char *,char *, char *,char *, int,const char *);
 static void  setstate_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+static void  privacy_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+static void  mute_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static char *strncpylower(char *, const char *, int);
 static char *class_to_group(char *);
 static void  schedule_deferred_request(client_t *);
@@ -224,12 +226,21 @@ static void  schedule_deferred_request(client_t *);
 
 static void sm_init(OhmPlugin *plugin)
 {
+    (void)plugin;
+
+    static fsif_field_t selist[] = {
+        { fldtype_string , "device", .value.string = "microphone" },
+        { fldtype_invalid,   NULL  , .value.string = NULL         }
+    };
+
     verify_state_machine();
 
     dbusif_add_hello_notification(fire_hello_signal_event);
     dbusif_add_property_notification("State", fire_state_signal_event);
 
-    fsif_add_watch(FACTSTORE_PLAYBACK, NULL, "setstate", setstate_cb, NULL);
+    fsif_add_watch(FACTSTORE_PLAYBACK, NULL  , "setstate", setstate_cb, NULL);
+    fsif_add_watch(FACTSTORE_PRIVACY , NULL  , "value"   , privacy_cb , NULL);
+    fsif_add_watch(FACTSTORE_MUTE    , selist, "mute"    , mute_cb    , NULL);
 }
 
 static sm_t *sm_create(char *name, void *user_data)
@@ -312,7 +323,7 @@ static int sm_process_event(sm_t *sm, sm_evdata_t *evdata)
         return FALSE;
     }
 
-    if (stid < stid_invalid || stid >= stid_max) {
+    if (/* stid < stid_invalid || */ stid >= stid_max) {
         OHM_ERROR("[%s] current state %d is out of range (0 - %d)",
                   sm->name, stid, stid_max-1);
         return FALSE;
@@ -453,19 +464,20 @@ static void verify_state_machine()
 {
     sm_stdef_t   *stdef;
     sm_transit_t *tr;
-    int           i, j;
+    unsigned int  i;
+    int           j;
     int           verified;
 
     verified = TRUE;
 
-    for (i = 0;  i < evid_max;  i++) {
-        if (evdef[i].id != i) {
-            OHM_ERROR("event definition entry %d is in wron position", i);
+    for (j = 0;  j < evid_max;  j++) {
+        if (evdef[j].id != j) {
+            OHM_ERROR("event definition entry %d is in wron position", j);
             verified = FALSE;
         }
     }
     
-    if (sm_def.stid < 0 || sm_def.stid >= stid_max) {
+    if (/* sm_def.stid < 0 || */ sm_def.stid >= stid_max) {
         OHM_ERROR("Initial state %d is out of range (0 - %d)",
                   sm_def.stid, stid_max-1);
         verified = FALSE;
@@ -589,11 +601,14 @@ static void fire_state_signal_event(char *dbusid, char *object,
 
 static int read_property(sm_evdata_t *evdata, void *usrdata)
 {
+    (void)evdata;
+
     client_t  *cl = (client_t *)usrdata;
 
-    client_get_property(cl, "PID"  , read_property_cb);
+    client_get_property(cl, "Pid"  , read_property_cb);
     client_get_property(cl, "Class", read_property_cb);
     client_get_property(cl, "State", read_property_cb);
+    client_get_property(cl, "Flags", read_property_cb);
 
     return TRUE;
 }
@@ -612,7 +627,7 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
     sm_evdata_t *schedev;
     int          state_accepted;
 
-    if (!strcmp(property->name, "PID")) {
+    if (!strcmp(property->name, "Pid")) {
         cl->pid = strdup(property->value);
         client_update_factstore_entry(cl, "pid", cl->pid);
         
@@ -634,12 +649,18 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         
         OHM_DEBUG(DBG_TRANS, "playback state is set to %s", cl->state);
     }
+    else if (!strcmp(property->name, "Flags")) {
+        cl->flags = strdup(property->value);
+        client_update_factstore_entry(cl, "flags", cl->flags);
+        
+        OHM_DEBUG(DBG_TRANS, "playback flags are set to %s", cl->flags);
+    }
     else {
         OHM_ERROR("[%s] Do not know anything about property '%s'",
                   __FUNCTION__, property->name);
     }
 
-    if (cl->pid != NULL && cl->group != NULL && cl->state != NULL) {
+    if (cl->pid && cl->group && cl->state && cl->flags) {
         if (cl->stream == NULL)
             snprintf(name, sizeof(name), "%s", cl->pid);
         else
@@ -719,6 +740,8 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
 
 static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
 {
+    (void)evdata;
+
     client_t    *cl = (client_t *)usrdata;
     sm_t        *sm = cl->sm;
     pbreq_t     *req;
@@ -879,6 +902,8 @@ static int abort_pbreq_deq(sm_evdata_t *evdata, void *usrdata)
 
 static int check_queue(sm_evdata_t *evdata, void *usrdata)
 {
+    (void)evdata;
+
     client_t *cl  = (client_t *)usrdata;
 
     schedule_deferred_request(cl);
@@ -914,6 +939,8 @@ static int update_state_deq(sm_evdata_t *evdata, void *usrdata)
 
 static int fake_stop_pbreq(sm_evdata_t *evdata, void *usrdata)
 {
+    (void)evdata;
+
     static char *state = "stop";
 
     client_t *cl = (client_t *)usrdata;
@@ -952,6 +979,10 @@ static void read_property_cb(char *dbusid, char *object,
 static void write_property_cb(char *dbusid, char *object, char *prname,
                               char *prvalue, int success, const char *error)
 {
+    (void)prname;
+    (void)prvalue;
+    (void)error;
+
     client_t    *cl;
     sm_evdata_t  evdata;
 
@@ -970,6 +1001,9 @@ static void write_property_cb(char *dbusid, char *object, char *prname,
 static void setstate_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
                         void *usrdata)
 {
+    (void)name;
+    (void)usrdata;
+
     client_t *cl;
     char     *setstate;
     char     *pid;
@@ -1014,6 +1048,76 @@ static void setstate_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     }
 }
 
+static void privacy_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
+                       void *usrdata)
+{
+    (void)entry;
+    (void)name;
+    (void)usrdata;
+
+    char *privacy;
+    int   state;
+
+    if (fld->type == fldtype_string && fld->value.string)
+        privacy = fld->value.string;
+    else {
+        OHM_ERROR("[%s] invalid field type", __FUNCTION__);
+        return;
+    }
+
+    if (privacy == NULL) {
+        OHM_ERROR("[%s] invalid field value '<null>'", __FUNCTION__);
+        return;
+    }
+
+    if (!strcmp(privacy, "public"))
+        state = 1;
+    else if (!strcmp(privacy, "private"))
+        state = 0;
+    else if (!strcmp(privacy, "default"))
+        state = 0;
+    else {
+        OHM_ERROR("[%s] invalid field value '%s'", __FUNCTION__, privacy);
+        return;
+    }
+
+    dbusif_privacy_override_changed(state);
+}
+
+static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
+                    void *usrdata)
+{
+    (void)entry;
+    (void)name;
+    (void)usrdata;
+
+    char *mute;
+    int   state;
+
+    if (fld->type == fldtype_string && fld->value.string)
+        mute = fld->value.string;
+    else {
+        OHM_ERROR("[%s] invalid field type", __FUNCTION__);
+        return;
+    }
+
+    if (mute == NULL) {
+        OHM_ERROR("[%s] invalid field value '<null>'", __FUNCTION__);
+        return;
+    }
+
+    if (!strcmp(mute, "muted"))
+        state = 1;
+    else if (!strcmp(mute, "unmuted"))
+        state = 0;
+    else {
+        OHM_ERROR("[%s] invalid field value '%s'", __FUNCTION__, mute);
+        return;
+    }
+
+    dbusif_mute_changed(state);
+}
+
 static char *strncpylower(char *to, const char *from, int tolen)
 {
     const char *p;
@@ -1034,10 +1138,16 @@ static char *class_to_group(char *klass)
     static struct {char *klass; char *group;}  map[] = {
         {"None"      , "othermedia"},
         {"Test"      , "othermedia"},
-        {"Event"     , "ringtone"  },
+        {"Event"     , "event"     },
         {"VoIP"      , "ipcall"    },
         {"Media"     , "player"    },
         {"Background", "othermedia"},
+        {"Ringtone"  , "ringtone"  },
+        {"Voiceui"   , "voiceui"   },
+        {"Camera"    , "camera"    },
+        {"Game"      , "game"      },
+        {"Alarm"     , "alarm"     },
+        {"Flash"     , "player"    },
         {NULL        , "othermedia"}
     };
 

@@ -6,8 +6,14 @@ static int init_selist(client_t *, fsif_field_t *, int);
 
 static void client_init(OhmPlugin *plugin)
 {
+    /*
     cl_head.next = (client_t *)&cl_head;
     cl_head.prev = (client_t *)&cl_head;
+    */
+    cl_head.next = (void *)&cl_head;
+    cl_head.prev = (void *)&cl_head;
+
+    (void)plugin;
 }
 
 static client_t *client_create(char *dbusid, char *object,
@@ -38,7 +44,7 @@ static client_t *client_create(char *dbusid, char *object,
                 cl->stream  = stream ? strdup(stream) : NULL;
                 cl->sm      = sm;  
 
-                next = (client_t *)&cl_head;
+                next = (void *)&cl_head;
                 prev = cl_head.prev;
                 
                 prev->next = cl;
@@ -63,12 +69,6 @@ static client_t *client_create(char *dbusid, char *object,
 
 static void client_destroy(client_t *cl)
 {
-#define FREE(d)                 \
-    do {                        \
-        if ((d) != NULL)        \
-            free((void *)(d));  \
-    } while(0)
-
     static sm_evdata_t  evdata = { .evid = evid_client_gone };
 
     client_t *prev, *next;
@@ -84,15 +84,16 @@ static void client_destroy(client_t *cl)
 
         pbreq_purge(cl);
 
-        FREE(cl->dbusid);
-        FREE(cl->object);
-        FREE(cl->pid);
-        FREE(cl->stream);
-        FREE(cl->group);
-        FREE(cl->reqstate);
-        FREE(cl->state);
-        FREE(cl->setstate);
-        FREE(cl->rqsetst.value);
+        free(cl->dbusid);
+        free(cl->object);
+        free(cl->pid);
+        free(cl->stream);
+        free(cl->group);
+        free(cl->flags);
+        free(cl->reqstate);
+        free(cl->state);
+        free(cl->setstate);
+        free(cl->rqsetst.value);
         
         if (cl->rqsetst.evsrc != 0)
             g_source_remove(cl->rqsetst.evsrc);
@@ -105,8 +106,6 @@ static void client_destroy(client_t *cl)
 
         free(cl);
     }
-
-#undef FREE
 }
 
 static client_t *client_find_by_dbus(char *dbusid, char *object)
@@ -114,7 +113,7 @@ static client_t *client_find_by_dbus(char *dbusid, char *object)
     client_t *cl;
 
     if (dbusid && object) {
-        for (cl = cl_head.next;   cl != (client_t *)&cl_head;   cl = cl->next){
+        for (cl = cl_head.next;   cl != (void *)&cl_head;   cl = cl->next){
             if (cl->dbusid && !strcmp(dbusid, cl->dbusid) &&
                 cl->object && !strcmp(object, cl->object)   )
                 return cl;
@@ -129,7 +128,7 @@ static client_t *client_find_by_stream(char *pid, char *stream)
     client_t *cl;
 
     if (pid) {
-        for (cl = cl_head.next;   cl != (client_t *)&cl_head;   cl = cl->next){
+        for (cl = cl_head.next;   cl != (void *)&cl_head;   cl = cl->next){
             if (cl->pid && !strcmp(pid, cl->pid)) {
                 if (!stream)
                     return cl;
@@ -147,7 +146,7 @@ static void client_purge(char *dbusid)
 {
     client_t *cl, *nxcl;
 
-    for (cl = cl_head.next;  cl != (client_t *)&cl_head;  cl = nxcl) {
+    for (cl = cl_head.next;  cl != (void *)&cl_head;  cl = nxcl) {
         nxcl = cl->next;
 
         if (cl->dbusid && !strcmp(dbusid, cl->dbusid))
@@ -166,10 +165,11 @@ static int client_add_factstore_entry(char *dbusid, char *object,
         { fldtype_string , "pid"      , .value.string  = STRING(pid)   },
         { fldtype_string , "stream"   , .value.string  = STRING(stream)},
         { fldtype_string , "group"    , .value.string  = "othermedia"  },
+        { fldtype_string , "flags"    , .value.string  = ""            },
         { fldtype_string , "state"    , .value.string  = "none"        },
         { fldtype_string , "reqstate" , .value.string  = "none"        },
         { fldtype_string , "setstate" , .value.string  = "stop"        },
-        { fldtype_invalid, NULL       , .value.string  = NULL         }
+        { fldtype_invalid, NULL       , .value.string  = NULL          }
     };
 
     return fsif_add_factstore_entry(FACTSTORE_PLAYBACK, fldlist);

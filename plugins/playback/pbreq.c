@@ -3,8 +3,10 @@ static pbreq_listhead_t  rq_head;
 
 static void pbreq_init(OhmPlugin *plugin)
 {
-    rq_head.next = (pbreq_t *)&rq_head;
-    rq_head.prev = (pbreq_t *)&rq_head;
+    (void)plugin;
+
+    rq_head.next = (void *)&rq_head;
+    rq_head.prev = (void *)&rq_head;
 }
 
 static pbreq_t *pbreq_create(client_t *cl, DBusMessage *msg)
@@ -24,7 +26,7 @@ static pbreq_t *pbreq_create(client_t *cl, DBusMessage *msg)
             req->msg  = msg;
             req->trid = trid++;
 
-            next = (pbreq_t *)&rq_head;
+            next = (void *)&rq_head;
             prev = rq_head.prev;
             
             prev->next = req;
@@ -80,7 +82,7 @@ static pbreq_t *pbreq_get_first(client_t *cl)
 {
     pbreq_t *req;
 
-    for (req = rq_head.next;   req != (pbreq_t *)&rq_head;   req = req->next) {
+    for (req = rq_head.next;   req != (void *)&rq_head;   req = req->next) {
         if (req->cl == cl)
             return req;
     }
@@ -92,7 +94,7 @@ static pbreq_t *pbreq_get_by_trid(int trid)
 {
     pbreq_t *req;
 
-    for (req = rq_head.next;   req != (pbreq_t *)&rq_head;   req = req->next) {
+    for (req = rq_head.next;   req != (void *)&rq_head;   req = req->next) {
         if (req->trid == trid)
             return req;
     }
@@ -104,7 +106,7 @@ static void pbreq_purge(client_t *cl)
 {
     pbreq_t *req, *nxreq;
 
-    for (req = rq_head.next;   req != (pbreq_t *)&rq_head;   req = nxreq) {
+    for (req = rq_head.next;   req != (void *)&rq_head;   req = nxreq) {
         nxreq = req->next;
 
         if (cl == req->cl)

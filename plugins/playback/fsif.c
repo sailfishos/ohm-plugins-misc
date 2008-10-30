@@ -35,6 +35,8 @@ static char         *time_str(unsigned long long, char *, int);
 
 static void fsif_init(OhmPlugin *plugin)
 {
+    (void)plugin;
+
     fs = ohm_fact_store_get_fact_store();
 
     g_signal_connect(G_OBJECT(fs), "updated", G_CALLBACK(updated_cb), NULL);
@@ -502,6 +504,8 @@ static char *print_value(fsif_fldtype_t type, void *vptr, char *buf, int len)
 
 static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
 {
+    (void)data;
+
     GValue        *gval = (GValue *)value;
     char          *name;
     watch_fact_t  *wfact;

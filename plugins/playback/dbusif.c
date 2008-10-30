@@ -28,7 +28,7 @@ static hello_cb_t         hello_notif; /* hello notification */
 static DBusHandlerResult name_changed(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult hello(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult notify(DBusConnection *, DBusMessage *, void *);
-static DBusHandlerResult req_state(DBusConnection *, DBusMessage *, void *);
+static DBusHandlerResult method(DBusConnection *, DBusMessage *, void *);
 
 
 static void get_property_cb(DBusPendingCall *, void *);
@@ -45,6 +45,8 @@ static prop_notif_t *find_property_notifier(char *);
 
 static void dbusif_init(OhmPlugin *plugin)
 {
+    (void)plugin;
+
 #define FILTER_SIGNAL(i) "type='signal',interface='" i "'"
 
     static char *adm_rule  = FILTER_SIGNAL(DBUS_ADMIN_INTERFACE);
@@ -53,8 +55,8 @@ static void dbusif_init(OhmPlugin *plugin)
 
 #undef FILTER_SIGNAL
 
-    static struct DBusObjectPathVTable req_state_method = {
-        .message_function = req_state
+    static struct DBusObjectPathVTable pb_method = {
+        .message_function = method
     };
 
 
@@ -122,7 +124,7 @@ static void dbusif_init(OhmPlugin *plugin)
      */
     success = dbus_connection_register_object_path(sess_conn,
                                                    DBUS_PLAYBACK_MANAGER_PATH,
-                                                   &req_state_method, NULL);
+                                                   &pb_method, NULL);
     if (!success) {
         OHM_ERROR("Can't register object path %s", DBUS_PLAYBACK_MANAGER_PATH);
         exit(0);
@@ -134,6 +136,7 @@ static void dbusif_init(OhmPlugin *plugin)
         if (dbus_error_is_set(&err)) {
             OHM_ERROR("Can't be the primary owner for name %s: %s",
                       DBUS_PLAYBACK_MANAGER_INTERFACE, err.message);
+            dbus_error_free(&err);
         }
         else {
             OHM_ERROR("Can't be the primary owner for name %s",
@@ -143,12 +146,15 @@ static void dbusif_init(OhmPlugin *plugin)
         exit(0);
     }
 
+    OHM_ERROR("Got name '%s'", DBUS_PLAYBACK_MANAGER_INTERFACE);
+
     /*
      *
      */
 
     initialize_notification_registry();
 }
+
 
 /*!
  * \brief Convenience function to reply to a client issued
@@ -173,10 +179,24 @@ static void dbusif_reply_to_req_state(DBusMessage *msg, const char *state)
     if (!success)
         dbus_message_unref(msg);
     else {
-        OHM_DEBUG(DBG_DBUS, "replying to playback request with '%s'", state);
+        OHM_DEBUG(DBG_DBUS, "replying to request state with '%s'", state);
 
         dbus_connection_send(sess_conn, reply, &serial);
     }
+}
+
+
+static void dbusif_reply(DBusMessage *msg)
+{
+    DBusMessage    *reply;
+    dbus_uint32_t   serial;
+
+    serial = dbus_message_get_serial(msg);
+    reply  = dbus_message_new_method_return(msg);
+
+    OHM_DEBUG(DBG_DBUS, "replying to playback method");
+
+    dbus_connection_send(sess_conn, reply, &serial);
 }
 
 
@@ -193,7 +213,7 @@ static void dbusif_reply_with_error(DBusMessage *msg,
     serial = dbus_message_get_serial(msg);
     reply  = dbus_message_new_error(msg, error, description);
 
-    OHM_DEBUG(DBG_DBUS, "replying to playback request with error '%s'",
+    OHM_DEBUG(DBG_DBUS, "replying to playback method with error '%s'",
               description);
 
     dbus_connection_send(sess_conn, reply, &serial);
@@ -350,6 +370,80 @@ static void dbusif_add_property_notification(char *prname,
     }
 }
 
+static void dbusif_privacy_override_changed(int state)
+{
+    static dbus_uint32_t  txid    = 1;
+    static const char    *path    = DBUS_PLAYBACK_MANAGER_PATH;
+    static const char    *iface   = DBUS_PLAYBACK_MANAGER_INTERFACE;
+    static const char    *signal  = DBUS_PRIVACY_SIGNAL;
+
+    DBusMessage          *msg;
+    dbus_bool_t           privacy;
+    int                   success;
+
+    if ((msg = dbus_message_new_signal(path, iface, signal)) == NULL) {
+        OHM_ERROR("%s(): failed to create message", __FUNCTION__);
+        return;
+    }
+
+    privacy = state ? TRUE : FALSE;
+    success = dbus_message_append_args(msg,
+                                       DBUS_TYPE_BOOLEAN, &privacy,
+                                       DBUS_TYPE_INVALID);
+    if (!success) {
+        OHM_ERROR("%s(): failed to build message", __FUNCTION__);
+        return;
+    }
+
+    success = dbus_connection_send(sess_conn, msg, NULL);
+
+    if (!success)
+        OHM_ERROR("%s(): failed to send message", __FUNCTION__);
+    else {
+        OHM_DEBUG(DBG_DBUS, "privacy_override=%s", privacy ? "True" : "False");
+        txid++;
+    }
+
+    dbus_message_unref(msg);
+}
+
+static void dbusif_mute_changed(int state)
+{
+    static dbus_uint32_t  txid    = 1;
+    static const char    *path    = DBUS_PLAYBACK_MANAGER_PATH;
+    static const char    *iface   = DBUS_PLAYBACK_MANAGER_INTERFACE;
+    static const char    *signal  = DBUS_MUTE_SIGNAL;
+
+    DBusMessage          *msg;
+    dbus_bool_t           mute;
+    int                   success;
+
+    if ((msg = dbus_message_new_signal(path, iface, signal)) == NULL) {
+        OHM_ERROR("%s(): failed to create message", __FUNCTION__);
+        return;
+    }
+
+    mute    = state ? TRUE : FALSE;
+    success = dbus_message_append_args(msg,
+                                       DBUS_TYPE_BOOLEAN, &mute,
+                                       DBUS_TYPE_INVALID);
+    if (!success) {
+        OHM_ERROR("%s(): failed to build message", __FUNCTION__);
+        return;
+    }
+
+    success = dbus_connection_send(sess_conn, msg, NULL);
+
+    if (!success)
+        OHM_ERROR("%s(): failed to send message", __FUNCTION__);
+    else {
+        OHM_DEBUG(DBG_DBUS, "mute=%s", mute ? "True" : "False");
+        txid++;
+    }
+
+    dbus_message_unref(msg);
+}
+
 static void dbusif_add_hello_notification(hello_cb_t callback)
 {
     hello_notif = callback;
@@ -414,9 +508,14 @@ static void dbusif_send_info_to_pep(char *oper, char *group, char *pidstr,
  * @}
  */
 
+
+
 static DBusHandlerResult name_changed(DBusConnection *conn, DBusMessage *msg,
                                       void *user_data)
 {
+    (void)conn;
+    (void)user_data;
+
     char              *sender;
     char              *before;
     char              *after;
@@ -452,6 +551,9 @@ static DBusHandlerResult name_changed(DBusConnection *conn, DBusMessage *msg,
 static DBusHandlerResult hello(DBusConnection *conn, DBusMessage *msg,
                                void *user_data)
 {
+    (void)conn;
+    (void)user_data;
+
     char              *path;
     char              *sender;
     int                success;
@@ -481,6 +583,9 @@ static DBusHandlerResult hello(DBusConnection *conn, DBusMessage *msg,
 static DBusHandlerResult notify(DBusConnection *conn, DBusMessage *msg,
                                 void *user_data)
 {
+    (void)conn;
+    (void)user_data;
+
     char              *dbusid;
     char              *object;
     char              *iface;
@@ -536,29 +641,31 @@ static DBusHandlerResult notify(DBusConnection *conn, DBusMessage *msg,
 }
 
 
-static DBusHandlerResult req_state(DBusConnection *conn, DBusMessage *msg,
-                                   void *user_data)
+static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
+                                void *user_data)
 {
-    static sm_evdata_t  evdata = { .evid = evid_playback_request };
+    (void)conn;
+    (void)user_data;
+
+    static const char  *interface  = DBUS_PLAYBACK_MANAGER_INTERFACE;
+    static const char  *rq_state   = DBUS_PLAYBACK_REQ_STATE_METHOD;
+    static const char  *rq_privacy = DBUS_PLAYBACK_REQ_PRIVACY_METHOD;
+    static const char  *rq_mute    = DBUS_PLAYBACK_REQ_MUTE_METHOD;
+    static sm_evdata_t  evdata     = { .evid = evid_playback_request };
 
     char               *msgpath;
     char               *objpath;
     char               *sender;
     char               *state;
     char               *pid;
+    dbus_bool_t         override;
+    dbus_bool_t         mute;
     client_t           *cl;
     pbreq_t            *req;
     const char         *errmsg;
     int                 success;
-    DBusHandlerResult   result;
 
-    success = dbus_message_is_method_call(msg, DBUS_PLAYBACK_MANAGER_INTERFACE,
-                                          DBUS_PLAYBACK_REQ_STATE_METHOD);
-
-    if (!success)
-        result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    else {
-        result = DBUS_HANDLER_RESULT_HANDLED;
+    if (dbus_message_is_method_call(msg, interface, rq_state)) {
 
         msgpath = (char *)dbus_message_get_path(msg);
         sender  = (char *)dbus_message_get_sender(msg);
@@ -573,17 +680,17 @@ static DBusHandlerResult req_state(DBusConnection *conn, DBusMessage *msg,
                                         DBUS_TYPE_INVALID);
         if (!success) {
             errmsg = "failed to parse playback request for state change";
-            goto failed;
+            goto rq_state_failed;
         }
 
         if ((cl = client_find_by_dbus(sender, objpath)) == NULL) {
             errmsg = "unable to find playback object";
-            goto failed;
+            goto rq_state_failed;
         }
 
         if ((req = pbreq_create(cl, msg)) == NULL) {
             errmsg = "internal server error";
-            goto failed;
+            goto rq_state_failed;
         }
 
         req->type = pbreq_state;
@@ -592,15 +699,65 @@ static DBusHandlerResult req_state(DBusConnection *conn, DBusMessage *msg,
         
         sm_process_event(cl->sm, &evdata);
         
-        return result;
+        return DBUS_HANDLER_RESULT_HANDLED;
 
-    failed:
+    rq_state_failed:
+        dbusif_reply_with_error(msg, NULL, errmsg);
+        
+        pbreq_destroy(req);     /* copes with NULL */
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else if (dbus_message_is_method_call(msg, interface, rq_privacy)) {
+
+        msgpath = (char *)dbus_message_get_path(msg);
+        sender  = (char *)dbus_message_get_sender(msg);
+
+        OHM_DEBUG(DBG_DBUS,"received set privacy override from %s",sender);
+
+        success = dbus_message_get_args(msg, NULL,
+                                        DBUS_TYPE_BOOLEAN, &override,
+                                        DBUS_TYPE_INVALID);
+        if (!success) {
+            errmsg = "failed to parse set privacy override message";
+            goto rq_privacy_failed;
+        }
+
+        dbusif_reply(msg);
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+
+    rq_privacy_failed:
         dbusif_reply_with_error(msg, NULL, errmsg);
 
-        pbreq_destroy(req);     /* copes with NULL */
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else if (dbus_message_is_method_call(msg, interface, rq_mute)) {
+
+        msgpath = (char *)dbus_message_get_path(msg);
+        sender  = (char *)dbus_message_get_sender(msg);
+
+        OHM_DEBUG(DBG_DBUS,"received set mute from %s",sender);
+
+        success = dbus_message_get_args(msg, NULL,
+                                        DBUS_TYPE_BOOLEAN, &mute,
+                                        DBUS_TYPE_INVALID);
+        if (!success) {
+            errmsg = "failed to parse set mute message";
+            goto rq_mute_failed;
+        }
+
+        dbusif_reply(msg);
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+
+    rq_mute_failed:
+        dbusif_reply_with_error(msg, NULL, errmsg);
+
+        return DBUS_HANDLER_RESULT_HANDLED;
     }
 
-    return result;
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 

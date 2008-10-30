@@ -3,6 +3,7 @@ OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
 static void dresif_init(OhmPlugin *plugin)
 {
+    (void)plugin;
 }
 
 
@@ -22,7 +23,7 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
     vars[++i] = "playback_group";
     vars[++i] = cl->group;
     vars[++i] = "playback_media";
-    vars[++i] = "unknown";
+    vars[++i] = cl->flags;
 
     if (transid > 0) {
         snprintf(buf, sizeof(buf), "%d", transid);

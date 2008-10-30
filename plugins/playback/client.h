@@ -9,6 +9,8 @@
 /* FactStore prefix */
 #define FACTSTORE_PREFIX                "com.nokia.policy"
 #define FACTSTORE_PLAYBACK              FACTSTORE_PREFIX ".playback"
+#define FACTSTORE_PRIVACY               FACTSTORE_PREFIX ".privacy_override"
+#define FACTSTORE_MUTE                  FACTSTORE_PREFIX ".audio_mute"
 
 #define CLIENT_LIST          \
     struct client_s   *next; \
@@ -20,10 +22,17 @@ typedef struct client_s {
     char              *object;    /* path of the playback object */
     char              *pid;       /* process ID of the client */
     char              *stream;    /* stream name */
-    char              *group;
+    char              *group;     /* policy group */
+    char              *flags;     /* resource flags */
     char              *reqstate;  /* what the client requested */
     char              *state;     /* what the client reported via prop.notify*/
     char              *setstate;  /* what the policy requested */
+    struct {
+        int audpb;                /* audio playback */
+        int vidpb;                /* video playback */
+        int audrec;               /* audio recording */
+        int vidrec;               /* video recording */
+    }                  resource;
     struct {
         int play;
         int stop;
