@@ -28,12 +28,6 @@ typedef struct client_s {
     char              *state;     /* what the client reported via prop.notify*/
     char              *setstate;  /* what the policy requested */
     struct {
-        int audpb;                /* audio playback */
-        int vidpb;                /* video playback */
-        int audrec;               /* audio recording */
-        int vidrec;               /* video recording */
-    }                  resource;
-    struct {
         int play;
         int stop;
     }                  allow;

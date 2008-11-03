@@ -885,6 +885,7 @@ static int abort_pbreq_deq(sm_evdata_t *evdata, void *usrdata)
 
         case pbreq_state:
             dbusif_reply_with_error(req->msg, DBUS_MAEMO_ERROR_DENIED,err);
+            break;
 
         default:
             OHM_ERROR("[%s] [%s] invalid request type %d",
@@ -1141,7 +1142,7 @@ static char *class_to_group(char *klass)
         {"Event"     , "event"     },
         {"VoIP"      , "ipcall"    },
         {"Media"     , "player"    },
-        {"Background", "othermedia"},
+        {"Background", "background"},
         {"Ringtone"  , "ringtone"  },
         {"Voiceui"   , "voiceui"   },
         {"Camera"    , "camera"    },
