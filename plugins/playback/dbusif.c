@@ -768,11 +768,21 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
     DBusMessage        *reply;
     client_t           *cl;
     char               *prvalue;
+    const char         *error_descr;
     int                 success;
 
     if ((reply = dbus_pending_call_steal_reply(pend)) == NULL || cbd == NULL) {
         OHM_ERROR("[%s] Property receiving failed: invalid argument",
                   __FUNCTION__);
+        return;
+    }
+
+    if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+        success = dbus_message_get_args(reply, NULL,
+                                        DBUS_TYPE_STRING, &error_descr,
+                                        DBUS_TYPE_INVALID);
+        OHM_ERROR("[%s] Property receiving failed: %s", __FUNCTION__,
+                  success ? error_descr : dbus_message_get_error_name(reply));
         return;
     }
 
