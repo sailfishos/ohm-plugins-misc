@@ -133,9 +133,7 @@ static void profile_value_change(const char *profile, const char *key, const cha
     /* get the previous fact with the profile name */
     GSList *list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
 
-#if 1
-    printf("> profile value change: '%s', '%s'\n", key, val);
-#endif
+    OHM_DEBUG(DBG_PROFILE, "profile value change: '%s', '%s'\n", key, val);
 
     if (g_slist_length(list) != 1) {
         OHM_DEBUG(DBG_PROFILE, "Error: there isn't a unique profile fact\n");

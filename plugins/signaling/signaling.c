@@ -106,7 +106,7 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
 
     /* Get facts to a list */
 
-    printf("signaling.signal_changed: signal '%s' with txid '%i', factcount '%i' with timeout '%li', %s a callback\n",
+    OHM_DEBUG(DBG_SIGNALING, "signal_changed: signal '%s' with txid '%i', factcount '%i' with timeout '%li', %s a callback",
             signal, transid, factc, timeout, callback ? "requires" : "doesn't require");
 
     for (i = 0; i < factc; i++) {
