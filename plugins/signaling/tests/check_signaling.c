@@ -546,6 +546,9 @@ START_TEST (test_signaling_timeout)
     dbus_error_init(&error);
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
+
+    fail_unless(c != NULL, "Could not get a D-Bus system bus.");
+    
     init_signaling(c, 0, 0);
 
     register_enforcement_point("external", FALSE);
