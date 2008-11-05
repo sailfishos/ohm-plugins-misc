@@ -86,6 +86,7 @@ static void free_facts(GSList *facts)
     return;
 }
 
+#if 0
 static GSList *copy_facts(GSList *facts)
 {
 
@@ -97,6 +98,7 @@ static GSList *copy_facts(GSList *facts)
 
     return new_facts;
 }
+#endif
 
 /* GObject stuff */
 
@@ -810,6 +812,8 @@ transaction_instance_init(GTypeInstance * instance,
     self->not_answered = NULL;
     self->timeout_id = 0;
     self->built_ready = FALSE;
+
+    (void) g_class;
 }
 
     static void
@@ -966,6 +970,8 @@ transaction_class_init(gpointer g_class, gpointer class_data) {
                 signaling_marshal_VOID__STRING_UINT,
                 G_TYPE_NONE,
                 2, G_TYPE_STRING, G_TYPE_UINT);
+    
+    (void) class_data;
 
 }
 
@@ -988,6 +994,8 @@ internal_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
     iface->unregister =
         (gboolean(*)(EnforcementPoint *))
         internal_ep_unregister;
+    
+    (void) iface_data;
 }
 
     static void
@@ -998,6 +1006,8 @@ internal_ep_strategy_instance_init(GTypeInstance * instance,
     OHM_DEBUG(DBG_SIGNALING, "initing internal strategy\n");
     InternalEPStrategy *self = INTERNAL_EP_STRATEGY(instance);
     self->id = NULL;
+    
+    (void) g_class;
 }
 
 
@@ -1020,6 +1030,8 @@ external_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
     iface->unregister =
         (gboolean(*)(EnforcementPoint *))
         external_ep_unregister;
+
+    (void) iface_data;
 }
 
     static void
@@ -1030,6 +1042,8 @@ external_ep_strategy_instance_init(GTypeInstance * instance,
     OHM_DEBUG(DBG_SIGNALING, "initing external strategy\n");
     ExternalEPStrategy *self = EXTERNAL_EP_STRATEGY(instance);
     self->id = NULL;
+
+    (void) g_class;
 }
 
     static void
@@ -1042,6 +1056,8 @@ external_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
     gobject->get_property = external_ep_strategy_get_property;
 
     g_object_class_override_property (gobject, PROP_ID, "id");
+    
+    (void) class_data;
 } 
 
     static void
@@ -1054,6 +1070,8 @@ internal_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
     gobject->get_property = internal_ep_strategy_get_property;
 
     g_object_class_override_property (gobject, PROP_ID, "id");
+
+    (void) class_data;
 } 
 
     GType
@@ -1347,6 +1365,8 @@ process_inq(gpointer data)
 #endif
 
     return FALSE;
+
+    (void) data;
 }
 
     EnforcementPoint *
@@ -1468,6 +1488,9 @@ update_external_enforcement_points(DBusConnection * c, DBusMessage * msg,
     OHM_DEBUG(DBG_SIGNALING, "< update_external_enforcement_points\n");
 
     return DBUS_HANDLER_RESULT_HANDLED;
+
+    (void) user_data;
+    (void) c;
 }
 
     DBusHandlerResult
@@ -1520,6 +1543,8 @@ err:
     OHM_DEBUG(DBG_SIGNALING, "D-Bus error\n");
     return DBUS_HANDLER_RESULT_HANDLED;
 
+    (void) user_data;
+
 }
 
     DBusHandlerResult
@@ -1571,6 +1596,8 @@ err:
     
     OHM_DEBUG(DBG_SIGNALING, "D-Bus error\n");
     return DBUS_HANDLER_RESULT_HANDLED;
+
+    (void) user_data;
 }
 
 
@@ -1727,6 +1754,9 @@ dbus_ack(DBusConnection * c, DBusMessage * msg, void *data)
     enforcement_point_receive_ack(ep, transaction, status);
 
     return DBUS_HANDLER_RESULT_HANDLED;
+
+    (void) data;
+    (void) c;
 }
 
 

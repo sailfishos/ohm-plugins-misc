@@ -42,9 +42,9 @@ OHM_EXPORTABLE(gboolean, unregister_internal_enforcement_point, (GObject *ep))
     return ret;
 }
 
-OHM_EXPORTABLE(Transaction *, queue_policy_decision, (GSList *facts, guint timeout))
+OHM_EXPORTABLE(GObject *, queue_policy_decision, (GSList *facts, guint timeout))
 {
-    return queue_decision(facts, 0, TRUE, timeout);
+    return (GObject *) queue_decision(facts, 0, TRUE, timeout);
 }
 
 OHM_EXPORTABLE(void, queue_key_change, (GSList *facts))
@@ -106,7 +106,8 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
 
     /* Get facts to a list */
 
-    OHM_DEBUG(DBG_SIGNALING, "signal_changed: signal '%s' with txid '%i', factcount '%i' with timeout '%li', %s a callback",
+    OHM_DEBUG(DBG_SIGNALING,
+            "signal_changed: signal '%s' with txid '%i', factcount '%i' with timeout '%li', %s a callback",
             signal, transid, factc, timeout, callback ? "requires" : "doesn't require");
 
     for (i = 0; i < factc; i++) {
@@ -141,6 +142,8 @@ plugin_init(OhmPlugin * plugin)
     /* should we ref the connection? */
     init_signaling(c, DBG_SIGNALING, DBG_FACTS);
     return;
+
+    (void) plugin;
 }
 
     static void
@@ -148,10 +151,12 @@ plugin_exit(OhmPlugin * plugin)
 {
     deinit_signaling();
     return;
+    
+    (void) plugin;
 }
 
 OHM_PLUGIN_DESCRIPTION("signaling",
-        "0.0.1",
+        "0.0.2",
         "ismo.h.puustinen@nokia.com",
         OHM_LICENSE_NON_FREE, plugin_init, plugin_exit,
         NULL);
