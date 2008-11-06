@@ -1,17 +1,11 @@
-#SUBDIRS = 	     \
-#	signaling    \
-#	hal          \
-#	playback     \
-#	accessories  \
-#	profile      \
-#	console      \
-#	telephony
-
 SUBDIRS = 	     \
 	signaling    \
+	hal          \
 	playback     \
 	accessories  \
-	console
+	profile      \
+	console      \
+	telephony
 
 clean-local:
 	rm -f *~
