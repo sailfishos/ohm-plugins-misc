@@ -14,6 +14,7 @@
 #include "telephony.h"
 
 #define __EMIT_RING_SIGNALS__
+#define __INTEGER_IDS__
 
 #define PLUGIN_NAME   "telephony"
 #define IS_CELLULAR(p) (!strncmp(p, TP_RING, sizeof(TP_RING) - 1))
@@ -62,18 +63,30 @@ static void event_handler(event_t *event);
 static GHashTable *calls;                        /* table of current calls */
 static int         ncscall;                      /* number of CS calls */
 static int         nipcall;                      /* number of ohter calls */
-static int         callid;
+static int         callid;                       /* call id */
+static int         holdorder;                    /* autohold order */
 
 call_t *call_register(const char *path, const char *name);
 call_t *call_lookup(const char *path);
 void    call_destroy(call_t *);
 
+enum {
+    UPDATE_NONE  = 0x00,
+    UPDATE_STATE = 0x01,
+    UPDATE_DIR   = 0x02,
+    UPDATE_ORDER = 0x04,
+    UPDATE_ALL   = 0xff,
+};
+
 int     policy_call_export(call_t *call);
-int     policy_call_update(call_t *call);
+int     policy_call_update(call_t *call, int fields);
 void    policy_call_delete(call_t *call);
 
 int     policy_actions(event_t *event);
 int     policy_enforce(event_t *event);
+
+int     policy_audio_update(void);
+
 
 static void ring_start(int knock);
 static void ring_stop(void);
@@ -87,6 +100,7 @@ static void ring_stop(void);
 #define FACT_FIELD_ID    "id"
 #define FACT_FIELD_STATE "state"
 #define FACT_FIELD_DIR   "direction"
+#define FACT_FIELD_ORDER "order"
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
 
@@ -654,7 +668,7 @@ event_handler(event_t *event)
             call = event->any.call = call_register(event->call.path, NULL);
         
         call->dir = event->call.dir;
-        policy_call_update(call);
+        policy_call_update(call, UPDATE_DIR);
         event->any.state = STATE_CREATED;
         break;
 
@@ -701,9 +715,10 @@ call_init(void)
     GEqualFunc     eptr = g_str_equal;
     GDestroyNotify fptr = (GDestroyNotify)call_destroy;
 
-    ncscall = 0;
-    nipcall = 0;
-    callid  = 1;
+    ncscall   = 0;
+    nipcall   = 0;
+    callid    = 1;
+    holdorder = 1;
     if ((calls = g_hash_table_new_full(hptr, eptr, NULL, fptr)) == NULL) {
         OHM_ERROR("failed to allocate call table");
         exit(1);
@@ -933,14 +948,20 @@ tp_hold(call_t *call, int status)
 static int
 call_hold(call_t *call, const char *action, event_t *event)
 {    
-    OHM_INFO("HOLD %s.", short_path(call->path));
+    OHM_INFO("%sHOLD %s.", !strcmp(action, "autohold") ? "AUTO" : "",
+             short_path(call->path));
     
     if (call == event->any.call && event->any.state == STATE_ON_HOLD) {
-        call->state = STATE_ON_HOLD;
-        policy_call_update(call);
+        call->state = (call->order == 0) ? STATE_ON_HOLD : STATE_AUTOHOLD;
+        policy_call_update(call, UPDATE_STATE);
         return 0;
     }
     
+    if (!strcmp(action, "autohold")) {
+        call->order = holdorder++;
+        policy_call_update(call, UPDATE_ORDER);
+    }
+
     if (tp_hold(call, TRUE) != 0) {
         OHM_ERROR("Failed to disconnect call %s.", call->path);
         return EIO;
@@ -962,7 +983,8 @@ call_activate(call_t *call, const char *action, event_t *event)
     
     if (call == event->any.call && event->any.state == STATE_ACTIVE) {
         call->state = STATE_ACTIVE;
-        policy_call_update(call);
+        call->order = 0;
+        policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
         ring_stop();
         return 0;
     }
@@ -987,7 +1009,7 @@ call_create(call_t *call, const char *action, event_t *event)
     OHM_INFO("CREATE call %s.", short_path(call->path));
 
     call->state = STATE_CREATED;
-    policy_call_update(call);
+    policy_call_update(call, UPDATE_STATE);
 
     if (call->dir == DIR_INCOMING)
         ring_start(FALSE);
@@ -1011,6 +1033,7 @@ call_action(call_t *call, const char *action, event_t *event)
     } handlers[] = {
         { "disconnected", call_disconnect },
         { "onhold"      , call_hold       },
+        { "autohold"    , call_hold       },
         { "active"      , call_activate   },
         { "created"     , call_create     },
         { NULL, NULL }
@@ -1063,6 +1086,7 @@ state_name(int state)
         STATE(CREATED     , "created"),
         STATE(ACTIVE      , "active"),
         STATE(ON_HOLD     , "onhold"),
+        STATE(AUTOHOLD    , "autohold"),
     };
     
     if (STATE_UNKNOWN < state && state < STATE_MAX)
@@ -1140,9 +1164,10 @@ policy_enforce(event_t *event)
             status = EINVAL;
             continue;
         }
-        
+
         action = g_value_get_string(value);
         id     = strtoul(field, &end, 10);
+
         if (end != NULL && *end != '\0') {
             OHM_ERROR("Invalid call id %s.", field);
             status = EINVAL;
@@ -1240,10 +1265,9 @@ policy_call_export(call_t *call)
     snprintf(id, sizeof(id), "%d", call->id);
     if ((value = ohm_value_from_string(id)) == NULL)
         FAIL(ENOMEM);
+
     ohm_fact_set(fact, FACT_FIELD_ID, value);
-
-
-
+    
     if (!ohm_fact_store_insert(store, fact))
         FAIL(ENOMEM);
 
@@ -1264,8 +1288,55 @@ policy_call_export(call_t *call)
  * policy_call_update
  ********************/
 int
-policy_call_update(call_t *call)
+policy_call_update(call_t *call, int fields)
 {
+#if 1
+    OhmFact *fact;
+    GValue  *value;
+    
+    if (call == NULL)
+        return ENOMEM;
+    
+    if ((fact = call->fact) == NULL)
+        return policy_call_export(call);
+
+    OHM_INFO("Updating fact for call %s", short_path(call->path));
+    
+    if (fields & UPDATE_STATE) {
+        if ((value = ohm_value_from_string(state_name(call->state))) == NULL) {
+            OHM_ERROR("Failed to update fact state for call %s", 
+                      short_path(call->path));
+            return EINVAL;
+        }
+        ohm_fact_set(fact, FACT_FIELD_STATE, value);
+    }
+    if (fields & UPDATE_DIR) {
+        value = ohm_fact_get(fact, FACT_FIELD_DIR);
+        if (value == NULL || G_VALUE_TYPE(value) != G_TYPE_STRING) {
+            OHM_ERROR("Invalid fact direction for call %s",
+                      short_path(call->path));
+            return EINVAL;
+        }
+        if (!strcmp(g_value_get_string(value), dir_name(DIR_UNKNOWN))) {
+            if ((value = ohm_value_from_string(dir_name(call->dir))) == NULL) {
+                OHM_ERROR("Failed to update fact dir for call %s",
+                          short_path(call->path));
+                return ENOMEM;
+            }
+            ohm_fact_set(fact, FACT_FIELD_DIR, value);
+        }
+    }
+    if (fields & UPDATE_ORDER) {
+        if ((value = ohm_value_from_unsigned(call->order)) == NULL) {
+            OHM_ERROR("Failed to update fact order for call %s",
+                      short_path(call->path));
+            return EINVAL;
+        }
+        ohm_fact_set(fact, FACT_FIELD_ORDER, value);
+    }
+
+#else
+
 #define FAIL(ec) do { status = (ec); goto fail; } while (0)
 
     OhmFact *fact;
@@ -1292,6 +1363,9 @@ policy_call_update(call_t *call)
             return ENOMEM;
         ohm_fact_set(fact, FACT_FIELD_DIR, value);
     }
+
+#endif
+
 
     return 0;
 }

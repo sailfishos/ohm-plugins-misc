@@ -56,6 +56,7 @@ typedef enum {
     STATE_CREATED,                             /* call created/alerting */
     STATE_ACTIVE,                              /* call active */
     STATE_ON_HOLD,                             /* call on hold */
+    STATE_AUTOHOLD,                            /* call autoheld by us */
     STATE_MAX
 } call_state_t;
 
@@ -74,6 +75,7 @@ typedef struct {
     char         *peer;                        /* URI of peer if known */
     call_dir_t    dir;                         /* incoming/outgoing */
     call_state_t  state;                       /* current state */
+    int           order;                       /* autohold order */
     OhmFact      *fact;                        /* this call in fact store */
 } call_t;
 
@@ -149,27 +151,6 @@ enum {
 
 
 
-
-#if 0
-
-/*
- * call events
- */
-
-enum {
-    EVENT_UNKNOWN = 0,
-    EVENT_CALLREQ,                             /* MC call request */
-    EVENT_CALLEND,                             /* MC call ended */
-    EVENT_CREATED,                             /* new call/channel created */
-    EVENT_ALERTING,                            /* alerting / knocking */
-    EVENT_ACCEPTED,                            /* accepted */
-    EVENT_RELEASED,                            /* released */
-    EVENT_ON_HOLD,                             /* put on hold */
-    EVENT_ACTIVATED,                           /* reactivated */
-    EVENT_MAX,
-};
-
-#endif
 
 
 #endif /* __OHM_PLUGIN_TELEPHONY_H__ */
