@@ -261,7 +261,7 @@ static void dbusif_get_property(char *dbusid, char *object, char *prname,
         goto failed;
     }
     
-    success = dbus_connection_send_with_reply(sess_conn, msg, &pend, 1000);
+    success = dbus_connection_send_with_reply(sess_conn, msg, &pend, -1);
     if (!success) {
         OHM_ERROR("[%s] Failed to query properties", __FUNCTION__);
         goto failed;
