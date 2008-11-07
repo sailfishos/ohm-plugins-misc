@@ -146,7 +146,7 @@ static void dbusif_init(OhmPlugin *plugin)
         exit(0);
     }
 
-    OHM_ERROR("Got name '%s'", DBUS_PLAYBACK_MANAGER_INTERFACE);
+    OHM_INFO("Got name '%s'", DBUS_PLAYBACK_MANAGER_INTERFACE);
 
     /*
      *
@@ -658,7 +658,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     char               *sender;
     char               *state;
     char               *pid;
-    dbus_bool_t         override;
+    dbus_bool_t         privacy_override;
     dbus_bool_t         mute;
     client_t           *cl;
     pbreq_t            *req;
@@ -716,14 +716,19 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
         OHM_DEBUG(DBG_DBUS,"received set privacy override from %s",sender);
 
         success = dbus_message_get_args(msg, NULL,
-                                        DBUS_TYPE_BOOLEAN, &override,
+                                        DBUS_TYPE_BOOLEAN, &privacy_override,
                                         DBUS_TYPE_INVALID);
         if (!success) {
             errmsg = "failed to parse set privacy override message";
             goto rq_privacy_failed;
         }
 
-        dbusif_reply(msg);
+        if (dresif_privacy_override_request(privacy_override, 0))
+            dbusif_reply(msg);
+        else {
+            dbusif_reply_with_error(msg, DBUS_MAEMO_ERROR_FAILED,
+                                    "Policy error");
+        }
 
         return DBUS_HANDLER_RESULT_HANDLED;
 
@@ -747,7 +752,12 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
             goto rq_mute_failed;
         }
 
-        dbusif_reply(msg);
+        if (dresif_mute_request(mute, 0))
+            dbusif_reply(msg);
+        else {
+            dbusif_reply_with_error(msg, DBUS_MAEMO_ERROR_FAILED,
+                                    "Policy error");
+        }
 
         return DBUS_HANDLER_RESULT_HANDLED;
 

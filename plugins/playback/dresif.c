@@ -57,6 +57,84 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
 #undef DRESIF_VARTYPE
 }
 
+static int dresif_privacy_override_request(int privacy_override, int transid)
+{
+#define DRESIF_VARTYPE(t) (char *)(t)
+    char *vars[48];
+    char  buf[64];
+    int   i;
+    int   err;
+
+    vars[i=0] = "privacy_override_state";
+    vars[++i] = DRESIF_VARTYPE('s');
+    vars[++i] = privacy_override ? "public" : "default";
+
+
+#if 1
+    transid = 0;
+#endif
+
+    if (transid > 0) {
+        snprintf(buf, sizeof(buf), "%d", transid);
+
+        vars[++i] = "completion_callback";
+        vars[++i] = DRESIF_VARTYPE('s');
+        vars[++i] = "playback.completion_cb";
+
+        vars[++i] = "transaction_id";
+        vars[++i] = DRESIF_VARTYPE('s');
+        vars[++i] = buf;
+    }
+
+    vars[++i] = NULL;
+
+    if ((err = resolve("audio_mute_request", vars)) != 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", err, strerror(err));
+
+    return err ? FALSE : TRUE;
+
+#undef DRESIF_VARTYPE
+}
+
+static int dresif_mute_request(int mute, int transid)
+{
+#define DRESIF_VARTYPE(t) (char *)(t)
+    char *vars[48];
+    char  buf[64];
+    int   i;
+    int   err;
+
+    vars[i=0] = "mute_state";
+    vars[++i] = DRESIF_VARTYPE('i');
+    vars[++i] = (char *)mute;
+
+
+#if 1
+    transid = 0;
+#endif
+
+    if (transid > 0) {
+        snprintf(buf, sizeof(buf), "%d", transid);
+
+        vars[++i] = "completion_callback";
+        vars[++i] = DRESIF_VARTYPE('s');
+        vars[++i] = "playback.completion_cb";
+
+        vars[++i] = "transaction_id";
+        vars[++i] = DRESIF_VARTYPE('s');
+        vars[++i] = buf;
+    }
+
+    vars[++i] = NULL;
+
+    if ((err = resolve("audio_mute_request", vars)) != 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", err, strerror(err));
+
+    return err ? FALSE : TRUE;
+
+#undef DRESIF_VARTYPE
+}
+
 OHM_EXPORTABLE(void, completion_cb, (int trid, int success))
 {
     pbreq_t     *req;
