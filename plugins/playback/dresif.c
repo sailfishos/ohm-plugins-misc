@@ -88,7 +88,7 @@ static int dresif_privacy_override_request(int privacy_override, int transid)
 
     vars[++i] = NULL;
 
-    if ((err = resolve("audio_mute_request", vars)) != 0)
+    if ((err = resolve("privacy_override_request", vars)) != 0)
         OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", err, strerror(err));
 
     return err ? FALSE : TRUE;
