@@ -99,17 +99,17 @@ AC_SUBST(OHM_PLUGIN_CONF_DIR, "\$(OHM_CONF_DIR)/plugins.d")
 AC_SUBST(OHM_PLUGIN_DIR, "\$(libdir)/ohm")
 
 # temporarily pulled in mission-control policy filter
-#MISSION_CONTROL_REQUIRED=5
-#PKG_CHECK_MODULES(MISSION_CONTROL, mission-control >= $MISSION_CONTROL_REQUIRED)
-#AC_SUBST(MISSION_CONTROL_CFLAGS)
-#AC_SUBST(MISSION_CONTROL_LIBS)
+MISSION_CONTROL_REQUIRED=5
+PKG_CHECK_MODULES(MISSION_CONTROL, mission-control >= $MISSION_CONTROL_REQUIRED)
+AC_SUBST(MISSION_CONTROL_CFLAGS)
+AC_SUBST(MISSION_CONTROL_LIBS)
 
-#PKG_CHECK_MODULES(LIBMISSIONCONTROL, libmissioncontrol >= $MISSION_CONTROL_REQUIRED)
-#AC_SUBST(LIBMISSIONCONTROL_CFLAGS)
-#AC_SUBST(LIBMISSIONCONTROL_LIBS)
+PKG_CHECK_MODULES(LIBMISSIONCONTROL, libmissioncontrol >= $MISSION_CONTROL_REQUIRED)
+AC_SUBST(LIBMISSIONCONTROL_CFLAGS)
+AC_SUBST(LIBMISSIONCONTROL_LIBS)
 
-#pluginlibdir="`$PKG_CONFIG --variable=pluginlibdir mission-control`"
-#AC_SUBST(pluginlibdir)
+pluginlibdir="`$PKG_CONFIG --variable=pluginlibdir mission-control`"
+AC_SUBST(pluginlibdir)
 
 
 
@@ -124,9 +124,9 @@ AC_CONFIG_FILES([Makefile
                  plugins/profile/tests/Makefile
                  plugins/signaling/Makefile
                  plugins/signaling/tests/Makefile
+                 plugins/telephony/Makefile
+                 plugins/telephony/ohm/Makefile
+                 plugins/telephony/mission-control/Makefile
  		 doc/Makefile])
 AC_OUTPUT
 
-#                plugins/telephony/Makefile
-#                plugins/telephony/ohm/Makefile
-#                plugins/telephony/mission-control/Makefile
