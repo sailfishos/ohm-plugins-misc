@@ -49,7 +49,7 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
 
     vars[++i] = NULL;
 
-    if ((err = resolve("audio_playback_request", vars)) != 0)
+    if ((err = resolve("playback_request", vars)) != 0)
         OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", err, strerror(err));
 
     return err ? FALSE : TRUE;
