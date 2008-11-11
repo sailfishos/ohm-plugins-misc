@@ -606,9 +606,6 @@ static int read_property(sm_evdata_t *evdata, void *usrdata)
     client_t  *cl = (client_t *)usrdata;
 
     client_get_property(cl, "Pid"  , read_property_cb);
-    client_get_property(cl, "Class", read_property_cb);
-    client_get_property(cl, "State", read_property_cb);
-    client_get_property(cl, "Flags", read_property_cb);
 
     return TRUE;
 }
@@ -632,6 +629,8 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         client_update_factstore_entry(cl, "pid", cl->pid);
         
         OHM_DEBUG(DBG_TRANS, "playback pid is set to %s", cl->pid);
+
+        client_get_property(cl, "Class", read_property_cb);
     }
     else if (!strcmp(property->name, "Class")) {
         group = class_to_group(property->value);
@@ -640,6 +639,8 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         client_update_factstore_entry(cl, "group", cl->group);
         
         OHM_DEBUG(DBG_TRANS, "playback group is set to %s", cl->group);
+
+        client_get_property(cl, "State", read_property_cb);
     }
     else if (!strcmp(property->name, "State")) {
         strncpylower(state, property->value, sizeof(state));
@@ -648,6 +649,8 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         client_update_factstore_entry(cl, "state", cl->state);
         
         OHM_DEBUG(DBG_TRANS, "playback state is set to %s", cl->state);
+
+        client_get_property(cl, "Flags", read_property_cb);
     }
     else if (!strcmp(property->name, "Flags")) {
         cl->flags = strdup(property->value);
