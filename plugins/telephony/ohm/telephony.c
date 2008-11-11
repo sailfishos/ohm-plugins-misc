@@ -687,7 +687,9 @@ event_handler(event_t *event)
 
     if (status == 0) {
         policy_enforce(event);
+#if 0
         policy_audio_update();
+#endif
     }
     else {
         OHM_ERROR("Failed to get policy actions for event %s of call %s.",
