@@ -9,6 +9,7 @@
 
 #define TP_BASE           "org.freedesktop.Telepathy"
 #define TP_CONNECTION     TP_BASE".Connection"
+#define TP_CONN_IFREQ     TP_CONNECTION".Interface.Requests"
 #define TP_CHANNEL        TP_BASE".Channel"
 #define TP_CHANNEL_GROUP  TP_CHANNEL".Interface.Group"
 #define TP_CHANNEL_HOLD   TP_CHANNEL".Interface.Hold"
@@ -17,7 +18,16 @@
 #define TP_CONN_PATH      "/org/freedesktop/Telepathy/Connection"
 #define TP_RING           "/org/freedesktop/Telepathy/Connection/ring/tel/ring"
 
+#define TP_NOKIA          "com.nokia.Telepathy"
+#define TP_CONFERENCE     TP_NOKIA".Channel.Interface.Conference"
+#define PROP_CHANNEL_TYPE TP_CHANNEL".ChannelType"
+#define PROP_INITIAL_MEMBERS TP_CONFERENCE".InitialMembers"
+#define PROP_TARGET       TP_CHANNEL".TargetID"
+#define PROP_INITIATOR    TP_CHANNEL".InitiatorID"
+#define INITIATOR_SELF    "<self>"
+
 #define NEW_CHANNEL        "NewChannel"
+#define NEW_CHANNELS       "NewChannels"
 #define CHANNEL_CLOSED     "Closed"
 #define MEMBERS_CHANGED    "MembersChanged"
 #define HOLD_STATE_CHANGED "HoldStateChanged"
@@ -111,6 +121,8 @@ typedef struct {
 
 typedef struct {
     EVENT_COMMON;
+    const char *target;
+    call_dir_t  dir;
 } channel_event_t;
 
 

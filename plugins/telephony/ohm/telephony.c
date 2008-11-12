@@ -43,6 +43,7 @@ static int bus_add_match(char *type, char *interface, char *member, char *path);
 
 DBUS_SIGNAL_HANDLER(dispatch_signal);
 DBUS_SIGNAL_HANDLER(channel_new);
+DBUS_SIGNAL_HANDLER(channels_new);
 DBUS_SIGNAL_HANDLER(channel_closed);
 DBUS_SIGNAL_HANDLER(members_changed);
 DBUS_SIGNAL_HANDLER(hold_state_changed);
@@ -152,6 +153,9 @@ bus_init(void)
         exit(1);
 
     if (!bus_add_match("signal", TP_CONNECTION, NEW_CHANNEL, NULL))
+        exit(1);
+
+    if (!bus_add_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL))
         exit(1);
 
     if (!bus_add_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL))
@@ -292,6 +296,9 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
     if (MATCHES(TP_CONNECTION, NEW_CHANNEL))
         return channel_new(c, msg, data);
 
+    if (MATCHES(TP_CONN_IFREQ, NEW_CHANNELS))
+        return channels_new(c, msg, data);
+
     if (MATCHES(TP_CHANNEL, CHANNEL_CLOSED))
         return channel_closed(c, msg, data);
     
@@ -327,12 +334,161 @@ channel_new(DBusConnection *c, DBusMessage *msg, void *data)
             event.type = EVENT_NEW_CHANNEL;
             event.name = dbus_message_get_sender(msg);
             event.path = path;
-            event.call = call_lookup(path);
-            event_handler((event_t *)&event);
+            if ((event.call = call_lookup(path)) != NULL)
+                OHM_INFO("Ignoring DBUS signal %s for existing call.",
+                         NEW_CHANNEL);
+            else
+                event_handler((event_t *)&event);
         }
     }
     else
         OHM_ERROR("Failed to parse DBUS signal %s.", NEW_CHANNEL);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+
+    (void)c;
+    (void)data;
+}
+
+
+/********************
+ * channels_new
+ ********************/
+static DBusHandlerResult
+channels_new(DBusConnection *c, DBusMessage *msg, void *data)
+{
+
+    
+#define SUB_ITER(iter, sub) dbus_message_iter_recurse((iter), (sub))
+#define ITER_NEXT(iter) dbus_message_iter_next(iter)
+#define ITER_TYPE(iter) dbus_message_iter_get_arg_type(iter)
+
+#define ITER_FOREACH(iter, type)                                             \
+    for (; (type = ITER_TYPE(iter)) != DBUS_TYPE_INVALID; ITER_NEXT(iter))
+    
+#define CHECK_TYPE(t1, t2) do {                                         \
+        if ((t1) != (t2)) {                                             \
+            OHM_ERROR("Type error in DBUS signal %s ('%c'!='%c').",     \
+                      NEW_CHANNELS, (t1), (t2));                        \
+            return DBUS_HANDLER_RESULT_HANDLED;                         \
+        }                                                               \
+    } while (0)
+    
+#define VARIANT_STRING(dict, ptr) do {                                  \
+        int _t;                                                         \
+        DBusMessageIter _entry;                                         \
+                                                                        \
+        SUB_ITER((dict), &_entry);                                      \
+        (ptr) = NULL;                                                   \
+        CHECK_TYPE((_t = ITER_TYPE(&_entry)), DBUS_TYPE_STRING);        \
+        dbus_message_iter_get_basic(&_entry, &(ptr));                   \
+    } while (0)
+
+
+#define VARIANT_PATH_ARRAY(dict, ptrarr) do {                           \
+        int _t, _max, _n;                                               \
+        DBusMessageIter _entry, _arr;                                   \
+                                                                        \
+        SUB_ITER((dict), &_entry);                                      \
+        (ptrarr)[0] = NULL;                                             \
+        CHECK_TYPE((_t = ITER_TYPE(&_entry)), DBUS_TYPE_ARRAY);         \
+        SUB_ITER(&_entry, &_arr);                                       \
+        _max = sizeof(ptrarr) / sizeof(ptrarr[0]) - 1;                  \
+        _n   = 0;                                                       \
+        ITER_FOREACH(&_arr, _t) {                                       \
+            if (_n >= _max) {                                           \
+                OHM_ERROR("Too many object paths in DBUS signal %s.",   \
+                          NEW_CHANNELS);                                \
+                return DBUS_HANDLER_RESULT_HANDLED;                     \
+            }                                                           \
+            CHECK_TYPE(_t, DBUS_TYPE_OBJECT_PATH);                      \
+            dbus_message_iter_get_basic(&_arr, (ptrarr) + _n);          \
+            printf("*** got member %s\n", (ptrarr)[_n]);                \
+            _n++;                                                       \
+        }                                                               \
+        ptrarr[_n] = NULL;                                              \
+    } while (0)
+
+    
+#define MAX_MEMBERS 8
+
+    DBusMessageIter  imsg, iarr, istruct, iprop, idict;
+    char            *path, *type, *name, *initiator, *members[MAX_MEMBERS];
+    channel_event_t  event;
+    int              t;
+
+    
+    if (!dbus_message_iter_init(msg, &imsg)) {
+        OHM_ERROR("Failed to get message iterator for DBUS signal %s.",
+                  NEW_CHANNELS);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    
+    path = NULL;
+    type = NULL;
+
+    ITER_FOREACH(&imsg, t) {
+        CHECK_TYPE(t, DBUS_TYPE_ARRAY);
+        SUB_ITER(&imsg, &iarr);
+        
+        ITER_FOREACH(&iarr, t) {
+            CHECK_TYPE(t, DBUS_TYPE_STRUCT);
+
+            SUB_ITER(&iarr, &istruct);
+            CHECK_TYPE((t = ITER_TYPE(&istruct)), DBUS_TYPE_OBJECT_PATH);
+            
+            dbus_message_iter_get_basic(&istruct, &path);
+            
+            ITER_NEXT(&istruct);
+            CHECK_TYPE((t = ITER_TYPE(&istruct)), DBUS_TYPE_ARRAY);
+            
+            SUB_ITER(&istruct, &iprop);
+            
+            ITER_FOREACH(&iprop, t) {
+                CHECK_TYPE(t, DBUS_TYPE_DICT_ENTRY);
+                
+                SUB_ITER(&iprop, &idict);
+                CHECK_TYPE((t = ITER_TYPE(&idict)), DBUS_TYPE_STRING);
+                
+                dbus_message_iter_get_basic(&idict, &name);
+                printf("*** property name %s\n", name);
+
+                if (!strcmp(name, PROP_CHANNEL_TYPE)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_STRING(&idict, type);
+                    if (type == NULL || strcmp(type, TP_CHANNEL_MEDIA))
+                        return DBUS_HANDLER_RESULT_HANDLED;
+                }
+                else if (!strcmp(name, PROP_TARGET)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_STRING(&idict, event.target);
+                }
+                else if (!strcmp(name, PROP_INITIATOR)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_STRING(&idict, initiator);
+                    if (!strcmp(initiator, INITIATOR_SELF))
+                        event.dir = DIR_OUTGOING;
+                    else
+                        event.dir = DIR_INCOMING;
+                }
+                else if (!strcmp(name, PROP_INITIAL_MEMBERS)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_PATH_ARRAY(&idict, members);
+                }
+            }
+            
+        }
+    }
+
+    
+    if (type != NULL && path != NULL) {
+        event.type = EVENT_NEW_CHANNEL;
+        event.name = dbus_message_get_sender(msg);
+        event.path = path;
+        event.call = call_lookup(path);
+        event_handler((event_t *)&event);
+    }
     
     return DBUS_HANDLER_RESULT_HANDLED;
 
@@ -687,9 +843,7 @@ event_handler(event_t *event)
 
     if (status == 0) {
         policy_enforce(event);
-#if 0
         policy_audio_update();
-#endif
     }
     else {
         OHM_ERROR("Failed to get policy actions for event %s of call %s.",
