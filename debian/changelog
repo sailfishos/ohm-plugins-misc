@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6) unstable; urgency=low
+
+  * Support for a dedicated policy group for flash in policy rules.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 13 Nov 2008 12:14:16 +0200
+
 ohm-plugins-misc (0.5) unstable; urgency=low
 
   * Cleanups
