@@ -951,10 +951,12 @@ static int fake_stop_pbreq(sm_evdata_t *evdata, void *usrdata)
 
     dbusif_send_info_to_pep("unregister", cl->group, cl->pid, cl->stream);
 
-    client_save_state(cl, client_reqstate, state);
-    client_update_factstore_entry(cl, "reqstate", state);
-    
-    dresif_state_request(cl, state, 0);
+    if (strcmp(state, client_get_state(cl, client_state, NULL,0))) {
+        client_save_state(cl, client_reqstate, state);
+        client_update_factstore_entry(cl, "reqstate", state);
+        
+        dresif_state_request(cl, state, 0);
+    }
 
     return TRUE;
 }
@@ -1151,7 +1153,7 @@ static char *class_to_group(char *klass)
         {"Camera"    , "camera"    },
         {"Game"      , "game"      },
         {"Alarm"     , "alarm"     },
-        {"Flash"     , "player"    },
+        {"Flash"     , "flash"     },
         {NULL        , "othermedia"}
     };
 
