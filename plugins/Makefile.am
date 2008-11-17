@@ -3,8 +3,8 @@ SUBDIRS = 	     \
 	hal          \
 	playback     \
 	accessories  \
-	profile      \
 	console      \
+	profile      \
 	telephony
 
 clean-local:

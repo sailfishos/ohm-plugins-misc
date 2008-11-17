@@ -13,6 +13,7 @@
 #define TP_CHANNEL        TP_BASE".Channel"
 #define TP_CHANNEL_GROUP  TP_CHANNEL".Interface.Group"
 #define TP_CHANNEL_HOLD   TP_CHANNEL".Interface.Hold"
+#define TP_CHANNEL_STATE  TP_CHANNEL".Interface.CallState"
 #define TP_CHANNEL_MEDIA  TP_CHANNEL".Type.StreamedMedia"
 
 #define TP_CONN_PATH      "/org/freedesktop/Telepathy/Connection"
@@ -20,17 +21,20 @@
 
 #define TP_NOKIA          "com.nokia.Telepathy"
 #define TP_CONFERENCE     TP_NOKIA".Channel.Interface.Conference"
-#define PROP_CHANNEL_TYPE TP_CHANNEL".ChannelType"
+
+#define PROP_CHANNEL_TYPE    TP_CHANNEL".ChannelType"
 #define PROP_INITIAL_MEMBERS TP_CONFERENCE".InitialMembers"
-#define PROP_TARGET       TP_CHANNEL".TargetID"
-#define PROP_INITIATOR    TP_CHANNEL".InitiatorID"
-#define INITIATOR_SELF    "<self>"
+#define PROP_TARGET_HANDLE   TP_CHANNEL".TargetHandle"
+#define PROP_TARGET_ID       TP_CHANNEL".TargetID"
+#define PROP_INITIATOR_ID    TP_CHANNEL".InitiatorID"
+#define INITIATOR_SELF      "<self>"
 
 #define NEW_CHANNEL        "NewChannel"
 #define NEW_CHANNELS       "NewChannels"
 #define CHANNEL_CLOSED     "Closed"
 #define MEMBERS_CHANGED    "MembersChanged"
 #define HOLD_STATE_CHANGED "HoldStateChanged"
+#define CALL_STATE_CHANGED "CallStateChanged"
 #define CLOSE              "Close"
 #define REQUEST_HOLD       "RequestHold"
 
@@ -50,9 +54,11 @@
  * call actions (policy decisions)
  */
 
-#define ACTION_DISCONNECT "disconnect"         /* disconnect call */
-#define ACTION_HOLD       "hold"               /* put call on hold */
-#define ACTION_ACTIVATE   "activate"           /* activate (pull from hold) */
+#define ACTION_CREATED    "created"            /* create call */
+#define ACTION_DISCONNECT "disconnected"       /* disconnect call */
+#define ACTION_HOLD       "onhold"             /* put call on hold */
+#define ACTION_ACTIVATE   "active"             /* activate (pull from hold) */
+#define ACTION_AUTOHOLD   "autohold"
 
 
 
@@ -67,6 +73,7 @@ typedef enum {
     STATE_ACTIVE,                              /* call active */
     STATE_ON_HOLD,                             /* call on hold */
     STATE_AUTOHOLD,                            /* call autoheld by us */
+    STATE_CONFERENCE,                          /* call member in a conference */
     STATE_MAX
 } call_state_t;
 
@@ -78,7 +85,9 @@ typedef enum {
     DIR_MAX
 } call_dir_t;
 
-typedef struct {
+typedef struct call_s call_t;
+
+struct call_s {
     int           id;                          /* our call ID */
     char         *name;                        /* channel D-BUS name */
     char         *path;                        /* channel object path */
@@ -86,8 +95,9 @@ typedef struct {
     call_dir_t    dir;                         /* incoming/outgoing */
     call_state_t  state;                       /* current state */
     int           order;                       /* autohold order */
+    call_t       *parent;                      /* hosting conference if any */
     OhmFact      *fact;                        /* this call in fact store */
-} call_t;
+};
 
 
 /*
@@ -121,8 +131,9 @@ typedef struct {
 
 typedef struct {
     EVENT_COMMON;
-    const char *target;
-    call_dir_t  dir;
+    const char  *peer;                         /* our peer (number/uri) */
+    char       **members;                      /* for conference call */
+    call_dir_t   dir;
 } channel_event_t;
 
 
@@ -160,8 +171,17 @@ enum {
 };
 
 
+/*
+ * telepathy call states
+ */
 
-
+enum {
+    TP_CALLSTATE_NONE      = 0x00,
+    TP_CALLSTATE_RINGING   = 0x01,
+    TP_CALLSTATE_QUEUED    = 0x02,
+    TP_CALLSTATE_HELD      = 0x04,
+    TP_CALLSTATE_FORWARDED = 0x10
+};
 
 
 

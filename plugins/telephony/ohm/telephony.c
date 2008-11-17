@@ -18,6 +18,9 @@
 
 #define PLUGIN_NAME   "telephony"
 #define IS_CELLULAR(p) (!strncmp(p, TP_RING, sizeof(TP_RING) - 1))
+#define IS_CONF_PARENT(call) ((call) != NULL && (call)->parent == (call))
+#define IS_CONF_MEMBER(call) ((call) != NULL && \
+                              (call)->parent != NULL && (call)->parent != call)
 
 static int DBG_CALL;
 
@@ -47,6 +50,7 @@ DBUS_SIGNAL_HANDLER(channels_new);
 DBUS_SIGNAL_HANDLER(channel_closed);
 DBUS_SIGNAL_HANDLER(members_changed);
 DBUS_SIGNAL_HANDLER(hold_state_changed);
+DBUS_SIGNAL_HANDLER(call_state_changed);
 DBUS_SIGNAL_HANDLER(call_end);
 
 DBUS_METHOD_HANDLER(dispatch_method);
@@ -67,16 +71,19 @@ static int         nipcall;                      /* number of ohter calls */
 static int         callid;                       /* call id */
 static int         holdorder;                    /* autohold order */
 
-call_t *call_register(const char *path, const char *name);
+call_t *call_register(const char *path, const char *name, const char *peer,
+                      int conference);
 call_t *call_lookup(const char *path);
-void    call_destroy(call_t *);
+void    call_destroy(call_t *call);
+void    call_foreach(GHFunc callback, gpointer data);
 
 enum {
-    UPDATE_NONE  = 0x00,
-    UPDATE_STATE = 0x01,
-    UPDATE_DIR   = 0x02,
-    UPDATE_ORDER = 0x04,
-    UPDATE_ALL   = 0xff,
+    UPDATE_NONE   = 0x00,
+    UPDATE_STATE  = 0x01,
+    UPDATE_DIR    = 0x02,
+    UPDATE_ORDER  = 0x04,
+    UPDATE_PARENT = 0x08,
+    UPDATE_ALL    = 0xff,
 };
 
 int     policy_call_export(call_t *call);
@@ -97,11 +104,12 @@ static void ring_stop(void);
  * policy and fact-store stuff
  */
 
-#define FACT_FIELD_PATH  "path"
-#define FACT_FIELD_ID    "id"
-#define FACT_FIELD_STATE "state"
-#define FACT_FIELD_DIR   "direction"
-#define FACT_FIELD_ORDER "order"
+#define FACT_FIELD_PATH   "path"
+#define FACT_FIELD_ID     "id"
+#define FACT_FIELD_STATE  "state"
+#define FACT_FIELD_DIR    "direction"
+#define FACT_FIELD_ORDER  "order"
+#define FACT_FIELD_PARENT "parent"
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
 
@@ -152,8 +160,10 @@ bus_init(void)
     if (!bus_add_match("signal", TP_CHANNEL_GROUP, NULL, NULL))
         exit(1);
 
+#if 0
     if (!bus_add_match("signal", TP_CONNECTION, NEW_CHANNEL, NULL))
         exit(1);
+#endif
 
     if (!bus_add_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL))
         exit(1);
@@ -162,6 +172,9 @@ bus_init(void)
         exit(1);
 
     if (!bus_add_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL))
+        exit(1);
+
+    if (!bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL))
         exit(1);
 
     if (!dbus_connection_add_filter(bus, dispatch_signal, NULL, NULL)) {
@@ -308,6 +321,9 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
     if (MATCHES(TP_CHANNEL_HOLD, HOLD_STATE_CHANGED))
         return hold_state_changed(c, msg, data);
 
+    if (MATCHES(TP_CHANNEL_STATE, CALL_STATE_CHANGED))
+        return call_state_changed(c, msg, data);
+
     if (MATCHES(TELEPHONY_INTERFACE, CALL_ENDED))
         return call_end(c, msg, data);
     
@@ -427,6 +443,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     
     path = NULL;
     type = NULL;
+    event.members = NULL;
 
     ITER_FOREACH(&imsg, t) {
         CHECK_TYPE(t, DBUS_TYPE_ARRAY);
@@ -438,6 +455,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
             SUB_ITER(&iarr, &istruct);
             CHECK_TYPE((t = ITER_TYPE(&istruct)), DBUS_TYPE_OBJECT_PATH);
             
+            /* dig out object path */
             dbus_message_iter_get_basic(&istruct, &path);
             
             ITER_NEXT(&istruct);
@@ -445,6 +463,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
             
             SUB_ITER(&istruct, &iprop);
             
+            /* dig out interesting properties */
             ITER_FOREACH(&iprop, t) {
                 CHECK_TYPE(t, DBUS_TYPE_DICT_ENTRY);
                 
@@ -452,7 +471,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                 CHECK_TYPE((t = ITER_TYPE(&idict)), DBUS_TYPE_STRING);
                 
                 dbus_message_iter_get_basic(&idict, &name);
-                printf("*** property name %s\n", name);
+                printf("*** property %s\n", name);
 
                 if (!strcmp(name, PROP_CHANNEL_TYPE)) {
                     ITER_NEXT(&idict);
@@ -460,21 +479,25 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                     if (type == NULL || strcmp(type, TP_CHANNEL_MEDIA))
                         return DBUS_HANDLER_RESULT_HANDLED;
                 }
-                else if (!strcmp(name, PROP_TARGET)) {
+                else if (!strcmp(name, PROP_TARGET_ID)) {
                     ITER_NEXT(&idict);
-                    VARIANT_STRING(&idict, event.target);
+                    VARIANT_STRING(&idict, event.peer);
                 }
-                else if (!strcmp(name, PROP_INITIATOR)) {
+                else if (!strcmp(name, PROP_INITIATOR_ID)) {
                     ITER_NEXT(&idict);
                     VARIANT_STRING(&idict, initiator);
                     if (!strcmp(initiator, INITIATOR_SELF))
                         event.dir = DIR_OUTGOING;
                     else
                         event.dir = DIR_INCOMING;
+
+                    printf("### initiator is %s (0x%x)\n", initiator,
+                           event.dir);
                 }
                 else if (!strcmp(name, PROP_INITIAL_MEMBERS)) {
                     ITER_NEXT(&idict);
                     VARIANT_PATH_ARRAY(&idict, members);
+                    event.members = &members[0];
                 }
             }
             
@@ -639,6 +662,56 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
 
     event_handler((event_t *)&event);
     
+    return DBUS_HANDLER_RESULT_HANDLED;
+    
+    (void)c;
+    (void)data;
+}
+
+
+/********************
+ * call_state_changed
+ ********************/
+static DBusHandlerResult
+call_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    status_event_t event;
+    unsigned int   contact, state;
+
+    if ((event.path = dbus_message_get_path(msg)) == NULL ||
+        (event.call = call_lookup(event.path))    == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_UINT32, &contact,
+                               DBUS_TYPE_UINT32, &state,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse CallStateChanged signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;        
+    }
+
+    OHM_INFO("CallState of contact %d %s is now 0x%x.", contact,
+             short_path(event.call->path), state);
+    
+    if (IS_CONF_PARENT(event.call)) {
+        OHM_WARNING("CallStateChanged for conference call ignored.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    if (IS_CONF_MEMBER(event.call)) {
+        OHM_WARNING("CallStateChanged for conference member ignored.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    if (!(state & TP_CALLSTATE_HELD) && event.call->state == STATE_ON_HOLD)
+        event.type = EVENT_CALL_ACTIVATED;
+    else if ((state & TP_CALLSTATE_HELD) && event.call->state == STATE_ACTIVE) {
+        event.type = EVENT_CALL_HELD;
+    }
+    else
+        return DBUS_HANDLER_RESULT_HANDLED;
+             
+    event_handler((event_t *)&event);
     return DBUS_HANDLER_RESULT_HANDLED;
     
     (void)c;
@@ -814,25 +887,76 @@ event_handler(event_t *event)
     switch (event->type) {
     case EVENT_NEW_CHANNEL:
         if (call == NULL) {
-            call = call_register(event->channel.path, event->channel.name);
+            call = call_register(event->channel.path, event->channel.name,
+                                 event->channel.peer,
+                                 event->channel.members != NULL);
+            call->dir = event->channel.dir;
             policy_call_export(call);
         }
-        return;
+        if (event->channel.members != NULL) {
+            int     i;
+            call_t *member;
 
-    case EVENT_CALL_REQUEST:
-        if (call == NULL)
-            call = event->any.call = call_register(event->call.path, NULL);
-        
-        call->dir = event->call.dir;
-        policy_call_update(call, UPDATE_DIR);
+            OHM_INFO("%s is a conference call.", call->path);
+
+            for (i = 0; event->channel.members[i] != NULL; i++) {
+                if ((member = call_lookup(event->channel.members[i])) == NULL) {
+                    OHM_WARNING("Unknown member call %s for conference %s.",
+                                call->path, event->channel.members[i]);
+                    return;
+                }
+                member->state  = STATE_CONFERENCE;
+                member->parent = call;
+                printf("*** call %s is now in conference %s\n",
+                       member->path, call->path);
+                policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
+            }
+        }
+        else
+            OHM_INFO("%s is not a conference call.", call->path);
+
         event->any.state = STATE_CREATED;
+        event->any.call  = call;
         break;
 
+    case EVENT_CALL_REQUEST:
+#if 0
+        if (call->dir == DIR_UNKNOWN) {
+            call->dir = event->call.dir;
+            policy_call_update(call, UPDATE_DIR);
+        }
+        event->any.state = STATE_CREATED;
+#else
+        if (call == NULL) {
+            OHM_WARNING("Denying CALL_REQUEST for unknown call %s.",
+                        event->call.path);
+            call_reply(event->call.req, FALSE);
+            return;
+        }
+        else {
+            policy_call_update(call, UPDATE_DIR);
+            call_reply(event->call.req, TRUE);
+            return;
+        }
+#endif
+        break;
+
+    case EVENT_CALL_ACCEPTED:
+        if (IS_CONF_PARENT(call) && call->state == STATE_ACTIVE)
+            return;
+        event->any.state = STATE_ACTIVE;
+        break;
+
+    case EVENT_CALL_ACTIVATED:
+        if (IS_CONF_MEMBER(call))
+            return;
+        event->any.state = STATE_ACTIVE;
+        break;
+
+        
+    case EVENT_CALL_HELD:      event->any.state = STATE_ON_HOLD;      break;
     case EVENT_CHANNEL_CLOSED: event->any.state = STATE_DISCONNECTED; break;
     case EVENT_CALL_ENDED:     event->any.state = STATE_DISCONNECTED; break;
-    case EVENT_CALL_ACCEPTED:  event->any.state = STATE_ACTIVE;       break;
-    case EVENT_CALL_HELD:      event->any.state = STATE_ON_HOLD;      break;
-    case EVENT_CALL_ACTIVATED: event->any.state = STATE_ACTIVE;       break;
     default: OHM_ERROR("Unknown event 0x%x.", event->type);          return;
     }
     
@@ -886,7 +1010,8 @@ call_init(void)
  * call_register
  ********************/
 call_t *
-call_register(const char *path, const char *name)
+call_register(const char *path, const char *name, const char *peer,
+              int conference)
 {
     call_t *call;
 
@@ -903,6 +1028,11 @@ call_register(const char *path, const char *name)
         g_free(call);
         return NULL;
     }
+
+    call->peer = g_strdup(peer);
+
+    if (conference)
+        call->parent = call;
 
     if (name != NULL) {
         if ((call->name = g_strdup(name)) == NULL) {
@@ -992,6 +1122,17 @@ call_find(int id)
 
 
 /********************
+ * call_foreach
+ ********************/
+void
+call_foreach(GHFunc callback, gpointer data)
+{
+    g_hash_table_foreach(calls, callback, data);
+    
+}
+
+
+/********************
  * call_destroy
  ********************/
 void
@@ -1031,6 +1172,26 @@ tp_disconnect(call_t *call)
 
 
 /********************
+ * remove_parent
+ ********************/
+static gboolean
+remove_parent(gpointer key, gpointer value, gpointer data)
+{
+    call_t *parent = (call_t *)data;
+    call_t *call   = (call_t *)value;
+
+    if (call->parent == parent) {
+        OHM_INFO("Clearing parent of conference member %s.", call->path);
+        call->parent = NULL;
+        policy_call_update(call, UPDATE_PARENT);
+    }
+    
+    return TRUE;
+    (void)key;
+}
+
+
+/********************
  * call_disconnect
  ********************/
 static int
@@ -1048,6 +1209,7 @@ call_disconnect(call_t *call, const char *action, event_t *event)
         case STATE_DISCONNECTED:
             policy_call_delete(call);
             call_unregister(call->path);
+            call_foreach((GHFunc)remove_parent, call);
             return 0;
         default:                 
             break;
@@ -1170,10 +1332,13 @@ call_create(call_t *call, const char *action, event_t *event)
     if (call->dir == DIR_INCOMING)
         ring_start(FALSE);
     
+#if 0
     call_reply(event->call.req, TRUE);
+#endif
     return 0;
 
     (void)action;
+    (void)event;
 }
 
 
@@ -1243,6 +1408,7 @@ state_name(int state)
         STATE(ACTIVE      , "active"),
         STATE(ON_HOLD     , "onhold"),
         STATE(AUTOHOLD    , "autohold"),
+        STATE(CONFERENCE  , "conference"),
     };
     
     if (STATE_UNKNOWN < state && state < STATE_MAX)
@@ -1382,61 +1548,94 @@ dir_name(int dir)
 }
 
 
+/*****************************************************************************
+ *                          *** factstore interface ***                      *
+ *****************************************************************************/
+
+
+/********************
+ * set_string_field
+ ********************/
+int
+set_string_field(OhmFact *fact, const char *field, const char *value)
+{
+    GValue *gval = ohm_value_from_string(value);
+
+    if (gval == NULL)
+        return FALSE;
+
+    ohm_fact_set(fact, field, gval);
+    return TRUE;
+}
+
+
+/********************
+ * set_uint_field
+ ********************/
+int
+set_uint_field(OhmFact *fact, const char *field, unsigned int value)
+{
+    GValue *gval = ohm_value_from_unsigned(value);
+
+    if (gval == NULL)
+        return FALSE;
+
+    ohm_fact_set(fact, field, gval);
+    return TRUE;
+}
+
+
 /********************
  * policy_call_export
  ********************/
 int
 policy_call_export(call_t *call)
 {
-#define FAIL(ec) do { status = (ec); goto fail; } while (0)
-
-    OhmFact *fact;
-    GValue  *value;
-    int      status;
-    char     id[16];
-
+    OhmFact    *fact;
+    const char *state, *dir, *path;
+    char        id[16], parent[16];
+    
     if (call == NULL)
-        return EINVAL;
-
+        return FALSE;
+    
     OHM_INFO("Exporting fact for call %s.", short_path(call->path));
 
     if (call->fact != NULL)
-        return 0;
+        return TRUE;
 
     if ((fact = ohm_fact_new(POLICY_FACT_CALL)) == NULL)
-        FAIL(ENOMEM);
+        return FALSE;
     
-    if ((value = ohm_value_from_string(call->path)) == NULL)
-        FAIL(ENOMEM);
-    ohm_fact_set(fact, FACT_FIELD_PATH, value);
-
-    if ((value = ohm_value_from_string(state_name(call->state))) == NULL)
-        FAIL(ENOMEM);
-    ohm_fact_set(fact, FACT_FIELD_STATE, value);
-    
-    if ((value = ohm_value_from_string(dir_name(call->dir))) == NULL)
-        FAIL(ENOMEM);
-    ohm_fact_set(fact, FACT_FIELD_DIR, value);
-
+    path  = call->path;
+    state = state_name(call->state);
+    dir   = dir_name(call->dir);
     snprintf(id, sizeof(id), "%d", call->id);
-    if ((value = ohm_value_from_string(id)) == NULL)
-        FAIL(ENOMEM);
+    if (call->parent == call) {
+        snprintf(parent, sizeof(parent), "%d", call->id);
+        printf("*** setting parent of %s to %s\n", call->path, parent);
+    }
+    else
+        parent[0] = '\0';
 
-    ohm_fact_set(fact, FACT_FIELD_ID, value);
+    if (!set_string_field(fact, FACT_FIELD_PATH , path) ||
+        !set_string_field(fact, FACT_FIELD_STATE, state)||
+        !set_string_field(fact, FACT_FIELD_DIR  , dir)  ||
+        !set_string_field(fact, FACT_FIELD_ID   , id)   ||
+        (parent[0] && !set_string_field(fact, FACT_FIELD_PARENT, parent))) {
+        OHM_ERROR("Failed to export call %s to factstore.", path);
+        g_object_unref(fact);
+        return FALSE;
+    }
     
-    if (!ohm_fact_store_insert(store, fact))
-        FAIL(ENOMEM);
-
+    if (!ohm_fact_store_insert(store, fact)) {
+        OHM_ERROR("Failed to insert call %s to factstore.", path);
+        g_object_unref(fact);
+        return FALSE;
+    }
+    
     call->fact = fact;
     
-    return 0;
-    
- fail:
-    if (fact)
-        g_object_unref(fact);
-    return status;
-
-#undef FAIL
+    return TRUE;
 }
 
 
@@ -1446,84 +1645,47 @@ policy_call_export(call_t *call)
 int
 policy_call_update(call_t *call, int fields)
 {
-#if 1
-    OhmFact *fact;
-    GValue  *value;
+    OhmFact    *fact;
+    const char *state, *dir, *parent;
+    char        id[16];
+    int         order;
     
     if (call == NULL)
-        return ENOMEM;
+        return FALSE;
     
     if ((fact = call->fact) == NULL)
         return policy_call_export(call);
 
     OHM_INFO("Updating fact for call %s", short_path(call->path));
     
-    if (fields & UPDATE_STATE) {
-        if ((value = ohm_value_from_string(state_name(call->state))) == NULL) {
-            OHM_ERROR("Failed to update fact state for call %s", 
-                      short_path(call->path));
-            return EINVAL;
-        }
-        ohm_fact_set(fact, FACT_FIELD_STATE, value);
-    }
-    if (fields & UPDATE_DIR) {
-        value = ohm_fact_get(fact, FACT_FIELD_DIR);
-        if (value == NULL || G_VALUE_TYPE(value) != G_TYPE_STRING) {
-            OHM_ERROR("Invalid fact direction for call %s",
-                      short_path(call->path));
-            return EINVAL;
-        }
-        if (!strcmp(g_value_get_string(value), dir_name(DIR_UNKNOWN))) {
-            if ((value = ohm_value_from_string(dir_name(call->dir))) == NULL) {
-                OHM_ERROR("Failed to update fact dir for call %s",
-                          short_path(call->path));
-                return ENOMEM;
-            }
-            ohm_fact_set(fact, FACT_FIELD_DIR, value);
-        }
-    }
-    if (fields & UPDATE_ORDER) {
-        if ((value = ohm_value_from_unsigned(call->order)) == NULL) {
-            OHM_ERROR("Failed to update fact order for call %s",
-                      short_path(call->path));
-            return EINVAL;
-        }
-        ohm_fact_set(fact, FACT_FIELD_ORDER, value);
-    }
-
-#else
-
-#define FAIL(ec) do { status = (ec); goto fail; } while (0)
-
-    OhmFact *fact;
-    GValue  *value;
-
-    if (call == NULL)
-        return ENOMEM;
-
-    OHM_INFO("Updating fact for call %s.", short_path(call->path));
-
-    if ((fact = call->fact) == NULL)
-        return policy_call_export(call);
+    state = (fields & UPDATE_STATE) ? state_name(call->state) : NULL;
+    dir   = (fields & UPDATE_DIR)   ? dir_name(call->dir) : NULL;
+    order = (fields & UPDATE_ORDER) ? call->order : 0;
     
-    if ((value = ohm_value_from_string(state_name(call->state))) == NULL)
-        return ENOMEM;
-    ohm_fact_set(fact, FACT_FIELD_STATE, value);
-    
-    if ((value = ohm_fact_get(fact, FACT_FIELD_DIR)) == NULL ||
-        G_VALUE_TYPE(value) != G_TYPE_STRING)
-        return EINVAL;
-    
-    if (!strcmp(g_value_get_string(value), dir_name(DIR_UNKNOWN))) {
-        if ((value = ohm_value_from_string(dir_name(call->dir))) == NULL)
-            return ENOMEM;
-        ohm_fact_set(fact, FACT_FIELD_DIR, value);
+    if (fields & UPDATE_PARENT) {
+        if (call->parent == NULL) {
+            ohm_fact_set(fact, FACT_FIELD_PARENT, NULL);
+            parent = NULL;
+            printf("*** removing parent from %s\n", call->path);
+        }
+        else {
+            snprintf(id, sizeof(id), "%d", call->parent->id);
+            parent = id;
+            printf("*** updating parent of %s to %s\n", call->path, parent);
+        }
     }
-
-#endif
-
-
-    return 0;
+    else
+        parent = NULL;
+    
+    if ((state  && !set_string_field(fact, FACT_FIELD_STATE , state))  ||
+        (dir    && !set_string_field(fact, FACT_FIELD_DIR   , dir))    ||
+        (parent && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
+        (order  && !set_uint_field(fact,   FACT_FIELD_ORDER , order))) {
+        OHM_ERROR("Failed to update fact for call %s", short_path(call->path));
+        return FALSE;
+    }
+    
+    return TRUE;
 }
 
 
