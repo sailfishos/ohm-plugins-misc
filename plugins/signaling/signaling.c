@@ -140,6 +140,10 @@ plugin_init(OhmPlugin * plugin)
 {
     DBusConnection *c = ohm_plugin_dbus_get_connection();
     /* should we ref the connection? */
+    
+    if (!OHM_DEBUG_INIT(signaling))
+        g_warning("Failed to initialize signaling plugin debugging.");
+    
     init_signaling(c, DBG_SIGNALING, DBG_FACTS);
     return;
 

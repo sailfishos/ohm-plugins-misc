@@ -8,7 +8,7 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
 
-static gchar *token = "headset";
+static gchar *token = "button";
 
 static OhmFactStore  *fs;
 
@@ -57,20 +57,14 @@ static void plugin_exit(OhmPlugin *plugin)
 
 gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data)
 {
-#if 0
-    const gchar *udi_hal, *udi_fs;
-    GValue *udi_val_hal, *udi_val_fs;
-    GSList *fields = NULL, *k = NULL, 
-    gchar *udi = NULL;
-#endif
-
     GValue *val_i = NULL, *capabilities = NULL;
     OhmFact *fact = NULL;
     gchar *fact_name = "com.nokia.policy.accessories";
     GSList *i = NULL, *list = NULL;
     int state = 0;
+    gboolean found = FALSE;
 
-    /* printf("Hal headset event received!\n"); */
+    /* printf("Possible hal headset event received!\n"); */
 
     /* find the virtual fact */
 
@@ -103,10 +97,9 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
     }
 
     capabilities = ohm_fact_get(hal_fact, "info.capabilities");
-    gboolean found = FALSE;
 
     if (capabilities == NULL) {
-        printf("Headset removed or something\n");
+        /* printf("Headset removed or something\n"); */
     }
     else if (G_VALUE_TYPE(capabilities) == G_TYPE_STRING) {
         const gchar *escaped_caps = g_value_get_string(capabilities);
@@ -118,102 +111,49 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
         for (; *caps_iter != NULL; caps_iter++) {
             gchar *cap = *caps_iter;
 
-            if (cap && strcmp(cap, "headset") == 0) {
-                printf("Fact has the headset capability\n");
-                found = TRUE;
-                break;
-            }
-        }
+            if (cap && strcmp(cap, "button") == 0) {
+                GValue *gval_b = ohm_fact_get(hal_fact, "button.state.value");
+                GValue *gval_id = ohm_fact_get(hal_fact, "platform.id");
 
-        g_strfreev(caps);
+                if (gval_b &&
+                        G_VALUE_TYPE(gval_b) == G_TYPE_INT &&
+                        gval_id &&
+                        G_VALUE_TYPE(gval_id) == G_TYPE_STRING) {
+                    gboolean value_b = g_value_get_int(gval_b);
+                    const gchar *value_id = g_value_get_string(gval_id);
+                
+                    if (!strcmp(value_id, "headphone")) {
+                        /* printf("Fact has the headset capability\n");
+                         * */
+                        if (value_b && !state) {
+                                printf("Headset inserted!\n");
 
-#if 0
-        if (!found)
-            printf("There were capabilities (but not headset)\n");
-#endif
+                                /* change the virtual fact */
+                                val_i = ohm_value_from_int(1);
+                                ohm_fact_set(fact, "state", val_i);
 
-    }
+                                found = TRUE;
+                                break;
+                            }
+                        else if (!value_b && state) {
+                            printf("Headset removed!\n");
 
-    printf("Headset state in FS: '%i', found: %s\n", state, found ? "TRUE" : "FALSE");
+                            /* change the virtual fact */
+                            val_i = ohm_value_from_int(0);
+                            ohm_fact_set(fact, "state", val_i);
 
-#if 0
-    if (!(added || removed) || added) {
-        /* during decoration or added later */
-        printf("Headset inserted!\n");
-
-        /* change the virtual fact */
-        val_i = ohm_value_from_int(1);
-        ohm_fact_set(fact, "state", val_i);
-
-        /* insert the HAL fact */
-
-        return ohm_fact_store_insert(fs, hal_fact);
-    }
-    else {
-        /* removed */
-        /* printf("Headset removal event!\n"); */
-        
-        /* change the virtual fact */
-        val_i = ohm_value_from_int(0);
-        ohm_fact_set(fact, "state", val_i);
-
-        /* delete the actual fact */
-
-        list = ohm_fact_store_get_facts_by_name(fs, capability);
-
-        udi_val_hal = ohm_fact_get(hal_fact, "udi");
-        if (G_VALUE_TYPE(udi_val_hal) == G_TYPE_STRING) {
-            udi_hal = g_value_get_string(udi_val_hal);
-        }
-        else {
-            return FALSE;
-        }
-
-        for (i = list; i != NULL; i = g_slist_next(i)) {
-            OhmFact *of = i->data;
-            udi_val_fs = ohm_fact_get(of, "udi");
-            if (G_VALUE_TYPE(udi_val_fs) == G_TYPE_STRING) {
-                udi_fs = g_value_get_string(udi_val_fs);
-
-                if (strcmp(udi_hal, udi_fs) == 0) {
-                    /* printf("Found the fact to remove (%s)!\n", udi_fs); */
-                    ohm_fact_store_remove(fs, of);
-                    printf("Headset removed!\n");
-                    return TRUE;
+                            found = TRUE;
+                            break;
+                        }
+                        /* else redundant event */
+                    }
                 }
             }
-        } 
+        }
+        g_strfreev(caps);
     }
 
-#else
-    
-    if (state && !found) {
-        printf("Headset removed!\n");
-
-        /* change the virtual fact */
-        val_i = ohm_value_from_int(0);
-        ohm_fact_set(fact, "state", val_i);
-
-        return TRUE;
-    }
-
-    else if (!state && found) {
-        printf("Headset inserted!\n");
-
-        /* change the virtual fact */
-        val_i = ohm_value_from_int(1);
-        ohm_fact_set(fact, "state", val_i);
-
-        /* insert the HAL fact */
-
-        return TRUE;
-        /* return ohm_fact_store_insert(fs, hal_fact); */
-    }
-
-#endif
-
-    /* not found */
-    return FALSE;
+    return found;
 }
 
 static gboolean headset_deinit(OhmPlugin *plugin)
@@ -223,7 +163,7 @@ static gboolean headset_deinit(OhmPlugin *plugin)
 
 static gboolean headset_init(OhmPlugin *plugin)
 {
-    return set_observer("headset", headset_cb, token);
+    return set_observer("button", headset_cb, token);
 }
 
 /* headset part ends */
@@ -319,7 +259,7 @@ static const char *get_field(OhmFact *fact, char *name)
 }
 
 OHM_PLUGIN_DESCRIPTION("accessories",
-                       "0.0.0",
+                       "0.0.1",
                        "janos.f.kovacs@nokia.com",
                        OHM_LICENSE_NON_FREE,
                        plugin_init,
