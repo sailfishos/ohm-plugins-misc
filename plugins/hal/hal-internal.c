@@ -133,6 +133,13 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
                     break;
 #undef STRING_DELIMITER
                 }
+            case LIBHAL_PROPERTY_TYPE_BOOLEAN:
+                {
+                    dbus_bool_t hal_value = libhal_psi_get_bool(&iter);
+                    int intval = (hal_value == TRUE) ? 1 : 0;
+                    val = ohm_value_from_int(intval);
+                    break;
+                }
             default:
                 /* error case, currently means that FactStore doesn't
                  * support the type yet */
@@ -177,8 +184,8 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec,
         fact = create_fact(plugin, udi, dec->capability, properties);
         dec->cb(fact, dec->capability, added, removed, dec->user_data);
 
+        /* g_object_unref(fact); */
         libhal_free_property_set(properties);
-        g_object_unref(fact);
     }
 
     return match;
@@ -447,7 +454,8 @@ gboolean decorate(hal_plugin *plugin, const gchar *capability, hal_cb cb, void *
         /* printf("allocated udi string '%s' at '%p'\n", udi, udi); */
         
         dec->devices = g_slist_prepend(dec->devices, udi);
-        process_decoration(plugin, dec, FALSE, FALSE, devices[i]);
+        if (process_decoration(plugin, dec, FALSE, FALSE, devices[i]))
+            libhal_device_add_property_watch(plugin->hal_ctx, udi, NULL);
     }
 
     libhal_free_string_array(devices);

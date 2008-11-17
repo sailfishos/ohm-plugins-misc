@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6) unstable; urgency=low
+
+  * Support for a dedicated policy group for flash in policy rules.
+  * Wired headset support.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 14 Nov 2008 16:18:51 +0200
+
 ohm-plugins-misc (0.5) unstable; urgency=low
 
   * Cleanups
