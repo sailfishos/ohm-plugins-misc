@@ -19,9 +19,15 @@ profile_plugin *profile_plugin_p;
 static void
 plugin_init(OhmPlugin * plugin)
 {
+    if (!OHM_DEBUG_INIT(profile))
+        g_warning("Failed to initialize profile plugin debugging.");
+    
     OHM_DEBUG(DBG_PROFILE, "> Profile plugin init");
+
     profile_plugin_p = init_profile();
     return;
+
+    (void) plugin;
 }
 
 static void
@@ -30,8 +36,11 @@ plugin_exit(OhmPlugin * plugin)
     if (profile_plugin_p) {
         deinit_profile(profile_plugin_p);
     }
+    
     profile_plugin_p = NULL;
     return;
+
+    (void) plugin;
 }
 
 OHM_PLUGIN_DESCRIPTION("profile",
@@ -122,7 +131,8 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
     return TRUE;
 }
 
-static void profile_value_change(const char *profile, const char *key, const char *val, const char *type)
+static void profile_value_change(const char *profile, const char *key,
+        const char *val, const char *type)
 {
 
     /* A value has changed in the currently active value */
@@ -166,6 +176,9 @@ static void profile_value_change(const char *profile, const char *key, const cha
     }
 
     return;
+    
+    (void) profile;
+    (void) type;
 }
 
 static void profile_name_change(const char *profile)
@@ -194,6 +207,22 @@ static void profile_name_change(const char *profile)
     profile_free_values(values);
 }
 
+static gboolean subscribe_to_service()
+{
+    /* subscribe to the profile change notification */
+    
+    profile_track_set_profile_cb(profile_name_change);
+
+    /* subscribe to the value change in profile notification */
+    
+    profile_track_set_active_cb(profile_value_change);
+
+    if (profile_tracker_init() < 0) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
 
 profile_plugin * init_profile()
 {
@@ -209,28 +238,14 @@ profile_plugin * init_profile()
 
     profile = profile_get_profile();
 
-    if (!profile) {
-        g_free(plugin);
-        return NULL;
+    if (profile && subscribe_to_service()) {
+        values = profile_get_values(profile);
     }
-    
-    /* subscribe to the profile change notification */
-    
-    profile_track_set_profile_cb(profile_name_change);
-
-    /* subscribe to the value change in profile notification */
-    
-    profile_track_set_active_cb(profile_value_change);
-
-    if (profile_tracker_init() < 0) {
+    else {
         g_free(plugin);
         plugin = NULL;
         goto end;
     }
-    
-    /* get the initial values */
-    
-    values = profile_get_values(profile);
 
     if (!profile_create_fact(profile, values)) {
         g_free(plugin);
@@ -252,7 +267,7 @@ void deinit_profile(profile_plugin *plugin)
     profile_tracker_quit();
     g_free(profile_plugin_p);
 
-    /* TODO: delete the previously created fact? */
+    (void) plugin;
 }
 
 
