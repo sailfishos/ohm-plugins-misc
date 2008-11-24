@@ -238,7 +238,7 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
                     if (!strcmp(value_id, "headphone")) {
                         /* printf("Fact has the headset capability\n");
                          */
-                        if (value_b && !state) {
+                        if (value_b) {
                                 printf("Headset inserted!\n");
 
                                 dres_accessory_request("headset", -1, 1);
@@ -246,7 +246,7 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
                                 found = TRUE;
                                 break;
                             }
-                        else if (!value_b && state) {
+                        else if (!value_b) {
                             printf("Headset removed!\n");
 
                             dres_accessory_request("headset", -1, 0);
