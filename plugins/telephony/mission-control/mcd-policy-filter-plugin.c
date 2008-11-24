@@ -171,6 +171,8 @@ policy_call_request(const char *id, int incoming, McdDispatcherContext *ctx)
 
     if (!dbus_pending_call_set_notify(pending, policy_call_reply, ctx, NULL))
         FAIL("failed to set pending DBUS call callback");
+
+    INFO("sent policy request for %s call", incoming ? "incoming" : "outgoing");
     
     return TRUE;
 
