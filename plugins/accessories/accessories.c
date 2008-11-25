@@ -14,6 +14,8 @@ static OhmFactStore  *fs;
 
 static gboolean headset_init(OhmPlugin *plugin);
 static gboolean headset_deinit(OhmPlugin *plugin);
+static gboolean bluetooth_init(OhmPlugin *plugin);
+static gboolean bluetooth_deinit(OhmPlugin *plugin);
 
 #if 0
 static void update_factstore_entry(char *, char *, int);
@@ -66,6 +68,8 @@ static void plugin_init(OhmPlugin *plugin)
 
     /* headset */
     headset_init(plugin);
+    /* bluetooth*/
+    bluetooth_init(plugin);
 }
 
 
@@ -73,6 +77,8 @@ static void plugin_exit(OhmPlugin *plugin)
 {
     /* headset */
     headset_deinit(plugin);
+    /* bluetooth*/
+    bluetooth_deinit(plugin);
 }
 
 
@@ -198,7 +204,6 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
 gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data)
 {
     GValue   *capabilities = NULL;
-    int       state = 0;
     gboolean  found = FALSE;
 
     (void)capability;
@@ -237,15 +242,15 @@ gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gbool
                 
                     if (!strcmp(value_id, "headphone")) {
                         /* printf("Fact has the headset capability\n");
-                         */
+                        */
                         if (value_b) {
-                                printf("Headset inserted!\n");
+                            printf("Headset inserted!\n");
 
-                                dres_accessory_request("headset", -1, 1);
+                            dres_accessory_request("headset", -1, 1);
 
-                                found = TRUE;
-                                break;
-                            }
+                            found = TRUE;
+                            break;
+                        }
                         else if (!value_b) {
                             printf("Headset removed!\n");
 
@@ -455,6 +460,100 @@ static int dres_accessory_request(char *name, int driver, int connected)
 #undef DRES_VARTYPE
 }
 
+/* bluetooth */
+
+static DBusHandlerResult a2dp_removed(DBusConnection *c, DBusMessage * msg, void *data)
+{
+    gchar *path = NULL;
+
+    if (!msg)
+        goto end;
+
+    if (dbus_message_get_args(msg,
+            NULL,
+            DBUS_TYPE_OBJECT_PATH,
+            &path,
+            DBUS_TYPE_INVALID)) {
+        
+        dres_accessory_request((char *) path, -1, 0);
+    }
+
+end:
+    
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    (void) data;
+    (void) c;
+}
+
+static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
+{
+    DBusMessageIter msg_i, var_i;
+
+    const gchar *path = dbus_message_get_path(msg); 
+    gchar *property_name;
+    gboolean val;
+
+    printf("bluetooth property changed!");
+    dbus_message_iter_init(msg, &msg_i);
+
+    if (!dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_STRING) {
+        goto end;
+    }
+
+    /* get the name of the property */
+    dbus_message_iter_get_basic(&msg_i, &property_name);
+
+    /* we are only interested in "Connected" properties */
+    if (strcmp(property_name, "Connected") == 0) {
+
+        dbus_message_iter_next(&msg_i);
+
+        if (!dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
+            goto end;
+        }
+
+        dbus_message_iter_recurse(&msg_i, &var_i);
+
+        if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_BOOLEAN) {
+            goto end;
+        }
+
+        dbus_message_iter_get_basic(&var_i, &val);
+
+        dres_accessory_request((char *) path, -1, (int) val);
+    }
+
+end:
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    (void) data;
+    (void) c;
+}
+
+static gboolean bluetooth_init(OhmPlugin *plugin)
+{
+    /* TODO:
+     * 1. query bluez and see if there are any bluetooth devices connected
+     * 2. get their properties
+     * 3. see if any of the a2dp or headset devices are in the
+     *    "Connected" state
+     * 4. for each such device, call the dres_accessory_request
+     **/
+
+    return TRUE;
+
+    (void)plugin;
+}
+
+static gboolean bluetooth_deinit(OhmPlugin *plugin)
+{
+    return TRUE;
+
+    (void)plugin;
+}
+
 
 OHM_PLUGIN_DESCRIPTION("accessories",
                        "0.0.1",
@@ -465,7 +564,9 @@ OHM_PLUGIN_DESCRIPTION("accessories",
                        NULL);
 
 OHM_PLUGIN_DBUS_SIGNALS(
-     {NULL, "com.nokia.policy", "info", "/com/nokia/policy/info", info, NULL}
+     {NULL, "com.nokia.policy", "info", "/com/nokia/policy/info", info, NULL},
+     {NULL, "org.bluez.AudioSink", "PropertyChanged", NULL, a2dp_property_changed, NULL},
+     {NULL, "org.bluez.Adapter", "DeviceRemoved", NULL, a2dp_removed, NULL}
 );
 
 /* 
