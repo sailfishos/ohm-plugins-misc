@@ -15,7 +15,7 @@
 #include "mcd-policy-filter-plugin.h"
 
 #define PLUGIN_NAME "policy-filter"
-#define MAX_CALLS   8
+#define MAX_CALLS   16
 #define ALLOW       TRUE
 #define REJECT      FALSE
 
@@ -284,7 +284,7 @@ policy_call_ended(const char *id)
  *                      *** mission control inteface ***                     *
  *****************************************************************************/
 
-
+#if 0
 static void
 set_online(gpointer key, gpointer value, gpointer data)
 {
@@ -302,8 +302,10 @@ set_online(gpointer key, gpointer value, gpointer data)
     
     (void)value;
 }
+#endif
 
 
+#if 0
 static void
 presence_force_all_online(McdDispatcher *mcd)
 {
@@ -356,7 +358,7 @@ presence_force_all_online(McdDispatcher *mcd)
     else         
         printf("*** oh no... no accounts to fiddle with !!!\n");
 }
-
+#endif
 
 static int
 call_add(const char *path)
@@ -444,11 +446,28 @@ call_reject(McdDispatcherContext *ctx)
 
 
 static void
-request_call(McdDispatcherContext *ctx, int incoming)
+request_call(McdDispatcherContext *ctx)
 {
     McdChannel *chnl = mcd_dispatcher_context_get_channel(ctx);
-    char       *type = incoming ? "incoming" : "outgoing";
+    GQuark      type = chnl ? mcd_channel_get_channel_type_quark(chnl) : 0;
     const char *id   = channel_path(chnl);
+    GValue      gout;
+    int         incoming;
+
+    if (type != TP_IFACE_QUARK_CHANNEL_TYPE_STREAMED_MEDIA) {
+        mcd_dispatcher_context_process(ctx, TRUE);
+        return;
+    }
+
+    memset(&gout, 0, sizeof(gout));
+    g_object_get_property(G_OBJECT(chnl), "outgoing", &gout);
+    
+    if (G_VALUE_TYPE(&gout) == G_TYPE_BOOLEAN)
+        incoming = g_value_get_boolean(&gout) ? FALSE : TRUE;
+    else
+        incoming = TRUE;
+
+    INFO("call direction is %s", incoming ? "incoming" : "outoing");
 
     if (id == NULL) {
         WARNING("failed to determine call path, letting it proceed");
@@ -457,13 +476,13 @@ request_call(McdDispatcherContext *ctx, int incoming)
     }
 
     if (call_add(id) != 0) {
-        WARNING("failed to register %s call, letting it proceed", type);
+        WARNING("failed to register call, letting it proceed");
         call_allow(ctx);
         return;
     }
 
     if (!policy_call_request(id, incoming, ctx)) {
-        WARNING("failed to request %s call, letting it proceed", type);
+        WARNING("failed to request call, letting it proceed");
         call_allow(ctx);
     }
 
@@ -477,30 +496,16 @@ request_call(McdDispatcherContext *ctx, int incoming)
  *****************************************************************************/
 
 static void
-incoming_handler(McdDispatcherContext *ctx)
+policy_handler(McdDispatcherContext *ctx)
 {
-    request_call(ctx, TRUE);
+    request_call(ctx);
 }
 
 
-static void
-outgoing_handler(McdDispatcherContext *ctx)
-{
-    request_call(ctx, FALSE);
-}
-
-
-
-static McdFilter filter_in[] = {              /* filters for incoming calls */
-    { (McdFilterFunc)incoming_handler, MCD_FILTER_PRIORITY_SYSTEM + 1, NULL },
+static McdFilter policy_filters[] = {
+    { (McdFilterFunc)policy_handler, MCD_FILTER_PRIORITY_SYSTEM + 1, NULL },
     { NULL, 0, NULL }
 };
-
-static McdFilter filter_out[] = {             /* filters for outgoing calls */
-    { (McdFilterFunc)outgoing_handler, MCD_FILTER_PRIORITY_SYSTEM + 1, NULL },
-    { NULL, 0, NULL }
-};
-
 
 
 
@@ -509,19 +514,17 @@ void
 mcd_plugin_init(McdPlugin *plugin)
 {
     McdDispatcher *mcd  = mcd_plugin_get_dispatcher(plugin);
-    GQuark         type = TP_IFACE_QUARK_CHANNEL_TYPE_STREAMED_MEDIA;
 
     INFO("initializing plugin %p", plugin);
     
     if (!dbus_init())
         ERROR("%s: plugin initialization failed", PLUGIN_NAME);
     
+#if 0 /* pathetic test hack */
     presence_force_all_online(mcd);
+#endif
     
-    mcd_dispatcher_register_filters(mcd, filter_in , type, MCD_FILTER_IN);
-    mcd_dispatcher_register_filters(mcd, filter_out, type, MCD_FILTER_OUT);
-
-    (void)presence_force_all_online;
+    mcd_dispatcher_add_filters(mcd, policy_filters);
 }
 
 
