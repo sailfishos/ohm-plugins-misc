@@ -460,13 +460,11 @@ request_call(McdDispatcherContext *ctx)
     }
 
     memset(&gout, 0, sizeof(gout));
+    g_value_init(&gout, G_TYPE_BOOLEAN);
     g_object_get_property(G_OBJECT(chnl), "outgoing", &gout);
     
-    if (G_VALUE_TYPE(&gout) == G_TYPE_BOOLEAN)
-        incoming = g_value_get_boolean(&gout) ? FALSE : TRUE;
-    else
-        incoming = TRUE;
-
+    incoming = g_value_get_boolean(&gout) ? FALSE : TRUE;
+    
     INFO("call direction is %s", incoming ? "incoming" : "outoing");
 
     if (id == NULL) {
