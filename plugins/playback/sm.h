@@ -20,6 +20,7 @@ typedef enum {
 } sm_evid_t;
 
 typedef enum {
+    stid_conditional = -1,
     stid_invalid = 0,
     stid_setup,
     stid_idle,

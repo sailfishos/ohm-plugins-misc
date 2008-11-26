@@ -464,7 +464,7 @@ static void verify_state_machine()
 {
     sm_stdef_t   *stdef;
     sm_transit_t *tr;
-    unsigned int  i;
+    int           i;
     int           j;
     int           verified;
 
@@ -477,7 +477,7 @@ static void verify_state_machine()
         }
     }
     
-    if (/* sm_def.stid < 0 || */ sm_def.stid >= stid_max) {
+    if (sm_def.stid < 0 ||  sm_def.stid >= stid_max) {
         OHM_ERROR("Initial state %d is out of range (0 - %d)",
                   sm_def.stid, stid_max-1);
         verified = FALSE;
@@ -623,6 +623,7 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
     char         name[256];
     sm_evdata_t *schedev;
     int          state_accepted;
+    char        *end;
 
     if (!strcmp(property->name, "Pid")) {
         cl->pid = strdup(property->value);
@@ -653,10 +654,17 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         client_get_property(cl, "Flags", read_property_cb);
     }
     else if (!strcmp(property->name, "Flags")) {
-        cl->flags = strdup(property->value);
-        client_update_factstore_entry(cl, "flags", cl->flags);
+        cl->flags = strtol(property->value, &end, 10);
+
+        if (end == property->value || *end) {
+            OHM_ERROR("playback: invalid property value for flag: '%s'\n",
+                      property->value);
+            cl->flags = 0;
+        }
+
+        client_update_factstore_entry(cl, "flags", &cl->flags);
         
-        OHM_DEBUG(DBG_TRANS, "playback flags are set to %s", cl->flags);
+        OHM_DEBUG(DBG_TRANS, "playback flags are set to 0x%04x", cl->flags);
     }
     else {
         OHM_ERROR("[%s] Do not know anything about property '%s'",

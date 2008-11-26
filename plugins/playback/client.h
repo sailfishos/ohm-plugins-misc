@@ -23,7 +23,7 @@ typedef struct client_s {
     char              *pid;       /* process ID of the client */
     char              *stream;    /* stream name */
     char              *group;     /* policy group */
-    char              *flags;     /* resource flags */
+    int                flags;     /* resource flags */
     char              *reqstate;  /* what the client requested */
     char              *state;     /* what the client reported via prop.notify*/
     char              *setstate;  /* what the policy requested */
@@ -52,7 +52,6 @@ typedef struct {
 
 
 
-
 static void       client_init(OhmPlugin *);
 
 static client_t  *client_create(char *, char *, char *, char *);
@@ -63,7 +62,7 @@ static void       client_purge(char *);
 
 static int        client_add_factstore_entry(char *, char *, char *, char *);
 static void       client_delete_factsore_entry(client_t *);
-static void       client_update_factstore_entry(client_t *, char *, char *);
+static void       client_update_factstore_entry(client_t *, char *, void *);
 
 static void       client_get_property(client_t *, char *, get_property_cb_t);
 static void       client_set_property(client_t *, char *, char *,

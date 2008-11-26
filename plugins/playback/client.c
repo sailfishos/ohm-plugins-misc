@@ -89,7 +89,6 @@ static void client_destroy(client_t *cl)
         free(cl->pid);
         free(cl->stream);
         free(cl->group);
-        free(cl->flags);
         free(cl->reqstate);
         free(cl->state);
         free(cl->setstate);
@@ -165,7 +164,7 @@ static int client_add_factstore_entry(char *dbusid, char *object,
         { fldtype_string , "pid"      , .value.string  = STRING(pid)   },
         { fldtype_string , "stream"   , .value.string  = STRING(stream)},
         { fldtype_string , "group"    , .value.string  = "othermedia"  },
-        { fldtype_string , "flags"    , .value.string  = ""            },
+        { fldtype_integer, "flags"    , .value.integer = 0             },
         { fldtype_string , "state"    , .value.string  = "none"        },
         { fldtype_string , "reqstate" , .value.string  = "none"        },
         { fldtype_string , "setstate" , .value.string  = "stop"        },
@@ -187,13 +186,25 @@ static void client_delete_factsore_entry(client_t *cl)
     fsif_delete_factstore_entry(FACTSTORE_PLAYBACK, selist);
 }
 
-static void client_update_factstore_entry(client_t *cl,char *field,char *value)
+static void client_update_factstore_entry(client_t *cl,char *field,void *value)
 {
-    fsif_field_t  selist[SELIST_DIM];
-    fsif_field_t  fldlist[] = {
-        { fldtype_string , field, .value.string = value },
-        { fldtype_invalid, NULL , .value.string = NULL  }
-    };
+    fsif_field_t   selist[SELIST_DIM];
+    fsif_field_t   fldlist[2];
+    
+    if (!strcmp(field, "flags")) {
+        fldlist[0].type = fldtype_integer;
+        fldlist[0].name = field;
+        fldlist[0].value.integer = *(int *)value; 
+    }
+    else {
+        fldlist[0].type = fldtype_string;
+        fldlist[0].name = field;
+        fldlist[0].value.string = (char *)value; 
+    }
+
+    fldlist[1].type = fldtype_invalid;
+    fldlist[1].name = NULL;
+    fldlist[1].value.string = NULL;
 
     if (!init_selist(cl, selist, SELIST_DIM))
         return;

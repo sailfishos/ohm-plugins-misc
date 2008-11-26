@@ -9,7 +9,8 @@ static void dresif_init(OhmPlugin *plugin)
 
 static int dresif_state_request(client_t *cl, char *state, int transid)
 {
-#define DRESIF_VARTYPE(t) (char *)(t)
+#define DRESIF_VARTYPE(t)  (char *)(t)
+#define DRESIF_VARVALUE(v) (char *)(v)
     char *vars[48];
     char  buf[64];
     int   i;
@@ -17,34 +18,34 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
 
     vars[i=0] = "playback_pid";
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = cl->pid ? cl->pid : "";
+    vars[++i] = DRESIF_VARVALUE(cl->pid ? cl->pid : "");
 
     vars[++i] = "playback_stream";
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = cl->stream ? cl->stream : "";
+    vars[++i] = DRESIF_VARVALUE(cl->stream ? cl->stream : "");
 
     vars[++i] = "playback_state";
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = state;
+    vars[++i] = DRESIF_VARVALUE(state);
 
     vars[++i] = "playback_group";
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = cl->group;
+    vars[++i] = DRESIF_VARVALUE(cl->group);
 
     vars[++i] = "playback_media";
-    vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = cl->flags;
+    vars[++i] = DRESIF_VARTYPE('i');
+    vars[++i] = DRESIF_VARVALUE(cl->flags);
 
     if (transid > 0) {
         snprintf(buf, sizeof(buf), "%d", transid);
 
         vars[++i] = "completion_callback";
         vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = "playback.completion_cb";
+        vars[++i] = DRESIF_VARVALUE("playback.completion_cb");
 
         vars[++i] = "transaction_id";
         vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = buf;
+        vars[++i] = DRESIF_VARVALUE(buf);
     }
 
     vars[++i] = NULL;
@@ -54,6 +55,7 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
 
     return err ? FALSE : TRUE;
 
+#undef DRESIF_VARVALUE
 #undef DRESIF_VARTYPE
 }
 
