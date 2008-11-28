@@ -1227,6 +1227,7 @@ transaction_ack_ep(Transaction *self, EnforcementPoint *ep, gboolean ack)
         self->acked = g_slist_prepend(self->acked, ep);
     }
     else {
+        OHM_DEBUG(DBG_SIGNALING, "NACK received from an enforcement point!");
         self->nacked = g_slist_prepend(self->nacked, ep);
     }
 	

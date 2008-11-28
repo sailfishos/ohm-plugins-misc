@@ -526,7 +526,7 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
 
         /* printf("Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
                 path, (int) val); */
-        dres_accessory_request("bta2dp", -1, (int) val);
+        dres_accessory_request("bta2dp", -1, val ? 1 : 0);
     }
 
 end:
