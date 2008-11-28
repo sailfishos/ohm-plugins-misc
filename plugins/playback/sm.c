@@ -1157,7 +1157,7 @@ static char *class_to_group(char *klass)
         {"Media"     , "player"    },
         {"Background", "background"},
         {"Ringtone"  , "ringtone"  },
-        {"Voiceui"   , "voiceui"   },
+        {"VoiceUI"   , "voiceui"   },
         {"Camera"    , "camera"    },
         {"Game"      , "game"      },
         {"Alarm"     , "alarm"     },
