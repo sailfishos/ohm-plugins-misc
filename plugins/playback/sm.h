@@ -13,6 +13,7 @@ typedef enum {
     evid_playback_complete,     /* audio policies are successfully set */
     evid_playback_failed,       /* audio policy setting failed */
     evid_setstate_changed,      /* internal request to change player's state */
+    evid_playhint_changed,      /* internal request to change allowed states */
     evid_setprop_succeeded,     /* outgoing set property method succeeded */
     evid_setprop_failed,        /* outgoing set property method failed */
     evid_client_gone,           /* D-Bus peer (i.e. the client) is gone */
@@ -27,6 +28,7 @@ typedef enum {
     stid_pbreq,
     stid_acked_pbreq,
     stid_setstreq,
+    stid_sethintreq,
     stid_waitack,
     stid_max
 } sm_stid_t;
