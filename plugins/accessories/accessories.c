@@ -475,7 +475,7 @@ static DBusHandlerResult a2dp_removed(DBusConnection *c, DBusMessage * msg, void
             &path,
             DBUS_TYPE_INVALID)) {
         
-        dres_accessory_request((char *) path, -1, 0);
+        dres_accessory_request("bta2dp", -1, 0);
     }
 
 end:
@@ -494,10 +494,10 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
     gchar *property_name;
     gboolean val;
 
-    printf("bluetooth property changed!");
+    /* printf("bluetooth property changed!\n\n"); */
     dbus_message_iter_init(msg, &msg_i);
 
-    if (!dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_STRING) {
+    if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_STRING) {
         goto end;
     }
 
@@ -507,21 +507,26 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
     /* we are only interested in "Connected" properties */
     if (strcmp(property_name, "Connected") == 0) {
 
+        /* printf("Connected signal!\n"); */
         dbus_message_iter_next(&msg_i);
 
-        if (!dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
+        if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
+            /* printf("The property value is not variant\n"); */
             goto end;
         }
 
         dbus_message_iter_recurse(&msg_i, &var_i);
 
         if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_BOOLEAN) {
+            /* printf("The variant value is not boolean\n"); */
             goto end;
         }
 
         dbus_message_iter_get_basic(&var_i, &val);
 
-        dres_accessory_request((char *) path, -1, (int) val);
+        /* printf("Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
+                path, (int) val); */
+        dres_accessory_request("bta2dp", -1, val ? 1 : 0);
     }
 
 end:
