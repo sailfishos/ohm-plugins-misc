@@ -375,6 +375,11 @@ map_to_dbus_type(GValue *gval, gchar *sig, void **value)
     int retval;
     gint i, *pi;
     guint u, *pu;
+    gulong ul;
+
+    if (!G_IS_VALUE(gval)) {
+        return DBUS_TYPE_INVALID;
+    }
 
     switch(G_VALUE_TYPE(gval)) {
         case G_TYPE_STRING:
@@ -398,7 +403,25 @@ map_to_dbus_type(GValue *gval, gchar *sig, void **value)
             *value = pu;
             retval = DBUS_TYPE_UINT32;
             break;
+#if 0
+        case G_TYPE_ULONG:
+            *sig = 'u';
+            u = g_value_get_ulong(gval);
+            pu = g_malloc(sizeof(guint));
+            *pu = u;
+            *value = pu;
+            retval = DBUS_TYPE_UINT32;
+            break;
+#endif
+        case G_TYPE_ULONG:
+            *sig = 'u';
+            ul = g_value_get_ulong(gval);
+            *value = g_malloc(sizeof(gulong));
+            memcpy(*value, &ul, sizeof(gulong));
+            retval = DBUS_TYPE_UINT32;
+            break;
         default:
+            /* printf("ERROR ALARM ERROR: G_VALUE_TYPE: '%i'\n", G_VALUE_TYPE(gval)); */
             *sig = '?';
             retval = DBUS_TYPE_INVALID;
             break;
@@ -420,7 +443,7 @@ send_ipc_signal(gpointer data)
     char           *interface = DBUS_INTERFACE_POLICY;
 
     DBusMessage    *dbus_signal = NULL;
-    
+
     /* this is ridiculous */
     DBusMessageIter message_iter,
                     command_array_iter,
@@ -440,40 +463,40 @@ send_ipc_signal(gpointer data)
         goto fail;
     }
 
-/**
- * This is really complicated and nasty. Idea is that the message is
- * supposed to look something like this:
- *
- * uint32 0
- * array [
- *    dict entry(
- *       string "com.nokia.policy.audio_route"
- *       array [
- *          array [
- *             struct {
- *                string "type"
- *                variant                      string "source"
- *             }
- *             struct {
- *                string "device"
- *                variant                      string "headset"
- *             }
- *          ]
- *          array [
- *             struct {
- *                string "type"
- *                variant                      string "sink"
- *             }
- *             struct {
- *                string "device"
- *                variant                      string "headset"
- *             }
- *          ]
- *       ]
- *    )
- * ]
- *
- */
+    /**
+     * This is really complicated and nasty. Idea is that the message is
+     * supposed to look something like this:
+     *
+     * uint32 0
+     * array [
+     *    dict entry(
+     *       string "com.nokia.policy.audio_route"
+     *       array [
+     *          array [
+     *             struct {
+     *                string "type"
+     *                variant                      string "source"
+     *             }
+     *             struct {
+     *                string "device"
+     *                variant                      string "headset"
+     *             }
+     *          ]
+     *          array [
+     *             struct {
+     *                string "type"
+     *                variant                      string "sink"
+     *             }
+     *             struct {
+     *                string "device"
+     *                variant                      string "headset"
+     *             }
+     *          ]
+     *       ]
+     *    )
+     * ]
+     *
+     */
 
     OHM_DEBUG(DBG_SIGNALING, "sending signal with txid '%u'\n", txid);
 
@@ -495,7 +518,7 @@ send_ipc_signal(gpointer data)
     for (i = facts; i != NULL; i = g_slist_next(i)) {
         gchar *f = i->data;
         GSList *ohm_facts = ohm_fact_store_get_facts_by_name(fs, f);
-        
+
         /* printf("key: %s, facts: %s\n", f, ohm_facts ? "yes" : "ERROR: NO FACTS!"); */
 
         if (!ohm_facts)
@@ -513,7 +536,7 @@ send_ipc_signal(gpointer data)
             printf("error appending OhmFact key\n");
             goto fail;
         }
-        
+
         /* open fact_iter */
         if (!dbus_message_iter_open_container(&command_array_entry_iter, DBUS_TYPE_ARRAY,
                     "a(sv)", &fact_iter)) {
@@ -527,20 +550,25 @@ send_ipc_signal(gpointer data)
             GSList *fields = NULL;
 
             /* printf("starting to process OhmFact '%p'\n", of); */
-        
+
             /* open fact_struct_iter */
             if (!dbus_message_iter_open_container(&fact_iter, DBUS_TYPE_ARRAY,
                         "(sv)", &fact_struct_iter)) {
                 printf("error opening container\n");
                 goto fail;
             }
-            
+
+#if 0
+            printf("%s: about to emit fact %s\n", __FUNCTION__,
+                    ohm_structure_to_string(OHM_STRUCTURE(of)));
+#endif
             fields = ohm_fact_get_fields(of);
 
             for (k = fields; k != NULL; k = g_slist_next(k)) {
 
                 GQuark qk = (GQuark)GPOINTER_TO_INT(k->data);
                 const gchar *field_name = g_quark_to_string(qk);
+                /* printf("%s: field name: %s\n", __FUNCTION__, field_name ?: "<NULL>"); */
                 gchar sig_c = '?';
                 gchar sig[2] = "?"; 
                 void *value;
@@ -548,7 +576,7 @@ send_ipc_signal(gpointer data)
                 int dbus_type = map_to_dbus_type(gval, &sig_c, &value);
 
                 sig[0] = sig_c;
-                
+
                 /* printf("Field name: %s\n", field_name); */
 
                 if (dbus_type == DBUS_TYPE_INVALID) {
@@ -575,9 +603,17 @@ send_ipc_signal(gpointer data)
                     goto fail;
                 }
 
-                if (!dbus_message_iter_append_basic(&variant_iter, dbus_type, &value)) {
-                    printf("error appending OhmFact value\n");
-                    goto fail;
+                if (dbus_type == DBUS_TYPE_STRING) {
+                    if (!dbus_message_iter_append_basic(&variant_iter, dbus_type, &value)) {
+                        printf("error appending OhmFact value\n");
+                        goto fail;
+                    }
+                }
+                else {
+                    if (!dbus_message_iter_append_basic(&variant_iter, dbus_type, value)) {
+                        printf("error appending OhmFact value\n");
+                        goto fail;
+                    }
                 }
 
                 g_free(value);
@@ -599,7 +635,7 @@ send_ipc_signal(gpointer data)
 
     /* close command_array_iter */
     dbus_message_iter_close_container(&message_iter, &command_array_iter);
-    
+
     if (!dbus_connection_send(connection, dbus_signal, NULL))
         goto fail;
 
@@ -771,7 +807,7 @@ internal_ep_receive_ack(EnforcementPoint * self, Transaction *transaction, guint
     if (transaction_done(transaction)) {
         transaction_complete(transaction);
     }
-    
+
     return TRUE;
 }
 
