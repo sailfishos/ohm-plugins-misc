@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.2) unstable; urgency=low
+
+  * Converted mission-control policy/telephony filter to new API.
+  * BT support + ohter enhancements in accessories plugin.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 27 Nov 2008 15:13:24 +0200
+
 ohm-plugins-misc (0.6.1) unstable; urgency=low
 
   * Cleanup in the profile plugin.
