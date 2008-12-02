@@ -373,9 +373,9 @@ map_to_dbus_type(GValue *gval, gchar *sig, void **value)
 {
 
     int retval;
-    gint i, *pi;
-    guint u, *pu;
-    gulong ul;
+    gulong ul, *pul;
+    glong l, *pl;
+    gdouble d, *pd;
 
     if (!G_IS_VALUE(gval)) {
         return DBUS_TYPE_INVALID;
@@ -389,37 +389,50 @@ map_to_dbus_type(GValue *gval, gchar *sig, void **value)
             break;
         case G_TYPE_INT:
             *sig = 'i';
-            i = g_value_get_int(gval);
-            pi = g_malloc(sizeof(gint));
-            *pi = i;
-            *value = pi;
+            l = g_value_get_int(gval);
+            pl = g_malloc(sizeof(glong));
+            *pl = l;
+            *value = pl;
             retval = DBUS_TYPE_INT32;
             break;
         case G_TYPE_UINT:
             *sig = 'u';
-            u = g_value_get_uint(gval);
-            pu = g_malloc(sizeof(guint));
-            *pu = u;
-            *value = pu;
+            ul = g_value_get_uint(gval);
+            pul = g_malloc(sizeof(gulong));
+            *pul = ul;
+            *value = pul;
             retval = DBUS_TYPE_UINT32;
             break;
-#if 0
-        case G_TYPE_ULONG:
-            *sig = 'u';
-            u = g_value_get_ulong(gval);
-            pu = g_malloc(sizeof(guint));
-            *pu = u;
-            *value = pu;
-            retval = DBUS_TYPE_UINT32;
+        case G_TYPE_LONG:
+            *sig = 'i';
+            l = g_value_get_long(gval);
+            pl = g_malloc(sizeof(glong));
+            *pl = l;
+            *value = pl;
+            retval = DBUS_TYPE_INT32;
             break;
-#endif
         case G_TYPE_ULONG:
             *sig = 'u';
             ul = g_value_get_ulong(gval);
-            *value = g_malloc(sizeof(gulong));
-            memcpy(*value, &ul, sizeof(gulong));
+            pul = g_malloc(sizeof(gulong));
+            *pul = ul;
+            *value = pul;
             retval = DBUS_TYPE_UINT32;
             break;
+        case G_TYPE_FLOAT:
+            *sig = 'd';
+            d = g_value_get_float(gval);
+            pd = g_malloc(sizeof(gfloat));
+            *pd = d;
+            *value = pd;
+            retval = DBUS_TYPE_DOUBLE;
+        case G_TYPE_DOUBLE:
+            *sig = 'd';
+            d = g_value_get_double(gval);
+            pd = g_malloc(sizeof(gfloat));
+            *pd = d;
+            *value = pd;
+            retval = DBUS_TYPE_DOUBLE;
         default:
             /* printf("ERROR ALARM ERROR: G_VALUE_TYPE: '%i'\n", G_VALUE_TYPE(gval)); */
             *sig = '?';
