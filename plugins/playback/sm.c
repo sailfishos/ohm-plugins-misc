@@ -986,11 +986,20 @@ static int abort_pbreq_deq(sm_evdata_t *evdata, void *usrdata)
     client_t *cl  = (client_t *)usrdata;
     sm_t     *sm  = cl->sm;
     pbreq_t  *req = evdata->pbreply.req;
+    char     *state;
 
     if (req != NULL) {
         switch (req->type) {
 
         case pbreq_state:
+            /* We might loose state requests issued by the policy engine */
+            state = client_get_state(cl, client_state, NULL,0);
+            client_save_state(cl, client_setstate, state);
+            OHM_DEBUG(DBG_QUE, "state request roll-back: "
+                      "setstate changed to '%s'", state);
+            client_update_factstore_entry(cl, "setstate", state);
+
+
             dbusif_reply_with_error(req->msg, DBUS_MAEMO_ERROR_DENIED,err);
             break;
 
