@@ -422,14 +422,14 @@ map_to_dbus_type(GValue *gval, gchar *sig, void **value)
         case G_TYPE_FLOAT:
             *sig = 'd';
             d = g_value_get_float(gval);
-            pd = g_malloc(sizeof(gfloat));
+            pd = g_malloc(sizeof(gdouble));
             *pd = d;
             *value = pd;
             retval = DBUS_TYPE_DOUBLE;
         case G_TYPE_DOUBLE:
             *sig = 'd';
             d = g_value_get_double(gval);
-            pd = g_malloc(sizeof(gfloat));
+            pd = g_malloc(sizeof(gdouble));
             *pd = d;
             *value = pd;
             retval = DBUS_TYPE_DOUBLE;
