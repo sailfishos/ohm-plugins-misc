@@ -288,6 +288,9 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
     DBusMessage     *msg;
     DBusPendingCall *pend;
     set_property_cb_data_t *ud;
+    char            *states[2];
+    char           **v_ARRAY;
+    int              i;
     int              success;
 
     if ((ud = malloc(sizeof(*ud))) == NULL) {
@@ -311,11 +314,28 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
         return;
     }
 
-    success = dbus_message_append_args(msg,
-                                       DBUS_TYPE_STRING, &pbif,
-                                       DBUS_TYPE_STRING, &prname,
-                                       DBUS_TYPE_STRING, &prvalue,
-                                       DBUS_TYPE_INVALID);
+    if (!strcmp(prname, "AllowedState")) {
+        states[i=0] = "Stop";
+
+        if (strcmp(prvalue, states[i]))
+            states[++i] = prvalue;
+
+        v_ARRAY = states;
+
+        success = dbus_message_append_args(msg,
+                                           DBUS_TYPE_STRING, &pbif,
+                                           DBUS_TYPE_STRING, &prname,
+                                           DBUS_TYPE_ARRAY,
+                                           DBUS_TYPE_STRING,  &v_ARRAY, i+1,
+                                           DBUS_TYPE_INVALID);
+    }
+    else {
+        success = dbus_message_append_args(msg,
+                                           DBUS_TYPE_STRING, &pbif,
+                                           DBUS_TYPE_STRING, &prname,
+                                           DBUS_TYPE_STRING, &prvalue,
+                                           DBUS_TYPE_INVALID);
+    }
     if (!success) {
         OHM_ERROR("[%s] Can't setup D-Bus message to set properties",
                   __FUNCTION__);

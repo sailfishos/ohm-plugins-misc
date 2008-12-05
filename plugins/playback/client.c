@@ -92,10 +92,15 @@ static void client_destroy(client_t *cl)
         free(cl->reqstate);
         free(cl->state);
         free(cl->setstate);
+        free(cl->playhint);
         free(cl->rqsetst.value);
+        free(cl->rqplayhint.value);
         
         if (cl->rqsetst.evsrc != 0)
             g_source_remove(cl->rqsetst.evsrc);
+
+        if (cl->rqplayhint.evsrc != 0)
+            g_source_remove(cl->rqplayhint.evsrc);
 
         next = cl->next;
         prev = cl->prev;
@@ -168,6 +173,7 @@ static int client_add_factstore_entry(char *dbusid, char *object,
         { fldtype_string , "state"    , .value.string  = "none"        },
         { fldtype_string , "reqstate" , .value.string  = "none"        },
         { fldtype_string , "setstate" , .value.string  = "stop"        },
+        { fldtype_string , "playhint" , .value.string  = "none"        },
         { fldtype_invalid, NULL       , .value.string  = NULL          }
     };
 
@@ -270,6 +276,57 @@ static void client_save_state(client_t *cl, client_stype_t type, char *value)
         case client_setstate:   store = &cl->setstate;       break;
         case client_rqsetst:    store = &cl->rqsetst.value;  break;
         default:                                             return;
+        }
+
+        if (*store != NULL)
+            free((void *)*store);
+
+        *store = value ? strdup(value) : NULL;
+    }
+}
+
+static char *client_get_playback_hint(client_t *cl, client_htype_t type,
+                                      char *buf, int len)
+{
+#define EMPTY_HINT ""
+
+    char *hint;
+
+    if (cl == NULL)
+        hint = EMPTY_HINT;
+    else {
+        switch (type) {
+        case client_playhint:    hint = cl->playhint;          break;
+        case client_rqplayhint:  hint = cl->rqplayhint.value;  break;
+        default:                 hint = EMPTY_HINT;            break;
+        }
+
+        if (hint == NULL)
+            hint = EMPTY_HINT;
+    }
+
+    if (buf != NULL && len > 1) {
+        strncpy(buf, hint, len);
+        buf[len-1] = '\0';
+        hint = buf;
+    }
+
+    return hint;
+
+#undef EMPTY_HINT
+}
+
+static void client_save_playback_hint(client_t *cl, client_htype_t type,
+                                      char *value)
+{
+    char **store;
+
+    if (cl != NULL) {
+
+        switch (type) {
+        case client_playhint:    store = &cl->playhint;          break;
+        case client_rqplayhint:  store = &cl->rqplayhint.value;  break;
+        default:                                                 return;
         }
 
         if (*store != NULL)

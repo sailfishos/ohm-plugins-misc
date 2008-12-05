@@ -45,6 +45,7 @@ sm_evdef_t  evdef[evid_max] = {
     { evid_playback_complete ,  "playback complete"      },
     { evid_playback_failed   ,  "playback failed"        },
     { evid_setstate_changed  ,  "setstate changed"       },
+    { evid_playhint_changed  ,  "playhint changed"       },
     { evid_setprop_succeeded ,  "set property succeeded" },
     { evid_setprop_failed    ,  "set property failed"    },
     { evid_client_gone       ,  "client gone"            },
@@ -60,6 +61,8 @@ static int abort_pbreq_deq(sm_evdata_t *, void *);
 static int check_queue(sm_evdata_t *, void *);
 static int update_state(sm_evdata_t *, void *);
 static int update_state_deq(sm_evdata_t *, void *);
+static int update_playhint(sm_evdata_t *, void *);
+static int update_playhint_deq(sm_evdata_t *, void *);
 static int fake_stop_pbreq(sm_evdata_t *, void *);
 
 
@@ -86,6 +89,7 @@ sm_def_t  sm_def = {
          {evid_playback_complete , GOTO                  , STATE(invalid)    },
          {evid_playback_failed   , GOTO                  , STATE(invalid)    },
          {evid_setstate_changed  , GOTO                  , STATE(invalid)    },
+         {evid_playhint_changed  , GOTO                  , STATE(invalid)    },
          {evid_setprop_succeeded , GOTO                  , STATE(invalid)    },
          {evid_setprop_failed    , GOTO                  , STATE(invalid)    },
          {evid_client_gone       , GOTO                  , STATE(invalid)    }}
@@ -104,6 +108,7 @@ sm_def_t  sm_def = {
          {evid_playback_complete , GOTO                  , STATE(setup)      },
          {evid_playback_failed   , GOTO                  , STATE(setup)      },
          {evid_setstate_changed  , GOTO                  , STATE(setup)      },
+         {evid_playhint_changed  , GOTO                  , STATE(setup)      },
          {evid_setprop_succeeded , GOTO                  , STATE(setup)      },
          {evid_setprop_failed    , GOTO                  , STATE(setup)      },
          {evid_client_gone       , GOTO                  , STATE(invalid)    }}
@@ -122,6 +127,7 @@ sm_def_t  sm_def = {
          {evid_playback_complete , GOTO                  , STATE(idle)       },
          {evid_playback_failed   , GOTO                  , STATE(idle)       },
          {evid_setstate_changed  , DO(write_property)    , STATE(setstreq)   },
+         {evid_playhint_changed  , DO(write_property)    , STATE(sethintreq) },
          {evid_setprop_succeeded , GOTO                  , STATE(idle)       },
          {evid_setprop_failed    , GOTO                  , STATE(idle)       },
          {evid_client_gone       , DO(fake_stop_pbreq)   , STATE(invalid)    }}
@@ -140,6 +146,7 @@ sm_def_t  sm_def = {
          {evid_playback_complete , DO(reply_pbreq)       , STATE(waitack)    },
          {evid_playback_failed   , DO(abort_pbreq_deq)   , STATE(idle)       },
          {evid_setstate_changed  , GOTO                  , STATE(pbreq)      },
+         {evid_playhint_changed  , GOTO                  , STATE(pbreq)      },
          {evid_setprop_succeeded , GOTO                  , STATE(pbreq)      },
          {evid_setprop_failed    , GOTO                  , STATE(pbreq)      },
          {evid_client_gone       , DO(fake_stop_pbreq)   , STATE(invalid)    }}
@@ -158,6 +165,7 @@ sm_def_t  sm_def = {
          {evid_playback_complete , DO(reply_pbreq_deq)   , STATE(idle)       },
          {evid_playback_failed   , DO(abort_pbreq_deq)   , STATE(idle)       },
          {evid_setstate_changed  , GOTO                  , STATE(acked_pbreq)},
+         {evid_playhint_changed  , GOTO                  , STATE(acked_pbreq)},
          {evid_setprop_succeeded , GOTO                  , STATE(acked_pbreq)},
          {evid_setprop_failed    , GOTO                  , STATE(acked_pbreq)},
          {evid_client_gone       , DO(fake_stop_pbreq)   , STATE(invalid)    }}
@@ -176,7 +184,27 @@ sm_def_t  sm_def = {
          {evid_playback_complete , GOTO                  , STATE(setstreq)   },
          {evid_playback_failed   , GOTO                  , STATE(setstreq)   },
          {evid_setstate_changed  , GOTO                  , STATE(setstreq)   },
+         {evid_playhint_changed  , GOTO                  , STATE(setstreq)   },
          {evid_setprop_succeeded , GOTO                  , STATE(waitack)    },
+         {evid_setprop_failed    , DO(check_queue)       , STATE(idle)       },
+         {evid_client_gone       , DO(fake_stop_pbreq)   , STATE(invalid)    }}
+        },
+
+        {stid_sethintreq, "set hint request", {
+         /* event                 transition              new state         */ 
+         /*-----------------------------------------------------------------*/
+         {evid_invalid           , GOTO                  , STATE(sethintreq) },
+         {evid_hello_signal      , GOTO                  , STATE(sethintreq) },
+         {evid_state_signal      , GOTO                  , STATE(sethintreq) },
+         {evid_property_received , GOTO                  , STATE(sethintreq) },
+         {evid_setup_complete    , GOTO                  , STATE(sethintreq) },
+         {evid_setup_state_denied, GOTO                  , STATE(sethintreq) },
+         {evid_playback_request  , GOTO                  , STATE(sethintreq) },
+         {evid_playback_complete , GOTO                  , STATE(sethintreq) },
+         {evid_playback_failed   , GOTO                  , STATE(sethintreq) },
+         {evid_setstate_changed  , GOTO                  , STATE(sethintreq) },
+         {evid_playhint_changed  , GOTO                  , STATE(sethintreq) },
+         {evid_setprop_succeeded , DO(update_playhint_deq),STATE(idle)       },
          {evid_setprop_failed    , DO(check_queue)       , STATE(idle)       },
          {evid_client_gone       , DO(fake_stop_pbreq)   , STATE(invalid)    }}
         },
@@ -194,6 +222,7 @@ sm_def_t  sm_def = {
          {evid_playback_complete , GOTO                  , STATE(acked_pbreq)},
          {evid_playback_failed   , GOTO                  , STATE(acked_pbreq)},
          {evid_setstate_changed  , GOTO                  , STATE(waitack)    },
+         {evid_playhint_changed  , GOTO                  , STATE(waitack)    },
          {evid_setprop_succeeded , GOTO                  , STATE(waitack)    },
          {evid_setprop_failed    , GOTO                  , STATE(waitack)    },
          {evid_client_gone       , DO(fake_stop_pbreq)   , STATE(invalid)    }}
@@ -212,13 +241,16 @@ sm_def_t  sm_def = {
 static void  verify_state_machine(void);
 static int   fire_scheduled_event(void *);
 static int   fire_setstate_changed_event(void *);
+static int   fire_playhint_changed_event(void *);
 static void  fire_hello_signal_event(char *, char *);
 static void  fire_state_signal_event(char *, char *, char *, char *);
 static void  read_property_cb(char *, char *, char *, char *);
 static void  write_property_cb(char *,char *, char *,char *, int,const char *);
 static void  setstate_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+static void  playhint_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void  privacy_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void  mute_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+static client_t *find_client_by_fact(fsif_entry_t *);
 static char *strncpylower(char *, const char *, int);
 static char *class_to_group(char *);
 static void  schedule_deferred_request(client_t *);
@@ -239,6 +271,7 @@ static void sm_init(OhmPlugin *plugin)
     dbusif_add_property_notification("State", fire_state_signal_event);
 
     fsif_add_watch(FACTSTORE_PLAYBACK, NULL  , "setstate", setstate_cb, NULL);
+    fsif_add_watch(FACTSTORE_PLAYBACK, NULL  , "playhint", playhint_cb, NULL);
     fsif_add_watch(FACTSTORE_PRIVACY , NULL  , "value"   , privacy_cb , NULL);
     fsif_add_watch(FACTSTORE_MUTE    , selist, "mute"    , mute_cb    , NULL);
 }
@@ -447,6 +480,7 @@ static void sm_free_evdata(sm_evdata_t *evdata)
             break;
 
         case evid_setstate_changed:
+        case evid_playhint_changed:
             FREE(evdata->watch.value);
             break;
 
@@ -556,11 +590,53 @@ static int fire_setstate_changed_event(void *data)
     
     if (*rqsetst == '\0')
         OHM_ERROR("something went twrong: rqsetst.value == NULL");
-    else if (!strcmp(state, rqsetst))
+    else if (!strcmp(state, rqsetst)) {
         OHM_DEBUG(DBG_QUE, "[%s] not firing identical event", sm->name);
+
+        free(cl->rqsetst.value);
+        cl->rqsetst.value = NULL;
+
+        schedule_deferred_request(cl);
+    }
     else {
         evdata.watch.evid  = evid_setstate_changed;
         evdata.watch.value = rqsetst;
+
+        OHM_DEBUG(DBG_SM, "[%s] fire event (%s)", sm->name,evdata.watch.value);
+
+        sm_process_event(sm, &evdata);
+    }
+
+    return FALSE;               /* run only once */
+}
+
+
+static int fire_playhint_changed_event(void *data)
+{
+    client_t    *cl  = (client_t *)data;
+    sm_t        *sm  = cl->sm;
+    char        *playhint;
+    char        *rqplayhint;
+    sm_evdata_t  evdata;
+
+    playhint   = client_get_playback_hint(cl, client_playhint,   NULL,0);
+    rqplayhint = client_get_playback_hint(cl, client_rqplayhint, NULL,0); 
+
+    cl->rqplayhint.evsrc = 0;
+    
+    if (*rqplayhint == '\0')
+        OHM_ERROR("something went twrong: rqplayhint.value == NULL");
+    else if (!strcmp(playhint, rqplayhint)) {
+        OHM_DEBUG(DBG_QUE, "[%s] not firing identical event", sm->name);
+
+        free(cl->rqplayhint.value);
+        cl->rqplayhint.value = NULL;
+
+        schedule_deferred_request(cl);
+    }
+    else {
+        evdata.watch.evid  = evid_playhint_changed;
+        evdata.watch.value = rqplayhint;
 
         OHM_DEBUG(DBG_SM, "[%s] fire event (%s)", sm->name,evdata.watch.value);
 
@@ -713,6 +789,7 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
 {
     client_t  *cl = (client_t *)usrdata;
     char      *setstate;
+    char      *playhint;
     char       prvalue[64];
 
     switch (evdata->watch.evid) {
@@ -721,7 +798,7 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
     case evid_setup_state_denied:
         setstate = evdata->watch.value;
 
-        if (!strcmp(cl->state, setstate)) {
+        if (cl->state && !strcmp(cl->state, setstate)) {
             OHM_DEBUG(DBG_TRANS, "do not write 'state' property: client is "
                       "already in '%s' state", setstate);
         }
@@ -736,6 +813,25 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
             client_set_property(cl, "State", prvalue, write_property_cb);
 
             client_save_state(cl, client_rqsetst, NULL);
+        }
+        break;
+
+    case evid_playhint_changed:
+        playhint = evdata->watch.value;
+
+        if (cl->playhint && !strcmp(cl->playhint, playhint)) {
+            OHM_DEBUG(DBG_TRANS, "do not write 'playhint' property: client is "
+                      "already hinted");
+        }
+        else {
+            /* capitalize the property value */
+            strncpy(prvalue, playhint, sizeof(prvalue));
+            prvalue[sizeof(prvalue)-1] = '\0';
+            prvalue[0] = toupper(prvalue[0]);
+            
+            client_set_property(cl, "AllowedState",prvalue, write_property_cb);
+
+            client_save_playback_hint(cl, client_rqplayhint, NULL);
         }
         break;
         
@@ -890,11 +986,20 @@ static int abort_pbreq_deq(sm_evdata_t *evdata, void *usrdata)
     client_t *cl  = (client_t *)usrdata;
     sm_t     *sm  = cl->sm;
     pbreq_t  *req = evdata->pbreply.req;
+    char     *state;
 
     if (req != NULL) {
         switch (req->type) {
 
         case pbreq_state:
+            /* We might loose state requests issued by the policy engine */
+            state = client_get_state(cl, client_state, NULL,0);
+            client_save_state(cl, client_setstate, state);
+            OHM_DEBUG(DBG_QUE, "state request roll-back: "
+                      "setstate changed to '%s'", state);
+            client_update_factstore_entry(cl, "setstate", state);
+
+
             dbusif_reply_with_error(req->msg, DBUS_MAEMO_ERROR_DENIED,err);
             break;
 
@@ -943,6 +1048,31 @@ static int update_state_deq(sm_evdata_t *evdata, void *usrdata)
     client_t *cl = (client_t *)usrdata;
 
     update_state(evdata, usrdata);
+
+    schedule_deferred_request(cl);
+
+    return TRUE;
+}
+
+static int update_playhint(sm_evdata_t *evdata, void *usrdata)
+{
+    sm_evdata_property_t *property = &evdata->property;
+    client_t             *cl       = (client_t *)usrdata;
+    char                  playhint[64];
+
+    strncpylower(playhint, property->value, sizeof(playhint));
+    client_save_playback_hint(cl, client_playhint, playhint);
+
+    OHM_DEBUG(DBG_TRANS, "playback hint is set to %s", playhint);
+
+    return TRUE;
+}
+
+static int update_playhint_deq(sm_evdata_t *evdata, void *usrdata)
+{
+    client_t *cl = (client_t *)usrdata;
+
+    update_playhint(evdata, usrdata);
 
     schedule_deferred_request(cl);
 
@@ -1020,8 +1150,6 @@ static void setstate_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
 
     client_t *cl;
     char     *setstate;
-    char     *pid;
-    char     *stream;
 
     if (fld->type == fldtype_string && fld->value.string)
         setstate = fld->value.string;
@@ -1030,20 +1158,8 @@ static void setstate_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
         return;
     }
 
-    fsif_get_field_by_entry(entry, fldtype_string, "pid"   , &pid   );
-    fsif_get_field_by_entry(entry, fldtype_string, "stream", &stream);
-
-    if (pid == NULL || *pid == '\0') {
-        OHM_ERROR("[%s] Can't fire event: no pid", __FUNCTION__);
-        return;
-    }
-
-    if (stream != NULL && *stream == '\0')
-        stream = NULL;
-
-    if ((cl = client_find_by_stream(pid, stream)) == NULL) {
-        OHM_ERROR("[%s] Can't find client for pid %s%s%s", __FUNCTION__,
-                  pid, stream?" stream ":"", stream?stream:"");
+    if ((cl = find_client_by_fact(entry)) == NULL) {
+        OHM_ERROR("[%s] Can't fire event: no client", __FUNCTION__);
         return;
     }
 
@@ -1054,11 +1170,47 @@ static void setstate_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
 
     OHM_DEBUG(DBG_QUE, "rqsetst is set to '%s'", cl->rqsetst.value);
 
-    if (cl->rqsetst.evsrc == 0) {
+    if (cl->rqsetst.evsrc == 0 && cl->rqplayhint.evsrc == 0) {
         OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", cl->sm->name,
                   evdef[evid_setstate_changed].name);
 
         cl->rqsetst.evsrc = g_idle_add(fire_setstate_changed_event, cl);
+    }
+}
+
+static void playhint_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
+                        void *usrdata)
+{
+    (void)name;
+    (void)usrdata;
+
+    client_t *cl;
+    char     *playhint;
+
+    if (fld->type == fldtype_string && fld->value.string)
+        playhint = fld->value.string;
+    else {
+        OHM_ERROR("[%s] invalid field type", __FUNCTION__);
+        return;
+    }
+
+    if ((cl = find_client_by_fact(entry)) == NULL) {
+        OHM_ERROR("[%s] Can't fire event: no client", __FUNCTION__);
+        return;
+    }
+
+    if (cl->rqplayhint.value != NULL)
+        free(cl->rqplayhint.value);
+
+    cl->rqplayhint.value = strdup(playhint);
+
+    OHM_DEBUG(DBG_QUE, "rqplayhint is set to '%s'", cl->rqplayhint.value);
+
+    if (cl->rqsetst.evsrc == 0 && cl->rqplayhint.evsrc == 0) {
+        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", cl->sm->name,
+                  evdef[evid_playhint_changed].name);
+
+        cl->rqplayhint.evsrc = g_idle_add(fire_playhint_changed_event, cl);
     }
 }
 
@@ -1132,6 +1284,33 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     dbusif_mute_changed(state);
 }
 
+static client_t *find_client_by_fact(fsif_entry_t *entry)
+{
+    client_t *cl;
+    char     *pid;
+    char     *stream;
+
+    fsif_get_field_by_entry(entry, fldtype_string, "pid"   , &pid   );
+    fsif_get_field_by_entry(entry, fldtype_string, "stream", &stream);
+
+    if (pid == NULL || *pid == '\0') {
+        OHM_ERROR("[%s] Can't find client: no pid", __FUNCTION__);
+        return NULL;
+    }
+
+    if (stream != NULL && *stream == '\0')
+        stream = NULL;
+
+    if ((cl = client_find_by_stream(pid, stream)) == NULL) {
+        OHM_ERROR("[%s] Can't find client for pid %s%s%s", __FUNCTION__,
+                  pid, stream?" stream ":"", stream?stream:"");
+        return NULL;
+    }
+
+
+    return cl;
+}
+
 static char *strncpylower(char *to, const char *from, int tolen)
 {
     const char *p;
@@ -1157,7 +1336,7 @@ static char *class_to_group(char *klass)
         {"Media"     , "player"    },
         {"Background", "background"},
         {"Ringtone"  , "ringtone"  },
-        {"Voiceui"   , "voiceui"   },
+        {"VoiceUI"   , "voiceui"   },
         {"Camera"    , "camera"    },
         {"Game"      , "game"      },
         {"Alarm"     , "alarm"     },
@@ -1190,7 +1369,18 @@ static void schedule_deferred_request(client_t *cl)
                   evdef[evid_setstate_changed].name);
 
         cl->rqsetst.evsrc = g_idle_add(fire_setstate_changed_event, cl);
+        return;
     }
+
+    if (cl->rqplayhint.value != NULL && cl->rqplayhint.evsrc == 0) {
+        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", cl->sm->name,
+                  evdef[evid_playhint_changed].name);
+
+        cl->rqplayhint.evsrc = g_idle_add(fire_playhint_changed_event, cl);
+        return;
+    }
+
+    OHM_DEBUG(DBG_SM, "[%s] no deferred request", cl->sm->name);
 }
 
 /* 
