@@ -3,12 +3,12 @@ Section: utils
 Priority: optional
 Maintainer: Krisztian Litkey <krisztian.litkey@nokia.com>
 Standards-Version: 3.7.2
-Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev, libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev, libtrace-dev, libprofile-dev, libmissioncontrol-dev, libgconf2-dev
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev, libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev, libtrace-dev, libprofile-dev, libmissioncontrol-dev, libgconf2-dev, libtelepathy-dev
 
 Package: ohm-plugins-misc
 Architecture: any
 Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0, osso-mission-control
-XB-GIT-ID: no git
+XB-GIT-ID: 3b7292d12475c22153c58b9bde7ed29f9777090a
 Description: Miscallaneous OHM Nokia plugins.
  OHM Nokia miscallaneous plugins.
  .
