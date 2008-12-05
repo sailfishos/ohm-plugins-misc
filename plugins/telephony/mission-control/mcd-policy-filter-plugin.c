@@ -7,6 +7,7 @@
 #include <telepathy-glib/interfaces.h>
 #include <telepathy-glib/channel.h>
 #include <telepathy-glib/connection.h>
+#include <libtelepathy/tp-chan.h>
 #include <mission-control/mcd-plugin.h>
 #include <mission-control/mcd-dispatcher.h>
 #include <mission-control/mcd-dispatcher-context.h>
