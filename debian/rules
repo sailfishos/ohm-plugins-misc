@@ -4,8 +4,10 @@ SHELL+= -e
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-GIT_VERSION := $(shell [ -x ./git-version.sh ] && \
-                           ./git-version.sh || echo "unknown")
+GIT_VERSION := $(strip $(shell [ -x ./git-version.sh ] && \
+                                   ./git-version.sh || echo "unknown"))
+
+DEB_DH_GENCONTROL_ARGS += -u-VGit-Id=$(GIT_VERSION)
 
 DEB_TAR_SRCDIR = ${DEB_SOURCE_PACKAGE}-${DEB_UPSTREAM_VERSION}
 DEB_DH_INSTALL_SOURCEDIR = debian/tmp
@@ -26,9 +28,6 @@ post-patches:: debian/stamp-autogen
 debian/stamp-autogen:
 	cd $(DEB_BUILDDIR) && ./autogen.sh
 	touch $@
-
-debian/control::
-	@sed -e 's/__GIT_ID__/$(GIT_VERSION)/g' debian/control.in > $@
 
 clean::
 	-rm -rf debian/stamp-autogen
