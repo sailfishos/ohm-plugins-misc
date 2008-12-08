@@ -381,7 +381,7 @@ static void update_factstore_entry(char *factname, char *device, int driver)
 
             if (!strcmp(fdev, device)) {
                 if ((fdrv = get_integer_field(fact, "driver")) == driver) {
-                    printf("%s: '%s' device driver state is already %d",
+                    printf("%s: '%s' device driver state is already %d\n",
                            __FILE__, device, driver);
                 }
                 else {
@@ -451,7 +451,7 @@ static int dres_accessory_request(char *name, int driver, int connected)
     vars[++i] = NULL;
 
     if ((err = resolve(goal, vars)) != 0)
-        printf("%s: %s() resolving '%s' failed: (%d) %s",
+        printf("%s: %s() resolving '%s' failed: (%d) %s\n",
                __FILE__, __FUNCTION__, goal, err, strerror(err));
 
     return err ? FALSE : TRUE;
