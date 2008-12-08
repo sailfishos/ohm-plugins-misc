@@ -400,6 +400,16 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
         dbus_message_iter_get_basic(&_entry, &(ptr));                   \
     } while (0)
 
+#define VARIANT_BOOLEAN(dict, ptr) do {                                 \
+        int _t;                                                         \
+        DBusMessageIter _entry;                                         \
+                                                                        \
+        SUB_ITER((dict), &_entry);                                      \
+        (ptr) = NULL;                                                   \
+        CHECK_TYPE((_t = ITER_TYPE(&_entry)), DBUS_TYPE_BOOLEAN);       \
+        dbus_message_iter_get_basic(&_entry, &(ptr));                   \
+    } while (0)
+
 
 #define VARIANT_PATH_ARRAY(dict, ptrarr) do {                           \
         int _t, _max, _n;                                               \
@@ -431,7 +441,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     DBusMessageIter  imsg, iarr, istruct, iprop, idict;
     char            *path, *type, *name, *initiator, *members[MAX_MEMBERS];
     channel_event_t  event;
-    int              t;
+    int              requested, t;
 
     
     if (!dbus_message_iter_init(msg, &imsg)) {
@@ -444,6 +454,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     path = NULL;
     type = NULL;
     event.members = NULL;
+    requested = -1;
+    initiator = NULL;
 
     ITER_FOREACH(&imsg, t) {
         CHECK_TYPE(t, DBUS_TYPE_ARRAY);
@@ -483,16 +495,15 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                     ITER_NEXT(&idict);
                     VARIANT_STRING(&idict, event.peer);
                 }
+                else if (!strcmp(name, PROP_REQUESTED)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_BOOLEAN(&idict, requested);
+                    event.dir = requested ? DIR_OUTGOING : DIR_INCOMING;
+                }
+                    
                 else if (!strcmp(name, PROP_INITIATOR_ID)) {
                     ITER_NEXT(&idict);
                     VARIANT_STRING(&idict, initiator);
-                    if (!strcmp(initiator, INITIATOR_SELF))
-                        event.dir = DIR_OUTGOING;
-                    else
-                        event.dir = DIR_INCOMING;
-
-                    printf("### initiator is %s (0x%x)\n", initiator,
-                           event.dir);
                 }
                 else if (!strcmp(name, PROP_INITIAL_MEMBERS)) {
                     ITER_NEXT(&idict);
@@ -510,6 +521,14 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
         event.name = dbus_message_get_sender(msg);
         event.path = path;
         event.call = call_lookup(path);
+
+        if (requested == -1 && initiator != NULL) {
+            if (!strcmp(initiator, INITIATOR_SELF))
+                event.dir = DIR_OUTGOING;
+            else
+                event.dir = DIR_INCOMING;
+        }
+
         event_handler((event_t *)&event);
     }
     
@@ -1439,7 +1458,7 @@ policy_actions(event_t *event)
     vars[3] = state;
     vars[4] = NULL;
 
-    OHM_INFO("resolve(telephony_request, &%s=%s, &%s=%s.",
+    OHM_INFO("Resolving telephony_request with &%s=%s, &%s=%s.",
              vars[0], vars[1], vars[2], vars[3]);
 
     return resolve("telephony_request", vars);
@@ -1520,6 +1539,7 @@ policy_enforce(event_t *event)
 int
 policy_audio_update(void)
 {
+    OHM_INFO("Resolving telephony_audio_update.");
     return resolve("telephony_audio_update", NULL);
 }
 
@@ -1570,12 +1590,12 @@ set_string_field(OhmFact *fact, const char *field, const char *value)
 
 
 /********************
- * set_uint_field
+ * set_int_field
  ********************/
 int
-set_uint_field(OhmFact *fact, const char *field, unsigned int value)
+set_int_field(OhmFact *fact, const char *field, int value)
 {
-    GValue *gval = ohm_value_from_unsigned(value);
+    GValue *gval = ohm_value_from_int(value);
 
     if (gval == NULL)
         return FALSE;
@@ -1680,7 +1700,7 @@ policy_call_update(call_t *call, int fields)
     if ((state  && !set_string_field(fact, FACT_FIELD_STATE , state))  ||
         (dir    && !set_string_field(fact, FACT_FIELD_DIR   , dir))    ||
         (parent && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
-        (order  && !set_uint_field(fact,   FACT_FIELD_ORDER , order))) {
+        (order  && !set_int_field(fact,   FACT_FIELD_ORDER , order))) {
         OHM_ERROR("Failed to update fact for call %s", short_path(call->path));
         return FALSE;
     }

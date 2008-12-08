@@ -27,6 +27,7 @@
 #define PROP_TARGET_HANDLE   TP_CHANNEL".TargetHandle"
 #define PROP_TARGET_ID       TP_CHANNEL".TargetID"
 #define PROP_INITIATOR_ID    TP_CHANNEL".InitiatorID"
+#define PROP_REQUESTED       TP_CHANNEL".Requested"
 #define INITIATOR_SELF      "<self>"
 
 #define NEW_CHANNEL        "NewChannel"
