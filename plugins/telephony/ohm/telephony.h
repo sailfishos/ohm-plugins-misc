@@ -22,13 +22,14 @@
 #define TP_NOKIA          "com.nokia.Telepathy"
 #define TP_CONFERENCE     TP_NOKIA".Channel.Interface.Conference"
 
-#define PROP_CHANNEL_TYPE    TP_CHANNEL".ChannelType"
-#define PROP_INITIAL_MEMBERS TP_CONFERENCE".InitialMembers"
-#define PROP_TARGET_HANDLE   TP_CHANNEL".TargetHandle"
-#define PROP_TARGET_ID       TP_CHANNEL".TargetID"
-#define PROP_INITIATOR_ID    TP_CHANNEL".InitiatorID"
-#define PROP_REQUESTED       TP_CHANNEL".Requested"
-#define INITIATOR_SELF      "<self>"
+#define PROP_CHANNEL_TYPE     TP_CHANNEL".ChannelType"
+#define PROP_INITIAL_MEMBERS  TP_CONFERENCE".InitialMembers"
+#define PROP_TARGET_HANDLE    TP_CHANNEL".TargetHandle"
+#define PROP_INITIATOR_HANDLE TP_CHANNEL".InitiatorHandle"
+#define PROP_TARGET_ID        TP_CHANNEL".TargetID"
+#define PROP_INITIATOR_ID     TP_CHANNEL".InitiatorID"
+#define PROP_REQUESTED        TP_CHANNEL".Requested"
+#define INITIATOR_SELF        "<self>"
 
 #define NEW_CHANNEL        "NewChannel"
 #define NEW_CHANNELS       "NewChannels"
@@ -70,6 +71,7 @@
 typedef enum {
     STATE_UNKNOWN = 0,
     STATE_DISCONNECTED,                        /* not connected */
+    STATE_PEER_HANGUP,                         /* peer ended the call */
     STATE_CREATED,                             /* call created/alerting */
     STATE_ACTIVE,                              /* call active */
     STATE_ON_HOLD,                             /* call on hold */
@@ -93,6 +95,7 @@ struct call_s {
     char         *name;                        /* channel D-BUS name */
     char         *path;                        /* channel object path */
     char         *peer;                        /* URI of peer if known */
+    unsigned int  peer_handle;                 /* handle of our peer */
     call_dir_t    dir;                         /* incoming/outgoing */
     call_state_t  state;                       /* current state */
     int           order;                       /* autohold order */
@@ -111,6 +114,7 @@ typedef enum {
     EVENT_CHANNEL_CLOSED,                      /* TP Closed */
     EVENT_CALL_REQUEST,                        /* MC call_request */
     EVENT_CALL_ENDED,                          /* MC call_ended */
+    EVENT_CALL_PEER_ENDED,                     /* TP MembersChanged */
     EVENT_CALL_ACCEPTED,                       /* TP MembersChanged */
     EVENT_CALL_HELD,                           /* TP HoldStateChanged */
     EVENT_CALL_ACTIVATED,                      /* TP HoldStateChanged */
@@ -134,7 +138,8 @@ typedef struct {
     EVENT_COMMON;
     const char  *peer;                         /* our peer (number/uri) */
     char       **members;                      /* for conference call */
-    call_dir_t   dir;
+    call_dir_t   dir;                          /* incoming/outgoing */
+    int          peer_handle;                  /* handle of our peer */
 } channel_event_t;
 
 

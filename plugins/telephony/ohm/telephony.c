@@ -71,7 +71,8 @@ static int         nipcall;                      /* number of ohter calls */
 static int         callid;                       /* call id */
 static int         holdorder;                    /* autohold order */
 
-call_t *call_register(const char *path, const char *name, const char *peer,
+call_t *call_register(const char *path, const char *name,
+                      const char *peer, unsigned int peer_handle,
                       int conference);
 call_t *call_lookup(const char *path);
 void    call_destroy(call_t *call);
@@ -400,14 +401,22 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
         dbus_message_iter_get_basic(&_entry, &(ptr));                   \
     } while (0)
 
-#define VARIANT_BOOLEAN(dict, ptr) do {                                 \
+#define VARIANT_HANDLE(dict, var) do {                                  \
         int _t;                                                         \
         DBusMessageIter _entry;                                         \
                                                                         \
         SUB_ITER((dict), &_entry);                                      \
-        (ptr) = NULL;                                                   \
+        CHECK_TYPE((_t = ITER_TYPE(&_entry)), DBUS_TYPE_UINT32);        \
+        dbus_message_iter_get_basic(&_entry, &(var));                   \
+    } while (0)
+
+#define VARIANT_BOOLEAN(dict, var) do {                                 \
+        int _t;                                                         \
+        DBusMessageIter _entry;                                         \
+                                                                        \
+        SUB_ITER((dict), &_entry);                                      \
         CHECK_TYPE((_t = ITER_TYPE(&_entry)), DBUS_TYPE_BOOLEAN);       \
-        dbus_message_iter_get_basic(&_entry, &(ptr));                   \
+        dbus_message_iter_get_basic(&_entry, &(var));                   \
     } while (0)
 
 
@@ -441,6 +450,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     DBusMessageIter  imsg, iarr, istruct, iprop, idict;
     char            *path, *type, *name, *initiator, *members[MAX_MEMBERS];
     channel_event_t  event;
+    int              init_handle, target_handle;
     int              requested, t;
 
     
@@ -456,7 +466,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     event.members = NULL;
     requested = -1;
     initiator = NULL;
-
+    init_handle = target_handle = 0;
+    
     ITER_FOREACH(&imsg, t) {
         CHECK_TYPE(t, DBUS_TYPE_ARRAY);
         SUB_ITER(&imsg, &iarr);
@@ -500,7 +511,14 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                     VARIANT_BOOLEAN(&idict, requested);
                     event.dir = requested ? DIR_OUTGOING : DIR_INCOMING;
                 }
-                    
+                else if (!strcmp(name, PROP_INITIATOR_HANDLE)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_HANDLE(&idict, init_handle);
+                }                    
+                else if (!strcmp(name, PROP_TARGET_HANDLE)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_HANDLE(&idict, target_handle);
+                }
                 else if (!strcmp(name, PROP_INITIATOR_ID)) {
                     ITER_NEXT(&idict);
                     VARIANT_STRING(&idict, initiator);
@@ -528,7 +546,12 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
             else
                 event.dir = DIR_INCOMING;
         }
-
+        
+        if (event.dir == DIR_INCOMING)
+            event.peer_handle = init_handle;
+        else
+            event.peer_handle = target_handle;
+        
         event_handler((event_t *)&event);
     }
     
@@ -584,6 +607,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     
     DBusMessageIter imsg;
     int             nadded, nremoved, nlocalpend, nremotepend;
+    unsigned int    actor;
     status_event_t  event;
 
     if ((event.path = dbus_message_get_path(msg)) == NULL ||
@@ -593,6 +617,9 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     }
     
     
+    actor = 0;
+
+
     /*
      * skip the 'reason' argument
      */
@@ -602,7 +629,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     
     
     /*
-     * collect sizes of arrays of interest
+     * get sizes of added, removed, pending arrays, and actor
      */
     
     GET_ARRAY_SIZE("added"         , &nadded);
@@ -610,8 +637,12 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     GET_ARRAY_SIZE("local pending" , &nlocalpend);
     GET_ARRAY_SIZE("remote pending", &nremotepend);
     
-    OHM_INFO("%s: added %d, removed %d, localpend %d, remotepend %d",
-             __FUNCTION__, nadded, nremoved, nlocalpend, nremotepend);
+    if (dbus_message_iter_get_arg_type(&imsg) == DBUS_TYPE_UINT32)
+        dbus_message_iter_get_basic(&imsg, &actor);
+    
+    
+    OHM_INFO("%s: added %d, removed %d, localpend %d, remotepend %d, actor %u",
+             __FUNCTION__, nadded, nremoved, nlocalpend, nremotepend, actor);
 
 
     /*
@@ -627,12 +658,26 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     }
     else if (nremoved != 0 && nlocalpend == 0 && nremotepend == 0) {
         /*
-         * Note: This is the earliest point we realise the call is (being)
-         *       released. If we want to react as quickly as possible this
-         *       is the place to do it. Currently we ignore this and wait
-         *       for the TP Closed and MC call_ended signals.
+         * We detect here if our peer ended the call and generate an
+         * event for it. This will end the call without reactivating
+         * any autoheld calls.
+         *
+         * Otherwise, ei. for locally ended calls, we ignore this signal
+         * and let the call be ended by the ChannelClosed signal. Similarly
+         * we ignore this event if the call is a conference or a conference
+         * member.
          */
-        OHM_INFO("Call %s has been released...", event.path);
+        if (actor != 0 && event.call->peer_handle == actor &&
+            !IS_CONF_PARENT(event.call) && !IS_CONF_MEMBER(event.call)) {
+            OHM_INFO("Call %s has been released remotely...", event.path);
+            
+            event.type = EVENT_CALL_PEER_ENDED;
+            event_handler((event_t *)&event);
+        }
+        else
+            OHM_INFO("Call %s has been released locally (%u != %u)...",
+                     event.path, actor, event.call->peer_handle);
+
     }
     
     return DBUS_HANDLER_RESULT_HANDLED;
@@ -852,14 +897,15 @@ event_name(int type)
 {
 #define DESCR(e, d) [EVENT_##e] = d
     const char *description[] = {
-        DESCR(UNKNOWN       , "<UNKNOWN>"),
-        DESCR(NEW_CHANNEL   , "<NEW CHANNEL>"),
-        DESCR(CHANNEL_CLOSED, "<CHANNEL CLOSED>"),
-        DESCR(CALL_REQUEST  , "<CALL REQUEST>"),
-        DESCR(CALL_ENDED    , "<CALL ENDED>"),
-        DESCR(CALL_ACCEPTED , "<CALL ACCEPTED>"),
-        DESCR(CALL_HELD     , "<CALL HELD>"),
-        DESCR(CALL_ACTIVATED, "<CALL ACTIVATED>"),
+        DESCR(UNKNOWN        , "<UNKNOWN>"),
+        DESCR(NEW_CHANNEL    , "<NEW CHANNEL>"),
+        DESCR(CHANNEL_CLOSED , "<CHANNEL CLOSED>"),
+        DESCR(CALL_REQUEST   , "<CALL REQUEST>"),
+        DESCR(CALL_ENDED     , "<CALL ENDED LOCALLY>"),
+        DESCR(CALL_PEER_ENDED, "<CALL ENDED REMOTELY>"),
+        DESCR(CALL_ACCEPTED  , "<CALL ACCEPTED>"),
+        DESCR(CALL_HELD      , "<CALL HELD>"),
+        DESCR(CALL_ACTIVATED , "<CALL ACTIVATED>"),
     };
 
 
@@ -908,6 +954,7 @@ event_handler(event_t *event)
         if (call == NULL) {
             call = call_register(event->channel.path, event->channel.name,
                                  event->channel.peer,
+                                 event->channel.peer_handle,
                                  event->channel.members != NULL);
             call->dir = event->channel.dir;
             policy_call_export(call);
@@ -926,8 +973,8 @@ event_handler(event_t *event)
                 }
                 member->state  = STATE_CONFERENCE;
                 member->parent = call;
-                printf("*** call %s is now in conference %s\n",
-                       member->path, call->path);
+                OHM_INFO("call %s is now in conference %s",
+                         member->path, call->path);
                 policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
             }
         }
@@ -973,9 +1020,10 @@ event_handler(event_t *event)
         break;
 
         
-    case EVENT_CALL_HELD:      event->any.state = STATE_ON_HOLD;      break;
-    case EVENT_CHANNEL_CLOSED: event->any.state = STATE_DISCONNECTED; break;
-    case EVENT_CALL_ENDED:     event->any.state = STATE_DISCONNECTED; break;
+    case EVENT_CALL_HELD:       event->any.state = STATE_ON_HOLD;      break;
+    case EVENT_CHANNEL_CLOSED:  event->any.state = STATE_DISCONNECTED; break;
+    case EVENT_CALL_ENDED:      event->any.state = STATE_DISCONNECTED; break;
+    case EVENT_CALL_PEER_ENDED: event->any.state = STATE_PEER_HANGUP;  break;
     default: OHM_ERROR("Unknown event 0x%x.", event->type);          return;
     }
     
@@ -1030,7 +1078,7 @@ call_init(void)
  ********************/
 call_t *
 call_register(const char *path, const char *name, const char *peer,
-              int conference)
+              unsigned int peer_handle, int conference)
 {
     call_t *call;
 
@@ -1048,7 +1096,8 @@ call_register(const char *path, const char *name, const char *peer,
         return NULL;
     }
 
-    call->peer = g_strdup(peer);
+    call->peer        = g_strdup(peer);
+    call->peer_handle = peer_handle;
 
     if (conference)
         call->parent = call;
@@ -1226,6 +1275,7 @@ call_disconnect(call_t *call, const char *action, event_t *event)
             call_reply(event->call.req, FALSE);
             /* fall through */
         case STATE_DISCONNECTED:
+        case STATE_PEER_HANGUP:
             policy_call_delete(call);
             call_unregister(call->path);
             call_foreach((GHFunc)remove_parent, call);
@@ -1423,6 +1473,7 @@ state_name(int state)
     static char *names[] = {
         STATE(UNKNOWN     , "unknown"),
         STATE(DISCONNECTED, "disconnected"),
+        STATE(PEER_HANGUP , "peerhangup"),
         STATE(CREATED     , "created"),
         STATE(ACTIVE      , "active"),
         STATE(ON_HOLD     , "onhold"),
@@ -1484,7 +1535,7 @@ policy_enforce(event_t *event)
         return ENOENT;
     
     if (g_slist_length(l) > 1) {
-        OHM_ERROR("Too many facts call_action facts (%d).", g_slist_length(l));
+        OHM_ERROR("Too many call_action facts (%d).", g_slist_length(l));
 
         for (; l != NULL; l = g_slist_next(l))
             ohm_fact_store_remove(store, (OhmFact *)l->data);
