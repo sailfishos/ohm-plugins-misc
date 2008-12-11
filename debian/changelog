@@ -14,6 +14,7 @@ ohm-plugins-misc (0.6.3) unstable; urgency=low
 
   * In the playback plugin fix the crash when the AllowedState property is
     sent (happens only with libplayback version 0.5-6)
+  * Initial support for the real headset API.
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Tue, 16 Dec 2008 14:25:04 +0200
 
