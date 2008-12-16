@@ -1,8 +1,9 @@
 ohm-plugins-misc (0.6.2) unstable; urgency=low
 
-  * 
+  * in the playback plugin fix the crash when the AllowedState property is
+    sent (happens only with libplayback version 0.5-6)
 
- -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 28 Nov 2008 12:27:10 +0200
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Tue, 16 Dec 2008 14:25:04 +0200
 
 ohm-plugins-misc (0.6.1) unstable; urgency=low
 

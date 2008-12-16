@@ -1060,8 +1060,10 @@ static int update_playhint(sm_evdata_t *evdata, void *usrdata)
     client_t             *cl       = (client_t *)usrdata;
     char                  playhint[64];
 
+#if 0
     strncpylower(playhint, property->value, sizeof(playhint));
     client_save_playback_hint(cl, client_playhint, playhint);
+#endif
 
     OHM_DEBUG(DBG_TRANS, "playback hint is set to %s", playhint);
 
@@ -1138,6 +1140,8 @@ static void write_property_cb(char *dbusid, char *object, char *prname,
 
     memset(&evdata, 0, sizeof(evdata));
     evdata.evid = success ? evid_setprop_succeeded : evid_setprop_failed;
+    evdata.property.name  = prname;
+    evdata.property.value = prvalue;
 
     sm_process_event(cl->sm, &evdata);
 }
