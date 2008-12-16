@@ -1,7 +1,8 @@
 pluginlib_LTLIBRARIES = libmcd_policy_filter.la
 
-INCLUDES = \
-	$(MISSION_CONTROL_CFLAGS) \
+libmcd_policy_filter_la_CFLAGS = \
+	$(LIBMISSIONCONTROL_CFLAGS) \
+	$(LIBTELEPATHY_CFLAGS) \
 	$(DBUS_CFLAGS) \
 	$(GLIB_CFLAGS) \
 	-DMC_DISABLE_DEPRECATED \
