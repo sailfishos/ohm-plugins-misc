@@ -13,28 +13,102 @@
 #define PRIO_MAX 99
 
 
+#ifdef _POSIX_PRIORITY_SCHEDULING
+
+
+/*
+ * scheduling modes
+ *
+ * Notes:
+ *
+ * There are four different scheduling modes supported. Disabled and fixed
+ * should be self-explanatory. Recursive mode keeps track of all boost / relax
+ * requests and keeps RT-scheduling on as long as the number of boost requests
+ * exceeds the number of relax request (ie. more boost requests than relax
+ * requests). Flat mode always honours the last boost / relax request.
+ *
+ * To configure RT scheduling you need to specify a valid mode and a
+ * non-zero priority in the configuration file (dvfs.ini). Below are some
+ * examples.
+ *
+ *
+ * Enable SCHED_RR scheduling in priority group 4 (ie. chrt -r -p 4) whenever
+ * there is at least 1 outstanding boost request (ie. more calls to boost
+ * than relax):
+ *
+ * mode = recursive
+ * policy = round-robin
+ * priority = 4
+ *
+ *
+ * Request SCHED_FIFO in priority group 1 (ie. chrt -f -p 1) whenever there is
+ * a boost request. Whenever there is a relax request fall back to SCHED_OTHER:
+ *
+ * mode = flat
+ * policy = fifo
+ * priority = 1
+ *
+ *
+ * Fixed SCHED_RR scheduling in priority group 5:
+ *
+ * mode = fixed
+ * policy = round-robin
+ * priority = 5
+ *
+ *
+ * Disable priority boosting altogether:
+ *
+ * mode = disabled
+ *
+ * This is the default mode for an empty or non-existing configuration file.
+ */
+
 enum {
-    MODE_DISABLED = 0,
-    MODE_FIXED,
-    MODE_RECURSIVE,
-    MODE_FLAT,
+    MODE_DISABLED = 0,                           /* rt-scheduling disabled */
+    MODE_FIXED,                                  /* rt-scheduling always on */
+    MODE_RECURSIVE,                              /* balanced rt boost/relax */
+    MODE_FLAT,                                   /* flat rt boost/relax */
 };
 
+
+/*
+ * scheduler configuration
+ */
+
+static int priority;                             /* scheduling priority */
+static int policy;                               /* scheduling policy */
+static int mode;                                 /* priority boosting mode */
+static int boost;
+
+
+
+/*
+ * configuration key values for modes and policies
+ */
 
 struct param_map {
     const char *name;
     int         value;
 };
 
+static struct param_map modes[] = {
+    { "disabled" , MODE_DISABLED  },
+    { "fixed"    , MODE_FIXED     },
+    { "recursive", MODE_RECURSIVE },
+    { "flat"     , MODE_FLAT      },
+    { NULL, 0 },
+};
 
-static int priority;
-static int policy;
-static int mode;
-static int boost;
+static struct param_map policies[] = {
+    { "round-robin", SCHED_RR   },
+    { "fifo"       , SCHED_FIFO },
+    { NULL , 0 },
+};
 
 
-#ifdef _POSIX_PRIORITY_SCHEDULING
-
+/*
+ * DVFS locking (currently not implemented)
+ */
 
 OHM_EXPORTABLE(int, dvfs_lock, (void))
 {
@@ -47,6 +121,10 @@ OHM_EXPORTABLE(int, dvfs_unlock, (void))
     return EOPNOTSUPP;
 }
 
+
+/*
+ * RT-scheduling (priority boosting)
+ */
 
 OHM_EXPORTABLE(int, priority_boost, (void))
 {
@@ -126,18 +204,6 @@ plugin_init(OhmPlugin *plugin)
     const char *param_policy   = ohm_plugin_get_param(plugin, "policy");
     char       *end;
 
-    struct param_map modes[] = {
-        { "disabled" , MODE_DISABLED  },
-        { "fixed"    , MODE_FIXED     },
-        { "recursive", MODE_RECURSIVE },
-        { "flat"     , MODE_FLAT      },
-        { NULL, 0 },
-    };
-    struct param_map policies[] = {
-        { "round-robin", SCHED_RR   },
-        { "fifo"       , SCHED_FIFO },
-        { NULL , 0 },
-    };
     struct param_map *pm;
 
     
