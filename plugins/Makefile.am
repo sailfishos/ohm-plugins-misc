@@ -5,7 +5,8 @@ SUBDIRS = 	     \
 	accessories  \
 	console      \
 	profile      \
-	telephony
+	telephony    \
+        dvfs
 
 clean-local:
 	rm -f *~

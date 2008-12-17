@@ -127,6 +127,7 @@ AC_CONFIG_FILES([Makefile
                  plugins/telephony/Makefile
                  plugins/telephony/ohm/Makefile
                  plugins/telephony/mission-control/Makefile
+                 plugins/dvfs/Makefile
  		 doc/Makefile])
 AC_OUTPUT
 
