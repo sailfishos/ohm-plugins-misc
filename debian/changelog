@@ -1,9 +1,30 @@
+ohm-plugins-misc (0.6.3) unstable; urgency=low
+
+  * In the playback plugin fix the crash when the AllowedState property is
+    sent (happens only with libplayback version 0.5-6)
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Tue, 16 Dec 2008 14:25:04 +0200
+
 ohm-plugins-misc (0.6.2) unstable; urgency=low
 
-  * Converted mission-control policy/telephony filter to new API.
-  * BT support + ohter enhancements in accessories plugin.
+  * Don't reactivate autoheld calls if peer hangs up the active call.
+  * Use dh_gencontrol to tag packages with git SHA1.
+  * Added missing n's to printfs... should use OHM_INFO/WARNING/ERROR.
+  * Use requestor property to find out call direction; call order is now int.
+  * Added dependency to libtelepathy-dev.
+  * Fix compilation problems with the latest mission-control.
+  * Rolling back the stetstate field in com.nokia.policy.playback facts.
+  * Fixed a memory handling issue.
+  * Added support for floats in signaling.
+  * More correct handling of ints in signaling.
+  * Support for playback hints (AllowedState property).
+  * Class name is VoiceUI instead of Voiceui.
+  * Added debug strings, fixed dres resolver parameters.
+  * Bumped the version number.
+  * Bluetooth a2dp profile actually appears to work now.
 
- -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 27 Nov 2008 15:13:24 +0200
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 10 Dec 2008 15:20:43 +0200
+
 ohm-plugins-misc (0.6.1) unstable; urgency=low
 
   * Cleanup in the profile plugin.
