@@ -892,8 +892,11 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
                 cl->stream = stream ? strdup(stream) : NULL;
 
                 client_update_factstore_entry(cl, "pid", pid);
+                if (stream) {
+                    client_update_factstore_entry(cl, "stream", stream);
+                }
                 client_update_factstore_entry(cl, "state", state ? state:"");
-
+                
                 dbusif_send_info_to_pep("register", cl->group, pid,
                                         stream ? stream : "<unknown>");
             }
@@ -1058,14 +1061,14 @@ static int update_playhint(sm_evdata_t *evdata, void *usrdata)
 {
     sm_evdata_property_t *property = &evdata->property;
     client_t             *cl       = (client_t *)usrdata;
+#if 0
     char                  playhint[64];
 
-#if 0
     strncpylower(playhint, property->value, sizeof(playhint));
     client_save_playback_hint(cl, client_playhint, playhint);
-#endif
 
     OHM_DEBUG(DBG_TRANS, "playback hint is set to %s", playhint);
+#endif
 
     return TRUE;
 }
