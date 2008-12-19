@@ -98,19 +98,51 @@ AC_SUBST(OHM_CONF_DIR, "\$(sysconfdir)/ohm")
 AC_SUBST(OHM_PLUGIN_CONF_DIR, "\$(OHM_CONF_DIR)/plugins.d")
 AC_SUBST(OHM_PLUGIN_DIR, "\$(libdir)/ohm")
 
-# mission-control policy filter
+# Check for libprofile.
+PKG_CHECK_MODULES(LIBPROFILE, profile >= 0.0.3,
+                              [has_libprofile=true], [has_libprofile=false])
+AM_CONDITIONAL(HAVE_LIBPROFILE, test x$has_libprofile = xtrue)
+
+AC_SUBST(LIBPROFILE_CFLAGS)
+AC_SUBST(LIBPROFILE_LIBS)
+
+if test x$has_libprofile = xtrue;
+then
+  AC_MSG_NOTICE([Profile plugin WILL BE built.])
+else
+  AC_MSG_NOTICE([profile plugin WILL NOT BE be built.])
+fi
+
+# Check for mission-control (for telephony plugins).
 MISSION_CONTROL_REQUIRED=5.0.beta39
-PKG_CHECK_MODULES(LIBMISSIONCONTROL, mission-control >= $MISSION_CONTROL_REQUIRED)
+PKG_CHECK_MODULES(LIBMISSIONCONTROL, 
+                  mission-control >= $MISSION_CONTROL_REQUIRED,
+                  [has_mc=true], [has_mc=false])
+
 AC_SUBST(LIBMISSIONCONTROL_CFLAGS)
 AC_SUBST(LIBMISSIONCONTROL_LIBS)
 
-pluginlibdir="`$PKG_CONFIG --variable=pluginlibdir mission-control`"
+if test x$has_mc = xtrue;
+then
+  pluginlibdir="`$PKG_CONFIG --variable=pluginlibdir mission-control`"
+fi
 AC_SUBST(pluginlibdir)
 
-PKG_CHECK_MODULES(LIBTELEPATHY, libtelepathy)
+# Check for telepathy (for telephony plugins).
+PKG_CHECK_MODULES(LIBTELEPATHY, libtelepathy,
+		  [has_libtp=true], [has_libtp=false])
 AC_SUBST(LIBTELEPATHY_CFLAGS)
 AC_SUBST(LIBTELEPATHY_LIBS)
 
+AM_CONDITIONAL(BUILD_TELEPHONY,
+               test x$has_mc = xtrue -a x$has_libtp = xtrue)
+
+if test x$has_mc = xtrue -a x$has_libtp = xtrue;
+then
+  AC_MSG_NOTICE([Telephony plugins WILL BE built.])
+else
+  AC_MSG_NOTICE([Telephony plugins WILL NOT be built.])
+fi
 
 
 AC_CONFIG_FILES([Makefile

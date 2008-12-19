@@ -9,9 +9,13 @@
 #include <ohm/ohm-plugin-debug.h>
 #include <ohm/ohm-plugin-log.h>
 
-#define PRIO_MIN 1
-#define PRIO_MAX 99
 
+#define PARAM_ROUNDROBIN "round-robin"
+#define PARAM_FIFO       "fifo"
+#define PARAM_DISABLED   "disabled"
+#define PARAM_FIXED      "fixed"
+#define PARAM_DYNAMIC    "dynamic"
+#define PARAM_FLAT       "flat"
 
 #ifdef _POSIX_PRIORITY_SCHEDULING
 
@@ -22,7 +26,7 @@
  * Notes:
  *
  * There are four different scheduling modes supported. Disabled and fixed
- * should be self-explanatory. Recursive mode keeps track of all boost / relax
+ * should be self-explanatory. Dynamic mode keeps track of all boost / relax
  * requests and keeps RT-scheduling on as long as the number of boost requests
  * exceeds the number of relax request (ie. more boost requests than relax
  * requests). Flat mode always honours the last boost / relax request.
@@ -36,7 +40,7 @@
  * there is at least 1 outstanding boost request (ie. more calls to boost
  * than relax):
  *
- * mode = recursive
+ * mode = dynamic
  * policy = round-robin
  * priority = 4
  *
@@ -66,7 +70,7 @@
 enum {
     MODE_DISABLED = 0,                           /* rt-scheduling disabled */
     MODE_FIXED,                                  /* rt-scheduling always on */
-    MODE_RECURSIVE,                              /* balanced rt boost/relax */
+    MODE_DYNAMIC,                                /* balanced rt boost/relax */
     MODE_FLAT,                                   /* flat rt boost/relax */
 };
 
@@ -91,17 +95,21 @@ struct param_map {
     int         value;
 };
 
+
 static struct param_map modes[] = {
-    { "disabled" , MODE_DISABLED  },
-    { "fixed"    , MODE_FIXED     },
-    { "recursive", MODE_RECURSIVE },
-    { "flat"     , MODE_FLAT      },
+    { PARAM_DISABLED, MODE_DISABLED  },
+    { PARAM_FIXED   , MODE_FIXED     },
+    { PARAM_DYNAMIC , MODE_DYNAMIC   },
+    { PARAM_FLAT    , MODE_FLAT      },
     { NULL, 0 },
 };
 
+
 static struct param_map policies[] = {
-    { "round-robin", SCHED_RR   },
-    { "fifo"       , SCHED_FIFO },
+    { PARAM_ROUNDROBIN, SCHED_RR   },
+    { "rr"            , SCHED_RR   },
+    { PARAM_FIFO      , SCHED_FIFO },
+    { "f"             , SCHED_FIFO },
     { NULL , 0 },
 };
 
@@ -132,6 +140,7 @@ OHM_EXPORTABLE(int, priority_boost, (void))
 
     switch (mode) {
     case MODE_FLAT:
+    case MODE_FIXED:
         if (boost <= 0) {
             if (sched_setscheduler(0, policy, &sched) < 0)
                 return errno;
@@ -139,16 +148,14 @@ OHM_EXPORTABLE(int, priority_boost, (void))
         }
         return 0;
         
-    case MODE_FIXED:
-        if (boost > 0)
-            return 0;
-        /* fall through */
-    case MODE_RECURSIVE:
-        if (sched_setscheduler(0, policy, &sched) < 0)
-            return errno;
-        boost++;
+    case MODE_DYNAMIC:
+        if (boost <= 0) {
+            if (sched_setscheduler(0, policy, &sched) < 0)
+                return errno;
+            boost++;
+        }
         return 0;
-
+        
     default:
     case MODE_DISABLED:
         return 0;
@@ -162,36 +169,48 @@ OHM_EXPORTABLE(int, priority_relax, (void))
     static int    warned = FALSE;
 
     switch (mode) {
-    case MODE_FIXED:
-        return 0;
-
     case MODE_FLAT:
-        if (boost < 1)
-            return 0;
-        if (sched_setscheduler(0, policy, &sched) < 0)
-            return errno;
-        boost = 0;
+        if (boost > 0) {
+            if (sched_setscheduler(0, policy, &sched) < 0)
+                return errno;
+            boost = 0;
+        }
         return 0;
 
-    case MODE_RECURSIVE:
-        if (boost > 1)
-            return 0;
+    case MODE_DYNAMIC:
+        boost--;
+
         if (boost < 0) {
             if (!warned) {
                 OHM_WARNING("Unbalanced priority boost/relax.");
                 warned = TRUE;
-                boost  = 0;
             }
+            boost = 0;
             return EALREADY;
         }
-        if (sched_setscheduler(0, policy, &sched) < 0)
-            return errno;
-        boost = 0;
+        
+        if (boost == 0) {
+            if (sched_setscheduler(0, SCHED_OTHER, &sched) < 0)
+                return errno;
+        }
         return 0;
 
     default:
     case MODE_DISABLED:
+    case MODE_FIXED:
         return 0;
+    }
+}
+
+
+
+static char *
+policy_name(int p)
+{
+    switch (p) {
+    case SCHED_RR:   return PARAM_ROUNDROBIN;
+    case SCHED_FIFO: return PARAM_FIFO;
+    default:         return PARAM_DISABLED;
     }
 }
 
@@ -202,11 +221,16 @@ plugin_init(OhmPlugin *plugin)
     const char *param_mode     = ohm_plugin_get_param(plugin, "mode");
     const char *param_priority = ohm_plugin_get_param(plugin, "priority");
     const char *param_policy   = ohm_plugin_get_param(plugin, "policy");
+    int         min, max;
     char       *end;
 
     struct param_map *pm;
 
-    
+
+    /*
+     * parse mode, policy and priorities
+     */
+       
     if (param_mode != NULL) {
         for (pm = modes; pm->name; pm++) {
             if (!strcasecmp(param_mode, pm->name)) {
@@ -215,7 +239,7 @@ plugin_init(OhmPlugin *plugin)
             }
         }
     }
-
+    
     if (param_policy != NULL) {
         for (pm = policies; pm->name; pm++) {
             if (!strcasecmp(param_policy, pm->name)) {
@@ -227,33 +251,33 @@ plugin_init(OhmPlugin *plugin)
 
     if (param_priority != NULL) {
         priority = strtol(param_priority, &end, 10);
-        if (end != NULL && !*end) {
+        if (end != NULL && *end) {
             OHM_WARNING("Invalid priority parameter '%s'.", param_priority);
             mode = MODE_DISABLED;
         }
-        else {
-            if (priority < PRIO_MIN)
-                priority = PRIO_MIN;
-            if (PRIO_MAX < priority)
-                priority = PRIO_MAX;
-        }
     }
 
-    if (priority == 0 && mode != MODE_DISABLED) {
-        OHM_WARNING("Invalid priority %d in mode %s.", priority,
-                    modes[mode].name);
-        mode = MODE_DISABLED;
-    }
     
-    if (mode == MODE_DISABLED)
-        OHM_INFO("Priority boosting is disabled.");
-    else {
-        OHM_INFO("Priority boosting mode: %s", modes[mode].name);
-        OHM_INFO("Boosted scheduling: %d, %s", priority, policies[policy].name);
-    }
+    /*
+     * check configuration validity
+     */
 
-    if (mode == MODE_FIXED)
-        priority_boost();
+    if (mode != MODE_DISABLED) {
+        min = sched_get_priority_min(policy);
+        max = sched_get_priority_max(policy);
+        if (priority < min)
+            priority = min;
+        if (priority > max)
+            priority = max;
+
+        OHM_INFO("Priority settings: %s, %s, %d", modes[mode].name,
+                 policy_name(policy), priority);
+
+        if (mode == MODE_FIXED)
+            priority_boost();
+    }
+    else
+        OHM_INFO("Priority settings disabled.");
 }
 
 
