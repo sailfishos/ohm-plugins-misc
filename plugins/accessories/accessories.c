@@ -7,6 +7,13 @@
 
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
+#include <ohm/ohm-plugin-debug.h>
+
+static int DBG_HEADSET, DBG_BT;
+
+OHM_DEBUG_PLUGIN(accessories,
+    OHM_DEBUG_FLAG("headset", "Wired headset events" , &DBG_HEADSET),
+    OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT));
 
 #define BT_DEVICE "connected_bt_device"
 
@@ -67,6 +74,9 @@ OHM_PLUGIN_REQUIRES_METHODS(accessories, 1,
 static void plugin_init(OhmPlugin *plugin)
 {
     fs = ohm_fact_store_get_fact_store();
+    
+    if (!OHM_DEBUG_INIT(accessories))
+        g_warning("Failed to initialize accessories plugin debugging.");
 
     /* headset */
     headset_init(plugin);
@@ -215,7 +225,7 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
     (void)removed;
     (void)user_data;
 
-    /* printf("Possible hal headset event received!\n"); */
+    OHM_DEBUG(DBG_HEADSET, "Possible hal headset event received!");
 
     /* see what we had plugged in before this event */
 
@@ -227,34 +237,49 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
 
         if (G_VALUE_TYPE(gval) == G_TYPE_STRING) {
             const gchar *value = g_value_get_string(gval);
+
+            OHM_DEBUG(DBG_HEADSET, "searching audio_device_accessible: '%s'", value);
+
             GValue *state = NULL;
-            /* printf("field/value: '%s'/'%s'\n", field_name, value); */
+            /* OHM_DEBUG(DBG_HEADSET, "field/value: '%s'/'%s'\n", field_name, value); */
             if (strcmp(value, "headset") == 0) {
                 state = ohm_fact_get(of, "connected");
 
                 if (G_VALUE_TYPE(state) != G_TYPE_INT)
-                    break; /* error case */
+                    break;
 
                 had_set = g_value_get_int(state) ? TRUE : FALSE;
-                break; /* success case */
+
+                if (had_set) {
+                    OHM_DEBUG(DBG_HEADSET, "had headset!");
+                    break; /* success case */
+                }
             }
             else if (strcmp(value, "headphone") == 0) {
                 state = ohm_fact_get(of, "connected");
 
                 if (G_VALUE_TYPE(state) != G_TYPE_INT)
-                    break; /* error case */
+                    break;
 
                 had_phones = g_value_get_int(state) ? TRUE : FALSE;
-                break; /* success case */
+                
+                if (had_phones) {
+                    OHM_DEBUG(DBG_HEADSET, "had headphone!");
+                    break; /* success case */
+                }
             }
             else if (strcmp(value, "headmike") == 0) {
                 state = ohm_fact_get(of, "connected");
 
                 if (G_VALUE_TYPE(state) != G_TYPE_INT)
-                    break; /* error case */
+                    break;
 
                 had_mic = g_value_get_int(state) ? TRUE : FALSE;
-                break; /* success case */
+
+                if (had_mic) {
+                    OHM_DEBUG(DBG_HEADSET, "had headmike!");
+                    break; /* success case */
+                }
             }
         }
     }
@@ -262,7 +287,7 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
     capabilities = ohm_fact_get(hal_fact, "input.jack.type");
 
     if (capabilities == NULL) {
-        /* printf("Headset removed or something?\n"); */
+        /* OHM_DEBUG(DBG_HEADSET, "Headset removed or something?\n"); */
     }
     else if (G_VALUE_TYPE(capabilities) == G_TYPE_STRING) {
         const gchar *escaped_caps = g_value_get_string(capabilities);
@@ -270,7 +295,7 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
         gchar **caps = g_strsplit(escaped_caps, STRING_DELIMITER, 0);
 #undef STRING_DELIMITER
         gchar **caps_iter = caps;
-        gboolean has_mic = FALSE, has_phones = FALSE;
+        gboolean has_mic = FALSE, has_phones = FALSE, has_set = FALSE;
 
         for (; *caps_iter != NULL; caps_iter++) {
             gchar *cap = *caps_iter;
@@ -288,42 +313,59 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
         /* let's see first if something changed; if not, we can just
          * go away */
 
-        if (((has_mic && has_phones) != had_set) ||
-                (has_mic != had_mic) ||
-                (has_phones != had_phones)) {
+        has_set = has_phones && has_mic;
+
+        OHM_DEBUG(DBG_HEADSET, "starting to change headset stuff...\n");
+        OHM_DEBUG(DBG_HEADSET, "Previous state: had_set=%i, had_mic=%i, had_phones=%i", had_set, had_mic, had_phones);
+        OHM_DEBUG(DBG_HEADSET, "Current state: has_set=%i, has_mic=%i, has_phones=%i", has_set, has_mic, has_phones);
+
+        if (!(has_set && had_set) &&
+                ((has_mic != had_mic) ||
+                (has_phones != had_phones))) {
 
             found = TRUE; /* something did change */
 
-            /* ok, first we add the current stuff */
+            /* we remove what we had */
+
+            if (had_set) {
+                OHM_DEBUG(DBG_HEADSET, "removed headset!");
+                dres_accessory_request("headset", -1, 0);
+            }
+            else if (had_mic) {
+                OHM_DEBUG(DBG_HEADSET, "removed headmike!");
+                dres_accessory_request("headmike", -1, 0);
+            }
+            else if (had_phones) {
+                OHM_DEBUG(DBG_HEADSET, "removed headphones!");
+                dres_accessory_request("headphone", -1, 0);
+            }
+            else {
+                /* had nothing previously */
+            }
+
+            /* we add the current stuff */
 
             if (has_mic && has_phones) {
+                OHM_DEBUG(DBG_HEADSET, "inserted headset!");
                 dres_accessory_request("headset", -1, 1);
             }
             else if (has_mic) {
+                OHM_DEBUG(DBG_HEADSET, "inserted headmike!");
                 dres_accessory_request("headmike", -1, 1);
             }
             else if (has_phones) {
-                dres_accessory_request("headphones", -1, 1);
+                OHM_DEBUG(DBG_HEADSET, "inserted headphones!");
+                dres_accessory_request("headphone", -1, 1);
             }
             else {
                 /* everything is now removed from the jack */
             }
 
-            /* then we remove what we had */
-
-            if (had_set) {
-                dres_accessory_request("headset", -1, 0);
-            }
-            else if (had_mic) {
-                dres_accessory_request("headmike", -1, 0);
-            }
-            else if (had_phones) {
-                dres_accessory_request("headphones", -1, 0);
-            }
-            else {
-                /* had nothing previously */
-            }
         }
+        else {
+            OHM_DEBUG(DBG_HEADSET, "Nothing changed");
+        }
+        OHM_DEBUG(DBG_HEADSET, "...done.");
     }
 
     return found;
@@ -331,16 +373,16 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
 
 static gboolean headset_deinit(OhmPlugin *plugin)
 {
-    (void)plugin;
-
     return unset_observer(token);
+
+    (void)plugin;
 }
 
 static gboolean headset_init(OhmPlugin *plugin)
 {
-    (void)plugin;
- 
     return set_observer("input.jack", complete_headset_cb, token);
+    
+    (void)plugin;
 }
 
 /* headset part ends */
@@ -764,7 +806,7 @@ static gboolean bluetooth_deinit(OhmPlugin *plugin)
 
 
 OHM_PLUGIN_DESCRIPTION("accessories",
-                       "0.0.1",
+                       "0.0.2",
                        "janos.f.kovacs@nokia.com",
                        OHM_LICENSE_NON_FREE,
                        plugin_init,
