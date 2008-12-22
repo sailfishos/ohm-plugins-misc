@@ -15,7 +15,7 @@ OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("headset", "Wired headset events" , &DBG_HEADSET),
     OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT));
 
-#define BT_DEVICE "connected_bt_device"
+#define BT_DEVICE "com.nokia.policy.connected_bt_device"
 
 static gchar *token = "button";
 
@@ -564,14 +564,21 @@ static int dres_accessory_request(const char *name, int driver, int connected)
 /* bluetooth */
     
 
-OhmFact * bt_get_connected()
+static OhmFact * bt_get_connected(const gchar *path)
 {
     OhmFact *ret = NULL;
+    GSList *e, *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
 
-    GSList *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
-    if (list)
-        ret = list->data;
-    
+    for (e = list; e != NULL; e = g_slist_next(e)) {
+        OhmFact *tmp = (OhmFact *) e->data;
+        GValue *gval = ohm_fact_get(tmp, "bt_path");
+        if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
+                && strcmp(path, g_value_get_string(gval)) == 0) {
+            ret = e->data;
+            break;
+        }
+    }
+
     /* FIXME: free the list? why isn't it freed elsewhere? */
 
     return ret;
@@ -595,8 +602,7 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
             &path,
             DBUS_TYPE_INVALID)) {
         
-        
-        OhmFact *bt_connected = bt_get_connected();
+        OhmFact *bt_connected = bt_get_connected(path);
 
         if (bt_connected) {
             GValue *gval = ohm_fact_get(bt_connected, "bt_path");
@@ -607,12 +613,18 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
 
                 GValue *bt_type = ohm_fact_get(bt_connected, "bt_type");
                 if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING) {
+    
+                    OHM_DEBUG(DBG_BT, "BT adapter setting %s to be disconnected",
+                            (char *) g_value_get_string(bt_type));
 
                     dres_accessory_request((char *) g_value_get_string(bt_type), -1, 0);
+
+                    /* remove the fact from the FS */
+                    ohm_fact_store_remove(fs, bt_connected);
                 }
             }
         }
-        /* else a bt device disconnected but there were no bt headsets
+        /* else a bt device disconnected but there were no known bt headsets
          * connected, just disregard */
     }
 
@@ -632,7 +644,7 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
     /* printf("Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
        path, (int) val); */
 
-    bt_connected = bt_get_connected();
+    bt_connected = bt_get_connected(path);
 
     if (connected) {
         /* add the object path to the bluetooth fact in order to
@@ -646,6 +658,13 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
         if (!bt_connected) {
             /* first time: create a new fact */
             bt_connected = ohm_fact_new(BT_DEVICE);
+            ohm_fact_store_insert(fs, bt_connected);
+        }
+        else {
+            /* We are connecting even though we already have a fact,
+             * perhaps in this case we are just changing the profile? */
+
+            OHM_DEBUG(DBG_BT, "We already have a fact for the connecting device!");
         }
 
         gval_1 = ohm_value_from_string(path);
@@ -657,24 +676,18 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
     else {
         /* remove the object path from the bluetooth fact */
 
-        GValue *gval = NULL;
-
         if (bt_connected) {
-            gval = ohm_fact_get(bt_connected, "bt_path");
-            if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
-                    && strcmp(path, g_value_get_string(gval)) == 0) {
-
-                /* we are removing what we inserted */
-                ohm_fact_set(bt_connected, "bt_path", NULL);
-                ohm_fact_set(bt_connected, "bt_type", NULL);
-
-            }
+            
+            /* remove the fact from the FS */
+            ohm_fact_store_remove(fs, bt_connected);
         }
         else {
             /* possibly OHM was started after a BT headset was
              * connected? */
         }
     }
+    
+    OHM_DEBUG(DBG_BT, "Setting %s to be %s", type, connected ? "connected" : "disconnected");
 
     dres_accessory_request(type, -1, connected ? 1 : 0);
 
