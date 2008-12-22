@@ -8,14 +8,16 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
 
+#define BT_DEVICE "connected_bt_device"
+
 static gchar *token = "button";
 
 static OhmFactStore  *fs;
 
-static gboolean headset_init(OhmPlugin *plugin);
-static gboolean headset_deinit(OhmPlugin *plugin);
-static gboolean bluetooth_init(OhmPlugin *plugin);
-static gboolean bluetooth_deinit(OhmPlugin *plugin);
+static gboolean headset_init(OhmPlugin *);
+static gboolean headset_deinit(OhmPlugin *);
+static gboolean bluetooth_init(OhmPlugin *);
+static gboolean bluetooth_deinit(OhmPlugin *);
 
 #if 0
 static void update_factstore_entry(char *, char *, int);
@@ -23,7 +25,7 @@ static const char *get_string_field(OhmFact *, char *);
 static int get_integer_field(OhmFact *, char *);
 #endif
 
-static int dres_accessory_request(char *, int, int);
+static int dres_accessory_request(const char *, int, int);
 
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
 
@@ -327,75 +329,6 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
     return found;
 }
 
-gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data)
-{
-    GValue   *capabilities = NULL;
-    gboolean  found = FALSE;
-
-    (void)capability;
-    (void)added;
-    (void)removed;
-    (void)user_data;
-
-    /* printf("Possible hal headset event received!\n"); */
-
-    capabilities = ohm_fact_get(hal_fact, "info.capabilities");
-
-    if (capabilities == NULL) {
-        /* printf("Headset removed or something\n"); */
-    }
-    else if (G_VALUE_TYPE(capabilities) == G_TYPE_STRING) {
-        const gchar *escaped_caps = g_value_get_string(capabilities);
-#define STRING_DELIMITER "\\"
-        gchar **caps = g_strsplit(escaped_caps, STRING_DELIMITER, 0);
-#undef STRING_DELIMITER
-        gchar **caps_iter = caps;
-        
-        for (; *caps_iter != NULL; caps_iter++) {
-            gchar *cap = *caps_iter;
-
-            if (cap && strcmp(cap, "button") == 0) {
-                GValue *gval_b = ohm_fact_get(hal_fact, "button.state.value");
-                GValue *gval_id = ohm_fact_get(hal_fact, "platform.id");
-
-                if (gval_b &&
-                    G_VALUE_TYPE(gval_b) == G_TYPE_INT &&
-                    gval_id &&
-                    G_VALUE_TYPE(gval_id) == G_TYPE_STRING)
-                {
-                    gboolean value_b = g_value_get_int(gval_b);
-                    const gchar *value_id = g_value_get_string(gval_id);
-                
-                    if (!strcmp(value_id, "headphone")) {
-                        /* printf("Fact has the headset capability\n");
-                        */
-                        if (value_b) {
-                            printf("Headset inserted!\n");
-
-                            dres_accessory_request("headset", -1, 1);
-
-                            found = TRUE;
-                            break;
-                        }
-                        else if (!value_b) {
-                            printf("Headset removed!\n");
-
-                            dres_accessory_request("headset", -1, 0);
-
-                            found = TRUE;
-                            break;
-                        }
-                        /* else redundant event */
-                    }
-                }
-            }
-        }
-        g_strfreev(caps);
-    }
-
-    return found;
-}
-
 static gboolean headset_deinit(OhmPlugin *plugin)
 {
     (void)plugin;
@@ -407,7 +340,7 @@ static gboolean headset_init(OhmPlugin *plugin)
 {
     (void)plugin;
  
-    return set_observer("input.jack", headset_cb, token);
+    return set_observer("input.jack", complete_headset_cb, token);
 }
 
 /* headset part ends */
@@ -551,7 +484,7 @@ static int get_integer_field(OhmFact *fact, char *name)
 }
 #endif
 
-static int dres_accessory_request(char *name, int driver, int connected)
+static int dres_accessory_request(const char *name, int driver, int connected)
 {
 #define DRES_VARTYPE(t)  (char *)(t)
 #define DRES_VARVALUE(s) (char *)(s)
@@ -587,6 +520,20 @@ static int dres_accessory_request(char *name, int driver, int connected)
 }
 
 /* bluetooth */
+    
+
+OhmFact * bt_get_connected()
+{
+    OhmFact *ret = NULL;
+
+    GSList *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
+    if (list)
+        ret = list->data;
+    
+    /* FIXME: free the list? why isn't it freed elsewhere? */
+
+    return ret;
+}
 
 static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg, void *data)
 {
@@ -606,7 +553,25 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
             &path,
             DBUS_TYPE_INVALID)) {
         
-        dres_accessory_request("bta2dp", -1, 0);
+        
+        OhmFact *bt_connected = bt_get_connected();
+
+        if (bt_connected) {
+            GValue *gval = ohm_fact_get(bt_connected, "bt_path");
+            
+            gval = ohm_fact_get(bt_connected, "bt_path");
+            if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
+                    && strcmp(path, g_value_get_string(gval)) == 0) {
+
+                GValue *bt_type = ohm_fact_get(bt_connected, "bt_type");
+                if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING) {
+
+                    dres_accessory_request((char *) g_value_get_string(bt_type), -1, 0);
+                }
+            }
+        }
+        /* else a bt device disconnected but there were no bt headsets
+         * connected, just disregard */
     }
 
 end:
@@ -617,10 +582,67 @@ end:
     (void) c;
 }
 
+static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboolean connected)
+{
+        
+    OhmFact *bt_connected = NULL;
+
+    /* printf("Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
+       path, (int) val); */
+
+    bt_connected = bt_get_connected();
+
+    if (connected) {
+        /* add the object path to the bluetooth fact in order to
+         * remember the device */
+
+        /* note: assumption is that we have only one device
+         * connected at a time */
+
+        GValue *gval_1 = NULL, *gval_2 = NULL;
+
+        if (!bt_connected) {
+            /* first time: create a new fact */
+            bt_connected = ohm_fact_new(BT_DEVICE);
+        }
+
+        gval_1 = ohm_value_from_string(path);
+        gval_2 = ohm_value_from_string(type);
+        ohm_fact_set(bt_connected, "bt_path", gval_1);
+        ohm_fact_set(bt_connected, "bt_type", gval_2);
+
+    }
+    else {
+        /* remove the object path from the bluetooth fact */
+
+        GValue *gval = NULL;
+
+        if (bt_connected) {
+            gval = ohm_fact_get(bt_connected, "bt_path");
+            if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
+                    && strcmp(path, g_value_get_string(gval)) == 0) {
+
+                /* we are removing what we inserted */
+                ohm_fact_set(bt_connected, "bt_path", NULL);
+                ohm_fact_set(bt_connected, "bt_type", NULL);
+
+            }
+        }
+        else {
+            /* possibly OHM was started after a BT headset was
+             * connected? */
+        }
+    }
+
+    dres_accessory_request(type, -1, connected ? 1 : 0);
+
+    return TRUE;
+
+}
+
 static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
 {
     DBusMessageIter msg_i, var_i;
-
     const gchar *path = dbus_message_get_path(msg); 
     gchar *property_name;
     gboolean val;
@@ -655,24 +677,8 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
 
         dbus_message_iter_get_basic(&var_i, &val);
 
-        /* printf("Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
-                path, (int) val); */
+        bt_connection_changed("bta2dp", path, val);
 
-        if (val) {
-            /* add the object path to the bluetooth fact in order to
-             * remember the device */
-
-            /* TODO */
-        
-        }
-        else {
-            /* remove the object path from the bluetooth fact */
-            
-            /* TODO */
-        
-        }
-
-        dres_accessory_request("bta2dp", -1, val ? 1 : 0);
     }
 
 end:
@@ -686,9 +692,49 @@ end:
 static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
 {
 
+    DBusMessageIter msg_i, var_i;
+    const gchar *path = dbus_message_get_path(msg); 
+    gchar *property_name;
+    gboolean val;
+
+    /* printf("bluetooth property changed!\n\n"); */
+    dbus_message_iter_init(msg, &msg_i);
+
+    if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_STRING) {
+        goto end;
+    }
+
+    /* get the name of the property */
+    dbus_message_iter_get_basic(&msg_i, &property_name);
+
+    /* we are only interested in "Connected" properties */
+    if (strcmp(property_name, "Connected") == 0) {
+
+        /* printf("Connected signal!\n"); */
+        dbus_message_iter_next(&msg_i);
+
+        if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
+            /* printf("The property value is not variant\n"); */
+            goto end;
+        }
+
+        dbus_message_iter_recurse(&msg_i, &var_i);
+
+        if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_BOOLEAN) {
+            /* printf("The variant value is not boolean\n"); */
+            goto end;
+        }
+
+        dbus_message_iter_get_basic(&var_i, &val);
+
+        bt_connection_changed("bthsp", path, val);
+
+    }
+
+end:
+
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    (void) msg;
     (void) data;
     (void) c;
 }
