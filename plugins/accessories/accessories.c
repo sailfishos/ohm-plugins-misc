@@ -96,122 +96,6 @@ static void plugin_exit(OhmPlugin *plugin)
 
 /* headset part */
 
-/* The purpose for this part is to do listen to the headset events from
- * wired and USB headsets and change the factstore state accordingly.
- *
- * 1. Whenever a headset is available, change the virtual headset fact
- *    to indicate that
- * 2. Map each headset to their own fact in the factstore, add or remove
- *    if neccessary
- **/
-
-#if 0                           /* old version */
-gboolean headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data)
-{
-    GValue *val_i = NULL, *capabilities = NULL;
-    OhmFact *fact = NULL;
-    gchar *fact_name = "com.nokia.policy.audio_device_connected";
-    GSList *i = NULL, *list = NULL;
-    int state = 0;
-    gboolean found = FALSE;
-
-    (void)capability;
-    (void)added;
-    (void)removed;
-    (void)user_data;
-
-    /* printf("Possible hal headset event received!\n"); */
-
-    /* find the virtual fact */
-
-    list = ohm_fact_store_get_facts_by_name(fs, fact_name);
-
-    for (i = list; i != NULL; i = g_slist_next(i)) {
-        OhmFact *of = i->data;
-
-        GValue *gval = ohm_fact_get(of, "name");
-
-        if (G_VALUE_TYPE(gval) == G_TYPE_STRING) {
-            const gchar *value = g_value_get_string(gval);
-            /* printf("field/value: '%s'/'%s'\n", field_name, value); */
-            if (strcmp(value, "headset") == 0) {
-                GValue *headset_state = ohm_fact_get(of, "state");
-                
-                if (G_VALUE_TYPE(headset_state) != G_TYPE_INT)
-                    break; /* error case */
-
-                state = g_value_get_int(headset_state);
-                fact = of; 
-                break; /* success case */
-            }
-        }
-    } 
-    
-    if (!fact) {
-        /* no virtual fact found, which is quite surprising */
-        return FALSE;
-    }
-
-    capabilities = ohm_fact_get(hal_fact, "info.capabilities");
-
-    if (capabilities == NULL) {
-        /* printf("Headset removed or something\n"); */
-    }
-    else if (G_VALUE_TYPE(capabilities) == G_TYPE_STRING) {
-        const gchar *escaped_caps = g_value_get_string(capabilities);
-#define STRING_DELIMITER "\\"
-        gchar **caps = g_strsplit(escaped_caps, STRING_DELIMITER, 0);
-#undef STRING_DELIMITER
-        gchar **caps_iter = caps;
-        
-        for (; *caps_iter != NULL; caps_iter++) {
-            gchar *cap = *caps_iter;
-
-            if (cap && strcmp(cap, "button") == 0) {
-                GValue *gval_b = ohm_fact_get(hal_fact, "button.state.value");
-                GValue *gval_id = ohm_fact_get(hal_fact, "platform.id");
-
-                if (gval_b &&
-                        G_VALUE_TYPE(gval_b) == G_TYPE_INT &&
-                        gval_id &&
-                        G_VALUE_TYPE(gval_id) == G_TYPE_STRING) {
-                    gboolean value_b = g_value_get_int(gval_b);
-                    const gchar *value_id = g_value_get_string(gval_id);
-                
-                    if (!strcmp(value_id, "headphone")) {
-                        /* printf("Fact has the headset capability\n");
-                         * */
-                        if (value_b && !state) {
-                                printf("Headset inserted!\n");
-
-                                /* change the virtual fact */
-                                val_i = ohm_value_from_int(1);
-                                ohm_fact_set(fact, "connected", val_i);
-
-                                found = TRUE;
-                                break;
-                            }
-                        else if (!value_b && state) {
-                            printf("Headset removed!\n");
-
-                            /* change the virtual fact */
-                            val_i = ohm_value_from_int(0);
-                            ohm_fact_set(fact, "connected", val_i);
-
-                            found = TRUE;
-                            break;
-                        }
-                        /* else redundant event */
-                    }
-                }
-            }
-        }
-        g_strfreev(caps);
-    }
-
-    return found;
-}
-#endif
 
 gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data)
 {
@@ -320,28 +204,11 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
         OHM_DEBUG(DBG_HEADSET, "Current state: has_set=%i, has_mic=%i, has_phones=%i", has_set, has_mic, has_phones);
 
         if (!(has_set && had_set) &&
-                ((has_mic != had_mic) ||
+                ((has_set != had_set) ||
+                (has_mic != had_mic) ||
                 (has_phones != had_phones))) {
 
             found = TRUE; /* something did change */
-
-            /* we remove what we had */
-
-            if (had_set) {
-                OHM_DEBUG(DBG_HEADSET, "removed headset!");
-                dres_accessory_request("headset", -1, 0);
-            }
-            else if (had_mic) {
-                OHM_DEBUG(DBG_HEADSET, "removed headmike!");
-                dres_accessory_request("headmike", -1, 0);
-            }
-            else if (had_phones) {
-                OHM_DEBUG(DBG_HEADSET, "removed headphones!");
-                dres_accessory_request("headphone", -1, 0);
-            }
-            else {
-                /* had nothing previously */
-            }
 
             /* we add the current stuff */
 
@@ -359,6 +226,24 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
             }
             else {
                 /* everything is now removed from the jack */
+            }
+
+            /* we remove what we had */
+            
+            if (had_set) {
+                OHM_DEBUG(DBG_HEADSET, "removed headset!");
+                dres_accessory_request("headset", -1, 0);
+            }
+            else if (had_mic) {
+                OHM_DEBUG(DBG_HEADSET, "removed headmike!");
+                dres_accessory_request("headmike", -1, 0);
+            }
+            else if (had_phones) {
+                OHM_DEBUG(DBG_HEADSET, "removed headphones!");
+                dres_accessory_request("headphone", -1, 0);
+            }
+            else {
+                /* had nothing previously */
             }
 
         }
