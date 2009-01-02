@@ -6,6 +6,7 @@
 #include <dbus/dbus.h>
 
 #include <ohm/ohm-plugin.h>
+#include <ohm/ohm-plugin-log.h>
 #include <ohm/ohm-fact.h>
 
 static gchar *token = "button";
@@ -434,7 +435,7 @@ static int dres_accessory_request(char *name, int driver, int connected)
 
     char *vars[48];
     int   i;
-    int   err;
+    int   status;
 
     vars[i=0] = "accessory_name";
     vars[++i] = DRES_VARTYPE('s');
@@ -450,11 +451,16 @@ static int dres_accessory_request(char *name, int driver, int connected)
 
     vars[++i] = NULL;
 
-    if ((err = resolve(goal, vars)) != 0)
-        printf("%s: %s() resolving '%s' failed: (%d) %s\n",
-               __FILE__, __FUNCTION__, goal, err, strerror(err));
+    status = resolve(goal, vars);
 
-    return err ? FALSE : TRUE;
+    if (status < 0)
+        OHM_ERROR("%s: %s() resolving '%s' failed: (%d) %s",
+                  __FILE__, __FUNCTION__, goal, status, strerror(-status));
+    else if (!status)
+        OHM_ERROR("%s: %s() resolving '%s' failed",
+                  __FILE__, __FUNCTION__, goal);
+
+    return status <= 0 ? FALSE : TRUE;
 
 #undef DRES_VARVALUE
 #undef DRES_VARTYPE

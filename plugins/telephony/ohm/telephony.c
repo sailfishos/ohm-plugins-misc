@@ -1032,15 +1032,15 @@ event_handler(event_t *event)
     
     status = policy_actions(event);
 
-    if (status == 0) {
-        policy_enforce(event);
-        policy_audio_update();
-    }
-    else {
+    if (status <= 0) {
         OHM_ERROR("Failed to get policy actions for event %s of call %s.",
                   event_name(event->any.type), short_path(call->path));
         /* policy_fallback(call, event); */
         return;
+    }
+    else {
+        policy_enforce(event);
+        policy_audio_update();
     }
     
     return;
