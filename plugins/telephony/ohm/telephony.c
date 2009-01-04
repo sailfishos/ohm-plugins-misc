@@ -981,7 +981,10 @@ event_handler(event_t *event)
         else
             OHM_INFO("%s is not a conference call.", call->path);
 
-        event->any.state = STATE_CREATED;
+        if (event->channel.dir == DIR_OUTGOING)
+            event->any.state = STATE_CALLOUT;
+        else
+            event->any.state = STATE_CREATED;
         event->any.call  = call;
         break;
 
@@ -1272,6 +1275,7 @@ call_disconnect(call_t *call, const char *action, event_t *event)
     if (call == event->any.call) {
         switch (event->any.state) {
         case STATE_CREATED:
+        case STATE_CALLOUT:
             call_reply(event->call.req, FALSE);
             /* fall through */
         case STATE_DISCONNECTED:
@@ -1475,6 +1479,7 @@ state_name(int state)
         STATE(DISCONNECTED, "disconnected"),
         STATE(PEER_HANGUP , "peerhangup"),
         STATE(CREATED     , "created"),
+        STATE(CALLOUT     , "callout"),
         STATE(ACTIVE      , "active"),
         STATE(ON_HOLD     , "onhold"),
         STATE(AUTOHOLD    , "autohold"),
