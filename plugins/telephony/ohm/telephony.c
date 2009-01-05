@@ -95,6 +95,7 @@ int     policy_actions(event_t *event);
 int     policy_enforce(event_t *event);
 
 int     policy_audio_update(void);
+int     policy_run_hook(char *hook_name);
 
 
 static void ring_start(int knock);
@@ -1125,6 +1126,9 @@ call_register(const char *path, const char *name, const char *peer,
         nipcall++;
     
     OHM_INFO("Call %s (#%d) registered.", path, ncscall + nipcall);
+
+    if (ncscall + nipcall == 1)
+        policy_run_hook("telephony_first_call_hook");
     
     return call;
 }
@@ -1151,6 +1155,9 @@ call_unregister(const char *path)
         ncscall--;
     else
         nipcall--;
+
+    if (ncscall + nipcall == 0)
+        policy_run_hook("telephony_last_call_hook");
     
     return 0;
 }
@@ -1599,6 +1606,16 @@ policy_audio_update(void)
     return resolve("telephony_audio_update", NULL);
 }
 
+
+/********************
+ * policy_run_hook
+ ********************/
+int
+policy_run_hook(char *hook_name)
+{
+    OHM_INFO("Running resolver hook %s.", hook_name);
+    return resolve(hook_name, NULL);
+}
 
 
 /********************
