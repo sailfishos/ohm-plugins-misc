@@ -73,6 +73,7 @@ typedef enum {
     STATE_DISCONNECTED,                        /* not connected */
     STATE_PEER_HANGUP,                         /* peer ended the call */
     STATE_CREATED,                             /* call created/alerting */
+    STATE_CALLOUT,                             /* call (out) created */
     STATE_ACTIVE,                              /* call active */
     STATE_ON_HOLD,                             /* call on hold */
     STATE_AUTOHOLD,                            /* call autoheld by us */

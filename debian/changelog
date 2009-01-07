@@ -1,3 +1,17 @@
+ohm-plugins-misc (0.6.7) unstable; urgency=low
+
+  * Autohold active calls as early as possible when calling out.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Sun, 04 Jan 2009 18:21:05 +0200
+
+ohm-plugins-misc (0.6.6) unstable; urgency=low
+
+  * Fixed BT device removal handling.
+  * Initial support for the real headset API.
+  * Added missing dvfs.ini.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 22 Dec 2008 17:06:46 +0200
+
 ohm-plugins-misc (0.6.5) unstable; urgency=low
 
   * Added a workaround for experience starvation problems.
@@ -14,6 +28,7 @@ ohm-plugins-misc (0.6.3) unstable; urgency=low
 
   * In the playback plugin fix the crash when the AllowedState property is
     sent (happens only with libplayback version 0.5-6)
+  * Initial support for the real headset API.
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Tue, 16 Dec 2008 14:25:04 +0200
 

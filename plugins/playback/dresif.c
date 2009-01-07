@@ -14,7 +14,7 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
     char *vars[48];
     char  buf[64];
     int   i;
-    int   err;
+    int   status;
 
     vars[i=0] = "playback_pid";
     vars[++i] = DRESIF_VARTYPE('s');
@@ -50,10 +50,15 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
 
     vars[++i] = NULL;
 
-    if ((err = resolve("playback_request", vars)) != 0)
-        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", err, strerror(err));
-
-    return err ? FALSE : TRUE;
+    status = resolve("playback_request", vars);
+    
+    if (status < 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed");
+    
+    return status <= 0 ? FALSE : TRUE;
 
 #undef DRESIF_VARVALUE
 #undef DRESIF_VARTYPE
@@ -65,7 +70,7 @@ static int dresif_privacy_override_request(int privacy_override, int transid)
     char *vars[48];
     char  buf[64];
     int   i;
-    int   err;
+    int   status;
 
     vars[i=0] = "privacy_override_state";
     vars[++i] = DRESIF_VARTYPE('s');
@@ -90,10 +95,15 @@ static int dresif_privacy_override_request(int privacy_override, int transid)
 
     vars[++i] = NULL;
 
-    if ((err = resolve("privacy_override_request", vars)) != 0)
-        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", err, strerror(err));
+    status = resolve("privacy_override_request", vars);
 
-    return err ? FALSE : TRUE;
+    if (status < 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed");
+    
+    return status <= 0 ? FALSE : TRUE;
 
 #undef DRESIF_VARTYPE
 }
@@ -104,7 +114,7 @@ static int dresif_mute_request(int mute, int transid)
     char *vars[48];
     char  buf[64];
     int   i;
-    int   err;
+    int   status;
 
     vars[i=0] = "mute_state";
     vars[++i] = DRESIF_VARTYPE('i');
@@ -129,10 +139,15 @@ static int dresif_mute_request(int mute, int transid)
 
     vars[++i] = NULL;
 
-    if ((err = resolve("audio_mute_request", vars)) != 0)
-        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", err, strerror(err));
+    status = resolve("audio_mute_request", vars);
 
-    return err ? FALSE : TRUE;
+    if (status < 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed");
+    
+    return status <= 0 ? FALSE : TRUE;
 
 #undef DRESIF_VARTYPE
 }

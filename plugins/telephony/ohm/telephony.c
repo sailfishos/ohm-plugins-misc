@@ -95,6 +95,7 @@ int     policy_actions(event_t *event);
 int     policy_enforce(event_t *event);
 
 int     policy_audio_update(void);
+int     policy_run_hook(char *hook_name);
 
 
 static void ring_start(int knock);
@@ -981,7 +982,10 @@ event_handler(event_t *event)
         else
             OHM_INFO("%s is not a conference call.", call->path);
 
-        event->any.state = STATE_CREATED;
+        if (event->channel.dir == DIR_OUTGOING)
+            event->any.state = STATE_CALLOUT;
+        else
+            event->any.state = STATE_CREATED;
         event->any.call  = call;
         break;
 
@@ -1032,15 +1036,15 @@ event_handler(event_t *event)
     
     status = policy_actions(event);
 
-    if (status == 0) {
-        policy_enforce(event);
-        policy_audio_update();
-    }
-    else {
+    if (status <= 0) {
         OHM_ERROR("Failed to get policy actions for event %s of call %s.",
                   event_name(event->any.type), short_path(call->path));
         /* policy_fallback(call, event); */
         return;
+    }
+    else {
+        policy_enforce(event);
+        policy_audio_update();
     }
     
     return;
@@ -1122,6 +1126,9 @@ call_register(const char *path, const char *name, const char *peer,
         nipcall++;
     
     OHM_INFO("Call %s (#%d) registered.", path, ncscall + nipcall);
+
+    if (ncscall + nipcall == 1)
+        policy_run_hook("telephony_first_call_hook");
     
     return call;
 }
@@ -1148,6 +1155,9 @@ call_unregister(const char *path)
         ncscall--;
     else
         nipcall--;
+
+    if (ncscall + nipcall == 0)
+        policy_run_hook("telephony_last_call_hook");
     
     return 0;
 }
@@ -1272,6 +1282,7 @@ call_disconnect(call_t *call, const char *action, event_t *event)
     if (call == event->any.call) {
         switch (event->any.state) {
         case STATE_CREATED:
+        case STATE_CALLOUT:
             call_reply(event->call.req, FALSE);
             /* fall through */
         case STATE_DISCONNECTED:
@@ -1475,6 +1486,7 @@ state_name(int state)
         STATE(DISCONNECTED, "disconnected"),
         STATE(PEER_HANGUP , "peerhangup"),
         STATE(CREATED     , "created"),
+        STATE(CALLOUT     , "callout"),
         STATE(ACTIVE      , "active"),
         STATE(ON_HOLD     , "onhold"),
         STATE(AUTOHOLD    , "autohold"),
@@ -1594,6 +1606,16 @@ policy_audio_update(void)
     return resolve("telephony_audio_update", NULL);
 }
 
+
+/********************
+ * policy_run_hook
+ ********************/
+int
+policy_run_hook(char *hook_name)
+{
+    OHM_INFO("Running resolver hook %s.", hook_name);
+    return resolve(hook_name, NULL);
+}
 
 
 /********************

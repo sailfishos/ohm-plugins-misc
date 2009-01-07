@@ -28,8 +28,9 @@
  * There are four different scheduling modes supported. Disabled and fixed
  * should be self-explanatory. Dynamic mode keeps track of all boost / relax
  * requests and keeps RT-scheduling on as long as the number of boost requests
- * exceeds the number of relax request (ie. more boost requests than relax
- * requests). Flat mode always honours the last boost / relax request.
+ * exceeds the number of relax request (ie. some boost request has not been
+ * cancelled by a relax request). Flat mode always honours the last boost /
+ * relax request.
  *
  * To configure RT scheduling you need to specify a valid mode and a
  * non-zero priority in the configuration file (dvfs.ini). Below are some
