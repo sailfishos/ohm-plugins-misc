@@ -494,7 +494,7 @@ static void dbusif_send_info_to_pep(char *oper, char *group, char *pidstr,
     if (!stream || !stream[0])
         stream = "<unknown>";
 
-    if ((msg = dbus_message_new_signal(path, iface, "info")) == NULL) {
+    if ((msg = dbus_message_new_signal(path, iface, "stream_info")) == NULL) {
         OHM_ERROR("%s(): failed to create message", __FUNCTION__);
         return;
     }
