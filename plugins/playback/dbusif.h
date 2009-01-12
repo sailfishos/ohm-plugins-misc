@@ -55,7 +55,7 @@ static void dbusif_add_property_notification(char *, notify_property_cb_t);
 static void dbusif_privacy_override_changed(int);
 static void dbusif_mute_changed(int);
 static void dbusif_add_hello_notification(hello_cb_t);
-static void dbusif_send_info_to_pep(char *, char *, char *, char *);
+static void dbusif_send_stream_info_to_pep(char *, char *, char *, char *);
 
 #endif /*  __OHM_PLAYBACK_DBUSIF_H__ */
 

@@ -469,8 +469,8 @@ static void dbusif_add_hello_notification(hello_cb_t callback)
     hello_notif = callback;
 }
 
-static void dbusif_send_info_to_pep(char *oper, char *group, char *pidstr,
-                                    char *stream)
+static void dbusif_send_stream_info_to_pep(char *oper, char *group,
+                                           char *pidstr, char *stream)
 {
     static dbus_uint32_t  txid = 1;
 
@@ -678,6 +678,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     char               *sender;
     char               *state;
     char               *pid;
+    char               *stream;
     dbus_bool_t         privacy_override;
     dbus_bool_t         mute;
     client_t           *cl;
@@ -697,6 +698,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
                                         DBUS_TYPE_OBJECT_PATH, &objpath,
                                         DBUS_TYPE_STRING, &state,
                                         DBUS_TYPE_STRING, &pid,
+                                        DBUS_TYPE_STRING, &stream,
                                         DBUS_TYPE_INVALID);
         if (!success) {
             errmsg = "failed to parse playback request for state change";
@@ -714,8 +716,9 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
         }
 
         req->type = pbreq_state;
-        req->state.name = state ? strdup(state) : NULL;
-        req->state.pid  = strdup(pid);
+        req->state.name   = state ? strdup(state) : NULL;
+        req->state.pid    = strdup(pid);
+        req->state.stream = stream[0] ? strdup(stream) : NULL;
         
         sm_process_event(cl->sm, &evdata);
         
