@@ -755,7 +755,8 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
 
         sm_rename(cl->sm, name);
 
-        dbusif_send_info_to_pep("register", cl->group, cl->pid, cl->stream);
+        dbusif_send_stream_info_to_pep("register", cl->group,
+                                       cl->pid, cl->stream);
 
         client_get_state(cl, client_state, state, sizeof(state));
 
@@ -857,7 +858,9 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
     char         origst[64];
     char         state[64];
     char        *pid;
+    char        *old_pid;
     char        *stream;
+    char        *old_str;
     int          update_pid;
     int          update_str;
     int          success;
@@ -881,8 +884,11 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
 
             if (pid && (update_pid || update_str)) {
                 if (cl->pid) {
-                    dbusif_send_info_to_pep("unregister", cl->group, cl->pid,
-                                            cl->stream?cl->stream:"<unknown>");
+                    old_pid = cl->pid; 
+                    old_str = cl->stream ? cl->stream : "<unknown>";
+
+                    dbusif_send_stream_info_to_pep("unregister", cl->group,
+                                                   old_pid, old_str);
                 }
 
                 if (cl->pid)    free(cl->pid);
@@ -897,8 +903,8 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
                 }
                 client_update_factstore_entry(cl, "state", state ? state:"");
                 
-                dbusif_send_info_to_pep("register", cl->group, pid,
-                                        stream ? stream : "<unknown>");
+                dbusif_send_stream_info_to_pep("register", cl->group, pid,
+                                               stream ? stream : "<unknown>");
             }
 
             client_save_state(cl, client_reqstate, state);
@@ -1059,9 +1065,12 @@ static int update_state_deq(sm_evdata_t *evdata, void *usrdata)
 
 static int update_playhint(sm_evdata_t *evdata, void *usrdata)
 {
+#if 1
+    (void)evdata;
+    (void)usrdata;
+#else
     sm_evdata_property_t *property = &evdata->property;
     client_t             *cl       = (client_t *)usrdata;
-#if 0
     char                  playhint[64];
 
     strncpylower(playhint, property->value, sizeof(playhint));
@@ -1092,7 +1101,8 @@ static int fake_stop_pbreq(sm_evdata_t *evdata, void *usrdata)
 
     client_t *cl = (client_t *)usrdata;
 
-    dbusif_send_info_to_pep("unregister", cl->group, cl->pid, cl->stream);
+    dbusif_send_stream_info_to_pep("unregister", cl->group,
+                                   cl->pid, cl->stream);
 
     if (strcmp(state, client_get_state(cl, client_state, NULL,0))) {
         client_save_state(cl, client_reqstate, state);
