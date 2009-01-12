@@ -1,6 +1,7 @@
 ohm-plugins-misc (0.6.7) unstable; urgency=low
 
   * Autohold active calls as early as possible when calling out.
+  * Change the playback plugin "info" signal to "command".
 
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Sun, 04 Jan 2009 18:21:05 +0200
 
