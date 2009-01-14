@@ -663,7 +663,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
          * event for it. This will end the call without reactivating
          * any autoheld calls.
          *
-         * Otherwise, ei. for locally ended calls, we ignore this signal
+         * Otherwise, ie. for locally ended calls, we ignore this signal
          * and let the call be ended by the ChannelClosed signal. Similarly
          * we ignore this event if the call is a conference or a conference
          * member.
