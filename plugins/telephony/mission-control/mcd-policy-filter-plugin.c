@@ -269,6 +269,8 @@ policy_call_ended(const char *id)
     if (!dbus_connection_send(bus, msg, NULL))
         FAIL("failed to send DBUS signal %s", signame);
     
+    dbus_message_unref(msg);
+    
     return TRUE;
     
  fail:
