@@ -265,7 +265,7 @@ bus_add_match(char *type, char *interface, char *member, char *path)
 int
 bus_send(DBusMessage *msg, dbus_uint32_t *serial)
 {
-    return dbus_connection_send(bus, msg, serial);
+    return dbus_connection_send(bus, msg, serial) ? 0 : EIO;
 }
 
 
@@ -464,7 +464,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     
     path = NULL;
     type = NULL;
-    event.members = NULL;
+    memset(&event, 0, sizeof(event));
     requested = -1;
     initiator = NULL;
     init_handle = target_handle = 0;
@@ -548,6 +548,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                 event.dir = DIR_INCOMING;
         }
         
+        printf("*** requested: %d, dir: %d\n", requested, event.dir);
+
         if (event.dir == DIR_INCOMING)
             event.peer_handle = init_handle;
         else
@@ -663,7 +665,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
          * event for it. This will end the call without reactivating
          * any autoheld calls.
          *
-         * Otherwise, ei. for locally ended calls, we ignore this signal
+         * Otherwise, ie. for locally ended calls, we ignore this signal
          * and let the call be ended by the ChannelClosed signal. Similarly
          * we ignore this event if the call is a conference or a conference
          * member.
@@ -878,12 +880,12 @@ call_reply(DBusMessage *msg, int may_proceed)
 
     if ((reply = dbus_message_new_method_return(msg)) != NULL) {
         if (!dbus_message_append_args(reply, DBUS_TYPE_BOOLEAN, &allow,
-                                      DBUS_TYPE_INVALID)) {
+                                      DBUS_TYPE_INVALID))
             OHM_ERROR("Failed to create D-BUS reply.");
-            dbus_message_unref(reply);
-        }
         else
             dbus_connection_send(bus, reply, NULL);
+
+        dbus_message_unref(reply);
     }
     else
         OHM_ERROR("Failed to allocate D-BUS reply.");
@@ -932,6 +934,10 @@ event_print(event_t *event)
         OHM_INFO("call direction: %s",
                  event->call.dir == DIR_INCOMING ? "incoming" : "outgoing");
         break;
+    case EVENT_NEW_CHANNEL:
+        OHM_INFO("call direction fixup: %s",
+                 event->call.dir == DIR_INCOMING ? "incoming" : "outgoing");
+        break;
     default:
         break;
     }
@@ -959,6 +965,21 @@ event_handler(event_t *event)
                                  event->channel.members != NULL);
             call->dir = event->channel.dir;
             policy_call_export(call);
+        }
+        else {
+            /*
+             * Notes:
+             *    For calls initiated using non-telepathy means (eg. cscall)
+             *    mission-control fails to set the "outgoing" property of the
+             *    channel to true. Hence policy filter reports the call to us
+             *    as incoming. It is correctly reported in tp-rings NewChannels
+             *    signal, so we always update it here to patch things up.
+             *
+             *    XXX TODO: Maybe we should get rid of the MC-based early
+             *    direction detection altogether and always use NewChannels.
+             */
+            call->dir = event->channel.dir;
+            policy_call_update(call, UPDATE_DIR);
         }
         if (event->channel.members != NULL) {
             int     i;
@@ -1233,19 +1254,24 @@ tp_disconnect(call_t *call)
 {
     DBusMessage *msg;
     const char  *name, *path, *iface, *method;
-    
+    int          status;
+
     name   = call->name;
     path   = call->path;
     iface  = TP_CHANNEL;
     method = CLOSE;
-    msg    = dbus_message_new_method_call(name, path, iface, method);
 
-    if (msg == NULL) {
-        OHM_ERROR("Failed to allocate D-BUS Close request.");
-        return ENOMEM;
+    if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
+        status = bus_send(msg, NULL);
+        dbus_message_unref(msg);
     }
+    else {
+        OHM_ERROR("Failed to allocate D-BUS Close request.");
+        status = ENOMEM;
+    }
+
     
-    return bus_send(msg, NULL) ? 0 : EIO;
+    return status;
 }
 
 
@@ -1322,21 +1348,22 @@ tp_hold(call_t *call, int status)
     path   = call->path;
     iface  = TP_CHANNEL_HOLD;
     method = REQUEST_HOLD;
-    msg    = dbus_message_new_method_call(name, path, iface, method);
 
-    if (msg == NULL) {
-        OHM_ERROR("Failed to allocate D-BUS Hold message.");
-        return ENOMEM;
-    }
-    
-    if (!dbus_message_append_args(msg, DBUS_TYPE_BOOLEAN, &held,
-                                  DBUS_TYPE_INVALID)) {
-        OHM_ERROR("Failed to create D-BUS Hold message.");
+    if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
+        if (dbus_message_append_args(msg, DBUS_TYPE_BOOLEAN, &held,
+                                     DBUS_TYPE_INVALID))
+            status = bus_send(msg, NULL);
+        else {
+            OHM_ERROR("Failed to create D-BUS Hold message.");
+            status = EINVAL;
+        }
+        
         dbus_message_unref(msg);
-        return EINVAL;
     }
-
-    return bus_send(msg, NULL) ? 0 : EIO;
+    else
+        status = ENOMEM;
+    
+    return status;
 }
 
 
@@ -1820,16 +1847,13 @@ ring_start(int knock)
     iface   = TELEPHONY_INTERFACE;
     signame = RING_START;
     
-    if ((msg = dbus_message_new_signal(path, iface, signame)) == NULL)
-        return;
-    
-    if (!dbus_message_append_args(msg, DBUS_TYPE_BOOLEAN, &knocking,
-                                  DBUS_TYPE_INVALID)) {
+    if ((msg = dbus_message_new_signal(path, iface, signame)) != NULL) {
+        if (dbus_message_append_args(msg, DBUS_TYPE_BOOLEAN, &knocking,
+                                     DBUS_TYPE_INVALID))
+            bus_send(msg, NULL);
+        
         dbus_message_unref(msg);
-        return;
     }
-    
-    bus_send(msg, NULL);
 #else
     return;
 #endif
@@ -1852,10 +1876,10 @@ ring_stop(void)
     iface   = TELEPHONY_INTERFACE;
     signame = RING_STOP;
     
-    if ((msg = dbus_message_new_signal(path, iface, signame)) == NULL)
-        return;
-    
-    bus_send(msg, NULL);
+    if ((msg = dbus_message_new_signal(path, iface, signame)) != NULL) {
+        bus_send(msg, NULL);
+        dbus_message_unref(msg);
+    }
 #else
     return;
 #endif
