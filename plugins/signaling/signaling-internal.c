@@ -473,7 +473,7 @@ send_ipc_signal(gpointer data)
 
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
     if (fs == NULL) {
-        goto fail;
+        goto end;
     }
 
     /**
@@ -515,18 +515,18 @@ send_ipc_signal(gpointer data)
 
     if ((dbus_signal =
                 dbus_message_new_signal(path, interface, "actions")) == NULL)
-        goto fail;
+        goto end;
 
     /* open message_iter */
     dbus_message_iter_init_append(dbus_signal, &message_iter);
 
     if (!dbus_message_iter_append_basic(&message_iter, DBUS_TYPE_UINT32, &txid))
-        goto fail;
+        goto end;
 
     /* open command_array_iter */
     if (!dbus_message_iter_open_container(&message_iter, DBUS_TYPE_ARRAY,
                 "{saa(sv)}", &command_array_iter))
-        goto fail;
+        goto end;
 
     for (i = facts; i != NULL; i = g_slist_next(i)) {
         gchar *f = i->data;
@@ -541,20 +541,20 @@ send_ipc_signal(gpointer data)
         if (!dbus_message_iter_open_container(&command_array_iter, DBUS_TYPE_DICT_ENTRY,
                     NULL, &command_array_entry_iter)) {
             printf("error opening container\n");
-            goto fail;
+            goto end;
         }
 
         if (!dbus_message_iter_append_basic
                 (&command_array_entry_iter, DBUS_TYPE_STRING, &f)) {
             printf("error appending OhmFact key\n");
-            goto fail;
+            goto end;
         }
 
         /* open fact_iter */
         if (!dbus_message_iter_open_container(&command_array_entry_iter, DBUS_TYPE_ARRAY,
                     "a(sv)", &fact_iter)) {
             printf("error opening container\n");
-            goto fail;
+            goto end;
         }
 
         for (j = ohm_facts; j != NULL; j = g_slist_next(j)) {
@@ -568,7 +568,7 @@ send_ipc_signal(gpointer data)
             if (!dbus_message_iter_open_container(&fact_iter, DBUS_TYPE_ARRAY,
                         "(sv)", &fact_struct_iter)) {
                 printf("error opening container\n");
-                goto fail;
+                goto end;
             }
 
 #if 0
@@ -601,31 +601,31 @@ send_ipc_signal(gpointer data)
                 if (!dbus_message_iter_open_container(&fact_struct_iter, DBUS_TYPE_STRUCT,
                             NULL, &fact_struct_field_iter)) {
                     printf("error opening container\n");
-                    goto fail;
+                    goto end;
                 }
 
                 if (!dbus_message_iter_append_basic
                         (&fact_struct_field_iter, DBUS_TYPE_STRING, &field_name)) {
                     printf("error appending OhmFact field\n");
-                    goto fail;
+                    goto end;
                 }
 
                 /* open variant_iter */
                 if (!dbus_message_iter_open_container(&fact_struct_field_iter, DBUS_TYPE_VARIANT, sig, &variant_iter)) {
                     printf("error opening container\n");
-                    goto fail;
+                    goto end;
                 }
 
                 if (dbus_type == DBUS_TYPE_STRING) {
                     if (!dbus_message_iter_append_basic(&variant_iter, dbus_type, &value)) {
                         printf("error appending OhmFact value\n");
-                        goto fail;
+                        goto end;
                     }
                 }
                 else {
                     if (!dbus_message_iter_append_basic(&variant_iter, dbus_type, value)) {
                         printf("error appending OhmFact value\n");
-                        goto fail;
+                        goto end;
                     }
                 }
 
@@ -650,22 +650,18 @@ send_ipc_signal(gpointer data)
     dbus_message_iter_close_container(&message_iter, &command_array_iter);
 
     if (!dbus_connection_send(connection, dbus_signal, NULL))
-        goto fail;
+        goto end;
 
-    signal->klass->pending_signals = g_slist_remove(signal->klass->pending_signals, signal);
-    g_object_unref(transaction);
-    g_free(signal);
+end:
 
-    /* FALSE means that this is not called again */
-    return FALSE;
+    /* this function is meant to be called from an idle loop, so we
+     * don't handle sending errors -- they will just timeout */
 
-fail:
-
-    OHM_DEBUG(DBG_SIGNALING, "emitting the signal failed\n");
     g_object_unref(transaction);
     signal->klass->pending_signals = g_slist_remove(signal->klass->pending_signals, signal);
     g_free(signal);
     dbus_message_unref(dbus_signal);
+
     return FALSE;
 }
 
