@@ -7,10 +7,18 @@ Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev, libglib2.0-dev, libdbus-glib
 
 Package: ohm-plugins-misc
 Architecture: any
-Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0, osso-mission-control, libdres0 (>= 0.0.7)
+Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0, osso-mission-control, libdres0 (>= 0.0.7), policy-settings
 XB-GIT-ID: ${Git-Id}
 Description: Miscallaneous OHM Nokia plugins.
  OHM Nokia miscallaneous plugins.
  .
  OHM Nokia miscallaneous plugins.
 
+Package: ohm-plugins-misc-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: ohm-plugins-misc (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for OHM miscallaneous plugins.
+ Debug symbols for OHM miscallaneous plugins.

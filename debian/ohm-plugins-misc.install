@@ -1,0 +1,3 @@
+usr/lib/mission-control/*
+usr/lib/ohm/*
+etc/ohm/plugins.d/*

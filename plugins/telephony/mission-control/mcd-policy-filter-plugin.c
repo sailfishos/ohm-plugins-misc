@@ -44,7 +44,6 @@ static DBusHandlerResult owner_changed(DBusConnection *, DBusMessage *, void *);
 static DBusConnection *bus;                 /* session bus connections */
 static char           *calls[MAX_CALLS];    /* object paths of current calls */
 static int             ncall;               /* number of current calls */
-
 static int             policy_down = 1;     /* whether OHM/policy is down */
 
 
@@ -116,7 +115,7 @@ owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
     if ((!prev || !prev[0]) && (curr && curr[0])) {
         INFO("policy interface came up at %s", curr);
         policy_down = 0;
-        /* XXX TODO: should send current list of calls... */
+        /* XXX TODO: should we determine and send current list of calls ? */
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     
@@ -246,6 +245,7 @@ policy_call_ended(const char *id)
     char         *path, *iface, *signame;
     dbus_int32_t  n;
 
+    INFO("call %s ended", id ? id : "<NULL>");
     
     if (bus == NULL)
         FAIL("no connection to D-BUS");
@@ -269,6 +269,8 @@ policy_call_ended(const char *id)
     if (!dbus_connection_send(bus, msg, NULL))
         FAIL("failed to send DBUS signal %s", signame);
     
+    dbus_message_unref(msg);
+    
     return TRUE;
     
  fail:
@@ -285,81 +287,6 @@ policy_call_ended(const char *id)
  *                      *** mission control inteface ***                     *
  *****************************************************************************/
 
-#if 0
-static void
-set_online(gpointer key, gpointer value, gpointer data)
-{
-    McdAccountManager *manager = (McdAccountManager *)data;
-    char              *name    = (char *)key;
-    McdAccount        *account;
-    int                status;
-
-    account = mcd_account_manager_lookup_account(manager, name);
-
-    if (account != NULL) {
-        status = TP_CONNECTION_PRESENCE_TYPE_AVAILABLE;
-        mcd_account_request_presence(account, status, "available", "now");
-    }
-    
-    (void)value;
-}
-#endif
-
-
-#if 0
-static void
-presence_force_all_online(McdDispatcher *mcd)
-{
-    McdMaster          *master;
-    McdAccountManager  *manager;
-    McdAccount         *account;
-    GHashTable         *accounts;
-    gchar             **names;
-    char               *name;
-    int                 status, i;
-
-    printf("*** trying to force all online accounts to be available...\n");
-    
-    master  = NULL;
-    manager = NULL;
-    account = NULL;
-    
-    g_object_get(mcd, "mcd-master", &master, NULL);
-    if (master == NULL) {
-        printf("*** failed to get MCD master\n");
-        return;
-    }
-
-    g_object_get(master, "account-manager", &manager, NULL);
-    if (manager == NULL) {
-        printf("*** failed to get account manager\n");
-        return;
-    }
-        
-    mcd_master_get_online_connection_names(master, &names);
-
-    for (i = 0; (name = names[i]) != NULL; i++) {
-        printf("*** trying to force account %s online...\n", name);
-        
-        account = mcd_account_manager_lookup_account(manager, name);
-        if (account != NULL) {
-            status = TP_CONNECTION_PRESENCE_TYPE_AVAILABLE;
-            mcd_account_request_presence(account, status, "available", "now");
-        }
-        
-        g_free(name);
-    }
-
-    
-    accounts = mcd_account_manager_get_valid_accounts(manager);
-    if (account != NULL) {
-        printf("*** setting all accounts online, bwahahahahaha!!!\n");
-        g_hash_table_foreach(accounts, set_online, manager);
-    }
-    else         
-        printf("*** oh no... no accounts to fiddle with !!!\n");
-}
-#endif
 
 static int
 call_add(const char *path)
@@ -421,13 +348,14 @@ channel_path(McdChannel *chnl)
 static void
 abort_channel(McdChannel *chnl, void *data)
 {
-    const char *id = channel_path(chnl);
+    char *id = (char *)data;
 
     g_signal_handlers_disconnect_by_func(chnl, G_CALLBACK(abort_channel), data);
 
     policy_call_ended(id);
     call_del(id);
-    
+    g_free(id);
+
     g_object_unref(G_OBJECT(chnl));
 }
 
@@ -452,6 +380,7 @@ request_call(McdDispatcherContext *ctx)
     McdChannel *chnl = mcd_dispatcher_context_get_channel(ctx);
     GQuark      type = chnl ? mcd_channel_get_channel_type_quark(chnl) : 0;
     const char *id   = channel_path(chnl);
+    char       *data;
     GValue      gout;
     int         incoming;
 
@@ -466,6 +395,7 @@ request_call(McdDispatcherContext *ctx)
     
     incoming = g_value_get_boolean(&gout) ? FALSE : TRUE;
     
+    INFO("new media channel %s", id ? id : "<null>");
     INFO("call direction is %s", incoming ? "incoming" : "outoing");
 
     if (id == NULL) {
@@ -486,7 +416,8 @@ request_call(McdDispatcherContext *ctx)
     }
 
     g_object_ref(G_OBJECT(chnl));
-    g_signal_connect(chnl, "abort", G_CALLBACK(abort_channel), NULL);
+    data = g_strdup(id);
+    g_signal_connect(chnl, "abort", G_CALLBACK(abort_channel), data);
 }
 
 
@@ -518,10 +449,6 @@ mcd_plugin_init(McdPlugin *plugin)
     
     if (!dbus_init())
         ERROR("%s: plugin initialization failed", PLUGIN_NAME);
-    
-#if 0 /* pathetic test hack */
-    presence_force_all_online(mcd);
-#endif
     
     mcd_dispatcher_add_filters(mcd, policy_filters);
 }
