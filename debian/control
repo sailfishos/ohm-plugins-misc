@@ -14,3 +14,11 @@ Description: Miscallaneous OHM Nokia plugins.
  .
  OHM Nokia miscallaneous plugins.
 
+Package: ohm-plugins-misc-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: ohm-plugins-misc (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for OHM miscallaneous plugins.
+ Debug symbols for OHM miscallaneous plugins.
