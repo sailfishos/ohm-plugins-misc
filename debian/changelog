@@ -1,3 +1,12 @@
+ohm-plugins-misc (0.6.8) unstable; urgency=low
+
+  * Support for the new client identification based on DBusID and Path
+  * Fixes in playback Queue management
+  * Support for getting the AllowdState property
+  * set the playhint initial value to "Play" instead of non/NULL
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Fri, 16 Jan 2009 17:54:00 +0200
+
 ohm-plugins-misc (0.6.7) unstable; urgency=low
 
   * Autohold active calls as early as possible when calling out.

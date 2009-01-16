@@ -667,15 +667,18 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     (void)conn;
     (void)user_data;
 
-    static const char  *interface  = DBUS_PLAYBACK_MANAGER_INTERFACE;
-    static const char  *rq_state   = DBUS_PLAYBACK_REQ_STATE_METHOD;
-    static const char  *rq_privacy = DBUS_PLAYBACK_REQ_PRIVACY_METHOD;
-    static const char  *rq_mute    = DBUS_PLAYBACK_REQ_MUTE_METHOD;
-    static sm_evdata_t  evdata     = { .evid = evid_playback_request };
+    static const char  *interface   = DBUS_PLAYBACK_MANAGER_INTERFACE;
+    static const char  *rq_state    = DBUS_PLAYBACK_REQ_STATE_METHOD;
+    static const char  *rq_privacy  = DBUS_PLAYBACK_REQ_PRIVACY_METHOD;
+    static const char  *rq_mute     = DBUS_PLAYBACK_REQ_MUTE_METHOD;
+    static const char  *get_allowed = DBUS_PLAYBACK_GET_ALLOWED_METHOD;
+    static sm_evdata_t  evdata      = { .evid = evid_playback_request };
 
+    DBusMessage        *reply;
     char               *msgpath;
     char               *objpath;
     char               *sender;
+    dbus_uint32_t       serial;
     char               *state;
     char               *pid;
     char               *stream;
@@ -684,6 +687,9 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     client_t           *cl;
     pbreq_t            *req;
     const char         *errmsg;
+    char               *states[2];
+    char              **v_ARRAY;
+    int                 i;
     int                 success;
 
     if (dbus_message_is_method_call(msg, interface, rq_state)) {
@@ -700,6 +706,19 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
                                         DBUS_TYPE_STRING, &pid,
                                         DBUS_TYPE_STRING, &stream,
                                         DBUS_TYPE_INVALID);
+
+        /********* this is temporary to support the old libplaybacks *********/
+        if (!success) {
+            stream = "";
+
+            success = dbus_message_get_args(msg, NULL,
+                                            DBUS_TYPE_OBJECT_PATH, &objpath,
+                                            DBUS_TYPE_STRING, &state,
+                                            DBUS_TYPE_STRING, &pid,
+                                            DBUS_TYPE_INVALID);
+        }
+        /************************ end of temporary ***************************/
+
         if (!success) {
             errmsg = "failed to parse playback request for state change";
             goto rq_state_failed;
@@ -785,6 +804,51 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
         return DBUS_HANDLER_RESULT_HANDLED;
 
     rq_mute_failed:
+        dbusif_reply_with_error(msg, NULL, errmsg);
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else if (dbus_message_is_method_call(msg, interface, get_allowed)) {
+        
+        msgpath = (char *)dbus_message_get_path(msg);
+        sender  = (char *)dbus_message_get_sender(msg);
+        serial  = dbus_message_get_serial(msg);
+
+        OHM_DEBUG(DBG_DBUS,"received allowed state request from %s",sender);
+
+        success = dbus_message_get_args(msg, NULL,
+                                        DBUS_TYPE_OBJECT_PATH, &objpath,
+                                        DBUS_TYPE_INVALID);
+        if (!success) {
+            errmsg = "failed to parse playback request for allowed state";
+            goto get_allowed_failed;
+        }
+
+        if ((cl = client_find_by_dbus(sender, objpath)) == NULL) {
+            errmsg = "unable to find playback object";
+            goto get_allowed_failed;
+        }
+
+        states[i=0] = "Stop";
+        if (cl->playhint && strcmp(cl->playhint, states[i])) {
+            states[++i] = cl->playhint;
+        }
+        v_ARRAY = states;
+
+        reply   = dbus_message_new_method_return(msg);
+        success = dbus_message_append_args(reply,
+                                           DBUS_TYPE_ARRAY,
+                                           DBUS_TYPE_STRING,  &v_ARRAY, i+1,
+                                           DBUS_TYPE_INVALID);
+
+
+        dbus_connection_send(sess_conn, reply, &serial);
+
+        dbus_message_unref(reply);
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+
+    get_allowed_failed:
         dbusif_reply_with_error(msg, NULL, errmsg);
 
         return DBUS_HANDLER_RESULT_HANDLED;

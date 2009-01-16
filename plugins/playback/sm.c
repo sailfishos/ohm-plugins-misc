@@ -865,7 +865,7 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
     int          update_str;
     int          success;
 
-    if ((req = pbreq_get_first(cl)) == NULL)
+    if ((req = pbreq_get_first(cl)) == NULL || req->waiting)
         success = FALSE;
     else {
         success = TRUE;
@@ -910,8 +910,10 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
             client_save_state(cl, client_reqstate, state);
             client_update_factstore_entry(cl, "reqstate", state);
 
-            if (dresif_state_request(cl, state, req->trid))
+            if (dresif_state_request(cl, state, req->trid)) {
+                req->waiting = TRUE;
                 client_save_state(cl, client_setstate, state);
+            }
             else {
                 /* dres failure: undo the data changes */
                 client_save_state(cl, client_reqstate, origst);
@@ -1376,7 +1378,9 @@ static void schedule_deferred_request(client_t *cl)
 {
     static sm_evdata_t  evdata = { .evid = evid_playback_request };
 
-    if (pbreq_get_first(cl)) {
+    pbreq_t *req;
+
+    if ((req = pbreq_get_first(cl)) != NULL && !req->waiting) {
         sm_schedule_event(cl->sm, &evdata, NULL);
         return;
     }
