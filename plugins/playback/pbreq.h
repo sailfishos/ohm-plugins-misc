@@ -17,6 +17,7 @@ typedef struct pbreq_s {
     struct client_s  *cl;
     DBusMessage      *msg;
     int               trid;     /* transaction id */
+    int               waiting;  /* waiting for transaction completion */
     pbreq_type_t      type;
     union {
         struct {

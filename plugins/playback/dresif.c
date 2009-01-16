@@ -16,13 +16,13 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
     int   i;
     int   status;
 
-    vars[i=0] = "playback_pid";
+    vars[i=0] = "playback_dbusid";
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = DRESIF_VARVALUE(cl->pid ? cl->pid : "");
+    vars[++i] = DRESIF_VARVALUE(cl->dbusid ? cl->dbusid : "");
 
-    vars[++i] = "playback_stream";
+    vars[++i] = "playback_object";
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = DRESIF_VARVALUE(cl->stream ? cl->stream : "");
+    vars[++i] = DRESIF_VARVALUE(cl->object ? cl->object : "");
 
     vars[++i] = "playback_state";
     vars[++i] = DRESIF_VARTYPE('s');

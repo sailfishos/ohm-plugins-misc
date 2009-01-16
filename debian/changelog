@@ -1,9 +1,20 @@
+ohm-plugins-misc (0.6.9) unstable; urgency=low
+
+  * Support for the new client identification based on DBusID and Path
+  * Fixes in playback Queue management
+  * Support for getting the AllowdState property
+  * set the playhint initial value to "Play" instead of non/NULL
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Fri, 16 Jan 2009 17:54:00 +0200
+
 ohm-plugins-misc (0.6.8) unstable; urgency=low
 
   * Pass channel object path to abort handler as an argument (Fixes: NB#97975).
   * Changed the "info" signal to "stream_info" in the playback plugin.
   * Removed the path definition from the info signal registration.
-  * Invoke resolver hooks when first call is created or the last call destroyed.
+  * Invoke resolver hooks when first call is created or the last call destroyed
+  * Workaround for MC call direction misdetection.
+  * Memory leak fixes.
 
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 14 Jan 2009 15:00:36 +0200
 

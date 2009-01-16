@@ -38,11 +38,12 @@ static client_t *client_create(char *dbusid, char *object,
             else {
                 memset(cl, 0, sizeof(*cl));
 
-                cl->dbusid  = dbusid ? strdup(dbusid) : NULL;
-                cl->object  = object ? strdup(object) : NULL;
-                cl->pid     = pid    ? strdup(pid)    : NULL;
-                cl->stream  = stream ? strdup(stream) : NULL;
-                cl->sm      = sm;  
+                cl->dbusid   = dbusid ? strdup(dbusid) : NULL;
+                cl->object   = object ? strdup(object) : NULL;
+                cl->pid      = pid    ? strdup(pid)    : NULL;
+                cl->stream   = stream ? strdup(stream) : NULL;
+                cl->playhint = strdup("Play");
+                cl->sm       = sm;  
 
                 next = (void *)&cl_head;
                 prev = cl_head.prev;
@@ -173,7 +174,7 @@ static int client_add_factstore_entry(char *dbusid, char *object,
         { fldtype_string , "state"    , .value.string  = "none"        },
         { fldtype_string , "reqstate" , .value.string  = "none"        },
         { fldtype_string , "setstate" , .value.string  = "stop"        },
-        { fldtype_string , "playhint" , .value.string  = "none"        },
+        { fldtype_string , "playhint" , .value.string  = "play"        },
         { fldtype_invalid, NULL       , .value.string  = NULL          }
     };
 
