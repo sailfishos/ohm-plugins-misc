@@ -3,6 +3,7 @@ SUBDIRS = 	     \
 	hal          \
 	playback     \
 	accessories  \
+	videoep      \
 	console      \
         dvfs
 
