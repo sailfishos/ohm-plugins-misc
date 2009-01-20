@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.10) unstable; urgency=low
+
+  * videoep plugin added
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Tue, 20 Jan 2009 15:30:00 +0200
+
 ohm-plugins-misc (0.6.9) unstable; urgency=low
 
   * Support for the new client identification based on DBusID and Path
