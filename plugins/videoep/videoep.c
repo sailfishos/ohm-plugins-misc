@@ -74,13 +74,22 @@ static void plugin_init(OhmPlugin *plugin)
         videoep->keychange_cb = keychange_cb; 
 
         /* ******************* temporary for test ************************* */
-        fbrt_device_new("/dev/fb2", 1024);
+        fbrt_device_new("/dev/fb0", 0);
+        fbrt_device_new("/dev/fb1", 1024);
         fbrt_route_new("builtinandtvout");
         fbrt_route_new("builtin");
-        fbrt_config_new_clone("/dev/fb2", "builtinandtvout", "/dev/fb0",
+
+        fbrt_config_new_clone("/dev/fb1", "builtinandtvout", "/dev/fb0",
                               "DIGIT", 1, 640,480, 0,0);
-        fbrt_config_new_clone("/dev/fb2", "builtin", "/dev/fb0",
+        fbrt_config_new_clone("/dev/fb1", "builtin", "/dev/fb0",
                               "DIGIT", 0, 640,480, 0,0);
+
+        /*
+        fbrt_config_new_route("/dev/fb0", "builtinandtvout", "DIGIT", 1);
+        fbrt_config_new_route("/dev/fb0", "builtin", "LCD", 1);
+        */
+
+
         /* ******************** end of temporary ************************** */
 
 
