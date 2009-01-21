@@ -82,6 +82,7 @@ static int route_action(videoep_t *videoep, void *data)
     route_t *route = data;
 
     printf("*** Got video route to '%s'\n", route->device);
+    fbrt_route_video(route->device, "");
 
     return TRUE;
 }
