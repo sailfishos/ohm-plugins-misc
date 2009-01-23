@@ -1242,6 +1242,7 @@ call_destroy(call_t *call)
         g_free(call->name);
         g_free(call->path);
         g_free(call);
+        g_free(call->peer);
     }
 }
 

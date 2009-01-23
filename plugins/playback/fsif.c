@@ -218,7 +218,7 @@ static int matching_entry(OhmFact *fact, fsif_field_t *selist)
                         
         case fldtype_string:
             get_field(fact, fldtype_string, se->name, &strval);
-            if (strcmp(strval, se->value.string))
+            if (strval == NULL || strcmp(strval, se->value.string))
                 return FALSE;
             break;
                 
