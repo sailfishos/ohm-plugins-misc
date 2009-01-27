@@ -13,7 +13,6 @@
 
 #include "telephony.h"
 
-#define __EMIT_RING_SIGNALS__
 #define __INTEGER_IDS__
 
 #define PLUGIN_NAME   "telephony"
@@ -97,9 +96,6 @@ int     policy_enforce(event_t *event);
 int     policy_audio_update(void);
 int     policy_run_hook(char *hook_name);
 
-
-static void ring_start(int knock);
-static void ring_stop(void);
 
 
 /*
@@ -215,6 +211,41 @@ bus_init(void)
 }
 
 
+/********************
+ * bus_exit
+ ********************/
+void
+bus_exit(void)
+{
+    DBusError err;
+    
+    if (bus == NULL)
+        return;
+
+    dbus_error_init(&err);
+    
+    dbus_bus_release_name(bus, TELEPHONY_INTERFACE, &err);
+    if (dbus_error_is_set(&err)) {
+        dbus_error_free(&err);
+        dbus_error_init(&err);
+    }
+    dbus_connection_unregister_object_path(bus, TELEPHONY_PATH);
+    dbus_connection_remove_filter(bus, dispatch_signal, NULL);
+    
+    bus_add_match("signal", TELEPHONY_INTERFACE, NULL, NULL);
+    bus_add_match("signal", TP_CHANNEL_GROUP, NULL, NULL);
+#if 0
+    bus_add_match("signal", TP_CONNECTION, NEW_CHANNEL, NULL);
+#endif
+    bus_add_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL);
+    bus_add_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL);
+    bus_add_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL);
+    bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
+    
+    dbus_connection_unref(bus);
+    bus = NULL;
+}
+
 
 /********************
  * bus_add_match
@@ -254,7 +285,44 @@ bus_add_match(char *type, char *interface, char *member, char *path)
     }
     else
         return TRUE;
+#undef MATCH
+}
 
+
+/********************
+ * bus_del_match
+ ********************/
+void
+bus_del_match(char *type, char *interface, char *member, char *path)
+{
+#define MATCH(tag) do {                                         \
+        if (tag && tag[0]) {                                    \
+            n  = snprintf(p, l, "%s%s='%s'", t, #tag, tag);     \
+            p += n;                                             \
+            l -= n;                                             \
+            t  = ",";                                           \
+        }                                                       \
+    } while (0)
+
+    DBusError err;
+    char      rule[1024], *p, *t;
+    int       l, n;
+    
+    p = rule;
+    l = sizeof(rule);
+    t = "";
+    
+    MATCH(type);
+    MATCH(interface);
+    MATCH(member);
+    MATCH(path);
+
+    dbus_error_init(&err);
+    dbus_bus_remove_match(bus, rule, &err);
+    
+    if (dbus_error_is_set(&err))
+        dbus_error_free(&err);
+        
 #undef MATCH
 }
 
@@ -1099,6 +1167,21 @@ call_init(void)
 
 
 /********************
+ * call_exit
+ ********************/
+void
+call_exit(void)
+{
+    if (calls != NULL)
+        g_hash_table_destroy(calls);
+    
+    calls = NULL;
+    ncscall = 0;
+    nipcall = 0;
+}
+
+
+/********************
  * call_register
  ********************/
 call_t *
@@ -1241,8 +1324,13 @@ call_destroy(call_t *call)
         OHM_INFO("Destroying call %s.", short_path(call->path));
         g_free(call->name);
         g_free(call->path);
-        g_free(call);
         g_free(call->peer);
+        if (call->fact != NULL) {
+            ohm_fact_store_remove(store, call->fact);
+            g_object_unref(call->fact);
+            call->fact = NULL;
+        }
+        g_free(call);
     }
 }
 
@@ -1304,8 +1392,6 @@ call_disconnect(call_t *call, const char *action, event_t *event)
 {
     OHM_INFO("DISCONNECT %s.", short_path(call->path));
 
-    ring_stop();
-    
     if (call == event->any.call) {
         switch (event->any.state) {
         case STATE_CREATED:
@@ -1411,7 +1497,6 @@ call_activate(call_t *call, const char *action, event_t *event)
         call->state = STATE_ACTIVE;
         call->order = 0;
         policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
-        ring_stop();
         return 0;
     }
     
@@ -1437,9 +1522,6 @@ call_create(call_t *call, const char *action, event_t *event)
     call->state = STATE_CREATED;
     policy_call_update(call, UPDATE_STATE);
 
-    if (call->dir == DIR_INCOMING)
-        ring_start(FALSE);
-    
 #if 0
     call_reply(event->call.req, TRUE);
 #endif
@@ -1497,6 +1579,19 @@ policy_init()
     if ((store = ohm_fact_store_get_fact_store()) == NULL) {
         OHM_ERROR("Failed to initialize fact store.");
         exit(1);
+    }
+}
+
+
+/********************
+ * policy_exit
+ ********************/
+void
+policy_exit(void)
+{
+    if (store) {
+        g_object_unref(store);
+        store = NULL;
     }
 }
 
@@ -1733,10 +1828,8 @@ policy_call_export(call_t *call)
     state = state_name(call->state);
     dir   = dir_name(call->dir);
     snprintf(id, sizeof(id), "%d", call->id);
-    if (call->parent == call) {
+    if (call->parent == call)
         snprintf(parent, sizeof(parent), "%d", call->id);
-        printf("*** setting parent of %s to %s\n", call->path, parent);
-    }
     else
         parent[0] = '\0';
 
@@ -1789,12 +1882,10 @@ policy_call_update(call_t *call, int fields)
         if (call->parent == NULL) {
             ohm_fact_set(fact, FACT_FIELD_PARENT, NULL);
             parent = NULL;
-            printf("*** removing parent from %s\n", call->path);
         }
         else {
             snprintf(id, sizeof(id), "%d", call->parent->id);
             parent = id;
-            printf("*** updating parent of %s to %s\n", call->path, parent);
         }
     }
     else
@@ -1831,65 +1922,6 @@ policy_call_delete(call_t *call)
  *                    *** fake ringtone player interface ***                 *
  *****************************************************************************/
 
-/********************
- * ring_start
- ********************/
-static void
-ring_start(int knock)
-{
-#ifdef __EMIT_RING_SIGNALS__
-    DBusMessage  *msg = NULL;
-    char         *path, *iface, *signame;
-    dbus_bool_t   knocking = knock ? TRUE : FALSE;
-
-    OHM_INFO("*** start ringing ***");
-    
-    if (bus == NULL)
-        return;
-
-    path    = TELEPHONY_PATH;
-    iface   = TELEPHONY_INTERFACE;
-    signame = RING_START;
-    
-    if ((msg = dbus_message_new_signal(path, iface, signame)) != NULL) {
-        if (dbus_message_append_args(msg, DBUS_TYPE_BOOLEAN, &knocking,
-                                     DBUS_TYPE_INVALID))
-            bus_send(msg, NULL);
-        
-        dbus_message_unref(msg);
-    }
-#else
-    return;
-#endif
-}
-
-
-/********************
- * ring_stop
- ********************/
-static void
-ring_stop(void)
-{
-#ifdef __EMIT_RING_SIGNALS__
-    DBusMessage  *msg = NULL;
-    char         *path, *iface, *signame;
-    
-    OHM_INFO("*** stop ringing ***");
-
-    path    = TELEPHONY_PATH;
-    iface   = TELEPHONY_INTERFACE;
-    signame = RING_STOP;
-    
-    if ((msg = dbus_message_new_signal(path, iface, signame)) != NULL) {
-        bus_send(msg, NULL);
-        dbus_message_unref(msg);
-    }
-#else
-    return;
-#endif
-}
-
-
 
 /********************
  * plugin_init
@@ -1916,8 +1948,10 @@ plugin_init(OhmPlugin *plugin)
 static void
 plugin_exit(OhmPlugin *plugin)
 {
-    return;
-    
+    bus_exit();
+    call_exit();
+    policy_exit();
+
     (void)plugin;
 }
 
