@@ -1577,9 +1577,10 @@ policy_enforce(event_t *event)
     if (g_slist_length(l) > 1) {
         OHM_ERROR("Too many call_action facts (%d).", g_slist_length(l));
 
-        for (; l != NULL; l = g_slist_next(l))
+        for (; l != NULL; l = g_slist_next(l)) {
             ohm_fact_store_remove(store, (OhmFact *)l->data);
-        
+            g_object_unref((OhmFact *)l->data);
+        }
         return EINVAL;
     }
 
@@ -1619,6 +1620,7 @@ policy_enforce(event_t *event)
     }
     
     ohm_fact_store_remove(store, actions);
+    g_object_unref(actions);
 
     return status;
 }
