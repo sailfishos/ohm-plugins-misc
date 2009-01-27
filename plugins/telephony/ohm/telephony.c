@@ -1819,6 +1819,7 @@ policy_call_delete(call_t *call)
     if (call != NULL && call->fact != NULL) {
         OHM_INFO("Removing fact for call %s.", short_path(call->path));
         ohm_fact_store_remove(store, call->fact);
+        g_object_unref(call->fact);
         call->fact = NULL;
     }
 }
