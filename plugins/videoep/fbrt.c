@@ -68,6 +68,7 @@ static int fbrt_device_new(const char *name, unsigned int memsize)
 
         
         if (memsize > 0) {
+            device->mem.type = OMAPFB_MEMTYPE_SDRAM;
             device->mem.size = memsize;
 
             if (ioctl(fd, OMAPFB_SETUP_MEM, &device->mem) < 0) {

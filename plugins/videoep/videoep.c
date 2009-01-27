@@ -79,10 +79,17 @@ static void plugin_init(OhmPlugin *plugin)
         fbrt_route_new("builtinandtvout");
         fbrt_route_new("builtin");
 
+        /*
         fbrt_config_new_clone("/dev/fb2", "builtinandtvout", "/dev/fb0",
                               "DIGIT", 1, 640,480, 0,0);
         fbrt_config_new_clone("/dev/fb2", "builtin", "/dev/fb0",
                               "DIGIT", 0, 640,480, 0,0);
+        */
+
+        fbrt_config_new_clone("/dev/fb2", "builtinandtvout", "/dev/fb0",
+                              "DIGIT", 1, 640,384, 40,10);
+        fbrt_config_new_clone("/dev/fb2", "builtin", "/dev/fb0",
+                              "DIGIT", 0, 640,384, 40,10);
 
         /*
         fbrt_config_new_route("/dev/fb0", "builtinandtvout", "DIGIT", 1);
