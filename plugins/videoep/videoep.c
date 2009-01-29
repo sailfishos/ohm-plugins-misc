@@ -21,6 +21,7 @@
 #include "videoep.h"
 #include "txparser.h"
 #include "fbrt.h"
+#include "xrandrt.h"
 
 videoep_t  *videoep = NULL;
 
@@ -72,6 +73,7 @@ static void plugin_init(OhmPlugin *plugin)
         videoep->conn = conn;
         videoep->decision_cb  = decision_cb;
         videoep->keychange_cb = keychange_cb; 
+        videoep->xr = xrandrt_init(NULL);
 
         /* ******************* temporary for test ************************* */
         fbrt_device_new("/dev/fb0", 0);
@@ -122,12 +124,15 @@ static void plugin_exit(OhmPlugin *plugin)
 
         unregister_ep(videoep->conn);
 
+        xrandrt_exit(videoep->xr);
+
         free(videoep);
     }
 }
 
 #include "txparser.c"
 #include "fbrt.c"
+#include "xrandrt.c"
 
 
 OHM_PLUGIN_DESCRIPTION("videoep",

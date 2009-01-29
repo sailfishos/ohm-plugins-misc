@@ -97,7 +97,6 @@ static int action_parser(actdsc_t *action, videoep_t *videoep)
     char    *data;
     int      success;
 
-    /* FIXME: this malloc leaks memory */
     if ((data = malloc(action->datalen)) == NULL) {
         OHM_ERROR("Can't allocate %d byte memory", action->datalen);
 
@@ -119,6 +118,8 @@ static int action_parser(actdsc_t *action, videoep_t *videoep)
         else
             success &= action->handler(videoep, data);
     }
+
+    free(data);
     
     return success;
 }

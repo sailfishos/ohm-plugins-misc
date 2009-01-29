@@ -6,10 +6,11 @@
 #include <ohm/ohm-plugin-debug.h>
 
 typedef struct {
-    OhmFactStore *fs;
-    GObject      *conn;
-    gulong        decision_cb;
-    gulong        keychange_cb;
+    OhmFactStore     *fs;                /* FactStore pointer */
+    GObject          *conn;              /* link to signaling */
+    gulong            decision_cb;       /* callbacks for signalling */
+    gulong            keychange_cb;
+    struct xrandrt_s *xr;                /* xrandrt private data */
 } videoep_t;
 
 static void plugin_init(OhmPlugin *);
