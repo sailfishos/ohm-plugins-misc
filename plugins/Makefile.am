@@ -5,7 +5,8 @@ SUBDIRS = 	     \
 	accessories  \
 	videoep      \
 	console      \
-        dvfs
+	gconf        \
+	dvfs
 
 if HAVE_LIBPROFILE
 SUBDIRS += profile

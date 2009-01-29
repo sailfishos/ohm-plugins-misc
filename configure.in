@@ -73,6 +73,11 @@ PKG_CHECK_MODULES(HAL, hal >= 0.5.7)
 AC_SUBST(HAL_CFLAGS)
 AC_SUBST(HAL_LIBS)
 
+# Checks for GConf.
+PKG_CHECK_MODULES(GCONF, gconf-2.0 >= 2.16.0)
+AC_SUBST(GCONF_CFLAGS)
+AC_SUBST(GCONF_LIBS)
+
 # Checks for libohmplugin and libohmfact.
 PKG_CHECK_MODULES(LIBOHMPLUGIN, libohmplugin)
 AC_SUBST(LIBOHMPLUGIN_CFLAGS)
@@ -149,6 +154,7 @@ AC_CONFIG_FILES([Makefile
                  plugins/Makefile
                  plugins/accessories/Makefile
                  plugins/console/Makefile
+                 plugins/gconf/Makefile
                  plugins/hal/Makefile
                  plugins/hal/tests/Makefile
                  plugins/playback/Makefile
@@ -159,7 +165,7 @@ AC_CONFIG_FILES([Makefile
                  plugins/telephony/Makefile
                  plugins/telephony/ohm/Makefile
                  plugins/telephony/mission-control/Makefile
-		 plugins/videoep/Makefile
+                 plugins/videoep/Makefile
                  plugins/dvfs/Makefile
  		 doc/Makefile])
 AC_OUTPUT

@@ -374,31 +374,23 @@ OHM_EXPORTABLE(int, console_write, (int id, char *buf, size_t size))
  ********************/
 OHM_EXPORTABLE(int, console_printf, (int id, char *fmt, ...))
 {
-#define MAX_SIZE 16384
     console_t *c = lookup_console(id);
-    char       default_buf[1024], *buf;
-    int        len, size;
+    int        fd, len;
+    FILE      *fp;
     va_list    ap;
-    
-    buf  = default_buf;
-    size = sizeof(default_buf);
-    
-    va_start(ap, fmt);
-    while ((len = vsnprintf(buf, size-1, fmt, ap)) >= size) {
-        if (buf != default_buf) {
-            free(buf);
-            buf = NULL;
-        }
-        if (size >= MAX_SIZE || (buf = malloc(size *= 2)) == NULL)
-            break;
-    }
-    va_end(ap);
 
-    if (size < MAX_SIZE && len < size)
-        write(c->sock, buf, len);
-    
-    if (buf && buf != default_buf)
-        free(buf);
+
+    /*
+     * what a pitty that we have neither standard v(f)dprintf nor fdclose...
+     */
+
+    if ((fd = dup(c->sock)) >= 0 && (fp = fdopen(fd, "w")) != NULL) {
+        va_start(ap, fmt);
+        len = vfprintf(fp, fmt, ap);
+        va_end(ap);
+        fflush(fp);
+        fclose(fp);
+    }
     
     return len;
 }
