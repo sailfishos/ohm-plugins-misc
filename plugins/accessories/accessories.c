@@ -17,6 +17,8 @@ OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT));
 
 #define BT_DEVICE "com.nokia.policy.connected_bt_device"
+#define BT_TYPE_A2DP "bta2dp"
+#define BT_TYPE_HSP  "bthsp"
 
 static gchar *token = "button";
 
@@ -502,17 +504,25 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
             if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
                     && strcmp(path, g_value_get_string(gval)) == 0) {
 
-                GValue *bt_type = ohm_fact_get(bt_connected, "bt_type");
-                if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING) {
-    
-                    OHM_DEBUG(DBG_BT, "BT adapter setting %s to be disconnected",
-                            (char *) g_value_get_string(bt_type));
-
-                    dres_accessory_request((char *) g_value_get_string(bt_type), -1, 0);
-
-                    /* remove the fact from the FS */
-                    ohm_fact_store_remove(fs, bt_connected);
+                GValue *gval_a2dp = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
+                GValue *gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
+            
+                if (gval_a2dp &&
+                        G_VALUE_TYPE(gval_a2dp) != G_TYPE_INT &&
+                        g_value_get_int(gval_a2dp) == 1) {
+                    OHM_DEBUG(DBG_BT, "BT A2DP profile to be disconnected");
+                    dres_accessory_request(BT_TYPE_A2DP, -1, 0);
                 }
+                
+                if (gval_hsp &&
+                        G_VALUE_TYPE(gval_hsp) != G_TYPE_INT &&
+                        g_value_get_int(gval_hsp) == 1) {
+                    OHM_DEBUG(DBG_BT, "BT HSP profile to be disconnected");
+                    dres_accessory_request(BT_TYPE_HSP, -1, 0);
+                }
+
+                ohm_fact_store_remove(fs, bt_connected);
+
             }
         }
         /* else a bt device disconnected but there were no known bt headsets
@@ -559,18 +569,38 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
         }
 
         gval_1 = ohm_value_from_string(path);
-        gval_2 = ohm_value_from_string(type);
         ohm_fact_set(bt_connected, "bt_path", gval_1);
-        ohm_fact_set(bt_connected, "bt_type", gval_2);
 
+        gval_2 = ohm_value_from_int(1);
+        ohm_fact_set(bt_connected, type, gval_2);
     }
     else {
         /* remove the object path from the bluetooth fact */
 
         if (bt_connected) {
             
-            /* remove the fact from the FS */
-            ohm_fact_store_remove(fs, bt_connected);
+            GValue *gval = NULL, *gval_a2dp = NULL, *gval_hsp = NULL;
+        
+            /* set the type to be disconnected */
+            gval = ohm_value_from_int(0);
+            ohm_fact_set(bt_connected, type, gval);
+            
+            /* remove the fact from the FS if both a2dp and hsp are
+             * disconnected */
+        
+            gval_a2dp = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
+            gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
+        
+            if ((gval_a2dp == NULL ||
+                        G_VALUE_TYPE(gval_a2dp) != G_TYPE_INT ||
+                        g_value_get_int(gval_a2dp) == 0) 
+                    &&
+                        (gval_hsp == NULL ||
+                        G_VALUE_TYPE(gval_hsp) != G_TYPE_INT ||
+                        g_value_get_int(gval_hsp) == 0)) {
+
+                ohm_fact_store_remove(fs, bt_connected);
+            }
         }
         else {
             /* possibly OHM was started after a BT headset was
@@ -623,7 +653,7 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
 
         dbus_message_iter_get_basic(&var_i, &val);
 
-        bt_connection_changed("bta2dp", path, val);
+        bt_connection_changed(BT_TYPE_A2DP, path, val);
 
     }
 
@@ -673,7 +703,7 @@ static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * m
 
         dbus_message_iter_get_basic(&var_i, &val);
 
-        bt_connection_changed("bthsp", path, val);
+        bt_connection_changed(BT_TYPE_HSP, path, val);
 
     }
 

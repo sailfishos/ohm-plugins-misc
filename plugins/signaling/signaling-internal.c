@@ -826,9 +826,11 @@ external_ep_receive_ack(EnforcementPoint * self, Transaction *transaction, guint
     /* future: do stuff that has to do with analyzing the ack? */
     
     ExternalEPStrategy *s = EXTERNAL_EP_STRATEGY(self);
-
-    OHM_DEBUG(DBG_SIGNALING, "External enforcement_point '%s', ack received!\n", s->id);
     
+    OHM_DEBUG(DBG_SIGNALING, "External enforcement_point '%s', %s received!\n",
+            s->id,
+            status ? "ACK" : "NACK");
+
     /* internal reference count */
     s->ongoing_transactions = g_slist_remove(s->ongoing_transactions, transaction);
 
@@ -895,17 +897,20 @@ transaction_dispose(GObject *object) {
         EnforcementPoint *ep = i->data;
         g_object_unref(ep);
     }
+    g_slist_free(self->acked);
 
     for (i = self->nacked; i != 0; i = g_slist_next(i)) {
         EnforcementPoint *ep = i->data;
         g_object_unref(ep);
     }
+    g_slist_free(self->nacked);
     
     /* in case of timeout, these are still referenced */
     for (i = self->not_answered; i != 0; i = g_slist_next(i)) {
         EnforcementPoint *ep = i->data;
         g_object_unref(ep);
     }
+    g_slist_free(self->not_answered);
 
     free_facts(self->facts);
     self->facts = NULL;
@@ -1126,14 +1131,14 @@ transaction_get_type(void)
     if (type == 0) {
         static const GTypeInfo info = {
             sizeof(TransactionClass),
-            (GBaseInitFunc) NULL,
-            (GBaseFinalizeFunc) NULL,		/* base_finalize */
-            (GClassInitFunc) transaction_class_init,		/* class_init */
-            (GClassFinalizeFunc) NULL,		/* class_finalize */
-            NULL,		/* class_data */
+            NULL,
+            NULL,       /* base_finalize */
+            transaction_class_init, /* class_init */
+            NULL,       /* class_finalize */
+            NULL,       /* class_data */
             sizeof(Transaction),
-            0,			/* n_preallocs */
-            (GInstanceInitFunc) transaction_instance_init,	/* instance_init */
+            0,          /* n_preallocs */
+            transaction_instance_init, /* instance_init */
             NULL
         };
         type = g_type_register_static(G_TYPE_OBJECT,
@@ -1150,13 +1155,13 @@ enforcement_point_get_type(void)
         static const GTypeInfo info = {
             sizeof(EnforcementPointInterface),
             enforcement_point_base_init,
-            NULL,		/* base_finalize */
-            NULL,		/* class_init */
-            NULL,		/* class_finalize */
-            NULL,		/* class_data */
+            NULL,       /* base_finalize */
+            NULL,       /* class_init */
+            NULL,       /* class_finalize */
+            NULL,       /* class_data */
             0,
-            0,			/* n_preallocs */
-            NULL,		/* instance_init */
+            0,          /* n_preallocs */
+            NULL,       /* instance_init */
             NULL
         };
         type = g_type_register_static(G_TYPE_INTERFACE,
@@ -1174,13 +1179,13 @@ external_ep_get_type(void)
         static const GTypeInfo info = {
             sizeof(ExternalEPStrategyClass),
             NULL,
-            NULL,		/* base_finalize */
-            external_ep_strategy_class_init,		/* class_init */
-            NULL,		/* class_finalize */
-            NULL,		/* class_data */
+            NULL,       /* base_finalize */
+            external_ep_strategy_class_init, /* class_init */
+            NULL,       /* class_finalize */
+            NULL,       /* class_data */
             sizeof(ExternalEPStrategy),
-            0,			/* n_preallocs */
-            external_ep_strategy_instance_init,	/* instance_init */
+            0,          /* n_preallocs */
+            external_ep_strategy_instance_init, /* instance_init */
             NULL
         };
         static const GInterfaceInfo interface_info = {
@@ -1205,13 +1210,13 @@ internal_ep_get_type(void)
         static const GTypeInfo info = {
             sizeof(InternalEPStrategyClass),
             NULL,
-            NULL,		/* base_finalize */
-            internal_ep_strategy_class_init,		/* class_init */
-            NULL,		/* class_finalize */
-            NULL,		/* class_data */
+            NULL,       /* base_finalize */
+            internal_ep_strategy_class_init, /* class_init */
+            NULL,       /* class_finalize */
+            NULL,       /* class_data */
             sizeof(InternalEPStrategy),
-            0,			/* n_preallocs */
-            internal_ep_strategy_instance_init,	/* instance_init */
+            0,          /* n_preallocs */
+            internal_ep_strategy_instance_init, /* instance_init */
             NULL
         };
         static const GInterfaceInfo interface_info = {
@@ -1269,13 +1274,14 @@ transaction_ack_ep(Transaction *self, EnforcementPoint *ep, gboolean ack)
     gchar *id;
 
     if (ack) {
+        /* OHM_DEBUG(DBG_SIGNALING, "ACK received from an enforcement point!"); */
         self->acked = g_slist_prepend(self->acked, ep);
     }
     else {
-        OHM_DEBUG(DBG_SIGNALING, "NACK received from an enforcement point!");
+        /* OHM_DEBUG(DBG_SIGNALING, "NACK received from an enforcement point!"); */
         self->nacked = g_slist_prepend(self->nacked, ep);
     }
-	
+
     self->not_answered = g_slist_remove(self->not_answered, ep);
 
     g_object_get(ep, "id", &id, NULL);
@@ -1303,7 +1309,7 @@ transaction_complete(Transaction *self)
         }
     }
 
-	g_signal_emit (self, signals [ON_TRANSACTION_COMPLETE], 0);
+    g_signal_emit (self, signals [ON_TRANSACTION_COMPLETE], 0);
 
     /* remove transaction from the table */
     g_hash_table_remove(transactions, &self->txid);
