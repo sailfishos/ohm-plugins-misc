@@ -16,22 +16,34 @@ gconf_plugin *gconf_plugin_p = NULL;
 
 static void plugin_init(OhmPlugin * plugin)
 {
+    const gchar *plugin_keys = (char *) ohm_plugin_get_param(plugin, "keys");
+
+    gchar **keys = NULL, **key_iter = NULL;
+
     if (!OHM_DEBUG_INIT(gconf))
         g_warning("Failed to initialize GConf plugin debugging.");
 
-    OHM_DEBUG(DBG_GCONF, "> GConf plugin init");
-
     gconf_plugin_p = init_gconf(DBG_GCONF);
 
-    OHM_DEBUG(DBG_GCONF, "< GConf plugin init");
+    /* preload the keys */
+
+    keys = g_strsplit(plugin_keys, GCONF_STRING_DELIMITER, 0);
+    key_iter = keys;
+
+    for (; key_iter != NULL; key_iter++) {
+         observe(gconf_plugin_p, *key_iter);
+    }
+
+    g_strfreev(keys);
 
     return;
-    
-    (void) plugin;
 }
 
 static void plugin_exit(OhmPlugin * plugin)
 {
+    /* the preloaded keys are unobserved automatically when the plugin
+     * is unloaded */
+
     if (gconf_plugin_p) {
         deinit_gconf(gconf_plugin_p);
         gconf_plugin_p = NULL;
