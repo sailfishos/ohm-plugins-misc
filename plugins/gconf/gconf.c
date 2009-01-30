@@ -27,14 +27,17 @@ static void plugin_init(OhmPlugin * plugin)
 
     /* preload the keys */
 
-    keys = g_strsplit(plugin_keys, GCONF_STRING_DELIMITER, 0);
-    key_iter = keys;
+    if (plugin_keys != NULL) {
 
-    for (; key_iter != NULL; key_iter++) {
-         observe(gconf_plugin_p, *key_iter);
+        keys = g_strsplit(plugin_keys, GCONF_STRING_DELIMITER, 0);
+        key_iter = keys;
+
+        for (; key_iter != NULL; key_iter++) {
+            observe(gconf_plugin_p, *key_iter);
+        }
+
+        g_strfreev(keys);
     }
-
-    g_strfreev(keys);
 
     return;
 }
