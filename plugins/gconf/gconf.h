@@ -29,7 +29,7 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-plugin-debug.h>
 
-#define GCONF_STRING_DELIMITER "\\"
+#define GCONF_STRING_DELIMITER ";"
 
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
 
