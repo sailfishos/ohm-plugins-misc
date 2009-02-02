@@ -38,6 +38,40 @@ static void free_set_property_cb_data(void *);
 static void initialize_notification_registry(void);
 static prop_notif_t *find_property_notifier(char *);
 
+
+
+
+static inline char *filter_signal(char *buf, size_t size,
+                                  const char *sender, const char *interface,
+                                  const char *member, const char *path)
+{
+#define FILTER_ON(tag, value)                                           \
+        if (value != NULL) {                                            \
+            n  = snprintf(p, l, "%s%s='%s'", t, tag, value);            \
+            p += n;                                                     \
+            l -= n;                                                     \
+            t  = ",";                                                   \
+        }
+
+    char *p, *t;
+    int   l, n;
+
+    t = "";
+    p = buf;
+    l = size;
+
+    FILTER_ON("type", "signal");
+    FILTER_ON("sender", sender);
+    FILTER_ON("interface", interface);
+    FILTER_ON("member", member);
+    FILTER_ON("path", path);
+
+    return buf;
+
+#undef FILTER_ON
+}
+
+
 /*! \addtogroup pubif
  *  Functions
  *  @{
@@ -46,14 +80,8 @@ static prop_notif_t *find_property_notifier(char *);
 static void dbusif_init(OhmPlugin *plugin)
 {
     (void)plugin;
-
-#define FILTER_SIGNAL(i) "type='signal',interface='" i "'"
-
-    static char *adm_rule  = FILTER_SIGNAL(DBUS_ADMIN_INTERFACE);
-    static char *pb_rule   = FILTER_SIGNAL(DBUS_PLAYBACK_INTERFACE);
-    static char *prop_rule = FILTER_SIGNAL(DBUS_INTERFACE_PROPERTIES);
-
-#undef FILTER_SIGNAL
+    char  filter[1024];
+    char *adm_rule, *pb_rule, *prop_rule;
 
     static struct DBusObjectPathVTable pb_method = {
         .message_function = method
@@ -86,6 +114,12 @@ static void dbusif_init(OhmPlugin *plugin)
      * add signal filters
      */
 
+    
+
+    adm_rule = filter_signal(filter, sizeof(filter),
+                             DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+                             DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH);
+
     dbus_bus_add_match(sess_conn, adm_rule, &err);
     if (dbus_error_is_set(&err)) {
         OHM_ERROR("Can't add match \"%s\": %s", adm_rule, err.message);
@@ -97,6 +131,9 @@ static void dbusif_init(OhmPlugin *plugin)
         exit(0);
     }
 
+    pb_rule = filter_signal(filter, sizeof(filter),
+                            NULL, DBUS_PLAYBACK_INTERFACE, NULL, NULL);
+                            
     dbus_bus_add_match(sess_conn, pb_rule, &err);
     if (dbus_error_is_set(&err)) {
         OHM_ERROR("Can't add match \"%s\": %s", pb_rule, err.message);
@@ -108,6 +145,9 @@ static void dbusif_init(OhmPlugin *plugin)
         exit(0);
     }
 
+    prop_rule = filter_signal(filter, sizeof(filter),
+                              NULL, DBUS_INTERFACE_PROPERTIES, NULL, NULL);
+    
     dbus_bus_add_match(sess_conn, prop_rule, &err);
     if (dbus_error_is_set(&err)) {
         OHM_ERROR("Can't add match \"%s\": %s", prop_rule, err.message);

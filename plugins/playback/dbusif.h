@@ -35,6 +35,7 @@
 
 
 /* D-Bus pathes */
+#define DBUS_ADMIN_PATH                  "/org/freedesktop/DBus"
 #define DBUS_PLAYBACK_MANAGER_PATH       "/org/maemo/Playback/Manager"
 #define DBUS_POLICY_DECISION_PATH        "/com/nokia/policy/decision"
 
