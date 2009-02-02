@@ -36,7 +36,7 @@ static gboolean update_fact(gconf_plugin *plugin, GConfEntry *entry)
 
     for (e = list; e != NULL; e = g_slist_next(e)) {
         OhmFact *tmp = (OhmFact *) e->data;
-        GValue *gval = ohm_fact_get(fact, "key");
+        GValue *gval = ohm_fact_get(tmp, "key");
 
         if (gval && !strcmp(key, g_value_get_string(gval))) {
             /* found a fact */
@@ -58,6 +58,7 @@ static gboolean update_fact(gconf_plugin *plugin, GConfEntry *entry)
         OHM_DEBUG(DBG_GCONF, "value was unset\n");
         /* the key was unset, delete from FS */
         ohm_fact_store_remove(plugin->fs, fact);
+        g_object_unref(fact);
         return TRUE;
     }
 
@@ -189,11 +190,29 @@ void deinit_gconf(gconf_plugin *plugin)
 
     /* free the facts */
 
+#if 0
+
     list = ohm_fact_store_get_facts_by_name(plugin->fs, GCONF_FACT);
-    for (e = list; e != NULL; e = g_slist_next(e)) {
+    for (e = list; e != NULL; e = n) {
         OhmFact *fact = (OhmFact *) e->data;
+        n = g_slist_next(e);
+
         ohm_fact_store_remove(plugin->fs, fact);
     }
+#else
+    
+    list = ohm_fact_store_get_facts_by_name(plugin->fs, GCONF_FACT);
+
+    while (list) {
+        
+        OhmFact *fact = (OhmFact *) list->data;
+        ohm_fact_store_remove(plugin->fs, fact);
+        g_object_unref(fact);
+
+        list = ohm_fact_store_get_facts_by_name(plugin->fs, GCONF_FACT);
+
+    }
+#endif
 
     g_slist_free(plugin->observers);
     plugin->observers = NULL;
@@ -233,8 +252,10 @@ gboolean observe(gconf_plugin *plugin, const gchar *key)
     
     if (entry && !update_fact(plugin, entry)) {
         OHM_DEBUG(DBG_GCONF, "ERROR creating the initial fact!");
+        gconf_entry_unref(entry);
         return FALSE;
     }
+    gconf_entry_unref(entry);
 
     /* add new observer */
 
@@ -250,6 +271,7 @@ gboolean observe(gconf_plugin *plugin, const gchar *key)
 
     return TRUE;
 }
+
 
 gboolean unobserve(gconf_plugin *plugin, const gchar *key)
 {
@@ -283,6 +305,8 @@ gboolean unobserve(gconf_plugin *plugin, const gchar *key)
 
                     if (gval && !strcmp(obs->key, g_value_get_string(gval))) {
                         ohm_fact_store_remove(plugin->fs, fact);
+                        g_object_unref(fact);
+                        break;
                     }
                 }
 

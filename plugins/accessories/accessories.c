@@ -472,8 +472,6 @@ static OhmFact * bt_get_connected(const gchar *path)
         }
     }
 
-    /* FIXME: free the list? why isn't it freed elsewhere? */
-
     return ret;
 }
 
@@ -522,6 +520,9 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
                 }
 
                 ohm_fact_store_remove(fs, bt_connected);
+
+                /* FIXME: how to check this? */
+                g_object_unref(bt_connected);
 
             }
         }

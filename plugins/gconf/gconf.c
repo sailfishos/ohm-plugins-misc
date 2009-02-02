@@ -44,6 +44,7 @@ static void plugin_init(OhmPlugin * plugin)
 
 static void plugin_exit(OhmPlugin * plugin)
 {
+
     /* the preloaded keys are unobserved automatically when the plugin
      * is unloaded */
 
