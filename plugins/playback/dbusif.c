@@ -41,35 +41,89 @@ static prop_notif_t *find_property_notifier(char *);
 
 
 
-static inline char *filter_signal(char *buf, size_t size,
-                                  const char *sender, const char *interface,
-                                  const char *member, const char *path)
+static char *filter_signal(char *buf, size_t size,
+                           const char *sender, const char *interface,
+                           const char *member, const char *path, ...)
 {
-#define FILTER_ON(tag, value)                                           \
+#define FILTER_TAG(tag, value)                                          \
         if (value != NULL) {                                            \
             n  = snprintf(p, l, "%s%s='%s'", t, tag, value);            \
             p += n;                                                     \
             l -= n;                                                     \
             t  = ",";                                                   \
         }
+#define FILTER_ARG(i, value)                                            \
+        if (value != NULL) {                                            \
+            n  = snprintf(p, l, "%sarg%d='%s'", t, i, value);           \
+            p += n;                                                     \
+            l -= n;                                                     \
+            t  = ",";                                                   \
+        }
 
-    char *p, *t;
-    int   l, n;
+    va_list ap;
+    char *p, *t, *argval;
+    int   l, n, i;
 
     t = "";
     p = buf;
     l = size;
 
-    FILTER_ON("type", "signal");
-    FILTER_ON("sender", sender);
-    FILTER_ON("interface", interface);
-    FILTER_ON("member", member);
-    FILTER_ON("path", path);
+    FILTER_TAG("type", "signal");
+    FILTER_TAG("sender", sender);
+    FILTER_TAG("interface", interface);
+    FILTER_TAG("member", member);
+    FILTER_TAG("path", path);
 
+    va_start(ap, path);
+    
+    for (i = 0; (argval = va_arg(ap, char *)) != NULL; i++)
+        FILTER_ARG(i, argval);
+    
     return buf;
 
-#undef FILTER_ON
+#undef FILTER_TAG
+#undef FILTER_ARG
 }
+
+
+static int dbusif_watch_client(const char *id, int watchit)
+{
+    char       filter[1024];
+    DBusError  err;
+
+    filter_signal(filter, sizeof(filter),
+                  DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+                  DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH,
+                  id, id, "",
+                  NULL);
+    
+    /*
+     * Notes:
+     *   We block when adding filters, to minimize (= eliminate ?) the time
+     *   window for the client to crash after it has let us know about itself
+     *   but before we managed to install the filter. According to the docs
+     *   we do not re-enter the main loop and all other messages than the
+     *   reply to AddMatch will get queued and processed once we're bac in the
+     *   main loop. On the watch removal path we do not care about errors and
+     *   we do not want to block either.
+     */
+
+    if (watchit) {
+        dbus_error_init(&err);
+        dbus_bus_add_match(sess_conn, filter, &err);
+
+        if (dbus_error_is_set(&err)) {
+            OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
+            dbus_error_free(&err);
+            return FALSE;
+        }
+    }
+    else
+        dbus_bus_remove_match(sess_conn, filter, NULL);
+    
+    return TRUE;
+}
+
 
 
 /*! \addtogroup pubif
@@ -81,8 +135,7 @@ static void dbusif_init(OhmPlugin *plugin)
 {
     (void)plugin;
     char  filter[1024];
-    char *adm_rule, *pb_rule, *prop_rule;
-
+    
     static struct DBusObjectPathVTable pb_method = {
         .message_function = method
     };
@@ -116,27 +169,32 @@ static void dbusif_init(OhmPlugin *plugin)
 
     
 
-    adm_rule = filter_signal(filter, sizeof(filter),
-                             DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
-                             DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH);
+#if 0 /* replaced by client-specific filters */
+    filter_signal(filter, sizeof(filter),
+                  DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+                  DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH,
+                  NULL);
 
-    dbus_bus_add_match(sess_conn, adm_rule, &err);
+    dbus_bus_add_match(sess_conn, filter, &err);
     if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", adm_rule, err.message);
+        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
         dbus_error_free(&err);
         exit(0);
     }
+#endif
+
     if (!dbus_connection_add_filter(sess_conn, name_changed,NULL, NULL)) {
         OHM_ERROR("Can't add filter 'name_changed'");
         exit(0);
     }
 
-    pb_rule = filter_signal(filter, sizeof(filter),
-                            NULL, DBUS_PLAYBACK_INTERFACE, NULL, NULL);
+    filter_signal(filter, sizeof(filter),
+                  NULL, DBUS_PLAYBACK_INTERFACE, NULL, NULL,
+                  NULL);
                             
-    dbus_bus_add_match(sess_conn, pb_rule, &err);
+    dbus_bus_add_match(sess_conn, filter, &err);
     if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", pb_rule, err.message);
+        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
         dbus_error_free(&err);
         exit(0);
     }
@@ -145,12 +203,13 @@ static void dbusif_init(OhmPlugin *plugin)
         exit(0);
     }
 
-    prop_rule = filter_signal(filter, sizeof(filter),
-                              NULL, DBUS_INTERFACE_PROPERTIES, NULL, NULL);
+    filter_signal(filter, sizeof(filter),
+                  NULL, DBUS_INTERFACE_PROPERTIES, NULL, NULL,
+                  NULL);
     
-    dbus_bus_add_match(sess_conn, prop_rule, &err);
+    dbus_bus_add_match(sess_conn, filter, &err);
     if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", prop_rule, err.message);
+        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
         dbus_error_free(&err);
         exit(0);
     }
