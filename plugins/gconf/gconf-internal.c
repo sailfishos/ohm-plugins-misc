@@ -32,12 +32,15 @@ static gboolean update_fact(gconf_plugin *plugin, GConfEntry *entry)
     val =  gconf_entry_get_value(entry);
     list = ohm_fact_store_get_facts_by_name(plugin->fs, GCONF_FACT);
 
+    /* printf("Creating / updating fact for key '%s'.\n", key); */
+
     for (e = list; e != NULL; e = g_slist_next(e)) {
-        fact = (OhmFact *) e->data;
+        OhmFact *tmp = (OhmFact *) e->data;
         GValue *gval = ohm_fact_get(fact, "key");
 
         if (gval && !strcmp(key, g_value_get_string(gval))) {
             /* found a fact */
+            fact = tmp;
             break;
         }
     }
@@ -108,7 +111,7 @@ void notify(GConfClient *client, guint id, GConfEntry *entry, gpointer user_data
 
     key = gconf_entry_get_key(entry);
 
-    OHM_DEBUG(DBG_GCONF, "Notify called for key '%s'.\n", key);
+    /* printf("Notify called for key '%s'.\n", key); */
 
     for (e = plugin->observers; e != NULL; e = g_slist_next(e)) {
         observer *obs = e->data;
@@ -204,10 +207,6 @@ void deinit_gconf(gconf_plugin *plugin)
 gboolean observe(gconf_plugin *plugin, const gchar *key)
 {
     GSList *e = NULL;
-    /* 
-    char *last_slash = NULL, *dir = NULL;
-    int dirlen = 0;
-    */
     observer *obs = NULL;
     GConfEntry *entry = NULL;
     
@@ -217,6 +216,7 @@ gboolean observe(gconf_plugin *plugin, const gchar *key)
         obs = e->data;
         if (!strcmp(key, obs->key)) {
             obs->refcount++;
+            /* printf("refcount for '%s' is now %i\n", key, obs->refcount); */
             return TRUE;
         }
     }
@@ -235,21 +235,6 @@ gboolean observe(gconf_plugin *plugin, const gchar *key)
         OHM_DEBUG(DBG_GCONF, "ERROR creating the initial fact!");
         return FALSE;
     }
-
-
-    /*
-
-    OHM_DEBUG(DBG_GCONF, "key: '%s' '%p', last slash: '%p'\n", key, key, last_slash);
-    
-    last_slash = strrchr(key, '/');
-    if (last_slash == NULL || last_slash == key) {
-        return FALSE;
-    }
-
-    dirlen = last_slash - key;
-    dir = g_strndup(key, dirlen);
-
-    */
 
     /* add new observer */
 

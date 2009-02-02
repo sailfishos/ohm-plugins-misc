@@ -32,7 +32,7 @@ static void plugin_init(OhmPlugin * plugin)
         keys = g_strsplit(plugin_keys, GCONF_STRING_DELIMITER, 0);
         key_iter = keys;
 
-        for (; key_iter != NULL; key_iter++) {
+        for (; *key_iter != NULL; key_iter++) {
             observe(gconf_plugin_p, *key_iter);
         }
 
