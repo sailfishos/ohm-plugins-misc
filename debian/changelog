@@ -1,8 +1,9 @@
 ohm-plugins-misc (0.6.11) unstable; urgency=low
 
   * Changed BT to support multiple connected profiles at once.
+  * GConf plugin added.
 
- -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 29 Jan 2009 13:53:25 +0200
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 03 Feb 2009 16:25:21 +0200
 
 ohm-plugins-misc (0.6.10) unstable; urgency=low
 
