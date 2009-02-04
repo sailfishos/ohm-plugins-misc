@@ -1502,6 +1502,7 @@ call_activate(call_t *call, const char *action, event_t *event)
         call->state = STATE_ACTIVE;
         call->order = 0;
         policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
+        policy_run_hook("telephony_call_connect_hook");
         return 0;
     }
     
