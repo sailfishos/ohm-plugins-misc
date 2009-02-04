@@ -230,7 +230,10 @@ policy_call_reply(DBusPendingCall *pending, void *user_data)
     dbus_pending_call_unref(pending);
     dbus_error_free(&err);
     
-    call_allow(ctx);
+    if (ctx) {
+        ERROR("call ALLOWED (because of internal failure)");
+        call_allow(ctx);
+    }
 
 #undef FAIL
 }

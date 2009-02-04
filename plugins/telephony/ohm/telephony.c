@@ -412,6 +412,9 @@ channel_new(DBusConnection *c, DBusMessage *msg, void *data)
     char            *path, *type;
     channel_event_t  event;
     
+    (void)c;
+    (void)data;
+
     if (dbus_message_get_args(msg, NULL,
                               DBUS_TYPE_OBJECT_PATH, &path,
                               DBUS_TYPE_STRING, &type,
@@ -431,9 +434,6 @@ channel_new(DBusConnection *c, DBusMessage *msg, void *data)
         OHM_ERROR("Failed to parse DBUS signal %s.", NEW_CHANNEL);
     
     return DBUS_HANDLER_RESULT_HANDLED;
-
-    (void)c;
-    (void)data;
 }
 
 
@@ -522,6 +522,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     int              init_handle, target_handle;
     int              requested, t;
 
+    (void)c;
+    (void)data;
     
     if (!dbus_message_iter_init(msg, &imsg)) {
         OHM_ERROR("Failed to get message iterator for DBUS signal %s.",
@@ -627,9 +629,6 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     }
     
     return DBUS_HANDLER_RESULT_HANDLED;
-
-    (void)c;
-    (void)data;
 }
 
 
@@ -640,6 +639,9 @@ static DBusHandlerResult
 channel_closed(DBusConnection *c, DBusMessage *msg, void *data)
 {
     channel_event_t event;
+
+    (void)c;
+    (void)data;
     
     if ((event.path = dbus_message_get_path(msg)) == NULL ||
         (event.call = call_lookup(event.path)) == NULL)
@@ -648,10 +650,7 @@ channel_closed(DBusConnection *c, DBusMessage *msg, void *data)
     event.type = EVENT_CHANNEL_CLOSED;
     event_handler((event_t *)&event);
     
-    return DBUS_HANDLER_RESULT_HANDLED;
-    
-    (void)c;
-    (void)data;
+    return DBUS_HANDLER_RESULT_HANDLED;    
 }
 
 
@@ -680,6 +679,9 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     int             nadded, nremoved, nlocalpend, nremotepend;
     unsigned int    actor;
     status_event_t  event;
+
+    (void)c;
+    (void)data;
 
     if ((event.path = dbus_message_get_path(msg)) == NULL ||
         (event.call = call_lookup(event.path))    == NULL) {
@@ -751,10 +753,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
 
     }
     
-    return DBUS_HANDLER_RESULT_HANDLED;
-    
-    (void)c;
-    (void)data;
+    return DBUS_HANDLER_RESULT_HANDLED;    
 }
 
 
@@ -767,6 +766,9 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
 {
     status_event_t event;
     unsigned int   state, reason;
+
+    (void)c;
+    (void)data;
 
     if ((event.path = dbus_message_get_path(msg)) == NULL ||
         (event.call = call_lookup(event.path))    == NULL)
@@ -791,16 +793,14 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
     case TP_PENDING_UNHOLD:
         OHM_INFO("Call %s is pending to be %s.", short_path(event.path),
                  state == TP_PENDING_HOLD ? "hold" : "unheld");
+        /* intentional fall through */
     default:
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
     event_handler((event_t *)&event);
     
-    return DBUS_HANDLER_RESULT_HANDLED;
-    
-    (void)c;
-    (void)data;
+    return DBUS_HANDLER_RESULT_HANDLED;    
 }
 
 
@@ -812,6 +812,9 @@ call_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
 {
     status_event_t event;
     unsigned int   contact, state;
+
+    (void)c;
+    (void)data;
 
     if ((event.path = dbus_message_get_path(msg)) == NULL ||
         (event.call = call_lookup(event.path))    == NULL)
@@ -847,10 +850,7 @@ call_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
              
     event_handler((event_t *)&event);
-    return DBUS_HANDLER_RESULT_HANDLED;
-    
-    (void)c;
-    (void)data;
+    return DBUS_HANDLER_RESULT_HANDLED;    
 }
 
 
@@ -862,6 +862,9 @@ call_end(DBusConnection *c, DBusMessage *msg, void *data)
 {
     call_event_t event;
     int          n;
+
+    (void)c;
+    (void)data;
 
     if (!dbus_message_get_args(msg, NULL,
                                DBUS_TYPE_STRING, &event.path,
@@ -877,9 +880,6 @@ call_end(DBusConnection *c, DBusMessage *msg, void *data)
     event_handler((event_t *)&event);
     
     return DBUS_HANDLER_RESULT_HANDLED;
-    
-    (void)c;
-    (void)data;
 }
 
 
@@ -914,6 +914,10 @@ call_request(DBusConnection *c, DBusMessage *msg, void *data)
     call_event_t event;
     int          incoming, n;
 
+    (void)c;
+    (void)msg;
+    (void)data;
+
     if (!dbus_message_get_args(msg, NULL,
                                DBUS_TYPE_STRING, &event.path,
                                DBUS_TYPE_BOOLEAN, &incoming,
@@ -930,10 +934,6 @@ call_request(DBusConnection *c, DBusMessage *msg, void *data)
     event_handler((event_t *)&event);
     
     return DBUS_HANDLER_RESULT_HANDLED;
-
-    (void)c;
-    (void)msg;
-    (void)data;
 }
 
 
@@ -1292,9 +1292,9 @@ has_id(gpointer key, gpointer value, gpointer data)
     call_t *call = (call_t *)value;
     int     id   = (int)data;
 
-    return call->id == id;
-
     (void)key;
+
+    return call->id == id;
 }
 
 
@@ -1378,6 +1378,8 @@ remove_parent(gpointer key, gpointer value, gpointer data)
     call_t *parent = (call_t *)data;
     call_t *call   = (call_t *)value;
 
+    (void)key;
+
     if (call->parent == parent) {
         OHM_INFO("Clearing parent of conference member %s.", call->path);
         call->parent = NULL;
@@ -1385,7 +1387,6 @@ remove_parent(gpointer key, gpointer value, gpointer data)
     }
     
     return TRUE;
-    (void)key;
 }
 
 
@@ -1396,6 +1397,8 @@ static int
 call_disconnect(call_t *call, const char *action, event_t *event)
 {
     OHM_INFO("DISCONNECT %s.", short_path(call->path));
+
+    (void)action;
 
     if (call == event->any.call) {
         switch (event->any.state) {
@@ -1422,7 +1425,6 @@ call_disconnect(call_t *call, const char *action, event_t *event)
     else
         return 0;
 
-    (void)action;
 }
 
 
@@ -1465,6 +1467,8 @@ tp_hold(call_t *call, int status)
 static int
 call_hold(call_t *call, const char *action, event_t *event)
 {    
+    (void)action;
+
     OHM_INFO("%sHOLD %s.", !strcmp(action, "autohold") ? "AUTO" : "",
              short_path(call->path));
     
@@ -1485,8 +1489,6 @@ call_hold(call_t *call, const char *action, event_t *event)
     }
     else
         return 0;
-
-    (void)action;
 }
 
 
@@ -1496,6 +1498,8 @@ call_hold(call_t *call, const char *action, event_t *event)
 static int
 call_activate(call_t *call, const char *action, event_t *event)
 {
+    (void)action;
+
     OHM_INFO("ACTIVATE %s.", short_path(call->path));
     
     if (call == event->any.call && event->any.state == STATE_ACTIVE) {
@@ -1512,8 +1516,6 @@ call_activate(call_t *call, const char *action, event_t *event)
     }
     else
         return 0;
-
-    (void)action;
 }
 
 
@@ -1523,6 +1525,9 @@ call_activate(call_t *call, const char *action, event_t *event)
 static int
 call_create(call_t *call, const char *action, event_t *event)
 {
+    (void)action;
+    (void)event;
+
     OHM_INFO("CREATE call %s.", short_path(call->path));
 
     call->state = STATE_CREATED;
@@ -1532,9 +1537,6 @@ call_create(call_t *call, const char *action, event_t *event)
     call_reply(event->call.req, TRUE);
 #endif
     return 0;
-
-    (void)action;
-    (void)event;
 }
 
 
@@ -1711,6 +1713,7 @@ policy_enforce(event_t *event)
         if ((call = call_find(id)) == NULL) {
             OHM_ERROR("Action %s for unknown call #%d.", action, id);
             status = EINVAL;
+            continue;
         }
         
         OHM_INFO("Policy decision for call #%d (%s): %s.",
@@ -1938,13 +1941,13 @@ plugin_init(OhmPlugin *plugin)
     if (!OHM_DEBUG_INIT(telephony))
         OHM_WARNING("failed to register plugin %s for tracing", PLUGIN_NAME);
 
+    (void)plugin;
+
     bus_init();
     call_init();
     policy_init();
 
     return;
-
-    (void)plugin;
 }
 
 
@@ -1954,11 +1957,11 @@ plugin_init(OhmPlugin *plugin)
 static void
 plugin_exit(OhmPlugin *plugin)
 {
+    (void)plugin;
+ 
     bus_exit();
     call_exit();
     policy_exit();
-
-    (void)plugin;
 }
 
 
