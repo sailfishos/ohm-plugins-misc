@@ -1233,6 +1233,8 @@ call_register(const char *path, const char *name, const char *peer,
 
     if (ncscall + nipcall == 1)
         policy_run_hook("telephony_first_call_hook");
+
+    policy_run_hook("telephony_call_start_hook");
     
     return call;
 }
@@ -1260,9 +1262,12 @@ call_unregister(const char *path)
     else
         nipcall--;
 
+    policy_run_hook("telephony_call_end_hook");
+
     if (ncscall + nipcall == 0)
         policy_run_hook("telephony_last_call_hook");
     
+
     return 0;
 }
 
