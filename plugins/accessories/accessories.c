@@ -55,16 +55,16 @@ OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
 static gboolean set_observer(gchar *capability, hal_cb cb, void *userdata)
 {
-    (void)capability;
-    (void)cb;
-    (void)userdata;
+    (void) capability;
+    (void) cb;
+    (void) userdata;
 
     return 1;
 }
 
 static gboolean unset_observer(void *userdata)
 {
-    (void)userdata;
+    (void) userdata;
 
     return 1;
 }
@@ -107,10 +107,10 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
     GSList *list = NULL, *i;
     gchar *fact_name = "com.nokia.policy.audio_device_accessible";
 
-    (void)capability;
-    (void)added;
-    (void)removed;
-    (void)user_data;
+    (void) capability;
+    (void) added;
+    (void) removed;
+    (void) user_data;
 
     OHM_DEBUG(DBG_HEADSET, "Possible hal headset event received!");
 
@@ -261,16 +261,16 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
 
 static gboolean headset_deinit(OhmPlugin *plugin)
 {
-    return unset_observer(token);
+    (void) plugin;
 
-    (void)plugin;
+    return unset_observer(token);
 }
 
 static gboolean headset_init(OhmPlugin *plugin)
 {
+    (void) plugin;
+
     return set_observer("input.jack", complete_headset_cb, token);
-    
-    (void)plugin;
 }
 
 /* headset part ends */
@@ -287,8 +287,8 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
     char            *end;
     char            *device;
 
-    (void)c;
-    (void)data;
+    (void) c;
+    (void) data;
 
     if (dbus_message_is_signal(msg, "com.nokia.policy", "info")) {
 
@@ -484,6 +484,9 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
 
     gchar *path = NULL;
 
+    (void) data;
+    (void) c;
+
     if (!msg)
         goto end;
 
@@ -496,9 +499,9 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
         OhmFact *bt_connected = bt_get_connected(path);
 
         if (bt_connected) {
+
             GValue *gval = ohm_fact_get(bt_connected, "bt_path");
             
-            gval = ohm_fact_get(bt_connected, "bt_path");
             if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
                     && strcmp(path, g_value_get_string(gval)) == 0) {
 
@@ -533,9 +536,6 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
 end:
     
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-
-    (void) data;
-    (void) c;
 }
 
 static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboolean connected)
@@ -624,6 +624,9 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
     gchar *property_name;
     gboolean val;
 
+    (void) data;
+    (void) c;
+
     /* printf("bluetooth property changed!\n\n"); */
     dbus_message_iter_init(msg, &msg_i);
 
@@ -661,9 +664,6 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
 end:
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-
-    (void) data;
-    (void) c;
 }
 
 static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
@@ -673,6 +673,9 @@ static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * m
     const gchar *path = dbus_message_get_path(msg); 
     gchar *property_name;
     gboolean val;
+
+    (void) data;
+    (void) c;
 
     /* printf("bluetooth property changed!\n\n"); */
     dbus_message_iter_init(msg, &msg_i);
@@ -711,14 +714,13 @@ static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * m
 end:
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-
-    (void) data;
-    (void) c;
 }
 
 
 static gboolean bluetooth_init(OhmPlugin *plugin)
 {
+    (void) plugin;
+
     /* TODO:
      * 1. query bluez and see if there are any bluetooth devices connected
      * 2. get their properties
@@ -728,15 +730,13 @@ static gboolean bluetooth_init(OhmPlugin *plugin)
      **/
 
     return TRUE;
-
-    (void)plugin;
 }
 
 static gboolean bluetooth_deinit(OhmPlugin *plugin)
 {
-    return TRUE;
+    (void) plugin;
 
-    (void)plugin;
+    return TRUE;
 }
 
 

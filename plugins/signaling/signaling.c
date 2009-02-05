@@ -139,6 +139,9 @@ error:
 plugin_init(OhmPlugin * plugin)
 {
     DBusConnection *c = ohm_plugin_dbus_get_connection();
+
+    (void) plugin;
+
     /* should we ref the connection? */
     
     if (!OHM_DEBUG_INIT(signaling))
@@ -146,17 +149,15 @@ plugin_init(OhmPlugin * plugin)
     
     init_signaling(c, DBG_SIGNALING, DBG_FACTS);
     return;
-
-    (void) plugin;
 }
 
     static void
 plugin_exit(OhmPlugin * plugin)
 {
+    (void) plugin;
+
     deinit_signaling();
     return;
-    
-    (void) plugin;
 }
 
 OHM_PLUGIN_DESCRIPTION("signaling",

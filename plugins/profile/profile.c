@@ -19,6 +19,8 @@ profile_plugin *profile_plugin_p;
 static void
 plugin_init(OhmPlugin * plugin)
 {
+    (void) plugin;
+
     if (!OHM_DEBUG_INIT(profile))
         g_warning("Failed to initialize profile plugin debugging.");
     
@@ -26,21 +28,19 @@ plugin_init(OhmPlugin * plugin)
 
     profile_plugin_p = init_profile();
     return;
-
-    (void) plugin;
 }
 
 static void
 plugin_exit(OhmPlugin * plugin)
 {
+    (void) plugin;
+
     if (profile_plugin_p) {
         deinit_profile(profile_plugin_p);
     }
     
     profile_plugin_p = NULL;
     return;
-
-    (void) plugin;
 }
 
 OHM_PLUGIN_DESCRIPTION("profile",
@@ -142,6 +142,9 @@ static void profile_value_change(const char *profile, const char *key,
 
     /* get the previous fact with the profile name */
     GSList *list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
+    
+    (void) profile;
+    (void) type;
 
     OHM_DEBUG(DBG_PROFILE, "profile value change: '%s', '%s'\n", key, val);
 
@@ -176,9 +179,6 @@ static void profile_value_change(const char *profile, const char *key,
     }
 
     return;
-    
-    (void) profile;
-    (void) type;
 }
 
 static void profile_name_change(const char *profile)
@@ -263,11 +263,13 @@ end:
 
 void deinit_profile(profile_plugin *plugin)
 {
+    (void) plugin;
+
     /* unregister to the notifications */
     profile_tracker_quit();
     g_free(profile_plugin_p);
 
-    (void) plugin;
+    return;
 }
 
 
