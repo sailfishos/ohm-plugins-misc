@@ -31,7 +31,7 @@ init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
     DBG_SIGNALING = flag_signaling;
     DBG_FACTS     = flag_facts;
 
-    transactions = g_hash_table_new(g_int_hash, g_int_equal);
+    transactions = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
     if (transactions == NULL) {
         g_error("Failed to create transaction hash table.");
         return FALSE;
