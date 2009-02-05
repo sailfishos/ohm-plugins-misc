@@ -68,19 +68,19 @@ static int dresif_privacy_override_request(int privacy_override, int transid)
 {
 #define DRESIF_VARTYPE(t) (char *)(t)
     char *vars[48];
-    char  buf[64];
     int   i;
     int   status;
+#if 0
+    char  buf[64];
+#else
+    (void) transid;
+#endif
 
     vars[i=0] = "privacy_override_state";
     vars[++i] = DRESIF_VARTYPE('s');
     vars[++i] = privacy_override ? "public" : "default";
 
-
-#if 1
-    transid = 0;
-#endif
-
+#if 0
     if (transid > 0) {
         snprintf(buf, sizeof(buf), "%d", transid);
 
@@ -92,6 +92,7 @@ static int dresif_privacy_override_request(int privacy_override, int transid)
         vars[++i] = DRESIF_VARTYPE('s');
         vars[++i] = buf;
     }
+#endif
 
     vars[++i] = NULL;
 
@@ -112,19 +113,19 @@ static int dresif_mute_request(int mute, int transid)
 {
 #define DRESIF_VARTYPE(t) (char *)(t)
     char *vars[48];
-    char  buf[64];
     int   i;
     int   status;
+#if 0
+    char  buf[64];
+#else
+    (void) transid;
+#endif
 
     vars[i=0] = "mute_state";
     vars[++i] = DRESIF_VARTYPE('i');
     vars[++i] = (char *)mute;
 
-
-#if 1
-    transid = 0;
-#endif
-
+#if 0
     if (transid > 0) {
         snprintf(buf, sizeof(buf), "%d", transid);
 
@@ -136,6 +137,7 @@ static int dresif_mute_request(int mute, int transid)
         vars[++i] = DRESIF_VARTYPE('s');
         vars[++i] = buf;
     }
+#endif
 
     vars[++i] = NULL;
 

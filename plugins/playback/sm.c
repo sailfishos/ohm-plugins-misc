@@ -421,7 +421,7 @@ static void sm_schedule_event(sm_t *sm, sm_evdata_t *evdata,sm_evfree_t evfree)
     sm_schedule_t *schedule;
 
     if (!sm || !evdata) {
-        OHM_ERROR("[%s] failed to schedule event: <null> argument", sm->name);
+        OHM_ERROR("[%s] failed to schedule event: <null> argument", sm ? sm->name : "SM-NULL");
         return;
     }
 
@@ -901,7 +901,7 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
                 if (stream) {
                     client_update_factstore_entry(cl, "stream", stream);
                 }
-                client_update_factstore_entry(cl, "state", state ? state:"");
+                client_update_factstore_entry(cl, "state", state);
                 
                 dbusif_send_stream_info_to_pep("register", cl->group, pid,
                                                stream ? stream : "<unknown>");

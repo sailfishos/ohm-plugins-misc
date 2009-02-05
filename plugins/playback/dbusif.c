@@ -347,6 +347,7 @@ static void dbusif_get_property(char *dbusid, char *object, char *prname,
     if (msg == NULL) {
         OHM_ERROR("[%s] Failed to create D-Dbus message to set properties",
                   __FUNCTION__);
+        free(ud);
         return;
     }
 
@@ -374,6 +375,7 @@ static void dbusif_get_property(char *dbusid, char *object, char *prname,
 
 
  failed:
+    free(ud);
     dbus_message_unref(msg);
     return;
 }
@@ -410,6 +412,7 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
     if (msg == NULL) {
         OHM_ERROR("[%s] Failed to create D-Dbus message to set properties",
                   __FUNCTION__);
+        free(ud);
         return;
     }
 
@@ -454,6 +457,7 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
     }
 
  failed:
+    free(ud);
     dbus_message_unref(msg);
     return;
 }
@@ -710,7 +714,7 @@ static DBusHandlerResult notify(DBusConnection *conn, DBusMessage *msg,
     char              *iface;
     char              *prop;
     char              *value;
-    client_t          *cl;
+    /* client_t          *cl; */
     prop_notif_t      *notif;
     int                success;
     DBusError          err;
@@ -727,7 +731,7 @@ static DBusHandlerResult notify(DBusConnection *conn, DBusMessage *msg,
         dbusid = (char *)dbus_message_get_sender(msg);
         object = (char *)dbus_message_get_path(msg);
 
-        if ((cl = client_find_by_dbus(dbusid, object)) != NULL) {
+        if (client_find_by_dbus(dbusid, object) != NULL) {
             dbus_error_init(&err);
 
             success = dbus_message_get_args(msg, &err,
@@ -774,7 +778,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     static sm_evdata_t  evdata      = { .evid = evid_playback_request };
 
     DBusMessage        *reply;
-    char               *msgpath;
+    /* char               *msgpath; */
     char               *objpath;
     char               *sender;
     dbus_uint32_t       serial;
@@ -793,7 +797,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
 
     if (dbus_message_is_method_call(msg, interface, rq_state)) {
 
-        msgpath = (char *)dbus_message_get_path(msg);
+        /* msgpath = (char *)dbus_message_get_path(msg); */
         sender  = (char *)dbus_message_get_sender(msg);
         req     = NULL;
 
@@ -851,7 +855,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     }
     else if (dbus_message_is_method_call(msg, interface, rq_privacy)) {
 
-        msgpath = (char *)dbus_message_get_path(msg);
+        /* msgpath = (char *)dbus_message_get_path(msg); */
         sender  = (char *)dbus_message_get_sender(msg);
 
         OHM_DEBUG(DBG_DBUS,"received set privacy override from %s",sender);
@@ -880,7 +884,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     }
     else if (dbus_message_is_method_call(msg, interface, rq_mute)) {
 
-        msgpath = (char *)dbus_message_get_path(msg);
+        /* msgpath = (char *)dbus_message_get_path(msg); */
         sender  = (char *)dbus_message_get_sender(msg);
 
         OHM_DEBUG(DBG_DBUS,"received set mute from %s",sender);
@@ -909,7 +913,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     }
     else if (dbus_message_is_method_call(msg, interface, get_allowed)) {
         
-        msgpath = (char *)dbus_message_get_path(msg);
+        /* msgpath = (char *)dbus_message_get_path(msg); */
         sender  = (char *)dbus_message_get_sender(msg);
         serial  = dbus_message_get_serial(msg);
 
@@ -962,7 +966,7 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
 {
     get_property_cb_data_t *cbd = (get_property_cb_data_t *)data;
     DBusMessage        *reply;
-    client_t           *cl;
+    /* client_t           *cl; */
     char               *prvalue;
     const char         *error_descr;
     int                 success;
@@ -982,7 +986,7 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
         return;
     }
 
-    if ((cl = client_find_by_dbus(cbd->dbusid, cbd->object)) == NULL) {
+    if (client_find_by_dbus(cbd->dbusid, cbd->object) == NULL) {
         OHM_DEBUG(DBG_DBUS, "Property receiving failed: playback is gone");
         return;
     }
@@ -1022,7 +1026,7 @@ static void set_property_cb(DBusPendingCall *pend, void *data)
 {
     set_property_cb_data_t *cbd = (set_property_cb_data_t *)data;
     DBusMessage  *reply;
-    client_t     *cl;
+    /* client_t     *cl; */
     const char   *error;
     int           success;
 
@@ -1032,7 +1036,7 @@ static void set_property_cb(DBusPendingCall *pend, void *data)
         return;
     }
 
-    if ((cl = client_find_by_dbus(cbd->dbusid, cbd->object)) == NULL) {
+    if (client_find_by_dbus(cbd->dbusid, cbd->object) == NULL) {
         OHM_DEBUG(DBG_DBUS, "Property setting failed: playback is gone");
         return;
     }
