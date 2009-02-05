@@ -1,8 +1,13 @@
+ohm-plugins-misc (0.6.13) unstable; urgency=low
+
+  * Fixed a number of errors reported by static analysis.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 05 Feb 2009 12:29:52 +0200
+
 ohm-plugins-misc (0.6.12) unstable; urgency=low
 
   * Added call start, call connect and call end hooks.
   * Removed double dependency on gconf2-dev.
-  * Fixed a number of errors reported by static analysis.
 
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 04 Feb 2009 19:16:52 +0200
 
