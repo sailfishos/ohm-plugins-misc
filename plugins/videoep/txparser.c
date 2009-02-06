@@ -80,9 +80,27 @@ static gboolean txparser(GObject *conn, GObject *transaction, gpointer data)
 static int route_action(videoep_t *videoep, void *data)
 {
     route_t *route = data;
+    xrt_clone_type_t clone;
 
     printf("*** Got video route to '%s'\n", route->device);
-    fbrt_route_video(route->device, "");
+
+    if (xrt_not_connected_to_xserver(videoep->xr))
+        xrt_connect_to_xserver(videoep->xr);
+    else {
+        if (!strcmp(route->device, "tvout") ||
+            !strcmp(route->device, "builtinandtvout"))
+        {
+            clone = xrt_clone_pal;
+        }
+        else if (!strcmp(route->device, "builtin")) {
+            clone = xrt_do_not_clone;
+        }
+        else {
+            return FALSE;
+        }
+
+        xrt_clone_to_tvout(videoep->xr, clone);
+    }
 
     return TRUE;
 }

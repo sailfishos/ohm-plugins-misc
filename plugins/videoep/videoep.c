@@ -1,12 +1,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h> 
+#include <stdlib.h>
+#include <malloc.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <netdb.h>
+#include <arpa/inet.h>
 
 
 #include <gmodule.h>
@@ -16,12 +21,9 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
 
-#include <omapfb.h>
-
 #include "videoep.h"
 #include "txparser.h"
-#include "fbrt.h"
-#include "xrandrt.h"
+#include "xrt.h"
 
 videoep_t  *videoep = NULL;
 
@@ -41,7 +43,7 @@ static void plugin_init(OhmPlugin *plugin)
     gulong   decision_cb;
     gulong   keychange_cb;
 
-    printf("Video EP: init\n");
+    printf("Video EP: init ...\n");
 
     do {
         if (register_ep == NULL) {
@@ -73,34 +75,9 @@ static void plugin_init(OhmPlugin *plugin)
         videoep->conn = conn;
         videoep->decision_cb  = decision_cb;
         videoep->keychange_cb = keychange_cb; 
-        videoep->xr = xrandrt_init(NULL);
+        videoep->xr = xrt_init(":0");
 
-        /* ******************* temporary for test ************************* */
-        fbrt_device_new("/dev/fb0", 0);
-        fbrt_device_new("/dev/fb2", 1024);
-        fbrt_route_new("builtinandtvout");
-        fbrt_route_new("builtin");
-
-        /*
-        fbrt_config_new_clone("/dev/fb2", "builtinandtvout", "/dev/fb0",
-                              "DIGIT", 1, 640,480, 0,0);
-        fbrt_config_new_clone("/dev/fb2", "builtin", "/dev/fb0",
-                              "DIGIT", 0, 640,480, 0,0);
-        */
-
-        fbrt_config_new_clone("/dev/fb2", "builtinandtvout", "/dev/fb0",
-                              "DIGIT", 1, 640,384, 40,10);
-        fbrt_config_new_clone("/dev/fb2", "builtin", "/dev/fb0",
-                              "DIGIT", 0, 640,384, 40,10);
-
-        /*
-        fbrt_config_new_route("/dev/fb0", "builtinandtvout", "DIGIT", 1);
-        fbrt_config_new_route("/dev/fb0", "builtin", "LCD", 1);
-        */
-
-
-        /* ******************** end of temporary ************************** */
-
+        xrt_connect_to_xserver(videoep->xr);
 
         return;                 /* everything went OK */
 
@@ -131,8 +108,7 @@ static void plugin_exit(OhmPlugin *plugin)
 }
 
 #include "txparser.c"
-#include "fbrt.c"
-#include "xrandrt.c"
+#include "xrt.c"
 
 
 OHM_PLUGIN_DESCRIPTION("videoep",
