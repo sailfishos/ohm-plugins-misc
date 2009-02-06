@@ -21,6 +21,8 @@ plugin_init(OhmPlugin * plugin)
 {
     DBusConnection *c = ohm_plugin_dbus_get_connection();
 
+    (void) plugin;
+
     if (!OHM_DEBUG_INIT(hal))
         g_warning("Failed to initialize HAL plugin debugging.");
     OHM_DEBUG(DBG_HAL, "> HAL plugin init");
@@ -47,6 +49,8 @@ OHM_EXPORTABLE(gboolean, unset_observer, (void *user_data))
 static void
 plugin_exit(OhmPlugin * plugin)
 {
+    (void) plugin;
+    
     if (hal_plugin_p) {
         deinit_hal(hal_plugin_p);
         hal_plugin_p = NULL;

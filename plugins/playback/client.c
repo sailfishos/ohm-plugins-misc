@@ -16,6 +16,7 @@ static void client_init(OhmPlugin *plugin)
     (void)plugin;
 }
 
+
 static client_t *client_create(char *dbusid, char *object,
                                char *pid, char *stream)
 {
@@ -54,9 +55,12 @@ static client_t *client_create(char *dbusid, char *object,
                 next->prev = cl;
                 cl->prev   = prev;
                 
+                dbusif_watch_client(dbusid, TRUE);
+
                 if (client_add_factstore_entry(dbusid, object, pid, stream))
                     OHM_DEBUG(DBG_CLIENT, "playback %s%s created",
                               dbusid, object);
+                    
                 else {
                     client_destroy(cl);
                     cl = NULL;
@@ -84,6 +88,8 @@ static void client_destroy(client_t *cl)
         client_delete_factsore_entry(cl);
 
         pbreq_purge(cl);
+
+        dbusif_watch_client(cl->dbusid, FALSE);
 
         free(cl->dbusid);
         free(cl->object);

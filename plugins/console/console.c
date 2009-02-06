@@ -281,7 +281,9 @@ OHM_EXPORTABLE(int, console_open, (char *address,
     if ((c = new_console()) == NULL)
         return -1;
 
-    c->sock     = socket(sin.sin_family, SOCK_STREAM, 0);
+    if ((c->sock = socket(sin.sin_family, SOCK_STREAM, 0)) < 0)
+        return -1;
+
     c->endpoint = STRDUP(address);
     c->opened   = opened;
     c->closed   = closed;
@@ -379,19 +381,25 @@ OHM_EXPORTABLE(int, console_printf, (int id, char *fmt, ...))
     FILE      *fp;
     va_list    ap;
 
-
-    /*
-     * what a pitty that we have neither standard v(f)dprintf nor fdclose...
-     */
-
-    if ((fd = dup(c->sock)) >= 0 && (fp = fdopen(fd, "w")) != NULL) {
-        va_start(ap, fmt);
-        len = vfprintf(fp, fmt, ap);
-        va_end(ap);
-        fflush(fp);
-        fclose(fp);
+    if (c == NULL) {
+        errno = EINVAL;
+        return -1;
     }
     
+    if ((fd = dup(c->sock)) < 0)
+        return -1;
+    
+    if ((fp = fdopen(fd, "w")) == NULL) {
+        close(fd);
+        return -1;
+    }
+    
+    va_start(ap, fmt);
+    len = vfprintf(fp, fmt, ap);
+    va_end(ap);
+    fflush(fp);
+    fclose(fp);
+
     return len;
 }
 
@@ -622,10 +630,11 @@ console_accept(GIOChannel *source, GIOCondition condition, gpointer data)
  fail:
     if (sock >= 0)
         close(sock);
-    if (c)
+    if (c) {
         FREE(c->endpoint);
-    c->endpoint = NULL;
-    c->sock    = -1;
+        c->endpoint = NULL;
+        c->sock     = -1;
+    }
 
     return TRUE;
 

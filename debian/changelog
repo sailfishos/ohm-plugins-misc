@@ -1,8 +1,22 @@
+ohm-plugins-misc (0.6.13) unstable; urgency=low
+
+  * Fixed a number of errors reported by static analysis.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 05 Feb 2009 12:29:52 +0200
+
+ohm-plugins-misc (0.6.12) unstable; urgency=low
+
+  * Added call start, call connect and call end hooks.
+  * Removed double dependency on gconf2-dev.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 04 Feb 2009 19:16:52 +0200
+
 ohm-plugins-misc (0.6.11) unstable; urgency=low
 
   * Changed BT to support multiple connected profiles at once.
+  * GConf plugin added.
 
- -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 29 Jan 2009 13:53:25 +0200
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 03 Feb 2009 16:25:21 +0200
 
 ohm-plugins-misc (0.6.10) unstable; urgency=low
 

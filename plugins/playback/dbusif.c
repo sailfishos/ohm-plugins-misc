@@ -38,6 +38,94 @@ static void free_set_property_cb_data(void *);
 static void initialize_notification_registry(void);
 static prop_notif_t *find_property_notifier(char *);
 
+
+
+
+static char *filter_signal(char *buf, size_t size,
+                           const char *sender, const char *interface,
+                           const char *member, const char *path, ...)
+{
+#define FILTER_TAG(tag, value)                                          \
+        if (value != NULL) {                                            \
+            n  = snprintf(p, l, "%s%s='%s'", t, tag, value);            \
+            p += n;                                                     \
+            l -= n;                                                     \
+            t  = ",";                                                   \
+        }
+#define FILTER_ARG(i, value)                                            \
+        if (value != NULL) {                                            \
+            n  = snprintf(p, l, "%sarg%d='%s'", t, i, value);           \
+            p += n;                                                     \
+            l -= n;                                                     \
+            t  = ",";                                                   \
+        }
+
+    va_list ap;
+    char *p, *t, *argval;
+    int   l, n, i;
+
+    t = "";
+    p = buf;
+    l = size;
+
+    FILTER_TAG("type", "signal");
+    FILTER_TAG("sender", sender);
+    FILTER_TAG("interface", interface);
+    FILTER_TAG("member", member);
+    FILTER_TAG("path", path);
+
+    va_start(ap, path);
+    
+    for (i = 0; (argval = va_arg(ap, char *)) != NULL; i++)
+        FILTER_ARG(i, argval);
+    
+    return buf;
+
+#undef FILTER_TAG
+#undef FILTER_ARG
+}
+
+
+static int dbusif_watch_client(const char *id, int watchit)
+{
+    char       filter[1024];
+    DBusError  err;
+
+    filter_signal(filter, sizeof(filter),
+                  DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+                  DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH,
+                  id, id, "",
+                  NULL);
+    
+    /*
+     * Notes:
+     *   We block when adding filters, to minimize (= eliminate ?) the time
+     *   window for the client to crash after it has let us know about itself
+     *   but before we managed to install the filter. According to the docs
+     *   we do not re-enter the main loop and all other messages than the
+     *   reply to AddMatch will get queued and processed once we're bac in the
+     *   main loop. On the watch removal path we do not care about errors and
+     *   we do not want to block either.
+     */
+
+    if (watchit) {
+        dbus_error_init(&err);
+        dbus_bus_add_match(sess_conn, filter, &err);
+
+        if (dbus_error_is_set(&err)) {
+            OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
+            dbus_error_free(&err);
+            return FALSE;
+        }
+    }
+    else
+        dbus_bus_remove_match(sess_conn, filter, NULL);
+    
+    return TRUE;
+}
+
+
+
 /*! \addtogroup pubif
  *  Functions
  *  @{
@@ -46,15 +134,8 @@ static prop_notif_t *find_property_notifier(char *);
 static void dbusif_init(OhmPlugin *plugin)
 {
     (void)plugin;
-
-#define FILTER_SIGNAL(i) "type='signal',interface='" i "'"
-
-    static char *adm_rule  = FILTER_SIGNAL(DBUS_ADMIN_INTERFACE);
-    static char *pb_rule   = FILTER_SIGNAL(DBUS_PLAYBACK_INTERFACE);
-    static char *prop_rule = FILTER_SIGNAL(DBUS_INTERFACE_PROPERTIES);
-
-#undef FILTER_SIGNAL
-
+    char  filter[1024];
+    
     static struct DBusObjectPathVTable pb_method = {
         .message_function = method
     };
@@ -86,20 +167,34 @@ static void dbusif_init(OhmPlugin *plugin)
      * add signal filters
      */
 
-    dbus_bus_add_match(sess_conn, adm_rule, &err);
+    
+
+#if 0 /* replaced by client-specific filters */
+    filter_signal(filter, sizeof(filter),
+                  DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+                  DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH,
+                  NULL);
+
+    dbus_bus_add_match(sess_conn, filter, &err);
     if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", adm_rule, err.message);
+        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
         dbus_error_free(&err);
         exit(0);
     }
+#endif
+
     if (!dbus_connection_add_filter(sess_conn, name_changed,NULL, NULL)) {
         OHM_ERROR("Can't add filter 'name_changed'");
         exit(0);
     }
 
-    dbus_bus_add_match(sess_conn, pb_rule, &err);
+    filter_signal(filter, sizeof(filter),
+                  NULL, DBUS_PLAYBACK_INTERFACE, NULL, NULL,
+                  NULL);
+                            
+    dbus_bus_add_match(sess_conn, filter, &err);
     if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", pb_rule, err.message);
+        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
         dbus_error_free(&err);
         exit(0);
     }
@@ -108,9 +203,13 @@ static void dbusif_init(OhmPlugin *plugin)
         exit(0);
     }
 
-    dbus_bus_add_match(sess_conn, prop_rule, &err);
+    filter_signal(filter, sizeof(filter),
+                  NULL, DBUS_INTERFACE_PROPERTIES, NULL, NULL,
+                  NULL);
+    
+    dbus_bus_add_match(sess_conn, filter, &err);
     if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", prop_rule, err.message);
+        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
         dbus_error_free(&err);
         exit(0);
     }
@@ -248,6 +347,7 @@ static void dbusif_get_property(char *dbusid, char *object, char *prname,
     if (msg == NULL) {
         OHM_ERROR("[%s] Failed to create D-Dbus message to set properties",
                   __FUNCTION__);
+        free_get_property_cb_data(ud);
         return;
     }
 
@@ -275,6 +375,10 @@ static void dbusif_get_property(char *dbusid, char *object, char *prname,
 
 
  failed:
+    if (!success) {
+        /* failed to send the dbus query, free cb data */
+        free_get_property_cb_data(ud);
+    }
     dbus_message_unref(msg);
     return;
 }
@@ -311,6 +415,7 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
     if (msg == NULL) {
         OHM_ERROR("[%s] Failed to create D-Dbus message to set properties",
                   __FUNCTION__);
+        free_get_property_cb_data(ud);
         return;
     }
 
@@ -355,6 +460,10 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
     }
 
  failed:
+    if (!success) {    
+        /* failed to send the dbus query, free cb data */
+        free_get_property_cb_data(ud);
+    }
     dbus_message_unref(msg);
     return;
 }
@@ -611,7 +720,7 @@ static DBusHandlerResult notify(DBusConnection *conn, DBusMessage *msg,
     char              *iface;
     char              *prop;
     char              *value;
-    client_t          *cl;
+    /* client_t          *cl; */
     prop_notif_t      *notif;
     int                success;
     DBusError          err;
@@ -628,7 +737,7 @@ static DBusHandlerResult notify(DBusConnection *conn, DBusMessage *msg,
         dbusid = (char *)dbus_message_get_sender(msg);
         object = (char *)dbus_message_get_path(msg);
 
-        if ((cl = client_find_by_dbus(dbusid, object)) != NULL) {
+        if (client_find_by_dbus(dbusid, object) != NULL) {
             dbus_error_init(&err);
 
             success = dbus_message_get_args(msg, &err,
@@ -675,7 +784,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     static sm_evdata_t  evdata      = { .evid = evid_playback_request };
 
     DBusMessage        *reply;
-    char               *msgpath;
+    /* char               *msgpath; */
     char               *objpath;
     char               *sender;
     dbus_uint32_t       serial;
@@ -694,7 +803,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
 
     if (dbus_message_is_method_call(msg, interface, rq_state)) {
 
-        msgpath = (char *)dbus_message_get_path(msg);
+        /* msgpath = (char *)dbus_message_get_path(msg); */
         sender  = (char *)dbus_message_get_sender(msg);
         req     = NULL;
 
@@ -752,7 +861,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     }
     else if (dbus_message_is_method_call(msg, interface, rq_privacy)) {
 
-        msgpath = (char *)dbus_message_get_path(msg);
+        /* msgpath = (char *)dbus_message_get_path(msg); */
         sender  = (char *)dbus_message_get_sender(msg);
 
         OHM_DEBUG(DBG_DBUS,"received set privacy override from %s",sender);
@@ -781,7 +890,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     }
     else if (dbus_message_is_method_call(msg, interface, rq_mute)) {
 
-        msgpath = (char *)dbus_message_get_path(msg);
+        /* msgpath = (char *)dbus_message_get_path(msg); */
         sender  = (char *)dbus_message_get_sender(msg);
 
         OHM_DEBUG(DBG_DBUS,"received set mute from %s",sender);
@@ -810,7 +919,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     }
     else if (dbus_message_is_method_call(msg, interface, get_allowed)) {
         
-        msgpath = (char *)dbus_message_get_path(msg);
+        /* msgpath = (char *)dbus_message_get_path(msg); */
         sender  = (char *)dbus_message_get_sender(msg);
         serial  = dbus_message_get_serial(msg);
 
@@ -863,7 +972,7 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
 {
     get_property_cb_data_t *cbd = (get_property_cb_data_t *)data;
     DBusMessage        *reply;
-    client_t           *cl;
+    /* client_t           *cl; */
     char               *prvalue;
     const char         *error_descr;
     int                 success;
@@ -883,7 +992,7 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
         return;
     }
 
-    if ((cl = client_find_by_dbus(cbd->dbusid, cbd->object)) == NULL) {
+    if (client_find_by_dbus(cbd->dbusid, cbd->object) == NULL) {
         OHM_DEBUG(DBG_DBUS, "Property receiving failed: playback is gone");
         return;
     }
@@ -923,7 +1032,7 @@ static void set_property_cb(DBusPendingCall *pend, void *data)
 {
     set_property_cb_data_t *cbd = (set_property_cb_data_t *)data;
     DBusMessage  *reply;
-    client_t     *cl;
+    /* client_t     *cl; */
     const char   *error;
     int           success;
 
@@ -933,7 +1042,7 @@ static void set_property_cb(DBusPendingCall *pend, void *data)
         return;
     }
 
-    if ((cl = client_find_by_dbus(cbd->dbusid, cbd->object)) == NULL) {
+    if (client_find_by_dbus(cbd->dbusid, cbd->object) == NULL) {
         OHM_DEBUG(DBG_DBUS, "Property setting failed: playback is gone");
         return;
     }

@@ -184,7 +184,7 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec,
         fact = create_fact(plugin, udi, dec->capability, properties);
         dec->cb(fact, dec->capability, added, removed, dec->user_data);
 
-        /* g_object_unref(fact); */
+        /* FIXME: g_object_unref(fact); */
         libhal_free_property_set(properties);
     }
 
