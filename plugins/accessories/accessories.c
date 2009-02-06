@@ -736,6 +736,11 @@ static gboolean bluetooth_deinit(OhmPlugin *plugin)
 {
     (void) plugin;
 
+    /* TODO;
+     * 1. Disconnect any connected BT devices from audio routing.
+     * 2. Remove any bluetooth facts.
+     * */
+
     return TRUE;
 }
 

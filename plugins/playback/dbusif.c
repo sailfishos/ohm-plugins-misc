@@ -347,7 +347,7 @@ static void dbusif_get_property(char *dbusid, char *object, char *prname,
     if (msg == NULL) {
         OHM_ERROR("[%s] Failed to create D-Dbus message to set properties",
                   __FUNCTION__);
-        free(ud);
+        free_get_property_cb_data(ud);
         return;
     }
 
@@ -375,7 +375,10 @@ static void dbusif_get_property(char *dbusid, char *object, char *prname,
 
 
  failed:
-    free(ud);
+    if (!success) {
+        /* failed to send the dbus query, free cb data */
+        free_get_property_cb_data(ud);
+    }
     dbus_message_unref(msg);
     return;
 }
@@ -412,7 +415,7 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
     if (msg == NULL) {
         OHM_ERROR("[%s] Failed to create D-Dbus message to set properties",
                   __FUNCTION__);
-        free(ud);
+        free_get_property_cb_data(ud);
         return;
     }
 
@@ -457,7 +460,10 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
     }
 
  failed:
-    free(ud);
+    if (!success) {    
+        /* failed to send the dbus query, free cb data */
+        free_get_property_cb_data(ud);
+    }
     dbus_message_unref(msg);
     return;
 }
