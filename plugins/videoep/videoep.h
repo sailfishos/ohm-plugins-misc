@@ -10,6 +10,7 @@ typedef struct {
     GObject      *conn;
     gulong        decision_cb;
     gulong        keychange_cb;
+    struct xrt_s *xr;
 } videoep_t;
 
 static void plugin_init(OhmPlugin *);
