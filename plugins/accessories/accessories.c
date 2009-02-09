@@ -265,12 +265,12 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
                 dres_accessory_request("headphone", -1, 1);
             }
             
-            if (has_line_out) {
+            if (has_line_out && !had_line_out) {
                 OHM_DEBUG(DBG_HEADSET, "inserted line-out!");
                 /* FIXME: not supported ATM */
                 /* dres_accessory_request("line_out", -1, 1); */
             }
-            if (has_video_out) {
+            if (has_video_out && !had_video_out) {
                 OHM_DEBUG(DBG_HEADSET, "inserted video-out!");
                 dres_accessory_request("tvout", -1, 1);
             }
@@ -290,11 +290,11 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
                 dres_accessory_request("headphone", -1, 0);
             }
 
-            if (had_line_out) {
+            if (had_line_out && !has_line_out) {
                 OHM_DEBUG(DBG_HEADSET, "removed line-out!");
                 /* dres_accessory_request("line_out", -1, 0); */
             }
-            if (had_video_out) {
+            if (had_video_out && !has_video_out) {
                 OHM_DEBUG(DBG_HEADSET, "removed video-out!");
                 dres_accessory_request("tvout", -1, 0);
             }
@@ -508,8 +508,6 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
                 }
 
                 ohm_fact_store_remove(fs, bt_connected);
-
-                /* FIXME: how to check this? */
                 g_object_unref(bt_connected);
 
             }
@@ -586,11 +584,11 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
                         g_value_get_int(gval_hsp) == 0)) {
 
                 ohm_fact_store_remove(fs, bt_connected);
+                g_object_unref(bt_connected);
             }
         }
         else {
-            /* possibly OHM was started after a BT headset was
-             * connected? */
+            OHM_DEBUG(DBG_BT, "ERROR: disconnect for a non-connected device?");
         }
     }
     
@@ -706,26 +704,49 @@ static gboolean bluetooth_init(OhmPlugin *plugin)
 {
     (void) plugin;
     
-    /* TODO:
-     * 1. query bluez and see if there are any bluetooth devices connected
-     * 2. get their properties
-     * 3. see if any of the a2dp or headset devices are in the
-     *    "Connected" state
-     * 4. for each such device, call the dres_accessory_request
-     **/
-
+    /* start the D-Bus method chain that queries the already
+     * connected BT audio devices */
     return get_default_adapter();
 
 }
 
 static gboolean bluetooth_deinit(OhmPlugin *plugin)
 {
+    GSList *e, *f, *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
+
     (void) plugin;
 
-    /* TODO;
-     * 1. Disconnect any connected BT devices from audio routing.
-     * 2. Remove any bluetooth facts.
-     * */
+    for (e = list; e != NULL; e = f) {
+        OhmFact *bt_connected = (OhmFact *) e->data;
+
+        /* this is special treatment for FS */
+        f = g_slist_next(e);
+
+        if (bt_connected) {
+
+            GValue *gval_a2dp = NULL, *gval_hsp = NULL;
+
+            /* disconnect the audio routing to BT and remove the fact */
+
+            gval_a2dp = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
+            gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
+
+            if ((gval_a2dp && 
+                        G_VALUE_TYPE(gval_a2dp) == G_TYPE_INT &&
+                        g_value_get_int(gval_a2dp) == 1)) {
+                dres_accessory_request(BT_TYPE_A2DP, -1, 0);
+            }
+
+            if ((gval_hsp && 
+                        G_VALUE_TYPE(gval_hsp) == G_TYPE_INT &&
+                        g_value_get_int(gval_hsp) == 1)) {
+                dres_accessory_request(BT_TYPE_HSP, -1, 0);
+            }
+
+            ohm_fact_store_remove(fs, bt_connected);
+            g_object_unref(bt_connected);
+        }
+    }
 
     return TRUE;
 }
