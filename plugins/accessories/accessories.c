@@ -277,7 +277,7 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
 
             /* we remove what we had */
             
-            if (had_set) {
+            if (had_set && !has_set) {
                 OHM_DEBUG(DBG_HEADSET, "removed headset!");
                 dres_accessory_request("headset", -1, 0);
             }
@@ -751,8 +751,7 @@ static gboolean bluetooth_deinit(OhmPlugin *plugin)
     return TRUE;
 }
 
-static void get_properties_cb (DBusPendingCall *pending,
-        void *user_data)
+static void get_properties_cb (DBusPendingCall *pending, void *user_data)
 {
 
     DBusMessage *reply = NULL;
@@ -771,14 +770,14 @@ static void get_properties_cb (DBusPendingCall *pending,
         goto error;
     }
 
-    if (dbus_message_get_type (reply) == DBUS_MESSAGE_TYPE_ERROR) {
+    if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
         goto error;
     }
     
     dbus_message_iter_init(reply, &iter);
 
     if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_ARRAY) {
-            goto error;
+        goto error;
     }
     
     dbus_message_iter_recurse(&iter, &array_iter);
@@ -840,7 +839,7 @@ static void get_properties_cb (DBusPendingCall *pending,
             }
         }
         else {
-            /* OHM_DEBUG(DBG_BT, "Unknown key '%s'\n", key); */
+            /* OHM_DEBUG(DBG_BT, "Non-handled key '%s'\n", key); */
         }
 
         /* now the beef: if an audio device was there, let's mark it
@@ -860,15 +859,8 @@ static void get_properties_cb (DBusPendingCall *pending,
 
     OHM_DEBUG(DBG_BT, "Device '%s': has_a2dp=%i, has_hsp=%i, has_hfp=%i, connected=%i\n", path, is_a2dp, is_hsp, is_hfp, is_connected);
 
-    g_free(path);
-
-    return;
-
 error:
 
-    if (pending)
-        dbus_pending_call_unref(pending);
-    
     if (reply)
         dbus_message_unref (reply);
 
@@ -913,21 +905,15 @@ static void get_properties(gchar *device_path)
         goto error;
     }
 
-    dbus_message_unref(request);
-
-    return;
-
 error:
 
     if (request)
         dbus_message_unref(request);
 
     return;
-
 }
 
-static void get_device_list_cb (DBusPendingCall *pending,
-        void *user_data)
+static void get_device_list_cb (DBusPendingCall *pending, void *user_data)
 {
 
     DBusMessage *reply = NULL;
@@ -1026,12 +1012,10 @@ error:
         dbus_message_unref(request);
 
     return FALSE;
-
 }
 
 
-static void get_default_adapter_cb (DBusPendingCall *pending,
-        void *user_data)
+static void get_default_adapter_cb (DBusPendingCall *pending, void *user_data)
 {
     DBusMessage *reply = NULL;
     gchar *result = NULL;
@@ -1130,9 +1114,7 @@ error:
         dbus_message_unref(request);
 
     return FALSE;
-
 }
-
 
 /* bluetooth part ends */    
 
