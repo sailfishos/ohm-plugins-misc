@@ -1,9 +1,11 @@
 enum {
     attr_clone_to_tvout = 0,
+    attr_tvout_standard,
     attr_end
 };
 
 #define FLAG_CLONE_TO_TVOUT ( 1 << attr_clone_to_tvout )
+#define FLAG_TVOUT_STANDARD ( 1 << attr_tvout_standard )
 #define FLAG_ALL            ((1 << attr_end) - 1)
 
 
@@ -13,6 +15,12 @@ static unsigned int  attrdef_all_flags = FLAG_ALL;
 static xrt_attrdef_t clone_to_tvout = {
     "XV_OMAP_CLONE_TO_TVOUT",
     FLAG_CLONE_TO_TVOUT,
+    FALSE,
+    0
+};
+static xrt_attrdef_t tvout_standard = {
+    "XV_OMAP_TVOUT_STANDARD",
+    FLAG_TVOUT_STANDARD,
     FALSE,
     0
 };
@@ -94,6 +102,9 @@ static void xrt_connect_to_xserver(xrt_t *xr)
     }
 
     query_attrdef(xr, &clone_to_tvout);
+    query_attrdef(xr, &tvout_standard);
+
+    xcb_flush(xr->xconn);
 }
 
 static int xrt_not_connected_to_xserver(xrt_t *xr)
@@ -112,16 +123,18 @@ static int xrt_not_connected_to_xserver(xrt_t *xr)
 static int xrt_clone_to_tvout(xrt_t *xr, xrt_clone_type_t clone)
 {
     int32_t        enable   = (clone == xrt_do_not_clone) ? 0 : 1;
-#if 0
     int32_t        standard = clone - xrt_clone_pal; /* dirty but fast */
-#endif
     int            retval   = 0;
     xrt_adaptor_t *adaptor;
 
     for (adaptor = xr->adaptors;   adaptor != NULL;  adaptor = adaptor->next) {
         if (adaptor->clone.valid && (enable != adaptor->clone.value)) {
+            set_attribute(xr, &adaptor->tvstd, standard);
+
             if (set_attribute(xr, &adaptor->clone, enable) < 0)
                 retval = -1;
+            else
+                xcb_flush(xr->xconn);
         }
     }
 
@@ -441,6 +454,10 @@ static void finish_adaptor_query(xrt_t *xr, void *reply_data, void *user_data)
             adaptor->clone.def     = &clone_to_tvout;
             adaptor->clone.flags   = &adaptor->atflags;
             
+            adaptor->tvstd.adaptor = adaptor;
+            adaptor->tvstd.def     = &tvout_standard;
+            adaptor->tvstd.flags   = &adaptor->atflags;
+            
             memcpy(adaptor->name, name, len);
             adaptor->name[len] = '\0';
             
@@ -451,6 +468,9 @@ static void finish_adaptor_query(xrt_t *xr, void *reply_data, void *user_data)
                    adaptor->portbeg, adaptor->portend);
 
             query_attribute(xr, &adaptor->clone);
+            query_attribute(xr, &adaptor->tvstd);
+
+            xcb_flush(xr->xconn);
         }
     }
 }
@@ -488,7 +508,6 @@ static int query_attrdef(xrt_t *xr, xrt_attrdef_t *def)
 
     rque_append_request(&xr->rque, ckie.sequence, finish_attrdef_query, def);
 
-    xcb_flush(xr->xconn);
 
     return 0;
 
@@ -553,8 +572,6 @@ static int query_attribute(xrt_t *xr, xrt_attribute_t *attr)
     }
 
     rque_append_request(&xr->rque, ckie.sequence, finish_attribute_query,attr);
-
-    xcb_flush(xr->xconn);
 
     return 0;
 

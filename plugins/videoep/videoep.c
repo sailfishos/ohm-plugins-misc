@@ -101,7 +101,7 @@ static void plugin_exit(OhmPlugin *plugin)
 
         unregister_ep(videoep->conn);
 
-        xrandrt_exit(videoep->xr);
+        xrt_exit(videoep->xr);
 
         free(videoep);
     }

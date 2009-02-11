@@ -24,6 +24,7 @@ typedef struct {		/* action descriptor */
 
 typedef struct {                /* video routing data structure */
     char         *device;
+    char         *tvstd;
 } route_t;
 
 static int route_action(videoep_t *, void *);
@@ -38,13 +39,14 @@ static gboolean txparser(GObject *conn, GObject *transaction, gpointer data)
     (void)conn;
 
     static argdsc_t  route_args [] = {
-        {argtype_string  ,   "device",  STRUCT_OFFSET(route_t, device)},
-        {argtype_invalid ,     NULL  ,                 0              }
+        { argtype_string  ,   "device"    ,  STRUCT_OFFSET(route_t, device) },
+        { argtype_string  ,   "tvstandard",  STRUCT_OFFSET(route_t, tvstd ) },
+        { argtype_invalid ,     NULL      ,                 0               }
     };
 
     static actdsc_t  actions[] = {
-        {PREFIX "video_route", route_action, route_args, sizeof(route_t)},
-        {           NULL     ,     NULL    ,    NULL   ,      0         }
+        { PREFIX "video_route", route_action, route_args, sizeof(route_t) },
+        {          NULL       ,     NULL    ,    NULL   ,      0          }
     };
     
     videoep_t *videoep = data;
@@ -82,7 +84,7 @@ static int route_action(videoep_t *videoep, void *data)
     route_t *route = data;
     xrt_clone_type_t clone;
 
-    printf("*** Got video route to '%s'\n", route->device);
+    printf("*** Got video route to '%s' / '%s'\n", route->device,route->tvstd);
 
     if (xrt_not_connected_to_xserver(videoep->xr))
         xrt_connect_to_xserver(videoep->xr);
@@ -90,7 +92,22 @@ static int route_action(videoep_t *videoep, void *data)
         if (!strcmp(route->device, "tvout") ||
             !strcmp(route->device, "builtinandtvout"))
         {
-            clone = xrt_clone_pal;
+            if (route->tvstd != NULL) {
+                if (!strcmp(route->tvstd, "pal"))
+                    clone = xrt_clone_pal;
+                else if (!strcmp(route->tvstd, "ntsc"))
+                    clone = xrt_clone_ntsc;
+                else {
+                    printf("Video EP: unsupported TV signal standard '%s'. "
+                           "Using 'pal' instead\n", route->tvstd);
+                    clone = xrt_clone_pal;
+                }
+            }
+            else {
+                printf("Video EP: No TV signal standard specified. "
+                       "Using default 'pal'\n");
+                clone = xrt_clone_pal;
+            }
         }
         else if (!strcmp(route->device, "builtin")) {
             clone = xrt_do_not_clone;

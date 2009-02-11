@@ -53,6 +53,7 @@ typedef struct xrt_adaptor_s {
     xcb_xv_port_t         portbeg;
     xcb_xv_port_t         portend;
     xrt_attribute_t       clone;
+    xrt_attribute_t       tvstd;
     unsigned int          atflags; /* to follow flag setups */
     int                   ready;
 } xrt_adaptor_t;
