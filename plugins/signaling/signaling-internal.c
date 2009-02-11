@@ -31,7 +31,7 @@ init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
     DBG_SIGNALING = flag_signaling;
     DBG_FACTS     = flag_facts;
 
-    transactions = g_hash_table_new(g_int_hash, g_int_equal);
+    transactions = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
     if (transactions == NULL) {
         g_error("Failed to create transaction hash table.");
         return FALSE;
@@ -426,6 +426,7 @@ map_to_dbus_type(GValue *gval, gchar *sig, void **value)
             *pd = d;
             *value = pd;
             retval = DBUS_TYPE_DOUBLE;
+            break;
         case G_TYPE_DOUBLE:
             *sig = 'd';
             d = g_value_get_double(gval);
@@ -433,6 +434,7 @@ map_to_dbus_type(GValue *gval, gchar *sig, void **value)
             *pd = d;
             *value = pd;
             retval = DBUS_TYPE_DOUBLE;
+            break;
         default:
             /* printf("ERROR ALARM ERROR: G_VALUE_TYPE: '%i'\n", G_VALUE_TYPE(gval)); */
             *sig = '?';
@@ -852,6 +854,8 @@ transaction_instance_init(GTypeInstance * instance,
         gpointer g_class) 
 {
 
+    (void) g_class;
+
     Transaction *self = (Transaction *) instance;
     self->txid = 0;
     self->acked = NULL;
@@ -859,8 +863,6 @@ transaction_instance_init(GTypeInstance * instance,
     self->not_answered = NULL;
     self->timeout_id = 0;
     self->built_ready = FALSE;
-
-    (void) g_class;
 }
 
     static void
@@ -918,9 +920,11 @@ transaction_dispose(GObject *object) {
 
     static void
 transaction_class_init(gpointer g_class, gpointer class_data) {
-
+    
     GObjectClass *gobject = (GObjectClass *) g_class;
     GParamSpec *param_spec;
+
+    (void) class_data;
 
     gobject->dispose = transaction_dispose;
 
@@ -1020,14 +1024,15 @@ transaction_class_init(gpointer g_class, gpointer class_data) {
                 signaling_marshal_VOID__STRING_UINT,
                 G_TYPE_NONE,
                 2, G_TYPE_STRING, G_TYPE_UINT);
-    
-    (void) class_data;
 
 }
 
     static void
 internal_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
 {
+    
+    (void) iface_data;
+
     OHM_DEBUG(DBG_SIGNALING, "initing internal interface\n");
 
     EnforcementPointInterface *iface =
@@ -1044,30 +1049,31 @@ internal_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
     iface->unregister =
         (gboolean(*)(EnforcementPoint *))
         internal_ep_unregister;
-    
-    (void) iface_data;
 }
 
     static void
 internal_ep_strategy_instance_init(GTypeInstance * instance,
         gpointer g_class)
 {
+    InternalEPStrategy *self = INTERNAL_EP_STRATEGY(instance);
+
+    (void) g_class;
 
     OHM_DEBUG(DBG_SIGNALING, "initing internal strategy\n");
-    InternalEPStrategy *self = INTERNAL_EP_STRATEGY(instance);
     self->id = NULL;
-    
-    (void) g_class;
 }
 
 
     static void
 external_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
 {
-
-    OHM_DEBUG(DBG_SIGNALING, "initing external interface\n");
     EnforcementPointInterface *iface =
         (EnforcementPointInterface *) g_iface;
+
+    (void) iface_data;
+    
+    OHM_DEBUG(DBG_SIGNALING, "initing external interface\n");
+    
     iface->send_decision =
         (gboolean(*)(EnforcementPoint *, Transaction *))
         external_ep_send_decision;
@@ -1080,25 +1086,26 @@ external_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
     iface->unregister =
         (gboolean(*)(EnforcementPoint *))
         external_ep_unregister;
-
-    (void) iface_data;
 }
 
     static void
 external_ep_strategy_instance_init(GTypeInstance * instance,
         gpointer g_class)
 {
-
-    OHM_DEBUG(DBG_SIGNALING, "initing external strategy\n");
     ExternalEPStrategy *self = EXTERNAL_EP_STRATEGY(instance);
-    self->id = NULL;
 
     (void) g_class;
+
+    OHM_DEBUG(DBG_SIGNALING, "initing external strategy\n");
+    self->id = NULL;
 }
 
     static void
 external_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
+
     GObjectClass *gobject = (GObjectClass *) g_class;
+    
+    (void) class_data;
     
     gobject->dispose = external_ep_dispose;
 
@@ -1106,13 +1113,14 @@ external_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
     gobject->get_property = external_ep_strategy_get_property;
 
     g_object_class_override_property (gobject, PROP_ID, "id");
-    
-    (void) class_data;
 } 
 
     static void
 internal_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
+
     GObjectClass *gobject = (GObjectClass *) g_class;
+
+    (void) class_data;
     
     gobject->dispose = internal_ep_dispose;
 
@@ -1120,8 +1128,6 @@ internal_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
     gobject->get_property = internal_ep_strategy_get_property;
 
     g_object_class_override_property (gobject, PROP_ID, "id");
-
-    (void) class_data;
 } 
 
     GType
@@ -1351,6 +1357,8 @@ process_inq(gpointer data)
     gboolean        ret = TRUE;
     Transaction *t      = NULL;
 
+    (void) data;
+
     OHM_DEBUG(DBG_SIGNALING, "> process_inq\n");
 
     /*
@@ -1417,8 +1425,6 @@ process_inq(gpointer data)
 #endif
 
     return FALSE;
-
-    (void) data;
 }
 
     EnforcementPoint *
@@ -1513,6 +1519,9 @@ update_external_enforcement_points(DBusConnection * c, DBusMessage * msg,
     gchar *sender = NULL, *before = NULL, *after = NULL;
     gboolean ret;
 
+    (void) user_data;
+    (void) c;
+
     OHM_DEBUG(DBG_SIGNALING, "> update_external_enforcement_points\n");
 
     ret = dbus_message_get_args(msg,
@@ -1540,9 +1549,6 @@ update_external_enforcement_points(DBusConnection * c, DBusMessage * msg,
     OHM_DEBUG(DBG_SIGNALING, "< update_external_enforcement_points\n");
 
     return DBUS_HANDLER_RESULT_HANDLED;
-
-    (void) user_data;
-    (void) c;
 }
 
     DBusHandlerResult
@@ -1553,6 +1559,8 @@ register_external_enforcement_point(DBusConnection * c, DBusMessage * msg,
     const gchar *uri;
     gint ret;
     EnforcementPoint *ep = NULL;
+    
+    (void) user_data;
 
     OHM_DEBUG(DBG_SIGNALING, "> register_external_enforcement_point\n");
 
@@ -1594,19 +1602,17 @@ err:
     
     OHM_DEBUG(DBG_SIGNALING, "D-Bus error\n");
     return DBUS_HANDLER_RESULT_HANDLED;
-
-    (void) user_data;
-
 }
 
     DBusHandlerResult
 unregister_external_enforcement_point(DBusConnection * c, DBusMessage * msg,
         void *user_data)
 {
-
     DBusMessage *reply;
     gboolean ret;
     const gchar *uri;
+
+    (void) user_data;
 
     if (msg == NULL) {
         goto err;
@@ -1648,8 +1654,6 @@ err:
     
     OHM_DEBUG(DBG_SIGNALING, "D-Bus error\n");
     return DBUS_HANDLER_RESULT_HANDLED;
-
-    (void) user_data;
 }
 
 
@@ -1740,6 +1744,9 @@ dbus_ack(DBusConnection * c, DBusMessage * msg, void *data)
     const char *member    = dbus_message_get_member(msg);
     const char *sender      = dbus_message_get_sender(msg);
 
+    (void) data;
+    (void) c;
+
     DBusError      error;
     dbus_uint32_t  txid, status;
     GSList *i = NULL;
@@ -1806,9 +1813,6 @@ dbus_ack(DBusConnection * c, DBusMessage * msg, void *data)
     enforcement_point_receive_ack(ep, transaction, status);
 
     return DBUS_HANDLER_RESULT_HANDLED;
-
-    (void) data;
-    (void) c;
 }
 
 

@@ -10,6 +10,11 @@
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin-debug.h>
 
+/* TODO: these must be in some bluez headers */
+#define HSP_UUID  "00001108-0000-1000-8000-00805f9b34fb"
+#define HFP_UUID  "0000111e-0000-1000-8000-00805f9b34fb"
+#define A2DP_UUID "0000110b-0000-1000-8000-00805f9b34fb"
+
 static int DBG_HEADSET, DBG_BT;
 
 OHM_DEBUG_PLUGIN(accessories,
@@ -29,12 +34,7 @@ static gboolean headset_deinit(OhmPlugin *);
 static gboolean bluetooth_init(OhmPlugin *);
 static gboolean bluetooth_deinit(OhmPlugin *);
 
-#if 0
-static void update_factstore_entry(char *, char *, int);
-static const char *get_string_field(OhmFact *, char *);
-static int get_integer_field(OhmFact *, char *);
-#endif
-
+static gboolean get_default_adapter(void);
 static int dres_accessory_request(const char *, int, int);
 
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
@@ -55,16 +55,16 @@ OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
 static gboolean set_observer(gchar *capability, hal_cb cb, void *userdata)
 {
-    (void)capability;
-    (void)cb;
-    (void)userdata;
+    (void) capability;
+    (void) cb;
+    (void) userdata;
 
     return 1;
 }
 
 static gboolean unset_observer(void *userdata)
 {
-    (void)userdata;
+    (void) userdata;
 
     return 1;
 }
@@ -103,14 +103,14 @@ static void plugin_exit(OhmPlugin *plugin)
 gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data)
 {
     GValue *capabilities = NULL;
-    gboolean found = FALSE, had_mic = FALSE, had_phones = FALSE, had_set = FALSE;
+    gboolean found = FALSE, had_mic = FALSE, had_phones = FALSE, had_set = FALSE, had_line_out = FALSE, had_video_out = FALSE;
     GSList *list = NULL, *i;
     gchar *fact_name = "com.nokia.policy.audio_device_accessible";
 
-    (void)capability;
-    (void)added;
-    (void)removed;
-    (void)user_data;
+    (void) capability;
+    (void) added;
+    (void) removed;
+    (void) user_data;
 
     OHM_DEBUG(DBG_HEADSET, "Possible hal headset event received!");
 
@@ -168,6 +168,32 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
                     break; /* success case */
                 }
             }
+            else if (strcmp(value, "tvout") == 0) {
+                state = ohm_fact_get(of, "connected");
+
+                if (G_VALUE_TYPE(state) != G_TYPE_INT)
+                    break;
+
+                had_video_out = g_value_get_int(state) ? TRUE : FALSE;
+
+                if (had_video_out) {
+                    OHM_DEBUG(DBG_HEADSET, "had video-out!");
+                    break; /* success case */
+                }
+            }
+            else if (strcmp(value, "line-out") == 0) {
+                state = ohm_fact_get(of, "connected");
+
+                if (G_VALUE_TYPE(state) != G_TYPE_INT)
+                    break;
+
+                had_line_out = g_value_get_int(state) ? TRUE : FALSE;
+
+                if (had_line_out) {
+                    OHM_DEBUG(DBG_HEADSET, "had line-out!");
+                    break; /* success case */
+                }
+            }
         }
     }
 
@@ -182,16 +208,24 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
         gchar **caps = g_strsplit(escaped_caps, STRING_DELIMITER, 0);
 #undef STRING_DELIMITER
         gchar **caps_iter = caps;
-        gboolean has_mic = FALSE, has_phones = FALSE, has_set = FALSE;
+        gboolean has_mic = FALSE, has_phones = FALSE, has_set = FALSE, has_line_out = FALSE, has_video_out = FALSE;
 
         for (; *caps_iter != NULL; caps_iter++) {
             gchar *cap = *caps_iter;
 
-            if (cap && strcmp(cap, "headphone") == 0) {
-                has_phones = TRUE;
-            }
-            if (cap && strcmp(cap, "microphone") == 0) {
-                has_mic = TRUE;
+            if (cap) {
+                if (strcmp(cap, "headphone") == 0) {
+                    has_phones = TRUE;
+                }
+                if (strcmp(cap, "microphone") == 0) {
+                    has_mic = TRUE;
+                }
+                if (strcmp(cap, "line-out") == 0) {
+                    has_line_out = TRUE;
+                }
+                if (strcmp(cap, "video-out") == 0) {
+                    has_video_out = TRUE;
+                }
             }
         }
         
@@ -203,13 +237,16 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
         has_set = has_phones && has_mic;
 
         OHM_DEBUG(DBG_HEADSET, "starting to change headset stuff...\n");
-        OHM_DEBUG(DBG_HEADSET, "Previous state: had_set=%i, had_mic=%i, had_phones=%i", had_set, had_mic, had_phones);
-        OHM_DEBUG(DBG_HEADSET, "Current state: has_set=%i, has_mic=%i, has_phones=%i", has_set, has_mic, has_phones);
+        OHM_DEBUG(DBG_HEADSET, "Previous state: had_set=%i, had_mic=%i, had_phones=%i, had_video_out=%i, had_line_out=%i", had_set, had_mic, had_phones, had_video_out, had_line_out);
+        OHM_DEBUG(DBG_HEADSET, "Current state: has_set=%i, has_mic=%i, has_phones=%i, has_video_out=%i, has_line_out=%i", has_set, has_mic, has_phones, has_video_out, has_line_out);
 
-        if (!(has_set && had_set) &&
-                ((has_set != had_set) ||
-                (has_mic != had_mic) ||
-                (has_phones != had_phones))) {
+        if (!((has_video_out && had_video_out) && 
+             (has_line_out && had_line_out) &&
+                (has_set && had_set) &&
+                  ((has_set != had_set) ||
+                   (has_mic != had_mic) ||
+                   (has_phones != had_phones))
+                  )) {
 
             found = TRUE; /* something did change */
 
@@ -227,13 +264,20 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
                 OHM_DEBUG(DBG_HEADSET, "inserted headphones!");
                 dres_accessory_request("headphone", -1, 1);
             }
-            else {
-                /* everything is now removed from the jack */
+            
+            if (has_line_out && !had_line_out) {
+                OHM_DEBUG(DBG_HEADSET, "inserted line-out!");
+                /* FIXME: not supported ATM */
+                /* dres_accessory_request("line_out", -1, 1); */
+            }
+            if (has_video_out && !had_video_out) {
+                OHM_DEBUG(DBG_HEADSET, "inserted video-out!");
+                dres_accessory_request("tvout", -1, 1);
             }
 
             /* we remove what we had */
             
-            if (had_set) {
+            if (had_set && !has_set) {
                 OHM_DEBUG(DBG_HEADSET, "removed headset!");
                 dres_accessory_request("headset", -1, 0);
             }
@@ -245,10 +289,15 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
                 OHM_DEBUG(DBG_HEADSET, "removed headphones!");
                 dres_accessory_request("headphone", -1, 0);
             }
-            else {
-                /* had nothing previously */
-            }
 
+            if (had_line_out && !has_line_out) {
+                OHM_DEBUG(DBG_HEADSET, "removed line-out!");
+                /* dres_accessory_request("line_out", -1, 0); */
+            }
+            if (had_video_out && !has_video_out) {
+                OHM_DEBUG(DBG_HEADSET, "removed video-out!");
+                dres_accessory_request("tvout", -1, 0);
+            }
         }
         else {
             OHM_DEBUG(DBG_HEADSET, "Nothing changed");
@@ -261,16 +310,16 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
 
 static gboolean headset_deinit(OhmPlugin *plugin)
 {
-    return unset_observer(token);
+    (void) plugin;
 
-    (void)plugin;
+    return unset_observer(token);
 }
 
 static gboolean headset_init(OhmPlugin *plugin)
 {
+    (void) plugin;
+
     return set_observer("input.jack", complete_headset_cb, token);
-    
-    (void)plugin;
 }
 
 /* headset part ends */
@@ -287,8 +336,8 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
     char            *end;
     char            *device;
 
-    (void)c;
-    (void)data;
+    (void) c;
+    (void) data;
 
     if (dbus_message_is_signal(msg, "com.nokia.policy", "info")) {
 
@@ -349,70 +398,6 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-#if 0
-static void update_factstore_entry(char *factname, char *device, int driver)
-{
-    OhmFact     *fact;
-    GSList      *list;
-    GValue      *gv;
-    const char  *fdev;
-    int          fdrv;
-
-    printf("%s: %s(%s, %d)\n", __FILE__, __FUNCTION__, device, driver);
-
-    for (list  = ohm_fact_store_get_facts_by_name(fs, factname);
-         list != NULL;
-         list  = g_slist_next(list))
-    {
-        fact = (OhmFact *)list->data;
-
-        if ((fdev = get_string_field(fact, "name")) != NULL) {
-
-            if (!strcmp(fdev, device)) {
-                if ((fdrv = get_integer_field(fact, "driver")) == driver) {
-                    printf("%s: '%s' device driver state is already %d\n",
-                           __FILE__, device, driver);
-                }
-                else {
-                    gv = ohm_value_from_int(driver);
-                    ohm_fact_set(fact, "driver", gv);
-                }
-
-                return;         /* supposed to have just one */
-            }
-        }
-    }
-
-    printf("%s: %s(), there is no fact with name='%s'\n",
-           __FILE__, __FUNCTION__, device);
-}
-
-static const char *get_string_field(OhmFact *fact, char *name)
-{
-    GValue  *gv;
-
-    if ((gv = ohm_fact_get(fact, name)) != NULL) {
-        if (G_VALUE_TYPE(gv) == G_TYPE_STRING) {
-            return g_value_get_string(gv);
-        }
-    }
-
-    return NULL;
-}
-
-static int get_integer_field(OhmFact *fact, char *name)
-{
-    GValue  *gv;
-
-    if ((gv = ohm_fact_get(fact, name)) != NULL) {
-        if (G_VALUE_TYPE(gv) == G_TYPE_INT) {
-            return g_value_get_int(gv);
-        }
-    }
-
-    return 0;
-}
-#endif
 
 static int dres_accessory_request(const char *name, int driver, int connected)
 {
@@ -454,8 +439,8 @@ static int dres_accessory_request(const char *name, int driver, int connected)
 #undef DRES_VARTYPE
 }
 
-/* bluetooth */
-    
+
+/* bluetooth part begins */    
 
 static OhmFact * bt_get_connected(const gchar *path)
 {
@@ -484,6 +469,9 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
 
     gchar *path = NULL;
 
+    (void) data;
+    (void) c;
+
     if (!msg)
         goto end;
 
@@ -496,9 +484,9 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
         OhmFact *bt_connected = bt_get_connected(path);
 
         if (bt_connected) {
+
             GValue *gval = ohm_fact_get(bt_connected, "bt_path");
             
-            gval = ohm_fact_get(bt_connected, "bt_path");
             if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
                     && strcmp(path, g_value_get_string(gval)) == 0) {
 
@@ -520,8 +508,6 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
                 }
 
                 ohm_fact_store_remove(fs, bt_connected);
-
-                /* FIXME: how to check this? */
                 g_object_unref(bt_connected);
 
             }
@@ -533,9 +519,6 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
 end:
     
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-
-    (void) data;
-    (void) c;
 }
 
 static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboolean connected)
@@ -543,7 +526,7 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
         
     OhmFact *bt_connected = NULL;
 
-    /* printf("Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
+    /* OHM_DEBUG(DBG_BT, "Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
        path, (int) val); */
 
     bt_connected = bt_get_connected(path);
@@ -601,11 +584,11 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
                         g_value_get_int(gval_hsp) == 0)) {
 
                 ohm_fact_store_remove(fs, bt_connected);
+                g_object_unref(bt_connected);
             }
         }
         else {
-            /* possibly OHM was started after a BT headset was
-             * connected? */
+            OHM_DEBUG(DBG_BT, "ERROR: disconnect for a non-connected device?");
         }
     }
     
@@ -624,7 +607,10 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
     gchar *property_name;
     gboolean val;
 
-    /* printf("bluetooth property changed!\n\n"); */
+    (void) data;
+    (void) c;
+
+    /* OHM_DEBUG(DBG_BT, "bluetooth property changed!\n\n"); */
     dbus_message_iter_init(msg, &msg_i);
 
     if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_STRING) {
@@ -637,18 +623,18 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
     /* we are only interested in "Connected" properties */
     if (strcmp(property_name, "Connected") == 0) {
 
-        /* printf("Connected signal!\n"); */
+        /* OHM_DEBUG(DBG_BT, "Connected signal!\n"); */
         dbus_message_iter_next(&msg_i);
 
         if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
-            /* printf("The property value is not variant\n"); */
+            /* OHM_DEBUG(DBG_BT, "The property value is not variant\n"); */
             goto end;
         }
 
         dbus_message_iter_recurse(&msg_i, &var_i);
 
         if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_BOOLEAN) {
-            /* printf("The variant value is not boolean\n"); */
+            /* OHM_DEBUG(DBG_BT, "The variant value is not boolean\n"); */
             goto end;
         }
 
@@ -661,9 +647,6 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
 end:
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-
-    (void) data;
-    (void) c;
 }
 
 static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
@@ -674,7 +657,10 @@ static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * m
     gchar *property_name;
     gboolean val;
 
-    /* printf("bluetooth property changed!\n\n"); */
+    (void) data;
+    (void) c;
+
+    /* OHM_DEBUG(DBG_BT, "bluetooth property changed!\n\n"); */
     dbus_message_iter_init(msg, &msg_i);
 
     if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_STRING) {
@@ -687,18 +673,18 @@ static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * m
     /* we are only interested in "Connected" properties */
     if (strcmp(property_name, "Connected") == 0) {
 
-        /* printf("Connected signal!\n"); */
+        /* OHM_DEBUG(DBG_BT, "Connected signal!\n"); */
         dbus_message_iter_next(&msg_i);
 
         if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
-            /* printf("The property value is not variant\n"); */
+            /* OHM_DEBUG(DBG_BT, "The property value is not variant\n"); */
             goto end;
         }
 
         dbus_message_iter_recurse(&msg_i, &var_i);
 
         if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_BOOLEAN) {
-            /* printf("The variant value is not boolean\n"); */
+            /* OHM_DEBUG(DBG_BT, "The variant value is not boolean\n"); */
             goto end;
         }
 
@@ -711,33 +697,426 @@ static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * m
 end:
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-
-    (void) data;
-    (void) c;
 }
 
 
 static gboolean bluetooth_init(OhmPlugin *plugin)
 {
-    /* TODO:
-     * 1. query bluez and see if there are any bluetooth devices connected
-     * 2. get their properties
-     * 3. see if any of the a2dp or headset devices are in the
-     *    "Connected" state
-     * 4. for each such device, call the dres_accessory_request
-     **/
+    (void) plugin;
+    
+    /* start the D-Bus method chain that queries the already
+     * connected BT audio devices */
+    return get_default_adapter();
 
-    return TRUE;
-
-    (void)plugin;
 }
 
 static gboolean bluetooth_deinit(OhmPlugin *plugin)
 {
+    GSList *e, *f, *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
+
+    (void) plugin;
+
+    for (e = list; e != NULL; e = f) {
+        OhmFact *bt_connected = (OhmFact *) e->data;
+
+        /* this is special treatment for FS */
+        f = g_slist_next(e);
+
+        if (bt_connected) {
+
+            GValue *gval_a2dp = NULL, *gval_hsp = NULL;
+
+            /* disconnect the audio routing to BT and remove the fact */
+
+            gval_a2dp = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
+            gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
+
+            if ((gval_a2dp && 
+                        G_VALUE_TYPE(gval_a2dp) == G_TYPE_INT &&
+                        g_value_get_int(gval_a2dp) == 1)) {
+                dres_accessory_request(BT_TYPE_A2DP, -1, 0);
+            }
+
+            if ((gval_hsp && 
+                        G_VALUE_TYPE(gval_hsp) == G_TYPE_INT &&
+                        g_value_get_int(gval_hsp) == 1)) {
+                dres_accessory_request(BT_TYPE_HSP, -1, 0);
+            }
+
+            ohm_fact_store_remove(fs, bt_connected);
+            g_object_unref(bt_connected);
+        }
+    }
+
+    return TRUE;
+}
+
+static void get_properties_cb (DBusPendingCall *pending, void *user_data)
+{
+
+    DBusMessage *reply = NULL;
+    DBusMessageIter iter, array_iter, dict_iter, variant_iter, uuid_iter;
+    gchar *path = (gchar *) user_data;
+    gboolean is_hsp = FALSE, is_a2dp = FALSE, is_hfp = FALSE, is_connected = FALSE;
+    
+    if (pending == NULL) 
+        goto error;
+
+    reply = dbus_pending_call_steal_reply(pending);
+    dbus_pending_call_unref(pending);
+    pending = NULL;
+    
+    if (reply == NULL) {
+        goto error;
+    }
+
+    if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+        goto error;
+    }
+    
+    dbus_message_iter_init(reply, &iter);
+
+    if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_ARRAY) {
+        goto error;
+    }
+    
+    dbus_message_iter_recurse(&iter, &array_iter);
+
+    while (dbus_message_iter_get_arg_type(&array_iter) == DBUS_TYPE_DICT_ENTRY) {
+
+        /* the arg type will be DBUS_TYPE_INVALID at the end of the
+         * array */
+
+        gchar *key = NULL;
+        int type;
+
+        /* process the dicts */
+        dbus_message_iter_recurse(&array_iter, &dict_iter);
+        
+        /* key must be string */
+        if (dbus_message_iter_get_arg_type(&dict_iter) != DBUS_TYPE_STRING) {
+            goto error;
+        }
+        dbus_message_iter_get_basic(&dict_iter, &key);
+    
+        /* go on to the value */
+        dbus_message_iter_next(&dict_iter);
+        
+        dbus_message_iter_recurse(&dict_iter, &variant_iter);
+        type = dbus_message_iter_get_arg_type(&variant_iter);
+        
+        if (strcmp(key, "UUIDs") == 0) {
+            
+            if (type == DBUS_TYPE_ARRAY) {
+                dbus_message_iter_recurse(&variant_iter, &uuid_iter);
+                while (dbus_message_iter_get_arg_type(&uuid_iter) == DBUS_TYPE_STRING) {
+                    gchar *uuid = NULL;
+
+                    dbus_message_iter_get_basic(&uuid_iter, &uuid);
+
+                    if (!uuid)
+                        break;
+
+                    if (strcmp(uuid, HSP_UUID) == 0) {
+                        is_hsp = TRUE;
+                    }
+                    else if (strcmp(uuid, HFP_UUID) == 0) {
+                        is_hfp = TRUE;
+                    }
+                    else if (strcmp(uuid, A2DP_UUID) == 0) {
+                        is_a2dp = TRUE;
+                    }
+                    dbus_message_iter_next(&uuid_iter);
+                }
+            }
+            else {
+                OHM_DEBUG(DBG_BT, "Error: type '%u'\n", dbus_message_iter_get_arg_type(&dict_iter));
+            }
+        }
+        else if (strcmp(key, "Connected") == 0) {
+            if (type == DBUS_TYPE_BOOLEAN) {
+                dbus_message_iter_get_basic(&variant_iter, &is_connected);
+            }
+        }
+        else {
+            /* OHM_DEBUG(DBG_BT, "Non-handled key '%s'\n", key); */
+        }
+
+        /* now the beef: if an audio device was there, let's mark it
+         * present */
+
+        if (is_connected) {
+            if (is_a2dp) {
+                bt_connection_changed(BT_TYPE_A2DP, path, TRUE);
+            }
+            if (is_hsp || is_hfp) {
+                bt_connection_changed(BT_TYPE_HSP, path, TRUE);
+            }
+        }
+        
+        dbus_message_iter_next(&array_iter);
+    }
+
+    OHM_DEBUG(DBG_BT, "Device '%s': has_a2dp=%i, has_hsp=%i, has_hfp=%i, connected=%i\n", path, is_a2dp, is_hsp, is_hfp, is_connected);
+
+error:
+
+    if (reply)
+        dbus_message_unref (reply);
+
+    g_free(path);
+
+    return;
+}
+
+static void get_properties(gchar *device_path)
+{
+
+    DBusMessage *request = NULL;
+    DBusPendingCall *pending_call = NULL;
+    DBusConnection *connection = dbus_bus_get(DBUS_BUS_SYSTEM, NULL);
+    
+    if (!connection) {
+        goto error;
+    }
+
+    if ((request =
+                dbus_message_new_method_call ("org.bluez",
+                    device_path,
+                    "org.bluez.Device",
+                    "GetProperties")) == NULL) {
+        goto error;
+
+    }
+
+    if (!dbus_connection_send_with_reply (connection,
+                request,
+                &pending_call,
+                -1)) {
+        goto error;
+    }
+
+    if (!dbus_pending_call_set_notify (pending_call,
+                get_properties_cb,
+                g_strdup(device_path),
+                NULL)) {
+
+        dbus_pending_call_cancel (pending_call);
+        goto error;
+    }
+
+error:
+
+    if (request)
+        dbus_message_unref(request);
+
+    return;
+}
+
+static void get_device_list_cb (DBusPendingCall *pending, void *user_data)
+{
+
+    DBusMessage *reply = NULL;
+    gchar **devices = NULL;
+    int n_devices = 0;
+
+    (void) user_data;
+
+    if (pending == NULL) 
+        goto error;
+
+    reply = dbus_pending_call_steal_reply(pending);
+    dbus_pending_call_unref(pending);
+    pending = NULL;
+    
+    if (reply == NULL) {
+        goto error;
+    }
+
+    if (dbus_message_get_type (reply) == DBUS_MESSAGE_TYPE_ERROR) {
+        goto error;
+    }
+    
+    if (!dbus_message_get_args (reply, NULL,
+                DBUS_TYPE_ARRAY, DBUS_TYPE_OBJECT_PATH, &devices, &n_devices,
+                DBUS_TYPE_INVALID)) {
+        goto error;
+    }
+
+    /* ok, then ask the adapter (whose object path we now know) about
+     * the listed devices */
+
+    for (; n_devices > 0; n_devices--) {
+        OHM_DEBUG(DBG_BT, "getting properties of device '%s'\n", devices[n_devices-1]);
+        get_properties(devices[n_devices-1]);
+    }
+
+    dbus_free_string_array(devices);
+
+    return;
+
+error:
+
+    if (pending)
+        dbus_pending_call_unref(pending);
+    
+    if (reply)
+        dbus_message_unref (reply);
+
+    return;
+}
+
+static gboolean get_device_list(gchar *adapter_path)
+{
+
+    DBusMessage *request = NULL;
+    DBusPendingCall *pending_call = NULL;
+    DBusConnection *connection = dbus_bus_get(DBUS_BUS_SYSTEM, NULL);
+
+    if (!connection) {
+        goto error;
+    }
+
+    if ((request =
+                dbus_message_new_method_call ("org.bluez",
+                    adapter_path,
+                    "org.bluez.Adapter",
+                    "ListDevices")) == NULL) {
+        goto error;
+
+    }
+
+    if (!dbus_connection_send_with_reply (connection,
+                request,
+                &pending_call,
+                -1)) {
+        goto error;
+    }
+
+    if (!dbus_pending_call_set_notify (pending_call,
+                get_device_list_cb,
+                NULL,
+                NULL)) {
+
+        dbus_pending_call_cancel (pending_call);
+        goto error;
+    }
+
+    dbus_message_unref(request);
+
     return TRUE;
 
-    (void)plugin;
+error:
+
+    if (request)
+        dbus_message_unref(request);
+
+    return FALSE;
 }
+
+
+static void get_default_adapter_cb (DBusPendingCall *pending, void *user_data)
+{
+    DBusMessage *reply = NULL;
+    gchar *result = NULL;
+    OHM_DEBUG(DBG_BT, "> get_default_adapter_cb\n");
+    
+    (void) user_data;
+    
+    if (pending == NULL) 
+        goto error;
+
+    reply = dbus_pending_call_steal_reply(pending);
+    dbus_pending_call_unref(pending);
+    pending = NULL;
+    
+    if (reply == NULL) {
+        goto error;
+    }
+
+    if (dbus_message_get_type (reply) == DBUS_MESSAGE_TYPE_ERROR) {
+        goto error;
+    }
+    
+    if (!dbus_message_get_args (reply, NULL,
+                DBUS_TYPE_OBJECT_PATH, &result,
+                DBUS_TYPE_INVALID)) {
+        goto error;
+    }
+
+    /* ok, then ask the adapter (whose object path we now know) about
+     * the listed devices */
+
+    if (!get_device_list(result)) {
+        goto error;
+    }
+
+    return;
+
+error:
+
+    if (pending)
+        dbus_pending_call_unref(pending);
+    
+    if (reply)
+        dbus_message_unref (reply);
+
+    return;
+
+}
+
+
+/* start the D-Bus command chain to find out the already connected
+ * devices */
+static gboolean get_default_adapter(void)
+{
+
+    DBusMessage *request = NULL;
+    DBusPendingCall *pending_call = NULL;
+    DBusConnection *connection = dbus_bus_get(DBUS_BUS_SYSTEM, NULL);
+    
+    if (!connection) {
+        goto error;
+    }
+
+    if ((request =
+                dbus_message_new_method_call ("org.bluez",
+                    "/",
+                    "org.bluez.Manager",
+                    "DefaultAdapter")) == NULL) {
+        goto error;
+
+    }
+
+    if (!dbus_connection_send_with_reply (connection,
+                request,
+                &pending_call,
+                -1)) {
+        goto error;
+    }
+
+    if (!dbus_pending_call_set_notify (pending_call,
+                get_default_adapter_cb,
+                NULL,
+                NULL)) {
+
+        dbus_pending_call_cancel (pending_call);
+        goto error;
+    }
+
+    dbus_message_unref(request);
+
+    return TRUE;
+
+error:
+
+    if (request)
+        dbus_message_unref(request);
+
+    return FALSE;
+}
+
+/* bluetooth part ends */    
 
 
 OHM_PLUGIN_DESCRIPTION("accessories",
