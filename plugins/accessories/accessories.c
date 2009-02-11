@@ -104,6 +104,7 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
 {
     GValue *capabilities = NULL;
     gboolean found = FALSE, had_mic = FALSE, had_phones = FALSE, had_set = FALSE, had_line_out = FALSE, had_video_out = FALSE;
+    gboolean video_changed, line_changed, headset_changed;
     GSList *list = NULL, *i;
     gchar *fact_name = "com.nokia.policy.audio_device_accessible";
 
@@ -231,28 +232,33 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
         
         g_strfreev(caps);
 
-        /* let's see first if something changed; if not, we can just
-         * go away */
+        /* See if the accessory state has changed. Note bit complicated
+         * handling of headset issues. :-) */
 
+        video_changed = (has_video_out != had_video_out);
+        line_changed = (has_line_out != had_line_out);
+        
+        /* If we had a set and still have a set, nothing has changed.
+         * Otherwise check the phones and mic. */
         has_set = has_phones && has_mic;
+        headset_changed = (!(has_set && had_set) &&
+               ((has_phones != had_phones) ||
+                (has_mic != had_mic) ||
+                (has_set != had_set)));
 
         OHM_DEBUG(DBG_HEADSET, "starting to change headset stuff...\n");
         OHM_DEBUG(DBG_HEADSET, "Previous state: had_set=%i, had_mic=%i, had_phones=%i, had_video_out=%i, had_line_out=%i", had_set, had_mic, had_phones, had_video_out, had_line_out);
         OHM_DEBUG(DBG_HEADSET, "Current state: has_set=%i, has_mic=%i, has_phones=%i, has_video_out=%i, has_line_out=%i", has_set, has_mic, has_phones, has_video_out, has_line_out);
 
-        if (!((has_video_out && had_video_out) && 
-             (has_line_out && had_line_out) &&
-                (has_set && had_set) &&
-                  ((has_set != had_set) ||
-                   (has_mic != had_mic) ||
-                   (has_phones != had_phones))
-                  )) {
+        OHM_DEBUG(DBG_HEADSET, "headset_changed=%i, video_changed=%i, line_changed=%i", headset_changed, video_changed, line_changed);
+        
+        if (video_changed || line_changed || headset_changed) {
 
             found = TRUE; /* something did change */
 
             /* we add the current stuff */
 
-            if (has_mic && has_phones) {
+            if (has_set) {
                 OHM_DEBUG(DBG_HEADSET, "inserted headset!");
                 dres_accessory_request("headset", -1, 1);
             }
@@ -600,21 +606,18 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
 
 }
 
-static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
+static void bt_property_changed(DBusMessage * msg, gchar *type)
 {
     DBusMessageIter msg_i, var_i;
     const gchar *path = dbus_message_get_path(msg); 
     gchar *property_name;
     gboolean val;
 
-    (void) data;
-    (void) c;
-
     /* OHM_DEBUG(DBG_BT, "bluetooth property changed!\n\n"); */
     dbus_message_iter_init(msg, &msg_i);
 
     if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_STRING) {
-        goto end;
+        return;
     }
 
     /* get the name of the property */
@@ -628,77 +631,41 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
 
         if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
             /* OHM_DEBUG(DBG_BT, "The property value is not variant\n"); */
-            goto end;
+            return;
         }
 
         dbus_message_iter_recurse(&msg_i, &var_i);
 
         if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_BOOLEAN) {
             /* OHM_DEBUG(DBG_BT, "The variant value is not boolean\n"); */
-            goto end;
+            return;
         }
 
         dbus_message_iter_get_basic(&var_i, &val);
 
-        bt_connection_changed(BT_TYPE_A2DP, path, val);
-
+        bt_connection_changed(type, path, val);
     }
 
-end:
+    return;
+}
 
+static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
+{
+    (void) data;
+    (void) c;
+
+    bt_property_changed(msg, BT_TYPE_A2DP); 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
 {
-
-    DBusMessageIter msg_i, var_i;
-    const gchar *path = dbus_message_get_path(msg); 
-    gchar *property_name;
-    gboolean val;
-
     (void) data;
     (void) c;
 
-    /* OHM_DEBUG(DBG_BT, "bluetooth property changed!\n\n"); */
-    dbus_message_iter_init(msg, &msg_i);
-
-    if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_STRING) {
-        goto end;
-    }
-
-    /* get the name of the property */
-    dbus_message_iter_get_basic(&msg_i, &property_name);
-
-    /* we are only interested in "Connected" properties */
-    if (strcmp(property_name, "Connected") == 0) {
-
-        /* OHM_DEBUG(DBG_BT, "Connected signal!\n"); */
-        dbus_message_iter_next(&msg_i);
-
-        if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
-            /* OHM_DEBUG(DBG_BT, "The property value is not variant\n"); */
-            goto end;
-        }
-
-        dbus_message_iter_recurse(&msg_i, &var_i);
-
-        if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_BOOLEAN) {
-            /* OHM_DEBUG(DBG_BT, "The variant value is not boolean\n"); */
-            goto end;
-        }
-
-        dbus_message_iter_get_basic(&var_i, &val);
-
-        bt_connection_changed(BT_TYPE_HSP, path, val);
-
-    }
-
-end:
-
+    bt_property_changed(msg, BT_TYPE_HSP); 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
-
 
 static gboolean bluetooth_init(OhmPlugin *plugin)
 {
