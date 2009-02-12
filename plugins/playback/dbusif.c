@@ -1011,6 +1011,7 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
         cbd->usercb(cbd->dbusid, cbd->object, cbd->prname, prvalue);
 
     dbus_message_unref(reply);
+    dbus_pending_call_unref(pend);
 }
 
 static void free_get_property_cb_data(void *memory)
@@ -1067,6 +1068,7 @@ static void set_property_cb(DBusPendingCall *pend, void *data)
     }
 
     dbus_message_unref(reply);
+    dbus_pending_call_unref(pend);
 }
 
 static void free_set_property_cb_data(void *memory)
