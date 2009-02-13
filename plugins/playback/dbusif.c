@@ -275,13 +275,14 @@ static void dbusif_reply_to_req_state(DBusMessage *msg, const char *state)
 
     success = dbus_message_append_args(reply, DBUS_TYPE_STRING,&state,
                                        DBUS_TYPE_INVALID);
-    if (!success)
-        dbus_message_unref(msg);
-    else {
+    if (success) {
         OHM_DEBUG(DBG_DBUS, "replying to request state with '%s'", state);
 
         dbus_connection_send(sess_conn, reply, &serial);
     }
+
+    dbus_message_unref(reply);
+
 }
 
 
@@ -296,6 +297,7 @@ static void dbusif_reply(DBusMessage *msg)
     OHM_DEBUG(DBG_DBUS, "replying to playback method");
 
     dbus_connection_send(sess_conn, reply, &serial);
+    dbus_message_unref(reply);
 }
 
 
@@ -980,7 +982,7 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
     if ((reply = dbus_pending_call_steal_reply(pend)) == NULL || cbd == NULL) {
         OHM_ERROR("[%s] Property receiving failed: invalid argument",
                   __FUNCTION__);
-        return;
+        goto unref_and_out;
     }
 
     if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
@@ -989,12 +991,12 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
                                         DBUS_TYPE_INVALID);
         OHM_ERROR("[%s] Property receiving failed: %s", __FUNCTION__,
                   success ? error_descr : dbus_message_get_error_name(reply));
-        return;
+        goto unref_and_out;
     }
 
     if (client_find_by_dbus(cbd->dbusid, cbd->object) == NULL) {
         OHM_DEBUG(DBG_DBUS, "Property receiving failed: playback is gone");
-        return;
+        goto unref_and_out;
     }
 
     success = dbus_message_get_args(reply, NULL,
@@ -1002,7 +1004,7 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
                                     DBUS_TYPE_INVALID);
     if (!success) {
         OHM_ERROR("[%s] Failed to parse property reply message", __FUNCTION__);
-        return;
+        goto unref_and_out;
     }
 
     OHM_DEBUG(DBG_DBUS, "Received property %s=%s", cbd->prname, prvalue);
@@ -1010,7 +1012,10 @@ static void get_property_cb(DBusPendingCall *pend, void *data)
     if (cbd->usercb != NULL)
         cbd->usercb(cbd->dbusid, cbd->object, cbd->prname, prvalue);
 
-    dbus_message_unref(reply);
+ unref_and_out:
+    if (reply)
+        dbus_message_unref(reply);
+
     dbus_pending_call_unref(pend);
 }
 
@@ -1040,12 +1045,12 @@ static void set_property_cb(DBusPendingCall *pend, void *data)
     if ((reply = dbus_pending_call_steal_reply(pend)) == NULL || cbd == NULL) {
         OHM_ERROR("[%s] Property setting failed: invalid argument",
                   __FUNCTION__);
-        return;
+        goto unref_and_out;
     }
 
     if (client_find_by_dbus(cbd->dbusid, cbd->object) == NULL) {
         OHM_DEBUG(DBG_DBUS, "Property setting failed: playback is gone");
-        return;
+        goto unref_and_out;
     }
 
     if ((error = dbus_message_get_error_name(reply)) == NULL) {
@@ -1067,7 +1072,10 @@ static void set_property_cb(DBusPendingCall *pend, void *data)
                     success, error);
     }
 
-    dbus_message_unref(reply);
+ unref_and_out:
+    if (reply)
+        dbus_message_unref(reply);
+    
     dbus_pending_call_unref(pend);
 }
 
