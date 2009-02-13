@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.16) unstable; urgency=low
+
+  * Fix a bunch of more playback DBUS message handling memory leaks, hopefully the last ones.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 13 Feb 2009 14:57:28 +0200
+
 ohm-plugins-misc (0.6.15) unstable; urgency=low
 
   * support for TV signalling standards, like pal&ntsc, in videoep plugin
