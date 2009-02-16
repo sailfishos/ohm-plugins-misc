@@ -78,6 +78,8 @@ static char *filter_signal(char *buf, size_t size,
     
     for (i = 0; (argval = va_arg(ap, char *)) != NULL; i++)
         FILTER_ARG(i, argval);
+
+    va_end(ap);
     
     return buf;
 

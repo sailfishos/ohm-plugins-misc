@@ -92,6 +92,9 @@ static DBusHandlerResult
 owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
 {
     const char *name, *prev, *curr;
+
+    (void)c;
+    (void)data;
     
     if (!dbus_message_is_signal(msg, DBUS_INTERFACE_DBUS, OWNER_CHANGED))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -120,10 +123,6 @@ owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
     }
     
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-
-    (void)c;
-    (void)data;
-    
 }
 
 

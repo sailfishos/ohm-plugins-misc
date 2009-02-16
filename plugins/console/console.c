@@ -146,9 +146,8 @@ static int ungrab_fd(int grab);
 static void
 plugin_init(OhmPlugin *plugin)
 {
-    return;
-
     (void)plugin;
+    return;
 }
 
 
@@ -158,9 +157,8 @@ plugin_init(OhmPlugin *plugin)
 static void
 plugin_exit(OhmPlugin *plugin)
 {
-    return;
-
     (void)plugin;
+    return;
 }
 
 
@@ -580,6 +578,8 @@ console_accept(GIOChannel *source, GIOCondition condition, gpointer data)
     socklen_t           addrlen = sizeof(addr);
     int                 sock, flags;
 
+    (void)source;
+
     if (condition != G_IO_IN)
         return TRUE;
     
@@ -637,8 +637,6 @@ console_accept(GIOChannel *source, GIOCondition condition, gpointer data)
     }
 
     return TRUE;
-
-    (void)source;
 }
 
 
@@ -676,6 +674,8 @@ console_handler(GIOChannel *source, GIOCondition condition, gpointer data)
     console_t    *c = (console_t *)data;
     int           left = c->size - c->used - 1;
     unsigned int  i;
+
+    (void)source;
 
     if (condition & G_IO_IN) {
         switch (console_read(c)) {
@@ -716,8 +716,6 @@ console_handler(GIOChannel *source, GIOCondition condition, gpointer data)
  closed:
     shutdown_console(c);
     return FALSE;
-
-    (void)source;
 }
 
 
