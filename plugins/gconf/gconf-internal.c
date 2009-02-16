@@ -110,6 +110,9 @@ void notify(GConfClient *client, guint id, GConfEntry *entry, gpointer user_data
     gboolean found = FALSE;
     gconf_plugin *plugin = user_data;
 
+    (void) client;
+    (void) id;
+
     key = gconf_entry_get_key(entry);
 
     /* printf("Notify called for key '%s'.\n", key); */
@@ -128,9 +131,6 @@ void notify(GConfClient *client, guint id, GConfEntry *entry, gpointer user_data
     update_fact(plugin, entry);
 
     return;
-
-    (void) client;
-    (void) id;
 }
 
 
@@ -250,11 +250,16 @@ gboolean observe(gconf_plugin *plugin, const gchar *key)
     
     entry = gconf_client_get_entry(plugin->client, key, NULL, TRUE, NULL);
     
-    if (entry && !update_fact(plugin, entry)) {
+    if (!entry) {
+        return FALSE;
+    }
+
+    if (!update_fact(plugin, entry)) {
         OHM_DEBUG(DBG_GCONF, "ERROR creating the initial fact!");
         gconf_entry_unref(entry);
         return FALSE;
     }
+
     gconf_entry_unref(entry);
 
     /* add new observer */

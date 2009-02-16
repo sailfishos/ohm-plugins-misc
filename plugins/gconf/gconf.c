@@ -44,6 +44,7 @@ static void plugin_init(OhmPlugin * plugin)
 
 static void plugin_exit(OhmPlugin * plugin)
 {
+    (void) plugin;
 
     /* the preloaded keys are unobserved automatically when the plugin
      * is unloaded */
@@ -54,8 +55,6 @@ static void plugin_exit(OhmPlugin * plugin)
     }
     
     return;
-
-    (void) plugin;
 }
 
 OHM_EXPORTABLE(gboolean, set_gconf_observer, (gchar *key))
