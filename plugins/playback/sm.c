@@ -1312,6 +1312,35 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     dbusif_mute_changed(state);
 }
 
+#if 1
+static client_t *find_client_by_fact(fsif_entry_t *entry)
+{
+    client_t *cl;
+    char     *dbusid;
+    char     *object;
+
+    fsif_get_field_by_entry(entry, fldtype_string, "dbusid", &dbusid);
+    fsif_get_field_by_entry(entry, fldtype_string, "object", &object);
+
+    if (dbusid == NULL || *dbusid == '\0') {
+        OHM_ERROR("[%s] Can't find client: no dbusid", __FUNCTION__);
+        return NULL;
+    }
+
+    if (object == NULL || *object == '\0') {
+        OHM_ERROR("[%s] Can't find client: no object", __FUNCTION__);
+        return NULL;
+    }
+
+    if ((cl = client_find_by_dbus(dbusid, object)) == NULL) {
+        OHM_ERROR("[%s] Can't find client for %s:%s",
+                  __FUNCTION__, dbusid, object);
+        return NULL;
+    }
+
+    return cl;
+}
+#else
 static client_t *find_client_by_fact(fsif_entry_t *entry)
 {
     client_t *cl;
@@ -1338,6 +1367,7 @@ static client_t *find_client_by_fact(fsif_entry_t *entry)
 
     return cl;
 }
+#endif
 
 static char *strncpylower(char *to, const char *from, int tolen)
 {
