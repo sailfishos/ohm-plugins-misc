@@ -119,6 +119,7 @@ enum {
     PROP_ID,
     PROP_TXID,
     PROP_TIMEOUT,
+    PROP_SIGNAL,
     PROP_RESPONSE_COUNT,
     PROP_ACKED,
     PROP_NACKED,
@@ -155,6 +156,9 @@ transaction_get_property(GObject *object,
             break;
         case PROP_TIMEOUT:
             g_value_set_uint(value, t->timeout);
+            break;
+        case PROP_SIGNAL:
+            g_value_set_string(value, t->signal);
             break;
         case PROP_RESPONSE_COUNT:
             g_value_set_uint(value, g_slist_length(t->acked)+g_slist_length(t->nacked));
@@ -226,6 +230,10 @@ transaction_set_property(GObject *object,
             break;
         case PROP_TIMEOUT:
             t->timeout = g_value_get_uint(value);
+            break;
+        case PROP_SIGNAL:
+            g_free(t->signal);
+            t->signal = g_value_dup_string(value);
             break;
         case PROP_FACTS:
 #if 0
@@ -344,9 +352,14 @@ enforcement_point_send_decision(EnforcementPoint * self, Transaction *transactio
 internal_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
 {
     guint txid;
+    gchar *signal_name;
     gboolean ret; /* return value from the signal */
 
-    g_object_get(transaction, "txid", &txid, NULL);
+    g_object_get(transaction,
+            "txid", &txid,
+            "signal", &signal_name,
+            NULL);
+
     OHM_DEBUG(DBG_SIGNALING, "Internal EP send decision, txid '%u'\n", txid);
     
     if (txid == 0) {
@@ -365,6 +378,7 @@ internal_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
         enforcement_point_receive_ack(self, transaction, ret ? 1 : 0);
     }
 
+    g_free(signal_name);
     return TRUE;
 }
 
@@ -456,6 +470,7 @@ send_ipc_signal(gpointer data)
     GSList         *k = NULL;
     char           *path = DBUS_PATH_POLICY "/decision";
     char           *interface = DBUS_INTERFACE_POLICY;
+    gchar          *signal_name;
 
     DBusMessage    *dbus_signal = NULL;
 
@@ -471,6 +486,8 @@ send_ipc_signal(gpointer data)
     g_object_get(transaction,
             "txid",
             &txid,
+            "signal",
+            &signal_name,
             NULL);
 
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
@@ -516,7 +533,7 @@ send_ipc_signal(gpointer data)
     OHM_DEBUG(DBG_SIGNALING, "sending signal with txid '%u'\n", txid);
 
     if ((dbus_signal =
-                dbus_message_new_signal(path, interface, "actions")) == NULL)
+                dbus_message_new_signal(path, interface, signal_name)) == NULL)
         goto end;
 
     /* open message_iter */
@@ -663,6 +680,7 @@ end:
     signal->klass->pending_signals = g_slist_remove(signal->klass->pending_signals, signal);
     g_free(signal);
     dbus_message_unref(dbus_signal);
+    g_free(signal_name);
 
     return FALSE;
 }
@@ -916,6 +934,9 @@ transaction_dispose(GObject *object) {
 
     free_facts(self->facts);
     self->facts = NULL;
+
+    g_free(self->signal);
+    self->signal = NULL;
 }
 
     static void
@@ -950,11 +971,21 @@ transaction_class_init(gpointer g_class, gpointer class_data) {
             G_MAXUINT,
             0,
             G_PARAM_READWRITE);
-
+    
     g_object_class_install_property (gobject,
             PROP_TIMEOUT,
             param_spec);
 
+    param_spec = g_param_spec_string ("signal",
+            "signal_name",
+            "name of the signal",
+            "signal", /* default */
+            G_PARAM_READWRITE);
+    
+    g_object_class_install_property (gobject,
+            PROP_SIGNAL,
+            param_spec);
+    
     param_spec = g_param_spec_uint ("response_count",
             "response_count",
             "Response count",
@@ -1673,7 +1704,7 @@ get_txid()
  * return the Transaction, NULL if no need for real transaction
  */
     Transaction *
-queue_decision(GSList *facts, gint proposed_txid, gboolean need_transaction, guint timeout)
+queue_decision(gchar *signal, GSList *facts, gint proposed_txid, gboolean need_transaction, guint timeout)
 {
     /*
      * Puts a policy decision to the decision queue and asks the
@@ -1705,6 +1736,8 @@ queue_decision(GSList *facts, gint proposed_txid, gboolean need_transaction, gui
     g_object_set(G_OBJECT(transaction),
             "txid",
             txid,
+            "signal",
+            signal,
             "facts",
             facts,
             "timeout",
