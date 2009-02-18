@@ -820,18 +820,6 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
                                         DBUS_TYPE_STRING, &stream,
                                         DBUS_TYPE_INVALID);
 
-        /********* this is temporary to support the old libplaybacks *********/
-        if (!success) {
-            stream = "";
-
-            success = dbus_message_get_args(msg, NULL,
-                                            DBUS_TYPE_OBJECT_PATH, &objpath,
-                                            DBUS_TYPE_STRING, &state,
-                                            DBUS_TYPE_STRING, &pid,
-                                            DBUS_TYPE_INVALID);
-        }
-        /************************ end of temporary ***************************/
-
         if (!success) {
             errmsg = "failed to parse playback request for state change";
             goto rq_state_failed;
