@@ -1,3 +1,5 @@
+#define __FLASH_HACK__  1
+
 typedef int       (* sm_trfunc_t)(sm_evdata_t *, void *);
 typedef sm_stid_t (* sm_cndfunc_t)(void *);
 
@@ -737,6 +739,13 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
                       property->value);
             cl->flags = 0;
         }
+
+#ifdef __FLASH_HACK__
+        if ((cl->flags & 1) && !strcmp(cl->group, "flash")) {
+            cl->flags &= ~1;
+            cl->flags |= 16;
+        }
+#endif
 
         client_update_factstore_entry(cl, "flags", &cl->flags);
         

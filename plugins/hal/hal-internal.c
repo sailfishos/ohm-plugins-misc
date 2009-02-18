@@ -82,6 +82,8 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
 {
     /* Create an OhmFact based on the properties of a HAL object */
 
+    (void) plugin;
+
     LibHalPropertySetIterator iter;
     OhmFact *fact = NULL;
     int i, len;

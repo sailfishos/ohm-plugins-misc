@@ -88,45 +88,6 @@ static char *filter_signal(char *buf, size_t size,
 }
 
 
-static int dbusif_watch_client(const char *id, int watchit)
-{
-    char       filter[1024];
-    DBusError  err;
-
-    filter_signal(filter, sizeof(filter),
-                  DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
-                  DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH,
-                  id, id, "",
-                  NULL);
-    
-    /*
-     * Notes:
-     *   We block when adding filters, to minimize (= eliminate ?) the time
-     *   window for the client to crash after it has let us know about itself
-     *   but before we managed to install the filter. According to the docs
-     *   we do not re-enter the main loop and all other messages than the
-     *   reply to AddMatch will get queued and processed once we're bac in the
-     *   main loop. On the watch removal path we do not care about errors and
-     *   we do not want to block either.
-     */
-
-    if (watchit) {
-        dbus_error_init(&err);
-        dbus_bus_add_match(sess_conn, filter, &err);
-
-        if (dbus_error_is_set(&err)) {
-            OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
-            dbus_error_free(&err);
-            return FALSE;
-        }
-    }
-    else
-        dbus_bus_remove_match(sess_conn, filter, NULL);
-    
-    return TRUE;
-}
-
-
 
 /*! \addtogroup pubif
  *  Functions
@@ -256,6 +217,44 @@ static void dbusif_init(OhmPlugin *plugin)
     initialize_notification_registry();
 }
 
+
+static int dbusif_watch_client(const char *id, int watchit)
+{
+    char       filter[1024];
+    DBusError  err;
+
+    filter_signal(filter, sizeof(filter),
+                  DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+                  DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH,
+                  id, id, "",
+                  NULL);
+    
+    /*
+     * Notes:
+     *   We block when adding filters, to minimize (= eliminate ?) the time
+     *   window for the client to crash after it has let us know about itself
+     *   but before we managed to install the filter. According to the docs
+     *   we do not re-enter the main loop and all other messages than the
+     *   reply to AddMatch will get queued and processed once we're back in the
+     *   main loop. On the watch removal path we do not care about errors and
+     *   we do not want to block either.
+     */
+
+    if (watchit) {
+        dbus_error_init(&err);
+        dbus_bus_add_match(sess_conn, filter, &err);
+
+        if (dbus_error_is_set(&err)) {
+            OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
+            dbus_error_free(&err);
+            return FALSE;
+        }
+    }
+    else
+        dbus_bus_remove_match(sess_conn, filter, NULL);
+    
+    return TRUE;
+}
 
 /*!
  * \brief Convenience function to reply to a client issued
@@ -819,18 +818,6 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
                                         DBUS_TYPE_STRING, &pid,
                                         DBUS_TYPE_STRING, &stream,
                                         DBUS_TYPE_INVALID);
-
-        /********* this is temporary to support the old libplaybacks *********/
-        if (!success) {
-            stream = "";
-
-            success = dbus_message_get_args(msg, NULL,
-                                            DBUS_TYPE_OBJECT_PATH, &objpath,
-                                            DBUS_TYPE_STRING, &state,
-                                            DBUS_TYPE_STRING, &pid,
-                                            DBUS_TYPE_INVALID);
-        }
-        /************************ end of temporary ***************************/
 
         if (!success) {
             errmsg = "failed to parse playback request for state change";

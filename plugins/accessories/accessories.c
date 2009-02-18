@@ -15,15 +15,16 @@
 #define HFP_UUID  "0000111e-0000-1000-8000-00805f9b34fb"
 #define A2DP_UUID "0000110b-0000-1000-8000-00805f9b34fb"
 
+#define BT_TYPE_A2DP "bta2dp"
+#define BT_TYPE_HSP  "bthsp"
+
+#define BT_DEVICE "com.nokia.policy.connected_bt_device"
+
 static int DBG_HEADSET, DBG_BT;
 
 OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("headset", "Wired headset events" , &DBG_HEADSET),
     OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT));
-
-#define BT_DEVICE "com.nokia.policy.connected_bt_device"
-#define BT_TYPE_A2DP "bta2dp"
-#define BT_TYPE_HSP  "bthsp"
 
 static gchar *token = "button";
 
@@ -232,6 +233,12 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
         
         g_strfreev(caps);
 
+
+        /* TODO: As the number of the things that are inserted to the
+         * headset plug is increasing (and the code is getting more
+         * complicated), it might make sense to actually implement a
+         * state machine to keep track of the plug states. */
+
         /* See if the accessory state has changed. Note bit complicated
          * handling of headset issues. :-) */
 
@@ -255,6 +262,31 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
         if (video_changed || line_changed || headset_changed) {
 
             found = TRUE; /* something did change */
+            
+            /* we remove what we had */
+            
+            if (had_set && !has_set) {
+                OHM_DEBUG(DBG_HEADSET, "removed headset!");
+                dres_accessory_request("headset", -1, 0);
+            }
+            else if (had_mic) {
+                OHM_DEBUG(DBG_HEADSET, "removed headmike!");
+                dres_accessory_request("headmike", -1, 0);
+            }
+            else if (had_phones) {
+                OHM_DEBUG(DBG_HEADSET, "removed headphones!");
+                dres_accessory_request("headphone", -1, 0);
+            }
+
+            if (had_line_out && !has_line_out) {
+                OHM_DEBUG(DBG_HEADSET, "removed line-out!");
+                /* not supported ATM */
+                /* dres_accessory_request("line_out", -1, 0); */
+            }
+            if (had_video_out && !has_video_out) {
+                OHM_DEBUG(DBG_HEADSET, "removed video-out!");
+                dres_accessory_request("tvout", -1, 0);
+            }
 
             /* we add the current stuff */
 
@@ -273,7 +305,7 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
             
             if (has_line_out && !had_line_out) {
                 OHM_DEBUG(DBG_HEADSET, "inserted line-out!");
-                /* FIXME: not supported ATM */
+                /* not supported ATM */
                 /* dres_accessory_request("line_out", -1, 1); */
             }
             if (has_video_out && !had_video_out) {
@@ -281,29 +313,6 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
                 dres_accessory_request("tvout", -1, 1);
             }
 
-            /* we remove what we had */
-            
-            if (had_set && !has_set) {
-                OHM_DEBUG(DBG_HEADSET, "removed headset!");
-                dres_accessory_request("headset", -1, 0);
-            }
-            else if (had_mic) {
-                OHM_DEBUG(DBG_HEADSET, "removed headmike!");
-                dres_accessory_request("headmike", -1, 0);
-            }
-            else if (had_phones) {
-                OHM_DEBUG(DBG_HEADSET, "removed headphones!");
-                dres_accessory_request("headphone", -1, 0);
-            }
-
-            if (had_line_out && !has_line_out) {
-                OHM_DEBUG(DBG_HEADSET, "removed line-out!");
-                /* dres_accessory_request("line_out", -1, 0); */
-            }
-            if (had_video_out && !has_video_out) {
-                OHM_DEBUG(DBG_HEADSET, "removed video-out!");
-                dres_accessory_request("tvout", -1, 0);
-            }
         }
         else {
             OHM_DEBUG(DBG_HEADSET, "Nothing changed");
