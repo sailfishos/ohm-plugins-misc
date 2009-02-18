@@ -22,7 +22,7 @@ ohm-plugins-misc (0.6.15) unstable; urgency=low
   * support for TV signalling standards, like pal&ntsc, in videoep plugin
   * support for TV cable detection in accessories plugin
   * startup time BT device detection in accessories plugin
-	
+
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Thu, 12 Feb 2009 13:23:00 +0200
 
 ohm-plugins-misc (0.6.14) unstable; urgency=low
