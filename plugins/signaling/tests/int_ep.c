@@ -8,9 +8,11 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
 
+typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
+
 GObject *ep = NULL;
 
-static gboolean on_decision(GObject *ep, GObject *transaction, gpointer data) {
+static void on_decision(GObject *ep, GObject *transaction, internal_ep_cb_t cb, gpointer data) {
 
     guint txid;
     gchar *signal_name;
@@ -30,7 +32,9 @@ static gboolean on_decision(GObject *ep, GObject *transaction, gpointer data) {
         printf("fact: '%s'\n", (gchar *) list->data);
     }
 
-    return TRUE;
+    cb(ep, transaction, TRUE);
+
+    return;
 }
 
 static void on_key_change(GObject *ep, GObject *transaction, gpointer data) {

@@ -17,6 +17,8 @@ DBusConnection *connection;
 GHashTable     *transactions;
 GQueue         *inq = NULL;
     
+typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
+
 static gboolean process_inq(gpointer data);
 
     static Transaction *
@@ -312,9 +314,9 @@ enforcement_point_base_init(gpointer g_class)
                     0,
                     NULL,
                     NULL,
-                    signaling_marshal_BOOLEAN__OBJECT,
-                    G_TYPE_BOOLEAN,
-                    1, G_TYPE_OBJECT);
+                    signaling_marshal_VOID__OBJECT_POINTER,
+                    G_TYPE_NONE,
+                    2, G_TYPE_OBJECT, G_TYPE_POINTER);
         
         signals [ON_KEY_CHANGE] =
             g_signal_new ("on-key-change",
@@ -347,17 +349,19 @@ enforcement_point_send_decision(EnforcementPoint * self, Transaction *transactio
     return EP_STRATEGY_GET_INTERFACE(self)->send_decision(self, transaction);
 }
 
+static void internal_ep_cb(EnforcementPoint *self, Transaction *t, gboolean success)
+{
+    enforcement_point_receive_ack(self, t, success);
+}
 
-    gboolean
-internal_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
+    gboolean 
+internal_ep_send_decision(EnforcementPoint *self, Transaction *transaction)
 {
     guint txid;
-    gchar *signal_name;
-    gboolean ret; /* return value from the signal */
+    InternalEPStrategy *s = INTERNAL_EP_STRATEGY(self);
 
     g_object_get(transaction,
             "txid", &txid,
-            "signal", &signal_name,
             NULL);
 
     OHM_DEBUG(DBG_SIGNALING, "Internal EP send decision, txid '%u'\n", txid);
@@ -366,8 +370,10 @@ internal_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
         g_signal_emit (INTERNAL_EP_STRATEGY(self), signals [ON_KEY_CHANGE], 0, transaction);
     }
     else {
-        g_signal_emit (INTERNAL_EP_STRATEGY(self), signals [ON_DECISION], 0, transaction, &ret);
+        s->ongoing_transactions = g_slist_prepend(s->ongoing_transactions, transaction);
+        g_signal_emit (INTERNAL_EP_STRATEGY(self), signals [ON_DECISION], 0, transaction, internal_ep_cb);
 
+#if 0
         /* we can receive the ack instantly */
 
         /* NOTE: if there are no handlers connected to the signal, currently
@@ -376,9 +382,9 @@ internal_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
          * queue */
 
         enforcement_point_receive_ack(self, transaction, ret ? 1 : 0);
+#endif
     }
 
-    g_free(signal_name);
     return TRUE;
 }
 
@@ -1290,6 +1296,7 @@ transaction_add_ep(Transaction *self, EnforcementPoint *ep) {
 
     /* ref in case that the EP goes away and we still want to use the
      * results  */
+
     g_object_ref(ep);
 
     self->not_answered = g_slist_prepend(self->not_answered, ep);
@@ -1299,8 +1306,11 @@ transaction_add_ep(Transaction *self, EnforcementPoint *ep) {
 
     void
 transaction_remove_ep(Transaction *self, EnforcementPoint *ep) {
+
     self->not_answered = g_slist_remove(self->not_answered, ep);
+    
     OHM_DEBUG(DBG_SIGNALING, "Removed ep %p to transaction %i, unanswered ep count now %i\n", ep, self->txid, g_slist_length(self->not_answered));
+
     g_object_unref(ep);
 }
 
@@ -1402,7 +1412,7 @@ process_inq(gpointer data)
     /* printf("Before popping, inq: '%p', length: '%i'\n", inq, g_queue_get_length(inq)); */
 
     if (inq == NULL || g_queue_is_empty(inq)) {
-        printf("Error! Nothing to process, even though processing was scheduled.\n");
+        OHM_DEBUG(DBG_SIGNALING, "Error! Nothing to process, even though processing was scheduled.\n");
         return FALSE;
     }
 
@@ -1435,7 +1445,7 @@ process_inq(gpointer data)
         /* If txid == 0, the transaction doesn't require any acks
          * and the enforcement points won't send them, so we can
          * complete right away. Also, the internal EP:s are ready by
-         * now, and if there are only those*/
+         * now, and if there are only those the */
         transaction_complete(t);
     }
 

@@ -9,6 +9,8 @@
 #include <check.h>
 #include "../signaling.h"
 
+typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
+
 extern int DBG_SIGNALING, DBG_FACTS;
 
 GMainLoop *loop;
@@ -62,7 +64,7 @@ END_TEST
 int key_changed_count = 0;
 int decision_count = 0;
 
-static gboolean test_internal_decision(EnforcementPoint *e, Transaction *t, gpointer data) {
+static gboolean test_internal_decision(EnforcementPoint *e, Transaction *t, internal_ep_cb_t cb, gpointer data) {
     guint txid;
     
     printf("on-decision!\n");
@@ -71,12 +73,14 @@ static gboolean test_internal_decision(EnforcementPoint *e, Transaction *t, gpoi
     fail_unless(txid != 0, "Wrong txid");
     decision_count++;
     
+    cb(G_OBJECT(e), G_OBJECT(t), TRUE);
+
     g_main_loop_quit(loop);
     
     return TRUE;
 }
 
-static gboolean test_internal_decision_gobject(EnforcementPoint *e, GObject *o, gpointer data) {
+static gboolean test_internal_decision_gobject(EnforcementPoint *e, GObject *o, internal_ep_cb_t cb, gpointer data) {
 
     GSList *facts, *list;
     guint txid;
@@ -96,8 +100,11 @@ static gboolean test_internal_decision_gobject(EnforcementPoint *e, GObject *o, 
     for (list = facts; list != NULL; list = g_slist_next(list)) {
         printf("fact: '%s'\n", list->data);
     }
+    
+    cb(G_OBJECT(e), o, TRUE);
 
     g_main_loop_quit(loop);
+    
     return TRUE;
 }
 
@@ -191,7 +198,7 @@ START_TEST (test_signaling_internal_ep_gobject)
     ret = init_signaling(c, 0, 0);
     fail_unless(ret == TRUE, "Init failed");
     
-    ep = register_enforcement_point("internal", TRUE);
+    ep = G_OBJECT(register_enforcement_point("internal", TRUE));
 
     facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_1"));
     facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_2"));
@@ -243,8 +250,10 @@ static void test_internal_2_complete(Transaction *t, gpointer data) {
     fail_unless(counter == 1 || counter == 2, "Wrong counter value: '%i'", counter);
 
     if (counter == 1) {
-        fail_unless(g_slist_length(nacked) == 1, "Not nacked correctly");
-        fail_unless(g_slist_length(acked) == 0, "Acked incorrectly");
+        fail_unless(g_slist_length(nacked) == 1, "Not nacked correctly: %i",
+                g_slist_length(nacked));
+        fail_unless(g_slist_length(acked) == 0, "Acked incorrectly: %i",
+                g_slist_length(acked));
     }
     else if (counter == 2) {
         fail_unless(g_slist_length(nacked) == 0, "Not nacked correctly");
@@ -253,7 +262,7 @@ static void test_internal_2_complete(Transaction *t, gpointer data) {
     g_main_loop_quit(loop);
 }
 
-static gboolean test_internal_2_decision(EnforcementPoint *e, Transaction *t, gpointer data) {
+static gboolean test_internal_2_decision(EnforcementPoint *e, Transaction *t, internal_ep_cb_t cb, gpointer data) {
 
     /* the first call to this function returns false, the second true */
 
@@ -269,6 +278,7 @@ static gboolean test_internal_2_decision(EnforcementPoint *e, Transaction *t, gp
 
     counter++;
 
+    cb(G_OBJECT(e), G_OBJECT(t), ret);
     g_main_loop_quit(loop);
     return ret;
 }
@@ -359,10 +369,10 @@ static void test_register_complete(Transaction *t, gpointer data) {
 
     fail_unless(txid == 1, "Wrong txid");
 
-    fail_unless(acked_count == 1,
+    fail_unless(acked_count == 2,
             "Acked EPs: %i", acked_count);
     
-    fail_unless(nacked_count == 2,
+    fail_unless(nacked_count == 1,
             "Nacked EPs: %i", nacked_count);
 
     fail_unless(acked_count == g_slist_length(acked),
@@ -421,6 +431,7 @@ test_transaction(gpointer data) {
         while (test_transaction_object->not_answered) {
             i++;
             EnforcementPoint *ep = test_transaction_object->not_answered->data;
+            printf(">>> receiving ack from ep %i\n", i);
             enforcement_point_receive_ack(ep, test_transaction_object, i % 3);
         }
     }
