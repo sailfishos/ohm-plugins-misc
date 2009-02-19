@@ -1,3 +1,11 @@
+ohm-plugins-misc (0.6.19) unstable; urgency=low
+
+  * Consider calls being terminated as active (Fixes: NB#99361).
+  * Added signal name changes to both internal and external signaling.
+  * More find clients by dbusid/object rather than pid/stream fixes.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 19 Feb 2009 19:15:06 +0200
+
 ohm-plugins-misc (0.6.18) unstable; urgency=low
 
   * according to the aggreement with the UI guys 'flash hack' is introduced
