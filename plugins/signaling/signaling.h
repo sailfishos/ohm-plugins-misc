@@ -81,6 +81,7 @@
 typedef struct _Transaction {
     GObject         parent;
     guint           txid;
+    gchar          *signal;
     GSList         *acked;
     GSList         *nacked;
     GSList         *not_answered;
@@ -179,7 +180,7 @@ EnforcementPoint * register_enforcement_point(const gchar * uri, gboolean intern
 
 gboolean unregister_enforcement_point(const gchar *uri);
 
-Transaction * queue_decision(GSList *facts, int txid, gboolean need_transaction, guint timeout);
+Transaction * queue_decision(gchar *signal, GSList *facts, int txid, gboolean need_transaction, guint timeout);
 
 gboolean init_signaling();
 

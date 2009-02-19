@@ -12,18 +12,19 @@ GObject *ep = NULL;
 
 static gboolean on_decision(GObject *ep, GObject *transaction, gpointer data) {
 
-    GSList *facts, *list;
     guint txid;
+    gchar *signal_name;
+    GSList *facts, *list;
 
     printf("Internal EP: on-decision!\n");
 
-    g_object_get(transaction, "txid", &txid, NULL);
-    printf("txid: %d\n", txid);
-
     g_object_get(transaction,
-            "facts",
-            &facts,
+            "txid", &txid,
+            "signal", &signal_name,
+            "facts", &facts,
             NULL);
+
+    printf("txid: %d\n", txid);
 
     for (list = facts; list != NULL; list = g_slist_next(list)) {
         printf("fact: '%s'\n", (gchar *) list->data);
@@ -35,15 +36,15 @@ static gboolean on_decision(GObject *ep, GObject *transaction, gpointer data) {
 static void on_key_change(GObject *ep, GObject *transaction, gpointer data) {
     
     guint txid;
+    gchar *signal_name;
     GSList *facts, *list;
     
     printf("Internal EP: on-key-change!\n");
 
-    g_object_get(transaction, "txid", &txid, NULL);
-
     g_object_get(transaction,
-            "facts",
-            &facts,
+            "txid", &txid,
+            "signal", &signal_name,
+            "facts", &facts,
             NULL);
 
     printf("txid: %d\n", txid);

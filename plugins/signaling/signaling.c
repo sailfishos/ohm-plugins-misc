@@ -42,14 +42,14 @@ OHM_EXPORTABLE(gboolean, unregister_internal_enforcement_point, (GObject *ep))
     return ret;
 }
 
-OHM_EXPORTABLE(GObject *, queue_policy_decision, (GSList *facts, guint timeout))
+OHM_EXPORTABLE(GObject *, queue_policy_decision, (gchar *signal, GSList *facts, guint timeout))
 {
-    return (GObject *) queue_decision(facts, 0, TRUE, timeout);
+    return (GObject *) queue_decision(signal, facts, 0, TRUE, timeout);
 }
 
-OHM_EXPORTABLE(void, queue_key_change, (GSList *facts))
+OHM_EXPORTABLE(void, queue_key_change, (gchar *signal, GSList *facts))
 {
-    queue_decision(facts, 0, FALSE, 0);
+    queue_decision(signal, facts, 0, FALSE, 0);
     return;
 }
 
@@ -115,10 +115,10 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
     }
 
     if (callback == NULL) {
-        queue_decision(facts, 0, FALSE, 0);
+        queue_decision(signal, facts, 0, FALSE, 0);
     }
     else {
-        t = queue_decision(facts, transid, TRUE, timeout);
+        t = queue_decision(signal, facts, transid, TRUE, timeout);
         if (t == NULL) {
             goto error;
         }

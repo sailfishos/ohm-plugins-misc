@@ -105,6 +105,7 @@ static void test_internal_key_change(EnforcementPoint *e, Transaction *t, gpoint
     
     guint txid;
     GSList *facts, *list;
+    gchar *signal_name;
     
     printf("on-key-change!\n");
 
@@ -113,16 +114,23 @@ static void test_internal_key_change(EnforcementPoint *e, Transaction *t, gpoint
     g_object_get(t,
             "facts",
             &facts,
+            "signal",
+            &signal_name,
             NULL);
 
     key_changed_count++;
-    fail_unless(txid == 0, "Wrong txid");
+
     printf("txid: %d\n", txid);
+    fail_unless(txid == 0, "Wrong txid");
+    
+    printf("signal name: %s\n", signal_name);
+    fail_unless(strcmp(signal_name, "actions") == 0, "Wrong signal name");
     
     for (list = facts; list != NULL; list = g_slist_next(list)) {
         printf("fact: '%s'\n", list->data);
     }
 
+    g_free(signal_name);
     g_main_loop_quit(loop);
 }
 
@@ -154,11 +162,11 @@ START_TEST (test_signaling_internal_ep_1)
     key_changed_count = 0;
     decision_count = 0;
 
-    queue_decision(NULL, 0, FALSE, 0);
+    queue_decision("actions", NULL, 0, FALSE, 0);
     
     g_main_loop_run(loop);
     
-    test_transaction_object = queue_decision(NULL, 0, TRUE, 2000);
+    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
     g_object_unref(test_transaction_object);
 
     g_main_loop_run(loop);
@@ -194,7 +202,7 @@ START_TEST (test_signaling_internal_ep_gobject)
     key_changed_count = 0;
     decision_count = 0;
 
-    queue_decision(facts, 0, FALSE, 0);
+    queue_decision("actions", facts, 0, FALSE, 0);
 
     g_main_loop_run(loop);
 
@@ -202,7 +210,7 @@ START_TEST (test_signaling_internal_ep_gobject)
     facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_3"));
     facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_4"));
 
-    test_transaction_object = queue_decision(facts, 0, TRUE, 2000);
+    test_transaction_object = queue_decision("actions", facts, 0, TRUE, 2000);
     g_object_unref(test_transaction_object);
 
     g_main_loop_run(loop);
@@ -284,7 +292,7 @@ START_TEST (test_signaling_internal_ep_2)
     key_changed_count = 0;
     decision_count = 0;
 
-    test_transaction_object = queue_decision(NULL, 0, TRUE, 2000);
+    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
 
     g_signal_connect(test_transaction_object, "on-transaction-complete", G_CALLBACK(test_internal_2_complete), NULL);
 
@@ -442,8 +450,8 @@ START_TEST (test_signaling_register_unregister)
     register_enforcement_point("internal", TRUE);
     register_enforcement_point("internal-2", TRUE);
 
-    queue_decision(NULL, 0, FALSE, 0);
-    test_transaction_object = queue_decision(NULL, 0, TRUE, 2000);
+    queue_decision("actions", NULL, 0, FALSE, 0);
+    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
 
     /* Register the signal handlers */
 
@@ -554,7 +562,7 @@ START_TEST (test_signaling_timeout)
     register_enforcement_point("external", FALSE);
     register_enforcement_point("external-2", FALSE);
 
-    test_transaction_object = queue_decision(NULL, 0, TRUE, 2000);
+    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
 
     /* Register the signal handlers */
 

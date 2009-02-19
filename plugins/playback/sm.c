@@ -1312,7 +1312,6 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     dbusif_mute_changed(state);
 }
 
-#if 1
 static client_t *find_client_by_fact(fsif_entry_t *entry)
 {
     client_t *cl;
@@ -1340,34 +1339,6 @@ static client_t *find_client_by_fact(fsif_entry_t *entry)
 
     return cl;
 }
-#else
-static client_t *find_client_by_fact(fsif_entry_t *entry)
-{
-    client_t *cl;
-    char     *pid;
-    char     *stream;
-
-    fsif_get_field_by_entry(entry, fldtype_string, "pid"   , &pid   );
-    fsif_get_field_by_entry(entry, fldtype_string, "stream", &stream);
-
-    if (pid == NULL || *pid == '\0') {
-        OHM_ERROR("[%s] Can't find client: no pid", __FUNCTION__);
-        return NULL;
-    }
-
-    if (stream != NULL && *stream == '\0')
-        stream = NULL;
-
-    if ((cl = client_find_by_stream(pid, stream)) == NULL) {
-        OHM_ERROR("[%s] Can't find client for pid %s%s%s", __FUNCTION__,
-                  pid, stream?" stream ":"", stream?stream:"");
-        return NULL;
-    }
-
-
-    return cl;
-}
-#endif
 
 static char *strncpylower(char *to, const char *from, int tolen)
 {
