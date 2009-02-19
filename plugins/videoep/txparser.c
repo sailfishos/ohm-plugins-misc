@@ -55,12 +55,16 @@ static gboolean txparser(GObject *conn, GObject *transaction, gpointer data)
     char      *name;
     actdsc_t  *action;
     gboolean   success;
+    gchar     *signal;
     
     printf("Video EP: got actions\n");
 
     g_object_get(transaction, "txid" , &txid, NULL);
     g_object_get(transaction, "facts", &list, NULL);
+    g_object_get(transaction, "signal", &signal, NULL);
     
+    /* TODO: signal holds the signal name that was sent */
+
     printf("txid: %d\n", txid);
     
     success = TRUE;
@@ -73,6 +77,8 @@ static gboolean txparser(GObject *conn, GObject *transaction, gpointer data)
                 success &= action_parser(action, videoep);
         }
     }
+
+    g_free(signal);
     
     return success;
 

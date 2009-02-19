@@ -25,6 +25,8 @@
 #include "txparser.h"
 #include "xrt.h"
 
+typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
+
 videoep_t  *videoep = NULL;
 
 OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri));
@@ -34,6 +36,23 @@ OHM_PLUGIN_REQUIRES_METHODS(videoep, 2,
    OHM_IMPORT("signaling.register_enforcement_point"  , register_ep  ),
    OHM_IMPORT("signaling.unregister_enforcement_point", unregister_ep)
 );
+
+static void decision_signal_cb(GObject *enforcement_point, GObject *transaction, internal_ep_cb_t cb, gpointer data)
+{
+    gboolean success = txparser(enforcement_point, transaction, data);
+
+    /* TODO: this here could be done asynchronously! */
+    cb(enforcement_point, transaction, success);
+
+    return;
+}
+
+static void key_change_signal_cb(GObject *enforcement_point, GObject *transaction, gpointer data)
+{
+    txparser(enforcement_point, transaction, data);
+
+    return;
+}
 
 static void plugin_init(OhmPlugin *plugin)
 {
@@ -63,10 +82,10 @@ static void plugin_init(OhmPlugin *plugin)
         }
 
         decision_cb  = g_signal_connect(conn, "on-decision",
-                                        G_CALLBACK(txparser),
+                                        G_CALLBACK(decision_signal_cb),
                                         (gpointer)videoep);
         keychange_cb = g_signal_connect(conn, "on-key-change",
-                                        G_CALLBACK(txparser),
+                                        G_CALLBACK(key_change_signal_cb),
                                         (gpointer)videoep);
         
 
