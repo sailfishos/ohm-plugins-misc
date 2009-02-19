@@ -744,13 +744,14 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
             !IS_CONF_PARENT(event.call) && !IS_CONF_MEMBER(event.call)) {
             OHM_INFO("Call %s has been released remotely...", event.path);
             
-            event.type = EVENT_CALL_PEER_ENDED;
+            event.type = EVENT_CALL_PEER_HUNGUP;
             event_handler((event_t *)&event);
         }
-        else
-            OHM_INFO("Call %s has been released locally (%u != %u)...",
-                     event.path, actor, event.call->peer_handle);
-
+        else {
+            OHM_INFO("Call %s has been released locally...", event.path);
+            event.type = EVENT_CALL_LOCAL_HUNGUP;
+            event_handler((event_t *)&event);
+        }
     }
     
     return DBUS_HANDLER_RESULT_HANDLED;    
@@ -968,15 +969,16 @@ event_name(int type)
 {
 #define DESCR(e, d) [EVENT_##e] = d
     const char *description[] = {
-        DESCR(UNKNOWN        , "<UNKNOWN>"),
-        DESCR(NEW_CHANNEL    , "<NEW CHANNEL>"),
-        DESCR(CHANNEL_CLOSED , "<CHANNEL CLOSED>"),
-        DESCR(CALL_REQUEST   , "<CALL REQUEST>"),
-        DESCR(CALL_ENDED     , "<CALL ENDED LOCALLY>"),
-        DESCR(CALL_PEER_ENDED, "<CALL ENDED REMOTELY>"),
-        DESCR(CALL_ACCEPTED  , "<CALL ACCEPTED>"),
-        DESCR(CALL_HELD      , "<CALL HELD>"),
-        DESCR(CALL_ACTIVATED , "<CALL ACTIVATED>"),
+        DESCR(UNKNOWN          , "<UNKNOWN>"),
+        DESCR(NEW_CHANNEL      , "<NEW CHANNEL>"),
+        DESCR(CHANNEL_CLOSED   , "<CHANNEL CLOSED>"),
+        DESCR(CALL_REQUEST     , "<CALL REQUEST>"),
+        DESCR(CALL_ENDED       , "<CALL ENDED>"),
+        DESCR(CALL_LOCAL_HUNGUP, "<CALL HUNGUP LOCALLY>"),
+        DESCR(CALL_PEER_HUNGUP , "<CALL ENDED REMOTELY>"),
+        DESCR(CALL_ACCEPTED    , "<CALL ACCEPTED>"),
+        DESCR(CALL_HELD        , "<CALL HELD>"),
+        DESCR(CALL_ACTIVATED   , "<CALL ACTIVATED>"),
     };
 
 
@@ -1112,12 +1114,12 @@ event_handler(event_t *event)
         event->any.state = STATE_ACTIVE;
         break;
 
-        
-    case EVENT_CALL_HELD:       event->any.state = STATE_ON_HOLD;      break;
-    case EVENT_CHANNEL_CLOSED:  event->any.state = STATE_DISCONNECTED; break;
-    case EVENT_CALL_ENDED:      event->any.state = STATE_DISCONNECTED; break;
-    case EVENT_CALL_PEER_ENDED: event->any.state = STATE_PEER_HANGUP;  break;
-    default: OHM_ERROR("Unknown event 0x%x.", event->type);          return;
+    case EVENT_CALL_PEER_HUNGUP:  event->any.state = STATE_PEER_HUNGUP;  break;
+    case EVENT_CALL_LOCAL_HUNGUP: event->any.state = STATE_LOCAL_HUNGUP; break;
+    case EVENT_CALL_HELD:         event->any.state = STATE_ON_HOLD;      break;
+    case EVENT_CHANNEL_CLOSED:    event->any.state = STATE_DISCONNECTED; break;
+    case EVENT_CALL_ENDED:        event->any.state = STATE_DISCONNECTED; break;
+    default: OHM_ERROR("Unknown event 0x%x.", event->type);              return;
     }
     
     if (call == NULL)
@@ -1391,6 +1393,23 @@ remove_parent(gpointer key, gpointer value, gpointer data)
 
 
 /********************
+ * call_hungup
+ ********************/
+static int
+call_hungup(call_t *call, const char *action, event_t *event)
+{
+    (void)action;
+    
+    OHM_INFO("%s HUNGUP %s.", short_path(call->path),
+             event->any.state == STATE_PEER_HUNGUP ? "REMOTELY" : "LOCALLY");
+    
+    call->state = event->any.state;
+    policy_call_update(call, UPDATE_STATE);
+    return 0;
+}
+
+
+/********************
  * call_disconnect
  ********************/
 static int
@@ -1407,7 +1426,8 @@ call_disconnect(call_t *call, const char *action, event_t *event)
             call_reply(event->call.req, FALSE);
             /* fall through */
         case STATE_DISCONNECTED:
-        case STATE_PEER_HANGUP:
+        case STATE_PEER_HUNGUP:
+        case STATE_LOCAL_HUNGUP:
             policy_call_delete(call);
             call_unregister(call->path);
             call_foreach((GHFunc)remove_parent, call);
@@ -1550,6 +1570,8 @@ call_action(call_t *call, const char *action, event_t *event)
         const char  *action;
         int        (*handler)(call_t *, const char *, event_t *);
     } handlers[] = {
+        { "peerhungup"  , call_hungup     },
+        { "localhungup" , call_hungup     },
         { "disconnected", call_disconnect },
         { "onhold"      , call_hold       },
         { "autohold"    , call_hold       },
@@ -1615,7 +1637,8 @@ state_name(int state)
     static char *names[] = {
         STATE(UNKNOWN     , "unknown"),
         STATE(DISCONNECTED, "disconnected"),
-        STATE(PEER_HANGUP , "peerhangup"),
+        STATE(PEER_HUNGUP , "peerhungup"),
+        STATE(LOCAL_HUNGUP, "localhungup"),
         STATE(CREATED     , "created"),
         STATE(CALLOUT     , "callout"),
         STATE(ACTIVE      , "active"),

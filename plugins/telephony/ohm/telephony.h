@@ -70,8 +70,9 @@
 
 typedef enum {
     STATE_UNKNOWN = 0,
-    STATE_DISCONNECTED,                        /* not connected */
-    STATE_PEER_HANGUP,                         /* peer ended the call */
+    STATE_PEER_HUNGUP,                         /* peer hung up */
+    STATE_LOCAL_HUNGUP,                        /* local end hung up */
+    STATE_DISCONNECTED,                        /* disconnected connected */
     STATE_CREATED,                             /* call created/alerting */
     STATE_CALLOUT,                             /* call (out) created */
     STATE_ACTIVE,                              /* call active */
@@ -115,7 +116,8 @@ typedef enum {
     EVENT_CHANNEL_CLOSED,                      /* TP Closed */
     EVENT_CALL_REQUEST,                        /* MC call_request */
     EVENT_CALL_ENDED,                          /* MC call_ended */
-    EVENT_CALL_PEER_ENDED,                     /* TP MembersChanged */
+    EVENT_CALL_PEER_HUNGUP,                    /* TP MembersChanged */
+    EVENT_CALL_LOCAL_HUNGUP,                   /* TP MembersChanged */
     EVENT_CALL_ACCEPTED,                       /* TP MembersChanged */
     EVENT_CALL_HELD,                           /* TP HoldStateChanged */
     EVENT_CALL_ACTIVATED,                      /* TP HoldStateChanged */
