@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.20) unstable; urgency=low
+
+  * Don't run call_connect hook for re-activated (off-hold) calls (Fixes: NB#102833).
+  * Modified videoep to use the new signaling interface.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 23 Feb 2009 21:25:01 +0200
+
 ohm-plugins-misc (0.6.19) unstable; urgency=low
 
   * Consider calls being terminated as active (Fixes: NB#99361).
