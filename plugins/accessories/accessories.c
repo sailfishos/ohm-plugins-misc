@@ -933,9 +933,6 @@ static void get_device_list_cb (DBusPendingCall *pending, void *user_data)
 
 error:
 
-    if (pending)
-        dbus_pending_call_unref(pending);
-    
     if (reply)
         dbus_message_unref (reply);
 
@@ -1031,14 +1028,10 @@ static void get_default_adapter_cb (DBusPendingCall *pending, void *user_data)
 
 error:
 
-    if (pending)
-        dbus_pending_call_unref(pending);
-    
     if (reply)
         dbus_message_unref (reply);
 
     return;
-
 }
 
 
