@@ -21,6 +21,7 @@
 
 #define TP_NOKIA          "com.nokia.Telepathy"
 #define TP_CONFERENCE     TP_NOKIA".Channel.Interface.Conference"
+#define TP_EMERGENCY      TP_NOKIA".Channel.Interface.Emergency"
 
 #define PROP_CHANNEL_TYPE     TP_CHANNEL".ChannelType"
 #define PROP_INITIAL_MEMBERS  TP_CONFERENCE".InitialMembers"
@@ -30,6 +31,7 @@
 #define PROP_INITIATOR_ID     TP_CHANNEL".InitiatorID"
 #define PROP_REQUESTED        TP_CHANNEL".Requested"
 #define INITIATOR_SELF        "<self>"
+#define PROP_EMERGENCY        TP_EMERGENCY".InitialEmergencyService"
 
 #define NEW_CHANNEL        "NewChannel"
 #define NEW_CHANNELS       "NewChannels"
@@ -99,6 +101,7 @@ struct call_s {
     char         *peer;                        /* URI of peer if known */
     unsigned int  peer_handle;                 /* handle of our peer */
     call_dir_t    dir;                         /* incoming/outgoing */
+    int           emergency;                   /* emergency call */
     call_state_t  state;                       /* current state */
     int           order;                       /* autohold order */
     call_t       *parent;                      /* hosting conference if any */
@@ -143,6 +146,7 @@ typedef struct {
     char       **members;                      /* for conference call */
     call_dir_t   dir;                          /* incoming/outgoing */
     int          peer_handle;                  /* handle of our peer */
+    int          emergency;                    /* an emergency call */
 } channel_event_t;
 
 

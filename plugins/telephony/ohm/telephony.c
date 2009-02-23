@@ -72,7 +72,7 @@ static int         holdorder;                    /* autohold order */
 
 call_t *call_register(const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
-                      int conference);
+                      int conference, int emergency);
 call_t *call_lookup(const char *path);
 void    call_destroy(call_t *call);
 void    call_foreach(GHFunc callback, gpointer data);
@@ -83,6 +83,7 @@ enum {
     UPDATE_DIR    = 0x02,
     UPDATE_ORDER  = 0x04,
     UPDATE_PARENT = 0x08,
+    UPDATE_EMERG  = 0x10,
     UPDATE_ALL    = 0xff,
 };
 
@@ -108,6 +109,7 @@ int     policy_run_hook(char *hook_name);
 #define FACT_FIELD_DIR    "direction"
 #define FACT_FIELD_ORDER  "order"
 #define FACT_FIELD_PARENT "parent"
+#define FACT_FIELD_EMERG  "emergency"
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
 
@@ -599,6 +601,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                     VARIANT_PATH_ARRAY(&idict, members);
                     event.members = &members[0];
                 }
+                else if (!strcmp(name, PROP_EMERGENCY))
+                    event.emergency = TRUE;
             }
             
         }
@@ -1032,7 +1036,8 @@ event_handler(event_t *event)
             call = call_register(event->channel.path, event->channel.name,
                                  event->channel.peer,
                                  event->channel.peer_handle,
-                                 event->channel.members != NULL);
+                                 event->channel.members != NULL,
+                                 event->channel.emergency);
             call->dir = event->channel.dir;
             policy_call_export(call);
         }
@@ -1188,7 +1193,7 @@ call_exit(void)
  ********************/
 call_t *
 call_register(const char *path, const char *name, const char *peer,
-              unsigned int peer_handle, int conference)
+              unsigned int peer_handle, int conference, int emergency)
 {
     call_t *call;
 
@@ -1212,12 +1217,14 @@ call_register(const char *path, const char *name, const char *peer,
     if (conference)
         call->parent = call;
 
+    call->emergency = emergency;
+
     if (name != NULL) {
         if ((call->name = g_strdup(name)) == NULL) {
-        OHM_ERROR("Failed to initialize new call %s.", path);
-        g_free(call->path);
-        g_free(call);
-        return NULL;
+            OHM_ERROR("Failed to initialize new call %s.", path);
+            g_free(call->path);
+            g_free(call);
+            return NULL;
         }
     }
 
@@ -1869,12 +1876,13 @@ policy_call_export(call_t *call)
         !set_string_field(fact, FACT_FIELD_STATE, state)||
         !set_string_field(fact, FACT_FIELD_DIR  , dir)  ||
         !set_string_field(fact, FACT_FIELD_ID   , id)   ||
-        (parent[0] && !set_string_field(fact, FACT_FIELD_PARENT, parent))) {
+        (parent[0] && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
+        (call->emergency && !set_string_field(fact, FACT_FIELD_EMERG, "yes"))) {
         OHM_ERROR("Failed to export call %s to factstore.", path);
         g_object_unref(fact);
         return FALSE;
     }
-    
+
     if (!ohm_fact_store_insert(store, fact)) {
         OHM_ERROR("Failed to insert call %s to factstore.", path);
         g_object_unref(fact);
@@ -1896,7 +1904,7 @@ policy_call_update(call_t *call, int fields)
     OhmFact    *fact;
     const char *state, *dir, *parent;
     char        id[16];
-    int         order;
+    int         order, emerg;
     
     if (call == NULL)
         return FALSE;
@@ -1909,7 +1917,8 @@ policy_call_update(call_t *call, int fields)
     state = (fields & UPDATE_STATE) ? state_name(call->state) : NULL;
     dir   = (fields & UPDATE_DIR)   ? dir_name(call->dir) : NULL;
     order = (fields & UPDATE_ORDER) ? call->order : 0;
-    
+    emerg = (fields & UPDATE_EMERG) ? call->emergency : 0;
+
     if (fields & UPDATE_PARENT) {
         if (call->parent == NULL) {
             ohm_fact_set(fact, FACT_FIELD_PARENT, NULL);
@@ -1926,11 +1935,16 @@ policy_call_update(call_t *call, int fields)
     if ((state  && !set_string_field(fact, FACT_FIELD_STATE , state))  ||
         (dir    && !set_string_field(fact, FACT_FIELD_DIR   , dir))    ||
         (parent && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
-        (order  && !set_int_field(fact,   FACT_FIELD_ORDER , order))) {
+        (order  && !set_int_field   (fact, FACT_FIELD_ORDER , order))) {
         OHM_ERROR("Failed to update fact for call %s", short_path(call->path));
         return FALSE;
     }
     
+    if (emerg && !set_string_field(fact, FACT_FIELD_EMERG, "yes")) {
+        OHM_ERROR("Failed to update fact for call %s", short_path(call->path));
+        return FALSE;
+    }
+
     return TRUE;
 }
 
