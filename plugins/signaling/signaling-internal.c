@@ -16,6 +16,9 @@ GSList         *enforcement_points = NULL;
 DBusConnection *connection;
 GHashTable     *transactions;
 GQueue         *inq = NULL;
+
+static OhmFactStore *store;
+
     
 typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
 
@@ -33,12 +36,17 @@ init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
     DBG_SIGNALING = flag_signaling;
     DBG_FACTS     = flag_facts;
 
+    if ((store = ohm_fact_store_get_fact_store()) == NULL) {
+        g_error("Failed to initialize factstore.");
+        return FALSE;
+    }
+    
     transactions = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
     if (transactions == NULL) {
         g_error("Failed to create transaction hash table.");
         return FALSE;
     }
-
+    
     inq = g_queue_new();
     if (inq == NULL) {
         g_error("Failed to create incoming queue.");
@@ -46,6 +54,8 @@ init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
     }
     
     connection = c;
+
+
     return TRUE;
 }
 
@@ -69,6 +79,8 @@ deinit_signaling()
 
     if (inq)
         g_queue_free(inq);
+
+    g_object_unref(store);
 
     return TRUE;
 }
@@ -496,11 +508,6 @@ send_ipc_signal(gpointer data)
             &signal_name,
             NULL);
 
-    OhmFactStore *fs = ohm_fact_store_get_fact_store();
-    if (fs == NULL) {
-        goto end;
-    }
-
     /**
      * This is really complicated and nasty. Idea is that the message is
      * supposed to look something like this:
@@ -555,7 +562,7 @@ send_ipc_signal(gpointer data)
 
     for (i = facts; i != NULL; i = g_slist_next(i)) {
         gchar *f = i->data;
-        GSList *ohm_facts = ohm_fact_store_get_facts_by_name(fs, f);
+        GSList *ohm_facts = ohm_fact_store_get_facts_by_name(store, f);
 
         /* printf("key: %s, facts: %s\n", f, ohm_facts ? "yes" : "ERROR: NO FACTS!"); */
 
@@ -1468,6 +1475,79 @@ process_inq(gpointer data)
     return FALSE;
 }
 
+
+static gboolean
+register_fact(const gchar *uri, gboolean internal)
+{
+    OhmFact *fact  = NULL;
+    GValue  *guri  = NULL;
+    GValue  *gkind = NULL;
+    
+    
+    if ((fact = ohm_fact_new(ENFORCEMENT_FACT_NAME)) == NULL) {
+        g_error("Failed to create fact for enforcement point %s.", uri);
+        goto fail;
+    }
+
+    guri = ohm_value_from_string(uri);
+    gkind = ohm_value_from_string(internal ? "internal" : "external");
+    
+    if (guri == NULL || gkind == NULL)
+        goto fail;
+
+    ohm_fact_set(fact, "id" , guri);
+    ohm_fact_set(fact, "type", gkind);
+    guri = gkind = NULL;
+    
+    if (ohm_fact_store_insert(store, fact))
+        return TRUE;
+    
+    g_error("Failed to insert fact for enforcment point %s.", uri);
+    
+    /* intentional fall through */
+ fail:
+    if (gkind) {
+        g_value_unset(gkind);
+        g_free(gkind);
+    }
+    if (guri) {
+        g_value_unset(guri);
+        g_free(guri);
+    }
+    if (fact)
+        g_object_unref(fact);
+    return FALSE;
+}
+
+
+static gboolean
+unregister_fact(const gchar *uri)
+{
+    GSList     *l;
+    OhmFact    *fact;
+    GValue     *guri;
+    const char *s;
+
+    for (l = ohm_fact_store_get_facts_by_name(store, ENFORCEMENT_FACT_NAME);
+         l != NULL;
+         l = l->next) {
+        fact = (OhmFact *)l->data;
+        guri = ohm_fact_get(fact, "id");
+        
+        if (guri == NULL || (s = g_value_get_string(guri)) == NULL)
+            continue;
+        
+        if (!strcmp(s, uri)) {
+            ohm_fact_store_remove(store, fact);
+            g_object_unref(fact);
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+
     EnforcementPoint *
 register_enforcement_point(const gchar * uri, gboolean internal)
 {
@@ -1513,7 +1593,9 @@ register_enforcement_point(const gchar * uri, gboolean internal)
     OHM_DEBUG(DBG_SIGNALING, "Created ep '%s' at 0x%p\n", uri, ep);
 
     enforcement_points = g_slist_prepend(enforcement_points, ep);
-    
+ 
+    register_fact(uri, internal);
+   
     return ep;
 }
 
@@ -1549,6 +1631,8 @@ unregister_enforcement_point(const gchar *uri)
     enforcement_point_unregister(ep);
     enforcement_points = g_slist_remove(enforcement_points, ep);
     g_object_unref(ep);
+
+    unregister_fact(uri);
 
     return TRUE;
 }

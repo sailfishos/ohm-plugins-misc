@@ -38,6 +38,7 @@
 #define SIGNAL_POLICY_ACK         "status"
 #define SIGNAL_NAME_OWNER_CHANGED "NameOwnerChanged"
 
+#define ENFORCEMENT_FACT_NAME "com.nokia.policy.enforcement_point"
 
 #define TRANSACTION_TYPE (transaction_get_type())
 #define TRANSACTION(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), TRANSACTION_TYPE, Transaction))
