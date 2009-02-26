@@ -13,8 +13,6 @@
 
 #include "telephony.h"
 
-#define __INTEGER_IDS__
-
 #define PLUGIN_NAME   "telephony"
 #define IS_CELLULAR(p) (!strncmp(p, TP_RING, sizeof(TP_RING) - 1))
 #define IS_CONF_PARENT(call) ((call) != NULL && (call)->parent == (call))
@@ -56,6 +54,7 @@ DBUS_METHOD_HANDLER(dispatch_method);
 DBUS_METHOD_HANDLER(call_request);
 
 static DBusConnection *bus;
+static OhmFact        *emergency;
 
 static void event_handler(event_t *event);
 
@@ -113,6 +112,9 @@ int     policy_run_hook(char *hook_name);
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
 
+int set_string_field(OhmFact *fact, const char *field, const char *value);
+
+
 static OhmFactStore *store;
 
 
@@ -159,11 +161,6 @@ bus_init(void)
 
     if (!bus_add_match("signal", TP_CHANNEL_GROUP, NULL, NULL))
         exit(1);
-
-#if 0
-    if (!bus_add_match("signal", TP_CONNECTION, NEW_CHANNEL, NULL))
-        exit(1);
-#endif
 
     if (!bus_add_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL))
         exit(1);
@@ -236,9 +233,6 @@ bus_exit(void)
     
     bus_add_match("signal", TELEPHONY_INTERFACE, NULL, NULL);
     bus_add_match("signal", TP_CHANNEL_GROUP, NULL, NULL);
-#if 0
-    bus_add_match("signal", TP_CONNECTION, NEW_CHANNEL, NULL);
-#endif
     bus_add_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL);
     bus_add_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL);
     bus_add_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL);
@@ -920,7 +914,6 @@ call_request(DBusConnection *c, DBusMessage *msg, void *data)
     int          incoming, n;
 
     (void)c;
-    (void)msg;
     (void)data;
 
     if (!dbus_message_get_args(msg, NULL,
@@ -966,6 +959,62 @@ call_reply(DBusMessage *msg, int may_proceed)
 
 
 /********************
+ * emergency_call_reply
+ ********************/
+static void
+emergency_call_reply(DBusConnection *c, DBusMessage *msg, char *error)
+{
+    DBusMessage *reply;
+
+    if (error == NULL)
+        reply = dbus_message_new_method_return(msg);
+    else
+        reply = dbus_message_new_error(msg, DBUS_ERROR_FAILED, error);
+
+    dbus_connection_send(c, reply, NULL);
+    dbus_message_unref(reply);
+}
+
+
+/********************
+ * emergency_call_request
+ ********************/
+static DBusHandlerResult
+emergency_call_request(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    emerg_event_t event;
+    int           active;
+
+    (void)data;
+
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_BOOLEAN, &active,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse early emergency call request.");
+        emergency_call_reply(c, msg, "Failed to parse request.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    event.type = active ? EVENT_EMERGENCY_ON : EVENT_EMERGENCY_OFF;
+    event.bus  = c;
+    event.req  = msg;
+    event_handler((event_t *)&event);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * emergency_active
+ ********************/
+static int
+emergency_active(int active)
+{
+    return set_string_field(emergency, "active", active ? "yes" : "no");
+}
+
+
+/********************
  * event_name
  ********************/
 static const char *
@@ -983,6 +1032,8 @@ event_name(int type)
         DESCR(CALL_ACCEPTED    , "<CALL ACCEPTED>"),
         DESCR(CALL_HELD        , "<CALL HELD>"),
         DESCR(CALL_ACTIVATED   , "<CALL ACTIVATED>"),
+        DESCR(EMERGENCY_ON     , "<EARLY EMERGENCY CALL START>"),
+        DESCR(EMERGENCY_OFF    , "<EARLY EMERGENCY CALL END>"),
     };
 
 
@@ -1086,13 +1137,6 @@ event_handler(event_t *event)
         break;
 
     case EVENT_CALL_REQUEST:
-#if 0
-        if (call->dir == DIR_UNKNOWN) {
-            call->dir = event->call.dir;
-            policy_call_update(call, UPDATE_DIR);
-        }
-        event->any.state = STATE_CREATED;
-#else
         if (call == NULL) {
             OHM_WARNING("Denying CALL_REQUEST for unknown call %s.",
                         event->call.path);
@@ -1104,9 +1148,17 @@ event_handler(event_t *event)
             call_reply(event->call.req, TRUE);
             return;
         }
-#endif
         break;
 
+    case EVENT_EMERGENCY_ON:
+    case EVENT_EMERGENCY_OFF:
+        if (!emergency_active(event->type == EVENT_EMERGENCY_ON)) {
+            emergency_call_reply(event->emerg.bus, event->emerg.req,
+                                 "Internal error: failed to update factstore.");
+            return;
+        }
+        break;
+        
     case EVENT_CALL_ACCEPTED:
         if (IS_CONF_PARENT(call) && call->state == STATE_ACTIVE)
             return;
@@ -1561,9 +1613,6 @@ call_create(call_t *call, const char *action, event_t *event)
     call->state = STATE_CREATED;
     policy_call_update(call, UPDATE_STATE);
 
-#if 0
-    call_reply(event->call.req, TRUE);
-#endif
     return 0;
 }
 
@@ -1616,6 +1665,12 @@ policy_init()
 {
     if ((store = ohm_fact_store_get_fact_store()) == NULL) {
         OHM_ERROR("Failed to initialize fact store.");
+        exit(1);
+    }
+    
+    if ((emergency = ohm_fact_new(POLICY_FACT_EMERG)) == NULL ||
+        !ohm_fact_store_insert(store, emergency)) {
+        OHM_ERROR("Failed to create fact for emergency call UI.");
         exit(1);
     }
 }
@@ -1674,6 +1729,9 @@ policy_actions(event_t *event)
     int  callstate = event->any.state;
     char id[16], state[32], *vars[2 * 2 + 1];
 
+    if (event->type == EVENT_EMERGENCY_ON || event->type == EVENT_EMERGENCY_OFF)
+        return TRUE;
+
     snprintf(id, sizeof(id), "%d", callid);
     snprintf(state, sizeof(state), "%s", state_name(callstate));
     
@@ -1705,8 +1763,15 @@ policy_enforce(event_t *event)
     int         id, status, err;
     call_t     *call;
 
-    if ((l = ohm_fact_store_get_facts_by_name(store, FACT_ACTIONS)) == NULL)
-        return ENOENT;
+    if ((l = ohm_fact_store_get_facts_by_name(store, FACT_ACTIONS)) == NULL) {
+        if (event->type == EVENT_EMERGENCY_ON ||
+            event->type == EVENT_EMERGENCY_OFF) {
+            emergency_call_reply(event->emerg.bus, event->emerg.req, NULL);
+            return 0;
+        }
+        else
+            return ENOENT;
+    }
     
     if (g_slist_length(l) > 1) {
         OHM_ERROR("Too many call_action facts (%d).", g_slist_length(l));
@@ -2010,6 +2075,11 @@ OHM_PLUGIN_DESCRIPTION("telephony", "0.0.1", "krisztian.litkey@nokia.com",
 OHM_PLUGIN_REQUIRES_METHODS(telephony, 1,
    OHM_IMPORT("dres.resolve", resolve)
 );
+
+
+OHM_PLUGIN_DBUS_METHODS(
+    { POLICY_INTERFACE, POLICY_PATH, EMERGENCY_CALL_ACTIVE,
+            emergency_call_request, NULL });
 
 
 /*

@@ -48,10 +48,10 @@
 #define TELEPHONY_PATH      POLICY_PATH"/telephony"
 #define CALL_REQUEST       "call_request"
 #define CALL_ENDED         "call_ended"
-#define RING_START         "ring_start"
-#define RING_STOP          "ring_stop"
+#define EMERGENCY_CALL_ACTIVE "emergency_call_active"
 
 #define POLICY_FACT_CALL   "com.nokia.policy.call"
+#define POLICY_FACT_EMERG  "com.nokia.policy.emergency_call"
 
 
 /*
@@ -124,6 +124,8 @@ typedef enum {
     EVENT_CALL_ACCEPTED,                       /* TP MembersChanged */
     EVENT_CALL_HELD,                           /* TP HoldStateChanged */
     EVENT_CALL_ACTIVATED,                      /* TP HoldStateChanged */
+    EVENT_EMERGENCY_ON,                        /* early emergency call active */
+    EVENT_EMERGENCY_OFF,                       /* early emergency call done */
     EVENT_MAX
 } event_id_t;
 
@@ -159,6 +161,14 @@ typedef struct {
 
 typedef struct {
     EVENT_COMMON;
+    DBusConnection *bus;
+    DBusMessage    *req;
+    int             active;
+} emerg_event_t;
+
+
+typedef struct {
+    EVENT_COMMON;
 } status_event_t;
 
 
@@ -168,6 +178,7 @@ typedef union {
     channel_event_t channel;                   /* new, closed*/
     call_event_t    call;                      /* request, ended */
     status_event_t  status;                    /* accepted, held, activated */
+    emerg_event_t   emerg;
 } event_t;
 
 
