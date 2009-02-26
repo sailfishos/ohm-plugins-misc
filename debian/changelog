@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.21) unstable; urgency=low
+
+  * Support for non-TP/early emergency calls.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 26 Feb 2009 11:38:01 +0200
+
 ohm-plugins-misc (0.6.20) unstable; urgency=low
 
   * Don't run call_connect hook for re-activated (off-hold) calls (Fixes: NB#102833).
