@@ -864,6 +864,7 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
     pbreq_t     *req;
     sm_evdata_t *evrply;
     sm_evfree_t  evfree;
+    char         curst[64];
     char         origst[64];
     char         state[64];
     char        *pid;
@@ -883,7 +884,8 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
 
         case pbreq_state:
             strncpylower(state, req->state.name, sizeof(state));
-            client_get_state(cl, client_reqstate, origst,sizeof(origst));
+            client_get_state(cl, client_reqstate, origst, sizeof(origst));
+            client_get_state(cl, client_state, curst, sizeof(curst));
 
             pid    = req->state.pid;
             stream = req->state.stream;
@@ -919,7 +921,14 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
             client_save_state(cl, client_reqstate, state);
             client_update_factstore_entry(cl, "reqstate", state);
 
-            if (dresif_state_request(cl, state, req->trid)) {
+            if (!strcmp(curst, state)) {
+                /* Client asked for the same state that it is already
+                 * in: just do nothing really. In case the client was
+                 * pre-empted previously, set the reqstate. */
+                client_save_state(cl, client_reqstate, state);
+                goto request_reply;
+            }
+            else if (dresif_state_request(cl, state, req->trid)) {
                 req->waiting = TRUE;
                 client_save_state(cl, client_setstate, state);
             }
@@ -928,18 +937,20 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
                 client_save_state(cl, client_reqstate, origst);
                 client_update_factstore_entry(cl, "reqstate", origst);
 
-                goto request_failure;
+                success = FALSE;
+                goto request_reply;
             }
                         
             break;
 
         default:
+            success = FALSE;
             OHM_ERROR("[%s] invalid playback request type %d",
                       sm->name,req->type);
 
             /* intentional fall trough */
 
-        request_failure:
+        request_reply:
             evrply = malloc(sizeof(*evrply));
             evfree = sm_free_evdata;
 
@@ -950,7 +961,7 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
             }
             else {
                 memset(evrply, 0, sizeof(*evrply));
-                evrply->pbreply.evid = evid_playback_failed;
+                evrply->pbreply.evid = success ? evid_playback_complete : evid_playback_failed;
                 evrply->pbreply.req  = req;
 
                 sm_schedule_event(sm, evrply, evfree);
@@ -978,6 +989,8 @@ static int reply_pbreq(sm_evdata_t *evdata, void *usrdata)
     default:
         OHM_ERROR("[%s] [%s] invalid request type %d",
                   __FUNCTION__, sm->name, req->type);
+        dbusif_reply_with_error(req->msg,
+                DBUS_MAEMO_ERROR_FAILED, "Invalid request type");
         break;
     }
 
