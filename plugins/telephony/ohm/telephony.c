@@ -1444,7 +1444,15 @@ remove_parent(gpointer key, gpointer value, gpointer data)
     if (call->parent == parent) {
         OHM_INFO("Clearing parent of conference member %s.", call->path);
         call->parent = NULL;
-        policy_call_update(call, UPDATE_PARENT);
+        /*
+         * Notes:
+         *   Splitting a conference involves disconnecting the conference
+         *   call and holding all calls except the one that remains active.
+         *   Hence we need to unconditionally set all members here to active
+         *   and will update their state as we receive the hold indications.
+         */
+        call->state = STATE_ACTIVE;
+        policy_call_update(call, UPDATE_PARENT | UPDATE_STATE);
     }
     
     return TRUE;
