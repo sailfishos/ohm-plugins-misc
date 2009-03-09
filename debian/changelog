@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.22) unstable; urgency=low
+
+  * Fix conference splitting leaving sometimes calls in conference state (hence breaking audio routing).
+  * Don't timeout in playback plugin if already in requested state.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 09 Mar 2009 10:31:27 +0200
+
 ohm-plugins-misc (0.6.21) unstable; urgency=low
 
   * Support for non-TP/early emergency calls.
