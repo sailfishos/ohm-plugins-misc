@@ -27,7 +27,6 @@
 #define ERROR(fmt, args...)   EMIT(g_error  , fmt, ## args)
 #define WARNING(fmt, args...) EMIT(g_warning, fmt, ## args)
 #define INFO(fmt, args...)    EMIT(g_message, fmt, ## args)
-#define DEBUG(fmt, args...)   EMIT(g_debug  , fmt, ## args)
 
 #define DBUS_ERROR(err) ((err).message ? (err).message : "unknown")
 
