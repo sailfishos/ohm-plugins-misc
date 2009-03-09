@@ -1562,6 +1562,7 @@ call_hold(call_t *call, const char *action, event_t *event)
     if (call == event->any.call && event->any.state == STATE_ON_HOLD) {
         call->state = (call->order == 0) ? STATE_ON_HOLD : STATE_AUTOHOLD;
         policy_call_update(call, UPDATE_STATE);
+        policy_run_hook("telephony_call_onhold_hook");
         return 0;
     }
     
@@ -1595,6 +1596,8 @@ call_activate(call_t *call, const char *action, event_t *event)
         policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
         if (event->type != EVENT_CALL_ACTIVATED)
             policy_run_hook("telephony_call_connect_hook");
+        else
+            policy_run_hook("telephony_call_active_hook");
         return 0;
     }
     
