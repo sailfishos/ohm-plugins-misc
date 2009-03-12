@@ -240,13 +240,13 @@ bus_exit(void)
     dbus_connection_unregister_object_path(bus, TELEPHONY_PATH);
     dbus_connection_remove_filter(bus, dispatch_signal, NULL);
     
-    bus_add_match("signal", TELEPHONY_INTERFACE, NULL, NULL);
-    bus_add_match("signal", TP_CHANNEL_GROUP, NULL, NULL);
-    bus_add_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL);
-    bus_add_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL);
-    bus_add_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL);
-    bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
-    bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
+    bus_del_match("signal", TELEPHONY_INTERFACE, NULL, NULL);
+    bus_del_match("signal", TP_CHANNEL_GROUP, NULL, NULL);
+    bus_del_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL);
+    bus_del_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL);
+    bus_del_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL);
+    bus_del_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
+    bus_del_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, STOPPED_DIALSTRING, NULL);
     
