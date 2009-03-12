@@ -20,8 +20,13 @@
 #define TP_RING           "/org/freedesktop/Telepathy/Connection/ring/tel/ring"
 
 #define TP_NOKIA          "com.nokia.Telepathy"
+#define TP_NNNOKIA        "com.Nokia.Telepathy" /* more Nokia than the other */
 #define TP_CONFERENCE     TP_NOKIA".Channel.Interface.Conference"
 #define TP_EMERGENCY      TP_NOKIA".Channel.Interface.Emergency"
+#define TP_DIALSTRINGS    TP_NNNOKIA".Channel.Interface.DialStrings"
+
+#define SENDING_DIALSTRING "SendingDialString"
+#define STOPPED_DIALSTRING "StoppedDialString"
 
 #define PROP_CHANNEL_TYPE     TP_CHANNEL".ChannelType"
 #define PROP_INITIAL_MEMBERS  TP_CONFERENCE".InitialMembers"
@@ -126,6 +131,8 @@ typedef enum {
     EVENT_CALL_ACTIVATED,                      /* TP HoldStateChanged */
     EVENT_EMERGENCY_ON,                        /* early emergency call active */
     EVENT_EMERGENCY_OFF,                       /* early emergency call done */
+    EVENT_SENDING_DIALSTRING,                  /* dialstring being sent */
+    EVENT_STOPPED_DIALSTRING,                  /* dialstring sent */
     EVENT_MAX
 } event_id_t;
 

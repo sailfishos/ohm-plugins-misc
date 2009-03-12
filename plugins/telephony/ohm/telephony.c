@@ -33,6 +33,7 @@ OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
  */
 
 static int bus_add_match(char *type, char *interface, char *member, char *path);
+static void bus_del_match(char *type, char *interface, char *member,char *path);
 
 #define DBUS_METHOD_HANDLER(name)                               \
     static DBusHandlerResult name(DBusConnection *c,            \
@@ -49,6 +50,8 @@ DBUS_SIGNAL_HANDLER(members_changed);
 DBUS_SIGNAL_HANDLER(hold_state_changed);
 DBUS_SIGNAL_HANDLER(call_state_changed);
 DBUS_SIGNAL_HANDLER(call_end);
+DBUS_SIGNAL_HANDLER(sending_dialstring);
+DBUS_SIGNAL_HANDLER(stopped_dialstring);
 
 DBUS_METHOD_HANDLER(dispatch_method);
 DBUS_METHOD_HANDLER(call_request);
@@ -174,6 +177,12 @@ bus_init(void)
     if (!bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL))
         exit(1);
 
+    if (!bus_add_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL))
+        exit(1);
+
+    if (!bus_add_match("signal", TP_DIALSTRINGS, STOPPED_DIALSTRING, NULL))
+        exit(1);
+    
     if (!dbus_connection_add_filter(bus, dispatch_signal, NULL, NULL)) {
         OHM_ERROR("Failed to add DBUS filter for signal dispatching.");
         exit(1);
@@ -237,6 +246,9 @@ bus_exit(void)
     bus_add_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL);
     bus_add_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL);
     bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
+    bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
+    bus_del_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL);
+    bus_del_match("signal", TP_DIALSTRINGS, STOPPED_DIALSTRING, NULL);
     
     dbus_connection_unref(bus);
     bus = NULL;
@@ -392,7 +404,13 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
 
     if (MATCHES(TELEPHONY_INTERFACE, CALL_ENDED))
         return call_end(c, msg, data);
-    
+
+    if (MATCHES(TP_DIALSTRINGS, SENDING_DIALSTRING))
+        return sending_dialstring(c, msg, data);
+
+    if (MATCHES(TP_DIALSTRINGS, STOPPED_DIALSTRING))
+        return stopped_dialstring(c, msg, data);
+        
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
 #undef MATCHES
@@ -882,6 +900,41 @@ call_end(DBusConnection *c, DBusMessage *msg, void *data)
 }
 
 
+static DBusHandlerResult
+sending_dialstring(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    call_event_t event;
+
+    (void)c;
+    (void)data;
+
+    event.path = dbus_message_get_path(msg);
+    event.call = call_lookup(event.path);
+    event.type = EVENT_SENDING_DIALSTRING;
+    event_handler((event_t *)&event);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+static DBusHandlerResult
+stopped_dialstring(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    call_event_t event;
+
+    (void)c;
+    (void)data;
+
+    event.path = dbus_message_get_path(msg);
+    event.call = call_lookup(event.path);
+    event.type = EVENT_STOPPED_DIALSTRING;
+    event_handler((event_t *)&event);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+
 /********************
  * dispatch_method
  ********************/
@@ -1022,18 +1075,20 @@ event_name(int type)
 {
 #define DESCR(e, d) [EVENT_##e] = d
     const char *description[] = {
-        DESCR(UNKNOWN          , "<UNKNOWN>"),
-        DESCR(NEW_CHANNEL      , "<NEW CHANNEL>"),
-        DESCR(CHANNEL_CLOSED   , "<CHANNEL CLOSED>"),
-        DESCR(CALL_REQUEST     , "<CALL REQUEST>"),
-        DESCR(CALL_ENDED       , "<CALL ENDED>"),
-        DESCR(CALL_LOCAL_HUNGUP, "<CALL HUNGUP LOCALLY>"),
-        DESCR(CALL_PEER_HUNGUP , "<CALL ENDED REMOTELY>"),
-        DESCR(CALL_ACCEPTED    , "<CALL ACCEPTED>"),
-        DESCR(CALL_HELD        , "<CALL HELD>"),
-        DESCR(CALL_ACTIVATED   , "<CALL ACTIVATED>"),
-        DESCR(EMERGENCY_ON     , "<EARLY EMERGENCY CALL START>"),
-        DESCR(EMERGENCY_OFF    , "<EARLY EMERGENCY CALL END>"),
+        DESCR(UNKNOWN           , "<UNKNOWN>"),
+        DESCR(NEW_CHANNEL       , "<NEW CHANNEL>"),
+        DESCR(CHANNEL_CLOSED    , "<CHANNEL CLOSED>"),
+        DESCR(CALL_REQUEST      , "<CALL REQUEST>"),
+        DESCR(CALL_ENDED        , "<CALL ENDED>"),
+        DESCR(CALL_LOCAL_HUNGUP , "<CALL HUNGUP LOCALLY>"),
+        DESCR(CALL_PEER_HUNGUP  , "<CALL ENDED REMOTELY>"),
+        DESCR(CALL_ACCEPTED     , "<CALL ACCEPTED>"),
+        DESCR(CALL_HELD         , "<CALL HELD>"),
+        DESCR(CALL_ACTIVATED    , "<CALL ACTIVATED>"),
+        DESCR(EMERGENCY_ON      , "<EARLY EMERGENCY CALL START>"),
+        DESCR(EMERGENCY_OFF     , "<EARLY EMERGENCY CALL END>"),
+        DESCR(SENDING_DIALSTRING, "<DIALSTRING SENDING STARTED>"),
+        DESCR(STOPPED_DIALSTRING, "<DIALSTRING SENDING STOPPED>"),
     };
 
 
@@ -1176,6 +1231,15 @@ event_handler(event_t *event)
     case EVENT_CALL_HELD:         event->any.state = STATE_ON_HOLD;      break;
     case EVENT_CHANNEL_CLOSED:    event->any.state = STATE_DISCONNECTED; break;
     case EVENT_CALL_ENDED:        event->any.state = STATE_DISCONNECTED; break;
+
+    case EVENT_SENDING_DIALSTRING:
+        policy_run_hook("telephony_sending_dialstring");
+        return;
+
+    case EVENT_STOPPED_DIALSTRING:
+        policy_run_hook("telephony_stopped_dialstring");
+        return;
+        
     default: OHM_ERROR("Unknown event 0x%x.", event->type);              return;
     }
     
