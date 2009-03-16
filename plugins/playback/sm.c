@@ -866,7 +866,6 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
     sm_evfree_t  evfree;
     char         origst[64];
     char         state[64];
-    char         curst[64];
     char        *pid;
     char        *old_pid;
     char        *stream;
@@ -920,25 +919,7 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
             client_save_state(cl, client_reqstate, state);
             client_update_factstore_entry(cl, "reqstate", state);
 
-            client_get_state(cl, client_state, curst,sizeof(curst));
-            if (!strcmp(curst, state)) {
-                sm_evdata_t immediate_reply;
-                
-                /*
-                 * If the client requests its current state, there is really
-                 * nothing else to do than answer immediately back with a
-                 * positive reply. (No need to wait for routing changes etc.
-                 * to take effect since we are already in the requested state).
-                 */
-
-                memset(&immediate_reply, 0, sizeof(immediate_reply));
-                
-                immediate_reply.pbreply.evid = evid_playback_complete;
-                immediate_reply.pbreply.req  = req;
-                
-                reply_pbreq(&immediate_reply, cl);
-            }
-            else if (dresif_state_request(cl, state, req->trid)) {
+            if (dresif_state_request(cl, state, req->trid)) {
                 req->waiting = TRUE;
                 client_save_state(cl, client_setstate, state);
             }
@@ -946,6 +927,7 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
                 /* dres failure: undo the data changes */
                 client_save_state(cl, client_reqstate, origst);
                 client_update_factstore_entry(cl, "reqstate", origst);
+
 
                 goto request_failure;
             }
