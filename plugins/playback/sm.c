@@ -1306,6 +1306,23 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
 
     char *mute;
     int   state;
+    char *hidden;
+
+
+    /* 
+     * Notes: We omit sending the signal if requested so. This hack is
+     *        currently used for muting during DTMF transmission without
+     *        letting the client (ie. the UI) know about it.
+     */
+
+    hidden = NULL;
+    fsif_get_field_by_entry(entry, fldtype_string, "hidden", &hidden);
+    if (hidden != NULL && !strcmp(hidden, "yes")) {
+        
+        OHM_DEBUG(DBG_QUE, "Hidden mute change, omitting notification.");
+        return;
+    }
+    
 
     if (fld->type == fldtype_string && fld->value.string)
         mute = fld->value.string;
@@ -1329,6 +1346,7 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     }
 
     dbusif_mute_changed(state);
+    
 }
 
 static client_t *find_client_by_fact(fsif_entry_t *entry)
