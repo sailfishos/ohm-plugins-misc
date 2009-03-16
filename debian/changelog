@@ -1,8 +1,14 @@
-ohm-plugins-misc (0.6.26) unstable; urgency=low
+ohm-plugins-misc (0.6.27) unstable; urgency=low
 
   * Don't reply immediately to playback requests of the current state.
 
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 16 Mar 2009 22:43:48 +0200
+
+ohm-plugins-misc (0.6.26) unstable; urgency=low
+
+  * Support for blocking mute state change notifications.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 16 Mar 2009 16:04:33 +0200
 
 ohm-plugins-misc (0.6.25) unstable; urgency=low
 
