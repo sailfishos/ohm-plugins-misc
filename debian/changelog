@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.25) unstable; urgency=low
+
+  * Fix broken denied playback request handling.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 16 Mar 2009 12:33:34 +0200
+
 ohm-plugins-misc (0.6.24) unstable; urgency=low
 
   * Added hooks for DTMF tone transmit start/stop.
