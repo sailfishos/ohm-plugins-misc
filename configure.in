@@ -181,6 +181,7 @@ AC_CONFIG_FILES([Makefile
                  plugins/telephony/mission-control/Makefile
                  plugins/videoep/Makefile
                  plugins/dvfs/Makefile
+		 ohm-session-agent/Makefile
  		 doc/Makefile])
 AC_OUTPUT
 

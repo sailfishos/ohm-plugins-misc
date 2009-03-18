@@ -1,3 +1,6 @@
 usr/lib/mission-control/*
 usr/lib/ohm/*
 etc/ohm/plugins.d/*
+usr/bin/ohm-session-agent
+etc/X11/Xsession.post/10kick-ohm-agent
+usr/share/dbus-1/services/org.freedesktop.ohm-session-agent.service

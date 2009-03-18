@@ -4,7 +4,7 @@ else !PD_SUPPORT
 DOCSUBDIR =
 endif !PD_SUPPORT
 
-SUBDIRS = plugins $(DOCSUBDIR)
+SUBDIRS = plugins ohm-session-agent $(DOCSUBDIR)
 
 MAINTAINTERCLEANFILES = Makefile.in
 

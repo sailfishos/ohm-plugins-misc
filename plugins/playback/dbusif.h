@@ -19,6 +19,8 @@
 #define DBUS_POLICY_DECISION_INTERFACE   "com.nokia.policy"
 
 /* D-Bus signal & method names */
+#define DBUS_POLICY_NEW_SESSION          "NewSession"
+
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL   "NameOwnerChanged"
 #define DBUS_HELLO_SIGNAL                "Hello"
 #define DBUS_NOTIFY_SIGNAL               "Notify"
@@ -46,6 +48,8 @@ typedef void  (*notify_property_cb_t)(char *, char *, char *, char *);
 typedef void  (*hello_cb_t)(char *, char *);
 
 static void dbusif_init(OhmPlugin *);
+static DBusHandlerResult dbusif_new_session(DBusConnection *,
+                                            DBusMessage *, void *);
 static int  dbusif_watch_client(const char *, int);
 static void dbusif_reply_to_req_state(DBusMessage *, const char *);
 static void dbusif_reply(DBusMessage *);
