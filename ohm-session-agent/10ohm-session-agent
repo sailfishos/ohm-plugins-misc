@@ -1,0 +1,3 @@
+#!/bin/sh
+
+/usr/sbin/dsmetool -t /usr/bin/ohm-session-agent
