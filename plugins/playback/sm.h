@@ -10,8 +10,8 @@ typedef enum {
     evid_setup_complete,        /* all requested properties has been received*/
     evid_setup_state_denied,    /* player's initial state is unacceptable */
     evid_playback_request,      /* D-Bus incoming set state method call */
-    evid_playback_complete,     /* audio policies are successfully set */
-    evid_playback_failed,       /* audio policy setting failed */
+    evid_playback_complete,     /* policies are successfully set */
+    evid_playback_failed,       /* policy setting failed */
     evid_setstate_changed,      /* internal request to change player's state */
     evid_playhint_changed,      /* internal request to change allowed states */
     evid_setprop_succeeded,     /* outgoing set property method succeeded */
