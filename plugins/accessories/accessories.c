@@ -37,6 +37,7 @@ static gboolean bluetooth_deinit(OhmPlugin *);
 
 static gboolean get_default_adapter(void);
 static int dres_accessory_request(const char *, int, int);
+static int dres_all(void);
 
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
 
@@ -313,6 +314,8 @@ gboolean complete_headset_cb (OhmFact *hal_fact, gchar *capability, gboolean add
                 dres_accessory_request("tvout", -1, 1);
             }
 
+            dres_all();
+
         }
         else {
             OHM_DEBUG(DBG_HEADSET, "Nothing changed");
@@ -406,6 +409,8 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
       
         } while (dbus_message_iter_next(&devit));
 
+        dres_all();
+
     done:
         return DBUS_HANDLER_RESULT_HANDLED;
     }
@@ -455,6 +460,45 @@ static int dres_accessory_request(const char *name, int driver, int connected)
 }
 
 
+static int dres_all(void)
+{
+#define DRES_VARTYPE(t)  (char *)(t)
+#define DRES_VARVALUE(s) (char *)(s)
+
+    static char *goal = "all";
+
+    char *vars[48];
+    int   i;
+    int   status;
+    char *callback = (char *)"";
+    char *txid = "0";
+
+    vars[i=0] = "completion_callback";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(callback);
+
+    vars[++i] = "transaction_id";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(txid);
+
+    vars[++i] = NULL;
+
+    status = resolve(goal, vars);
+
+    if (status < 0)
+        OHM_ERROR("%s: %s() resolving '%s' failed: (%d) %s",
+                  __FILE__, __FUNCTION__, goal, status, strerror(-status));
+    else if (!status)
+        OHM_ERROR("%s: %s() resolving '%s' failed",
+                  __FILE__, __FUNCTION__, goal);
+
+    return status <= 0 ? FALSE : TRUE;
+
+#undef DRES_VARVALUE
+#undef DRES_VARTYPE
+}
+
+
 /* bluetooth part begins */    
 
 static OhmFact * bt_get_connected(const gchar *path)
@@ -483,6 +527,7 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
      * device actually is a HSP or A2DP device. */
 
     gchar *path = NULL;
+    int resolve_all = FALSE;
 
     (void) data;
     (void) c;
@@ -513,6 +558,7 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
                         g_value_get_int(gval_a2dp) == 1) {
                     OHM_DEBUG(DBG_BT, "BT A2DP profile to be disconnected");
                     dres_accessory_request(BT_TYPE_A2DP, -1, 0);
+                    resolve_all = TRUE;
                 }
                 
                 if (gval_hsp &&
@@ -520,7 +566,12 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
                         g_value_get_int(gval_hsp) == 1) {
                     OHM_DEBUG(DBG_BT, "BT HSP profile to be disconnected");
                     dres_accessory_request(BT_TYPE_HSP, -1, 0);
+                    resolve_all = TRUE;
                 }
+
+
+                if (resolve_all)
+                    dres_all();
 
                 ohm_fact_store_remove(fs, bt_connected);
                 g_object_unref(bt_connected);
@@ -610,6 +661,7 @@ static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboo
     OHM_DEBUG(DBG_BT, "Setting %s to be %s", type, connected ? "connected" : "disconnected");
 
     dres_accessory_request(type, -1, connected ? 1 : 0);
+    dres_all();
 
     return TRUE;
 
@@ -689,6 +741,7 @@ static gboolean bluetooth_init(OhmPlugin *plugin)
 static gboolean bluetooth_deinit(OhmPlugin *plugin)
 {
     GSList *e, *f, *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
+    int resolve_all = FALSE;
 
     (void) plugin;
 
@@ -711,13 +764,18 @@ static gboolean bluetooth_deinit(OhmPlugin *plugin)
                         G_VALUE_TYPE(gval_a2dp) == G_TYPE_INT &&
                         g_value_get_int(gval_a2dp) == 1)) {
                 dres_accessory_request(BT_TYPE_A2DP, -1, 0);
+                resolve_all = TRUE;
             }
 
             if ((gval_hsp && 
                         G_VALUE_TYPE(gval_hsp) == G_TYPE_INT &&
                         g_value_get_int(gval_hsp) == 1)) {
                 dres_accessory_request(BT_TYPE_HSP, -1, 0);
+                resolve_all = TRUE;
             }
+
+            if (resolve_all)
+                dres_all();
 
             ohm_fact_store_remove(fs, bt_connected);
             g_object_unref(bt_connected);

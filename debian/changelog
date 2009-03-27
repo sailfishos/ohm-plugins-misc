@@ -1,6 +1,8 @@
 ohm-plugins-misc (0.6.29) unstable; urgency=low
 
   * Answering duplicate playback requests.
+  * Decrese the number of policy decisions by issuing ane resolve 'all'
+    after resolving multiple accessory_requests
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Thu, 26 Mar 2009 17:00:00 +0200
 
