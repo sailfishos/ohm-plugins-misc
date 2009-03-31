@@ -8,7 +8,7 @@ nodist_check_signaling_SOURCES = ../signaling_marshal.c
 
 check_signaling_SOURCES = ../signaling-internal.c check_signaling.c 
 check_signaling_CFLAGS = @OHM_PLUGIN_CFLAGS@
-check_signaling_LDADD = -lcheck -lglib-2.0 -lgobject-2.0 -ldbus-1 -ldbus-glib-1 -lohmfact -ltrace # -lhal -lohm @OHM_PLUGIN_LIBS@
+check_signaling_LDADD = -lcheck -lglib-2.0 -lgobject-2.0 -ldbus-1 -ldbus-glib-1 -lohmfact -lsimple-trace # -lhal -lohm @OHM_PLUGIN_LIBS@
 
 # internal EP for testing
 
