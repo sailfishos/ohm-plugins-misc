@@ -81,6 +81,7 @@ sensor_init(sensor_t *sensor)
 {
     int         i, n;
     const char *state;
+    GSList     *factlist;
 
     /* count state map entries */
     for (i = 0, n = 0; sensor->states[i] != NULL; i++, n++)
@@ -88,7 +89,17 @@ sensor_init(sensor_t *sensor)
     sensor->nstate = n;
 
     /* create and initialize fact */
-    sensor->fact = ohm_fact_new(sensor->fact_name);
+    factlist = ohm_fact_store_get_facts_by_name(store, sensor->fact_name);
+    if (factlist != NULL) {
+        if (g_slist_length(factlist) > 1) {
+            OHM_ERROR("sensor: multiple facts for sensor %s", sensor->id);
+            exit(1);
+        }
+        sensor->fact = (OhmFact *)factlist->data;
+    }
+    else
+        sensor->fact = ohm_fact_new(sensor->fact_name);
+    
     if (sensor->fact == NULL)
         return FALSE;
         
