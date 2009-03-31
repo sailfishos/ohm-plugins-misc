@@ -97,8 +97,10 @@ sensor_init(sensor_t *sensor)
         }
         sensor->fact = (OhmFact *)factlist->data;
     }
-    else
+    else {
         sensor->fact = ohm_fact_new(sensor->fact_name);
+        ohm_fact_store_insert(store, sensor->fact);
+    }
     
     if (sensor->fact == NULL)
         return FALSE;
@@ -109,7 +111,7 @@ sensor_init(sensor_t *sensor)
     state = sensor->states[sensor->state];
     ohm_fact_set(sensor->fact, "state", ohm_value_from_string(state));
     
-    return ohm_fact_store_insert(store, sensor->fact);
+    return TRUE;
 }
 
 
