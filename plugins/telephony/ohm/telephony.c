@@ -1812,7 +1812,7 @@ call_action(call_t *call, const char *action, event_t *event)
 void
 policy_init()
 {
-    if ((store = ohm_fact_store_get_fact_store()) == NULL) {
+    if ((store = ohm_get_fact_store()) == NULL) {
         OHM_ERROR("Failed to initialize fact store.");
         exit(1);
     }
@@ -1831,10 +1831,7 @@ policy_init()
 void
 policy_exit(void)
 {
-    if (store) {
-        g_object_unref(store);
-        store = NULL;
-    }
+    store = NULL;
 }
 
 

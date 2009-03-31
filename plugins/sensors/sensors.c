@@ -199,7 +199,7 @@ plugin_init(OhmPlugin *plugin)
 {
     sensor_t *sensor;
     
-    if ((store = ohm_fact_store_get_fact_store()) == NULL) {
+    if ((store = ohm_get_fact_store()) == NULL) {
         OHM_ERROR("sensors: Failed to initialize factstore.");
         exit(1);
     }
@@ -229,6 +229,8 @@ plugin_exit(OhmPlugin *plugin)
 
     for (sensor = sensor_table; sensor->id != NULL; sensor++)
         sensor_exit(sensor);
+
+    store = NULL;
 }
 
 
