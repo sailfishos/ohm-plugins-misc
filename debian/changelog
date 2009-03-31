@@ -1,8 +1,8 @@
-ohm-plugins-misc (0.6.29ubuntu1) unstable; urgency=low
+ohm-plugins-misc (0.6.30) unstable; urgency=low
 
   * Fixed a HAL bug.
 
- -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 31 Mar 2009 16:48:43 +0300
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 31 Mar 2009 16:54:29 +0300
 
 ohm-plugins-misc (0.6.29) unstable; urgency=low
 
