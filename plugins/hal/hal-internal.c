@@ -131,7 +131,6 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
                     char **strlist = libhal_psi_get_strlist(&iter);
                     gchar *escaped_string = g_strjoinv(STRING_DELIMITER, strlist);
                     val = ohm_value_from_string(escaped_string);
-                    g_free(escaped_string);
                     break;
 #undef STRING_DELIMITER
                 }

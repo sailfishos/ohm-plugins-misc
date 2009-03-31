@@ -6,7 +6,8 @@ SUBDIRS = 	     \
 	videoep      \
 	console      \
 	gconf        \
-	dvfs
+	dvfs         \
+	sensors
 
 if HAVE_LIBPROFILE
 SUBDIRS += profile
