@@ -1,6 +1,9 @@
 ohm-plugins-misc (0.6.30) unstable; urgency=low
 
   * Fixed a HAL bug.
+  * Fixed a few factstore unreffing bugs on exit/cleanup code paths.
+  * Added a sensors plugin with proximity support.
+  * Typoed the changelog.
 
  -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 31 Mar 2009 16:54:29 +0300
 
