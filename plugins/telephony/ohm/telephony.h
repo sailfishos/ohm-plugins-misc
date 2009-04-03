@@ -46,6 +46,7 @@
 #define CALL_STATE_CHANGED "CallStateChanged"
 #define CLOSE              "Close"
 #define REQUEST_HOLD       "RequestHold"
+#define ADD_MEMBERS        "AddMembers"
 
 #define POLICY_INTERFACE    "com.nokia.policy"
 #define POLICY_PATH         "/com/nokia/policy"
@@ -54,6 +55,8 @@
 #define CALL_REQUEST       "call_request"
 #define CALL_ENDED         "call_ended"
 #define EMERGENCY_CALL_ACTIVE "emergency_call_active"
+#define ACCEPT_REQUEST      "AcceptRequest"
+#define HOLD_REQUEST        "HoldRequest"
 
 #define POLICY_FACT_CALL   "com.nokia.policy.call"
 #define POLICY_FACT_EMERG  "com.nokia.policy.emergency_call"
@@ -105,6 +108,7 @@ struct call_s {
     char         *path;                        /* channel object path */
     char         *peer;                        /* URI of peer if known */
     unsigned int  peer_handle;                 /* handle of our peer */
+    unsigned int  local_handle;                /* our handle */
     call_dir_t    dir;                         /* incoming/outgoing */
     int           emergency;                   /* emergency call */
     call_state_t  state;                       /* current state */
@@ -129,6 +133,8 @@ typedef enum {
     EVENT_CALL_ACCEPTED,                       /* TP MembersChanged */
     EVENT_CALL_HELD,                           /* TP HoldStateChanged */
     EVENT_CALL_ACTIVATED,                      /* TP HoldStateChanged */
+    EVENT_CALL_ACCEPT_REQUEST,                 /* accept request from UI */
+    EVENT_CALL_HOLD_REQUEST,                   /* hold request from UI */
     EVENT_EMERGENCY_ON,                        /* early emergency call active */
     EVENT_EMERGENCY_OFF,                       /* early emergency call done */
     EVENT_SENDING_DIALSTRING,                  /* dialstring being sent */

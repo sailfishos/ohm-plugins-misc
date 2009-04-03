@@ -55,6 +55,8 @@ DBUS_SIGNAL_HANDLER(stopped_dialstring);
 
 DBUS_METHOD_HANDLER(dispatch_method);
 DBUS_METHOD_HANDLER(call_request);
+DBUS_METHOD_HANDLER(accept_call_request);
+DBUS_METHOD_HANDLER(hold_call_request);
 
 static DBusConnection *bus;
 static OhmFact        *emergency;
@@ -676,9 +678,8 @@ channel_closed(DBusConnection *c, DBusMessage *msg, void *data)
 static DBusHandlerResult
 members_changed(DBusConnection *c, DBusMessage *msg, void *data)
 {
-#define GET_ARRAY_SIZE(arg, ptr) do {                                   \
+#define GET_ARRAY_SIZE(arg, ptr, itemptr) do {                          \
         DBusMessageIter  _iarr;                                         \
-        dbus_int32_t    *_items;                                        \
                                                                         \
         if (dbus_message_iter_get_arg_type(&imsg) != DBUS_TYPE_ARRAY) { \
             OHM_ERROR("Failed to parse %s array of DBUS signal %s.",    \
@@ -687,14 +688,15 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
         }                                                               \
                                                                         \
         dbus_message_iter_recurse(&imsg, &_iarr);                       \
-        dbus_message_iter_get_fixed_array(&_iarr, &_items, (ptr));      \
+        dbus_message_iter_get_fixed_array(&_iarr, itemptr, (ptr));      \
         dbus_message_iter_next(&imsg);                                  \
     } while (0)
     
-    DBusMessageIter imsg;
-    int             nadded, nremoved, nlocalpend, nremotepend;
-    unsigned int    actor;
-    status_event_t  event;
+    DBusMessageIter  imsg;
+    dbus_int32_t    *added, *removed, *localpend, *remotepend;
+    int              nadded, nremoved, nlocalpend, nremotepend;
+    unsigned int     actor;
+    status_event_t   event;
 
     (void)c;
     (void)data;
@@ -721,10 +723,10 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
      * get sizes of added, removed, pending arrays, and actor
      */
     
-    GET_ARRAY_SIZE("added"         , &nadded);
-    GET_ARRAY_SIZE("removed"       , &nremoved);
-    GET_ARRAY_SIZE("local pending" , &nlocalpend);
-    GET_ARRAY_SIZE("remote pending", &nremotepend);
+    GET_ARRAY_SIZE("added"         , &nadded     , &added);
+    GET_ARRAY_SIZE("removed"       , &nremoved   , &removed);
+    GET_ARRAY_SIZE("local pending" , &nlocalpend , &localpend);
+    GET_ARRAY_SIZE("remote pending", &nremotepend, &remotepend);
     
     if (dbus_message_iter_get_arg_type(&imsg) == DBUS_TYPE_UINT32)
         dbus_message_iter_get_basic(&imsg, &actor);
@@ -744,6 +746,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     }
     else if (nlocalpend != 0) {
         OHM_INFO("Call %s is coming in...", event.path);
+        call->local_handle = localpend[0];
     }
     else if (nremoved != 0 && nlocalpend == 0 && nremotepend == 0) {
         /*
@@ -952,7 +955,11 @@ dispatch_method(DBusConnection *c, DBusMessage *msg, void *data)
     
     if (MATCHES(TELEPHONY_INTERFACE, CALL_REQUEST))
         return call_request(c, msg, data);
-    
+    else if (MATCHES(TELEPHONY_INTERFACE, ACCEPT_REQUEST))
+        return accept_request(c, msg, data);
+    else if (MATCHES(TELEPHONY_INTERFACE, HOLD_REQUEST))
+        return hold_request(c, msg, data);
+
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
@@ -1065,6 +1072,109 @@ emergency_active(int active)
 {
     return set_string_field(emergency, "active", active ? "yes" : "no");
 }
+
+
+/********************
+ * accept_call_reply
+ ********************/
+static void
+accept_call_reply(DBusMessage *msg, char *error)
+{
+    DBusMessage *reply;
+
+    if (error == NULL)
+        reply = dbus_message_new_method_return(msg);
+    else
+        reply = dbus_message_new_error(msg, DBUS_ERROR_FAILED, error);
+
+    dbus_connection_send(bus, reply, NULL);
+    dbus_message_unref(reply);
+    dbus_message_unref(msg);
+}
+
+
+/********************
+ * accept_call_request
+ ********************/
+static DBusHandlerResult
+accept_call_request(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    call_event_t  event;
+    const char   *manager, *path;
+
+    (void)c;
+    (void)data;
+
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_STRING, &manager,
+                               DBUS_TYPE_OBJECT_PATH, &path,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse AcceptCall request.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    event.type = EVENT_CALL_ACCEPT_REQUEST;
+    event.call = call_lookup(event.path);
+    event.req  = dbus_message_ref(msg);
+    event_handler((event_t *)&event);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * hold_call_reply
+ ********************/
+static void
+hold_call_reply(DBusMessage *msg, char *error)
+{
+    DBusMessage *reply;
+
+    if (error == NULL)
+        reply = dbus_message_new_method_return(msg);
+    else
+        reply = dbus_message_new_error(msg, DBUS_ERROR_FAILED, error);
+
+    dbus_connection_send(bus, reply, NULL);
+    dbus_message_unref(reply);
+    dbus_message_unref(msg);
+}
+
+
+/********************
+ * hold_call_request
+ ********************/
+static DBusHandlerResult
+hold_call_request(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    call_event_t event;
+    int          hold;
+
+    (void)c;
+    (void)data;
+
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_STRING, &manager,
+                               DBUS_TYPE_OBJECT_PATH, &path,
+                               DBUS_TYPE_BOOLEAN, &hold,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse AcceptCall request.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    event.type = hold ? EVENT_CALL_HOLD_REQUEST : EVENT_CALL_UNHOLD_REQUEST;
+    event.call = call_lookup(event.path);
+    event.req  = dbus_message_ref(msg);
+
+    if (event.call == NULL)
+        hold_call_reply(c, msg, "unknown call");
+    else
+        event_handler((event_t *)&event);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
 
 
 /********************
@@ -1223,6 +1333,18 @@ event_handler(event_t *event)
     case EVENT_CALL_ACTIVATED:
         if (IS_CONF_MEMBER(call))
             return;
+        event->any.state = STATE_ACTIVE;
+        break;
+
+    case EVENT_CALL_ACCEPT_REQUEST:
+        event->any.state = STATE_ACTIVE;
+        break;
+
+    case EVENT_CALL_HOLD_REQUEST:
+        event->any.state = STATE_ON_HOLD;
+        break;
+
+    case EVENT_CALL_UNHOLD_REQUEST:
         event->any.state = STATE_ACTIVE;
         break;
 
@@ -1580,6 +1702,45 @@ call_disconnect(call_t *call, const char *action, event_t *event)
 
 
 /********************
+ * tp_accept
+ ********************/
+static int
+tp_accept(call_t *call)
+{
+    DBusMessage        *msg;
+    const char         *name, *path, *iface, *method, *message;
+    const dbus_uint32_t  handles[1];
+    const dbus_uint32_t *members;
+    
+    name   = call->name;
+    path   = call->path;
+    iface  = TP_CHANNEL_GROUP;
+    method = ADD_MEMBERS;
+    
+    if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
+        members = handles;
+        message = "";
+        if (dbus_message_append_args(msg,
+                                     DBUS_TYPE_ARRAY,
+                                     DBUS_TYPE_UNT32, &members, 1
+                                     DBUS_TYPE_STRING, &message,
+                                     DBUS_TYPE_INVALID))
+            status = bus_send(msg, NULL);
+        else {
+            OHM_ERROR("Failed to create D-BUS AddMembers message.");
+            status = EINVAL;
+        }
+
+        dbus_message_unref(msg);
+    }
+    else
+        status = ENOMEM;
+    
+    return status;
+}
+
+
+/********************
  * tp_hold
  ********************/
 static int
@@ -1618,29 +1779,42 @@ tp_hold(call_t *call, int status)
 static int
 call_hold(call_t *call, const char *action, event_t *event)
 {    
-    (void)action;
-
     OHM_INFO("%sHOLD %s.", !strcmp(action, "autohold") ? "AUTO" : "",
              short_path(call->path));
-    
-    if (call == event->any.call && event->any.state == STATE_ON_HOLD) {
-        call->state = (call->order == 0) ? STATE_ON_HOLD : STATE_AUTOHOLD;
+
+    if (call == event->any.call) {
+        if (event->type == EVENT_CALL_HOLD_REQUEST) {
+            if (tp_hold(call, TRUE) != 0) {
+                hold_call_reply(event->msg, "Failed to hold call");
+                return EINVAL;
+            }
+            else
+                hold_call_reply(event->msg, NULL);
+
+            call->state = STATE_ON_HOLD;
+        }
+        else /* event->type == EVENT_CALL_HELD */
+            call->state = (call->order == 0) ? STATE_ON_HOLD : STATE_AUTOHOLD;
+        
         policy_call_update(call, UPDATE_STATE);
         policy_run_hook("telephony_call_onhold_hook");
         return 0;
     }
+    else {   /* call being held or autoheld because of some other event */
+        if (!strcmp(action, "autohold"))
+            call->order = holdorder++;
+        
+        if (tp_hold(call, TRUE) != 0) {
+            OHM_ERROR("Failed to disconnect call %s.", call->path);
+            return EIO;
+        }
+        
+        call->state = STATE_AUTOHOLD;
+    }
     
-    if (!strcmp(action, "autohold")) {
-        call->order = holdorder++;
-        policy_call_update(call, UPDATE_ORDER);
-    }
+    policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
+    return 0;
 
-    if (tp_hold(call, TRUE) != 0) {
-        OHM_ERROR("Failed to disconnect call %s.", call->path);
-        return EIO;
-    }
-    else
-        return 0;
 }
 
 
@@ -1655,22 +1829,33 @@ call_activate(call_t *call, const char *action, event_t *event)
     OHM_INFO("ACTIVATE %s.", short_path(call->path));
     
     if (call == event->any.call && event->any.state == STATE_ACTIVE) {
+        
+        if (event->type == EVENT_CALL_ACCEPT_REQUEST) {
+            if (tp_accept(call) != 0) {
+                accept_call_reply(event->call.req, "failed to accept call");
+                return EINVAL;
+            }
+            else
+                accept_call_reply(event->call.req, NULL);
+        }
+            
         call->state = STATE_ACTIVE;
         call->order = 0;
         policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
+
         if (event->type != EVENT_CALL_ACTIVATED)
             policy_run_hook("telephony_call_connect_hook");
         else
             policy_run_hook("telephony_call_active_hook");
-        return 0;
     }
-    
-    if (tp_hold(call, FALSE) != 0) {
-        OHM_ERROR("Failed to disconnect call %s.", call->path);
-        return EIO;
+    else {
+        if (tp_hold(call, FALSE) != 0) {
+            OHM_ERROR("Failed to disconnect call %s.", call->path);
+            return EIO;
+        }
     }
-    else
-        return 0;
+
+    return 0;
 }
 
 
