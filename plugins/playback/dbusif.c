@@ -40,7 +40,6 @@ static prop_notif_t *find_property_notifier(char *);
 
 
 
-
 static char *filter_signal(char *buf, size_t size,
                            const char *sender, const char *interface,
                            const char *member, const char *path, ...)
@@ -89,15 +88,26 @@ static char *filter_signal(char *buf, size_t size,
 
 
 
-/*! \addtogroup pubif
- *  Functions
- *  @{
- */
-
-static void dbusif_init(OhmPlugin *plugin)
+static void system_bus_init(void)
 {
-    (void)plugin;
-    char  filter[1024];
+    DBusError err;
+
+    dbus_error_init(&err);
+
+    if ((sys_conn = dbus_bus_get(DBUS_BUS_SYSTEM , &err)) == NULL) {
+        if (dbus_error_is_set(&err))
+            OHM_ERROR("Can't get system D-Bus connection: %s", err.message);
+        else
+            OHM_ERROR("Can't get system D-Bus connection");
+
+        exit(0);
+    }
+}
+
+
+static int session_bus_init(const char *address)
+{
+    char filter[1024];
     
     static struct DBusObjectPathVTable pb_method = {
         .message_function = method
@@ -114,41 +124,49 @@ static void dbusif_init(OhmPlugin *plugin)
      * setup sess_conn
      */
 
-    if ((sys_conn  = dbus_bus_get(DBUS_BUS_SYSTEM , &err)) == NULL ||
-        (sess_conn = dbus_bus_get(DBUS_BUS_SESSION, &err)) == NULL    ) {
-        if (dbus_error_is_set(&err))
-            OHM_ERROR("Can't get D-Bus connection: %s", err.message);
-        else
-            OHM_ERROR("Can't get D-Bus connection");
-
-        exit(0);
+    if (address == NULL) {
+        if ((sess_conn = dbus_bus_get(DBUS_BUS_SESSION, &err)) == NULL) {
+            if (dbus_error_is_set(&err))
+                OHM_ERROR("Can't get D-Bus connection: %s", err.message);
+            else
+                OHM_ERROR("Can't get D-Bus connection");
+            
+            return FALSE;
+        }
     }
+    else {
+        if ((sess_conn = dbus_connection_open(address, &err)) == NULL ||
+            !dbus_bus_register(sess_conn, &err)) {
+            if (dbus_error_is_set(&err))
+                OHM_ERROR("Failed to connect to DBUS %s (%s).", address,
+                          err.message);
+            else
+                OHM_ERROR("Failed to connect to DBUS %s.", address);
+            
+            return FALSE;
+        }
 
+        /*
+         * Notes:
+         *
+         *   Not sure what to do about the principal possibility of losing
+         *   connection to the session bus. The easies might be to exit (or
+         *   let libdbus _exit(2) on behalf of us) and let upstart start us
+         *   up again. This would accomplish exactly that.
+         *
+         *     dbus_connection_set_exit_on_disconnect(sess_conn, TRUE);
+         */
+    }
+    
     dbus_connection_setup_with_g_main(sess_conn, NULL);
 
     /*
      * add signal filters
      */
 
-    
-
-#if 0 /* replaced by client-specific filters */
-    filter_signal(filter, sizeof(filter),
-                  DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
-                  DBUS_NAME_OWNER_CHANGED_SIGNAL, DBUS_ADMIN_PATH,
-                  NULL);
-
-    dbus_bus_add_match(sess_conn, filter, &err);
-    if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
-        dbus_error_free(&err);
-        exit(0);
-    }
-#endif
-
     if (!dbus_connection_add_filter(sess_conn, name_changed,NULL, NULL)) {
         OHM_ERROR("Can't add filter 'name_changed'");
-        exit(0);
+        exit(1);
     }
 
     filter_signal(filter, sizeof(filter),
@@ -159,11 +177,11 @@ static void dbusif_init(OhmPlugin *plugin)
     if (dbus_error_is_set(&err)) {
         OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
         dbus_error_free(&err);
-        exit(0);
+        exit(1);
     }
     if (!dbus_connection_add_filter(sess_conn, hello,NULL, NULL)) {
         OHM_ERROR("Can't add filter 'hello'");
-        exit(0);
+        exit(1);
     }
 
     filter_signal(filter, sizeof(filter),
@@ -174,11 +192,11 @@ static void dbusif_init(OhmPlugin *plugin)
     if (dbus_error_is_set(&err)) {
         OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
         dbus_error_free(&err);
-        exit(0);
+        exit(1);
     }
     if (!dbus_connection_add_filter(sess_conn, notify,NULL, NULL)) {
         OHM_ERROR("Can't add filter 'notify'");
-        exit(0);
+        exit(1);
     }
 
     /*
@@ -189,7 +207,7 @@ static void dbusif_init(OhmPlugin *plugin)
                                                    &pb_method, NULL);
     if (!success) {
         OHM_ERROR("Can't register object path %s", DBUS_PLAYBACK_MANAGER_PATH);
-        exit(0);
+        exit(1);
     }
 
     retval = dbus_bus_request_name(sess_conn, DBUS_PLAYBACK_MANAGER_INTERFACE,
@@ -205,16 +223,71 @@ static void dbusif_init(OhmPlugin *plugin)
                       DBUS_PLAYBACK_MANAGER_INTERFACE);
             
         }
-        exit(0);
+        exit(1);
     }
 
-    OHM_INFO("Got name '%s'", DBUS_PLAYBACK_MANAGER_INTERFACE);
+    
+    OHM_INFO("Got name '%s' on session D-BUS", DBUS_PLAYBACK_MANAGER_INTERFACE);
+    return TRUE;
+}
 
-    /*
-     *
-     */
 
-    initialize_notification_registry();
+/*! \addtogroup pubif
+ *  Functions
+ *  @{
+ */
+
+static void dbusif_init(OhmPlugin *plugin)
+{
+    (void)plugin;
+
+    
+    system_bus_init();
+    
+    if (!session_bus_init(NULL))
+        OHM_WARNING("Session bus initialization delayed.");
+}
+
+
+static DBusHandlerResult
+dbusif_new_session(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    char      *address;
+    DBusError  error;
+
+    (void)c;
+    (void)data;
+
+    if (sess_conn != NULL) {
+        OHM_ERROR("Received session bus notification but already has a bus.");
+        OHM_ERROR("Ignoring session bus notification.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    dbus_error_init(&error);
+    
+    if (!dbus_message_get_args(msg, &error,
+                               DBUS_TYPE_STRING, &address,
+                               DBUS_TYPE_INVALID)) {
+        if (dbus_error_is_set(&error)) {
+            OHM_ERROR("Failed to parse session bus notification: %s.",
+                      error.message);
+            dbus_error_free(&error);
+        }
+        else
+            OHM_ERROR("Failed to parse session bus notification.");
+        
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+                               
+    
+    OHM_INFO("Received session bus notification with address \"%s\".", address);
+    
+    if (!session_bus_init(address))
+        OHM_ERROR("Delayed session bus initialization failed.");
+    
+    /* we need to give others a chance to notice the session bus */
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 

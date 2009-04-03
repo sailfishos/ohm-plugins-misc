@@ -1,3 +1,5 @@
 usr/lib/mission-control/*
 usr/lib/ohm/*
 etc/ohm/plugins.d/*
+usr/bin/ohm-session-agent
+etc/X11/Xsession.post/10ohm-session-agent

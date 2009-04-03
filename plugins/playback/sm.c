@@ -423,7 +423,8 @@ static void sm_schedule_event(sm_t *sm, sm_evdata_t *evdata,sm_evfree_t evfree)
     sm_schedule_t *schedule;
 
     if (!sm || !evdata) {
-        OHM_ERROR("[%s] failed to schedule event: <null> argument", sm ? sm->name : "SM-NULL");
+        OHM_ERROR("[%s] failed to schedule event: <null> argument",
+                  sm ? sm->name : "SM-NULL");
         return;
     }
 
@@ -862,10 +863,12 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
     client_t    *cl = (client_t *)usrdata;
     sm_t        *sm = cl->sm;
     pbreq_t     *req;
+    sm_evid_t    evid;
     sm_evdata_t *evrply;
     sm_evfree_t  evfree;
     char         origst[64];
     char         state[64];
+    char        *oldstate;
     char        *pid;
     char        *old_pid;
     char        *stream;
@@ -916,9 +919,18 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
                                                stream ? stream : "<unknown>");
             }
 
+            oldstate = client_get_state(cl, client_setstate, NULL,0);
+
+            if (!strcmp(state, oldstate)) {
+                OHM_DEBUG(DBG_TRANS, "identical setstate and reqstate (%s)",
+                          state);
+                evid = evid_playback_complete;
+                goto schedule_reply_event;
+            }
+
             client_save_state(cl, client_reqstate, state);
             client_update_factstore_entry(cl, "reqstate", state);
-
+            
             if (dresif_state_request(cl, state, req->trid)) {
                 req->waiting = TRUE;
                 client_save_state(cl, client_setstate, state);
@@ -927,31 +939,32 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
                 /* dres failure: undo the data changes */
                 client_save_state(cl, client_reqstate, origst);
                 client_update_factstore_entry(cl, "reqstate", origst);
-
-
+    
                 goto request_failure;
             }
-                        
             break;
 
         default:
             OHM_ERROR("[%s] invalid playback request type %d",
                       sm->name,req->type);
-
             /* intentional fall trough */
 
         request_failure:
+            evid = evid_playback_failed;
+            /* intentional fall trough */
+
+        schedule_reply_event:
             evrply = malloc(sizeof(*evrply));
             evfree = sm_free_evdata;
 
             if (evrply == NULL) {
                 OHM_ERROR("[%s] failed to schedule '%s' event: malloc failed",
-                          sm->name, evdef[evid_playback_failed].name);
+                          sm->name, evdef[evid].name);
                 success = FALSE;
             }
             else {
                 memset(evrply, 0, sizeof(*evrply));
-                evrply->pbreply.evid = evid_playback_failed;
+                evrply->pbreply.evid = evid;
                 evrply->pbreply.req  = req;
 
                 sm_schedule_event(sm, evrply, evfree);

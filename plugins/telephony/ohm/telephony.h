@@ -61,6 +61,8 @@
 #define POLICY_FACT_CALL   "com.nokia.policy.call"
 #define POLICY_FACT_EMERG  "com.nokia.policy.emergency_call"
 
+#define DBUS_INTERFACE_POLICY   "com.nokia.policy"
+#define DBUS_POLICY_NEW_SESSION "NewSession"
 
 /*
  * call actions (policy decisions)

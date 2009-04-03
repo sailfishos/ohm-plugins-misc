@@ -36,7 +36,7 @@ init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
     DBG_SIGNALING = flag_signaling;
     DBG_FACTS     = flag_facts;
 
-    if ((store = ohm_fact_store_get_fact_store()) == NULL) {
+    if ((store = ohm_get_fact_store()) == NULL) {
         g_error("Failed to initialize factstore.");
         return FALSE;
     }
@@ -80,7 +80,7 @@ deinit_signaling()
     if (inq)
         g_queue_free(inq);
 
-    g_object_unref(store);
+    store = NULL;
 
     return TRUE;
 }

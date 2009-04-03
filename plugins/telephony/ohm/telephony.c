@@ -123,12 +123,11 @@ int set_string_field(OhmFact *fact, const char *field, const char *value);
 static OhmFactStore *store;
 
 
-
 /********************
  * bus_init
  ********************/
-void
-bus_init(void)
+int
+bus_init(const char *address)
 {
     static struct DBusObjectPathVTable vtable = {
         .message_function = dispatch_method
@@ -145,13 +144,38 @@ bus_init(void)
 
     dbus_error_init(&err);
 
-    if ((bus = dbus_bus_get(DBUS_BUS_SESSION, &err)) == NULL) {
-        if (dbus_error_is_set(&err))
-            OHM_ERROR("Failed to get DBUS connection (%s).", err.message);
-        else
-            OHM_ERROR("Failed to get DBUS connection.");
-        
-        exit(1);
+    if (address == NULL) {
+        if ((bus = dbus_bus_get(DBUS_BUS_SESSION, &err)) == NULL) {
+            if (dbus_error_is_set(&err))
+                OHM_ERROR("Failed to get DBUS connection (%s).", err.message);
+            else
+                OHM_ERROR("Failed to get DBUS connection.");
+            
+            return FALSE;
+        }
+    }
+    else {
+        if ((bus = dbus_connection_open(address, &err)) == NULL ||
+            !dbus_bus_register(bus, &err)) {
+            if (dbus_error_is_set(&err))
+                OHM_ERROR("Failed to connect to DBUS %s (%s).", address,
+                          err.message);
+            else
+                OHM_ERROR("Failed to connect to DBUS %s.", address);
+            
+            return FALSE;
+        }
+
+        /*
+         * Notes:
+         *
+         *   Not sure what to do about the principal possibility of losing
+         *   connection to the session bus. The easies might be to exit (or
+         *   let libdbus _exit(2) on behalf of us) and let upstart start us
+         *   up again. This would accomplish exactly that.
+         *
+         *     dbus_connection_set_exit_on_disconnect(sess_conn, TRUE);
+         */
     }
     
     dbus_connection_setup_with_g_main(bus, NULL);
@@ -218,6 +242,8 @@ bus_init(void)
         
         exit(1);
     }
+
+    return TRUE;
 }
 
 
@@ -254,6 +280,54 @@ bus_exit(void)
     
     dbus_connection_unref(bus);
     bus = NULL;
+}
+
+
+/********************
+ * bus_new_session
+ ********************/
+static DBusHandlerResult
+bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    char      *address;
+    DBusError  error;
+
+    (void)c;
+    (void)data;
+
+
+    if (bus != NULL) {
+        OHM_ERROR("Received session bus notification but already has a bus.");
+        OHM_ERROR("Ignoring session bus notification.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    dbus_error_init(&error);
+    
+    if (!dbus_message_get_args(msg, &error,
+                               DBUS_TYPE_STRING, &address,
+                               DBUS_TYPE_INVALID)) {
+        if (dbus_error_is_set(&error)) {
+            OHM_ERROR("Failed to parse session bus notification: %s.",
+                      error.message);
+            dbus_error_free(&error);
+        }
+        else
+            OHM_ERROR("Failed to parse session bus notification.");
+        
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    
+    
+    OHM_INFO("Received session bus notification with address \"%s\".", address);
+    
+    if (!bus_init(address))
+        OHM_ERROR("Delayed session bus initialization failed.");
+    else
+        OHM_INFO("Connected to session DBUS.");
+    
+    /* we need to give others a chance to notice the session bus */
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 
@@ -1923,7 +1997,7 @@ call_action(call_t *call, const char *action, event_t *event)
 void
 policy_init()
 {
-    if ((store = ohm_fact_store_get_fact_store()) == NULL) {
+    if ((store = ohm_get_fact_store()) == NULL) {
         OHM_ERROR("Failed to initialize fact store.");
         exit(1);
     }
@@ -1942,10 +2016,7 @@ policy_init()
 void
 policy_exit(void)
 {
-    if (store) {
-        g_object_unref(store);
-        store = NULL;
-    }
+    store = NULL;
 }
 
 
@@ -2306,7 +2377,10 @@ plugin_init(OhmPlugin *plugin)
 
     (void)plugin;
 
-    bus_init();
+    if (!bus_init(NULL)) {
+        OHM_WARNING("Failed to connect to session DBUS.");
+        OHM_WARNING("Delaying session DBUS initialization...");
+    }
     call_init();
     policy_init();
 
@@ -2340,6 +2414,11 @@ OHM_PLUGIN_REQUIRES_METHODS(telephony, 1,
 OHM_PLUGIN_DBUS_METHODS(
     { POLICY_INTERFACE, POLICY_PATH, EMERGENCY_CALL_ACTIVE,
             emergency_call_request, NULL });
+
+OHM_PLUGIN_DBUS_SIGNALS(
+    { NULL, DBUS_INTERFACE_POLICY, DBUS_POLICY_NEW_SESSION, NULL,
+            bus_new_session, NULL }
+);
 
 
 /*

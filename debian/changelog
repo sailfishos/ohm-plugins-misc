@@ -1,3 +1,26 @@
+ohm-plugins-misc (0.6.30) unstable; urgency=low
+
+  * Fixed a HAL bug.
+  * Fixed a few factstore unreffing bugs on exit/cleanup code paths.
+  * Added a sensors plugin with proximity support.
+  * Typoed the changelog.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 31 Mar 2009 16:54:29 +0300
+
+ohm-plugins-misc (0.6.29) unstable; urgency=low
+
+  * Answering duplicate playback requests.
+  * Decrese the number of policy decisions by issuing ane resolve 'all'
+    after resolving multiple accessory_requests
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Thu, 26 Mar 2009 17:00:00 +0200
+
+ohm-plugins-misc (0.6.28) unstable; urgency=low
+
+  * Support for delayed session bus initialization.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 19 Mar 2009 10:23:39 +0200
+
 ohm-plugins-misc (0.6.27) unstable; urgency=low
 
   * Don't reply immediately to playback requests of the current state.

@@ -89,6 +89,8 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
     int i, len;
     GValue *val = NULL;
 
+    OHM_DEBUG(DBG_HAL, "> create_fact -- udi: '%s', capability: '%s'\n", udi, capability);
+
     fact = ohm_fact_new(capability);
 
     if (!fact)
@@ -107,7 +109,9 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
     for (i = 0; i < len; i++, libhal_psi_next(&iter)) {
         char *key = libhal_psi_get_key(&iter);
         LibHalPropertyType type = libhal_psi_get_type(&iter);
+        val = NULL;
 
+        OHM_DEBUG(DBG_HAL, "key: '%s', ", key);
         /* Not good to duplicate the switch, consider strategy pattern. Still,
          * it is a good idea to fetch the properties only once. */
         switch (type) {
@@ -115,22 +119,25 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
                 {
                     dbus_int32_t hal_value = libhal_psi_get_int(&iter);
                     val = ohm_value_from_int(hal_value);
+                    OHM_DEBUG(DBG_HAL, "int: '%i'", hal_value);
                     break;
                 }
             case LIBHAL_PROPERTY_TYPE_STRING:
                 {
-                    /* freed with propertyset*/
+                    /* freed with propertyset */
                     char *hal_value = libhal_psi_get_string(&iter);
                     val = ohm_value_from_string(hal_value);
+                    OHM_DEBUG(DBG_HAL, "string: '%s'", hal_value);
                     break;
                 }
             case LIBHAL_PROPERTY_TYPE_STRLIST:
                 {
 #define STRING_DELIMITER "\\"
-                    /* freed with propertyset*/
+                    /* freed with propertyset */
                     char **strlist = libhal_psi_get_strlist(&iter);
                     gchar *escaped_string = g_strjoinv(STRING_DELIMITER, strlist);
                     val = ohm_value_from_string(escaped_string);
+                    OHM_DEBUG(DBG_HAL, "escaped string: '%s'", escaped_string);
                     g_free(escaped_string);
                     break;
 #undef STRING_DELIMITER
@@ -140,9 +147,11 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
                     dbus_bool_t hal_value = libhal_psi_get_bool(&iter);
                     int intval = (hal_value == TRUE) ? 1 : 0;
                     val = ohm_value_from_int(intval);
+                    OHM_DEBUG(DBG_HAL, "boolean: '%s'", (hal_value == TRUE) ? "TRUE" : "FALSE");
                     break;
                 }
             default:
+                OHM_DEBUG(DBG_HAL, "error with value (%i)", type);
                 /* error case, currently means that FactStore doesn't
                  * support the type yet */
                 break;
@@ -161,7 +170,7 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec,
         gboolean added, gboolean removed, const gchar *udi)
 {
     gboolean match = FALSE;
-    OHM_DEBUG(DBG_FACTS,"> process_decoration\n");
+    OHM_DEBUG(DBG_HAL,"> process_decoration\n");
 
     if (has_udi(dec, udi)) {
         DBusError error;
@@ -185,8 +194,8 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec,
 
         fact = create_fact(plugin, udi, dec->capability, properties);
         dec->cb(fact, dec->capability, added, removed, dec->user_data);
-
-        /* FIXME: g_object_unref(fact); */
+        if (fact)
+            g_object_unref(fact);
         libhal_free_property_set(properties);
     }
 

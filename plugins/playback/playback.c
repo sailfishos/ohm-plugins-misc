@@ -80,6 +80,11 @@ OHM_PLUGIN_PROVIDES(
     "maemo.playback"
 );
 
+OHM_PLUGIN_DBUS_SIGNALS(
+    { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_POLICY_NEW_SESSION, NULL,
+            dbusif_new_session, NULL }
+);
+
 
 /* 
  * Local Variables:

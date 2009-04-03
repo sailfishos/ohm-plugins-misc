@@ -1,0 +1,5 @@
+#!/bin/sh
+
+dbus-send --session --type=signal                 \
+    --dest=org.freedesktop.ohm_session_agent /foo \
+    org.freedesktop.ohm_session_agent.foo || :
