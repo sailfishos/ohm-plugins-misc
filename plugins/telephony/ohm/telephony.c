@@ -815,12 +815,16 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
      */
     
     if (nadded != 0 && nlocalpend == 0 && nremotepend == 0) {
-        event.type = EVENT_CALL_ACCEPTED;
-        event_handler((event_t *)&event);
+        if (event.call->state == STATE_ACTIVE)    /* incoming, accepted by us */
+            return DBUS_HANDLER_RESULT_HANDLED;
+        else {
+            event.type = EVENT_CALL_ACCEPTED;
+            event_handler((event_t *)&event);
+        }
     }
     else if (nlocalpend != 0) {
         OHM_INFO("Call %s is coming in...", event.path);
-        call->local_handle = localpend[0];
+        event.call->local_handle = localpend[0];
     }
     else if (nremoved != 0 && nlocalpend == 0 && nremotepend == 0) {
         /*
@@ -878,10 +882,16 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
 
     switch (state) {
     case TP_HELD:
-        event.type = EVENT_CALL_HELD;
+        if (event.call->state == STATE_ON_HOLD)
+            return DBUS_HANDLER_RESULT_HANDLED;
+        else
+            event.type = EVENT_CALL_HELD;
         break;
     case TP_UNHELD:
-        event.type = EVENT_CALL_ACTIVATED;
+        if (event.call->state == STATE_ACTIVE)
+            return DBUS_HANDLER_RESULT_HANDLED;
+        else
+            event.type = EVENT_CALL_ACTIVATED;
         break;
     case TP_PENDING_HOLD:
     case TP_PENDING_UNHOLD:
@@ -937,9 +947,8 @@ call_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
 
     if (!(state & TP_CALLSTATE_HELD) && event.call->state == STATE_ON_HOLD)
         event.type = EVENT_CALL_ACTIVATED;
-    else if ((state & TP_CALLSTATE_HELD) && event.call->state == STATE_ACTIVE) {
+    else if ((state & TP_CALLSTATE_HELD) && event.call->state == STATE_ACTIVE)
         event.type = EVENT_CALL_HELD;
-    }
     else
         return DBUS_HANDLER_RESULT_HANDLED;
              
@@ -1030,9 +1039,9 @@ dispatch_method(DBusConnection *c, DBusMessage *msg, void *data)
     if (MATCHES(TELEPHONY_INTERFACE, CALL_REQUEST))
         return call_request(c, msg, data);
     else if (MATCHES(TELEPHONY_INTERFACE, ACCEPT_REQUEST))
-        return accept_request(c, msg, data);
+        return accept_call_request(c, msg, data);
     else if (MATCHES(TELEPHONY_INTERFACE, HOLD_REQUEST))
-        return hold_request(c, msg, data);
+        return hold_call_request(c, msg, data);
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
@@ -1174,14 +1183,14 @@ static DBusHandlerResult
 accept_call_request(DBusConnection *c, DBusMessage *msg, void *data)
 {
     call_event_t  event;
-    const char   *manager, *path;
+    const char   *manager;
 
     (void)c;
     (void)data;
 
     if (!dbus_message_get_args(msg, NULL,
                                DBUS_TYPE_STRING, &manager,
-                               DBUS_TYPE_OBJECT_PATH, &path,
+                               DBUS_TYPE_OBJECT_PATH, &event.path,
                                DBUS_TYPE_INVALID)) {
         OHM_ERROR("Failed to parse AcceptCall request.");
         return DBUS_HANDLER_RESULT_HANDLED;
@@ -1221,27 +1230,29 @@ hold_call_reply(DBusMessage *msg, char *error)
 static DBusHandlerResult
 hold_call_request(DBusConnection *c, DBusMessage *msg, void *data)
 {
-    call_event_t event;
-    int          hold;
+    call_event_t  event;
+    const char   *owner;
+    int           hold;
+    
 
     (void)c;
     (void)data;
 
     if (!dbus_message_get_args(msg, NULL,
-                               DBUS_TYPE_STRING, &manager,
-                               DBUS_TYPE_OBJECT_PATH, &path,
+                               DBUS_TYPE_STRING, &owner,
+                               DBUS_TYPE_OBJECT_PATH, &event.path,
                                DBUS_TYPE_BOOLEAN, &hold,
                                DBUS_TYPE_INVALID)) {
         OHM_ERROR("Failed to parse AcceptCall request.");
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
-    event.type = hold ? EVENT_CALL_HOLD_REQUEST : EVENT_CALL_UNHOLD_REQUEST;
+    event.type = hold ? EVENT_CALL_HOLD_REQUEST : EVENT_CALL_ACTIVATE_REQUEST;
     event.call = call_lookup(event.path);
     event.req  = dbus_message_ref(msg);
 
     if (event.call == NULL)
-        hold_call_reply(c, msg, "unknown call");
+        hold_call_reply(msg, "unknown call");
     else
         event_handler((event_t *)&event);
     
@@ -1259,20 +1270,23 @@ event_name(int type)
 {
 #define DESCR(e, d) [EVENT_##e] = d
     const char *description[] = {
-        DESCR(UNKNOWN           , "<UNKNOWN>"),
-        DESCR(NEW_CHANNEL       , "<NEW CHANNEL>"),
-        DESCR(CHANNEL_CLOSED    , "<CHANNEL CLOSED>"),
-        DESCR(CALL_REQUEST      , "<CALL REQUEST>"),
-        DESCR(CALL_ENDED        , "<CALL ENDED>"),
-        DESCR(CALL_LOCAL_HUNGUP , "<CALL HUNGUP LOCALLY>"),
-        DESCR(CALL_PEER_HUNGUP  , "<CALL ENDED REMOTELY>"),
-        DESCR(CALL_ACCEPTED     , "<CALL ACCEPTED>"),
-        DESCR(CALL_HELD         , "<CALL HELD>"),
-        DESCR(CALL_ACTIVATED    , "<CALL ACTIVATED>"),
-        DESCR(EMERGENCY_ON      , "<EARLY EMERGENCY CALL START>"),
-        DESCR(EMERGENCY_OFF     , "<EARLY EMERGENCY CALL END>"),
-        DESCR(SENDING_DIALSTRING, "<DIALSTRING SENDING STARTED>"),
-        DESCR(STOPPED_DIALSTRING, "<DIALSTRING SENDING STOPPED>"),
+        DESCR(UNKNOWN              , "<UNKNOWN>"),
+        DESCR(NEW_CHANNEL          , "<NEW CHANNEL>"),
+        DESCR(CHANNEL_CLOSED       , "<CHANNEL CLOSED>"),
+        DESCR(CALL_REQUEST         , "<CALL REQUEST>"),
+        DESCR(CALL_ENDED           , "<CALL ENDED>"),
+        DESCR(CALL_LOCAL_HUNGUP    , "<CALL HUNGUP LOCALLY>"),
+        DESCR(CALL_PEER_HUNGUP     , "<CALL ENDED REMOTELY>"),
+        DESCR(CALL_ACCEPTED        , "<CALL ACCEPTED>"),
+        DESCR(CALL_HELD            , "<CALL HELD>"),
+        DESCR(CALL_ACTIVATED       , "<CALL ACTIVATED>"),
+        DESCR(CALL_ACCEPT_REQUEST  , "<CALL ACCEPT REQUEST>"),
+        DESCR(CALL_HOLD_REQUEST    , "<CALL HOLD REQUEST>"),
+        DESCR(CALL_ACTIVATE_REQUEST, "<CALL ACTIVATE REQUEST>"),
+        DESCR(EMERGENCY_ON         , "<EARLY EMERGENCY CALL START>"),
+        DESCR(EMERGENCY_OFF        , "<EARLY EMERGENCY CALL END>"),
+        DESCR(SENDING_DIALSTRING   , "<DIALSTRING SENDING STARTED>"),
+        DESCR(STOPPED_DIALSTRING   , "<DIALSTRING SENDING STOPPED>"),
     };
 
 
@@ -1418,7 +1432,7 @@ event_handler(event_t *event)
         event->any.state = STATE_ON_HOLD;
         break;
 
-    case EVENT_CALL_UNHOLD_REQUEST:
+    case EVENT_CALL_ACTIVATE_REQUEST:
         event->any.state = STATE_ACTIVE;
         break;
 
@@ -1781,22 +1795,27 @@ call_disconnect(call_t *call, const char *action, event_t *event)
 static int
 tp_accept(call_t *call)
 {
-    DBusMessage        *msg;
-    const char         *name, *path, *iface, *method, *message;
-    const dbus_uint32_t  handles[1];
+    DBusMessage         *msg;
+    dbus_uint32_t        handles[1];
     const dbus_uint32_t *members;
+    const char          *name, *path, *iface, *method, *message;
+    int                  status;
     
     name   = call->name;
     path   = call->path;
     iface  = TP_CHANNEL_GROUP;
     method = ADD_MEMBERS;
     
+    printf("*** %s: calling %s.%s of %s in %s\n", __FUNCTION__,
+           iface, method, path, name);
+
     if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
-        members = handles;
-        message = "";
+        handles[0] = call->local_handle;
+        members    = handles;
+        message    = "";
         if (dbus_message_append_args(msg,
                                      DBUS_TYPE_ARRAY,
-                                     DBUS_TYPE_UNT32, &members, 1
+                                     DBUS_TYPE_UINT32, &members, 1,
                                      DBUS_TYPE_STRING, &message,
                                      DBUS_TYPE_INVALID))
             status = bus_send(msg, NULL);
@@ -1859,11 +1878,11 @@ call_hold(call_t *call, const char *action, event_t *event)
     if (call == event->any.call) {
         if (event->type == EVENT_CALL_HOLD_REQUEST) {
             if (tp_hold(call, TRUE) != 0) {
-                hold_call_reply(event->msg, "Failed to hold call");
+                hold_call_reply(event->call.req, "Failed to hold call");
                 return EINVAL;
             }
             else
-                hold_call_reply(event->msg, NULL);
+                hold_call_reply(event->call.req, NULL);
 
             call->state = STATE_ON_HOLD;
         }
@@ -1912,12 +1931,20 @@ call_activate(call_t *call, const char *action, event_t *event)
             else
                 accept_call_reply(event->call.req, NULL);
         }
-            
+        else if (event->type == EVENT_CALL_ACTIVATE_REQUEST) {
+            if (tp_hold(call, FALSE) != 0) {
+                hold_call_reply(event->call.req, "failed to unhold call");
+                return EINVAL;
+            }
+            else
+                hold_call_reply(event->call.req, NULL);
+        }
+    
         call->state = STATE_ACTIVE;
         call->order = 0;
         policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
 
-        if (event->type != EVENT_CALL_ACTIVATED)
+        if (event->type == EVENT_CALL_ACCEPT_REQUEST)
             policy_run_hook("telephony_call_connect_hook");
         else
             policy_run_hook("telephony_call_active_hook");

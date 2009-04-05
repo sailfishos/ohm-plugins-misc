@@ -55,8 +55,8 @@
 #define CALL_REQUEST       "call_request"
 #define CALL_ENDED         "call_ended"
 #define EMERGENCY_CALL_ACTIVE "emergency_call_active"
-#define ACCEPT_REQUEST      "AcceptRequest"
-#define HOLD_REQUEST        "HoldRequest"
+#define ACCEPT_REQUEST      "RequestAccept"
+#define HOLD_REQUEST        "RequestHold"
 
 #define POLICY_FACT_CALL   "com.nokia.policy.call"
 #define POLICY_FACT_EMERG  "com.nokia.policy.emergency_call"
@@ -137,6 +137,7 @@ typedef enum {
     EVENT_CALL_ACTIVATED,                      /* TP HoldStateChanged */
     EVENT_CALL_ACCEPT_REQUEST,                 /* accept request from UI */
     EVENT_CALL_HOLD_REQUEST,                   /* hold request from UI */
+    EVENT_CALL_ACTIVATE_REQUEST,               /* unhold request from UI */
     EVENT_EMERGENCY_ON,                        /* early emergency call active */
     EVENT_EMERGENCY_OFF,                       /* early emergency call done */
     EVENT_SENDING_DIALSTRING,                  /* dialstring being sent */
