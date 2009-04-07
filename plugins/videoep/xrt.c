@@ -186,14 +186,11 @@ static int connect_to_xserver(xrt_t *xr)
     return 0;
 
  failed:
-    if (evsrc) 
-        g_source_remove(evsrc);
 
     if (chan != NULL)
         g_io_channel_unref(chan);
 
-    if (xconn != NULL)
-        xcb_disconnect(xconn);
+    xcb_disconnect(xconn);
 
     return -1;
 }
@@ -235,7 +232,8 @@ static int check_randr(xrt_t *xr)
      * first see whether the X server
      * has the RandR extension or not
      */
-    if ((rext = xcb_get_extension_data(xr->xconn, &xcb_randr_id)) == NULL) {
+    if (xr->xconn == NULL ||
+            (rext = xcb_get_extension_data(xr->xconn, &xcb_randr_id)) == NULL) {
         printf("videoep: failed to query extensions\n");
         return -1;
     }
@@ -249,7 +247,7 @@ static int check_randr(xrt_t *xr)
      * next check if we have suitable versions of RandR
      * both in server and libxcb side
      */
-    if (xr->xconn == NULL || xcb_connection_has_error(xr->xconn))
+    if (xcb_connection_has_error(xr->xconn))
         return -1;
 
     ckie = xcb_randr_query_version(xr->xconn, 0,0);
@@ -307,7 +305,8 @@ static int check_xvideo(xrt_t *xr)
      * first see whether the X server
      * has the Xvideo extension or not
      */
-    if ((rext = xcb_get_extension_data(xr->xconn, &xcb_xv_id)) == NULL) {
+    if (xr->xconn == NULL || 
+            (rext = xcb_get_extension_data(xr->xconn, &xcb_xv_id)) == NULL) {
         printf("videoep: failed to query extensions\n");
         return -1;
     }
@@ -323,7 +322,7 @@ static int check_xvideo(xrt_t *xr)
      * next check if we have suitable versions of Xvideo
      * both at X server and libxcb side
      */
-    if (xr->xconn == NULL || xcb_connection_has_error(xr->xconn))
+    if (xcb_connection_has_error(xr->xconn))
         return -1;
 
     ckie = xcb_xv_query_extension(xr->xconn);
