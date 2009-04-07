@@ -767,7 +767,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     } while (0)
     
     DBusMessageIter  imsg;
-    dbus_int32_t    *added, *removed, *localpend, *remotepend;
+    dbus_uint32_t   *added, *removed, *localpend, *remotepend;
     int              nadded, nremoved, nlocalpend, nremotepend;
     unsigned int     actor;
     status_event_t   event;
@@ -783,8 +783,8 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     
     
     actor = 0;
-
-
+    
+    
     /*
      * skip the 'reason' argument
      */
@@ -815,11 +815,17 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
      */
     
     if (nadded != 0 && nlocalpend == 0 && nremotepend == 0) {
-        if (event.call->state == STATE_ACTIVE)    /* incoming, accepted by us */
-            return DBUS_HANDLER_RESULT_HANDLED;
-        else {
-            event.type = EVENT_CALL_ACCEPTED;
-            event_handler((event_t *)&event);
+        if (event.call->state != STATE_ACTIVE) {
+            if (event.call->dir == DIR_OUTGOING &&
+                event.call->peer_handle == added[0]) {
+                event.type = EVENT_CALL_ACCEPTED;
+                event_handler((event_t *)&event);
+            }
+            else if (event.call->dir == DIR_INCOMING &&
+                     event.call->local_handle == added[0]) {
+                event.type = EVENT_CALL_ACCEPTED;
+                event_handler((event_t *)&event);
+            }
         }
     }
     else if (nlocalpend != 0) {

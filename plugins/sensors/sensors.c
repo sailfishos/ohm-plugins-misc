@@ -172,7 +172,7 @@ hal_event(OhmFact *fact, gchar *capability, gboolean added, gboolean removed,
     {
         char       *fact_dump;
         fact_dump = ohm_structure_to_string(OHM_STRUCTURE(fact));
-        OHM_DEBUG("fact: %s", fact_dump);
+        printf("fact: %s\n", fact_dump);
         g_free(fact_dump);
     }
 #endif

@@ -160,11 +160,11 @@ typedef struct {
 
 typedef struct {
     EVENT_COMMON;
-    const char  *peer;                         /* our peer (number/uri) */
-    char       **members;                      /* for conference call */
-    call_dir_t   dir;                          /* incoming/outgoing */
-    int          peer_handle;                  /* handle of our peer */
-    int          emergency;                    /* an emergency call */
+    const char     *peer;                      /* our peer (number/uri) */
+    char          **members;                   /* for conference call */
+    call_dir_t      dir;                       /* incoming/outgoing */
+    unsigned int    peer_handle;               /* handle of our peer */
+    int             emergency;                 /* an emergency call */
 } channel_event_t;
 
 
