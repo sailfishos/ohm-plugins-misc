@@ -1,3 +1,11 @@
+ohm-plugins-misc (0.6.31) unstable; urgency=low
+
+  * printf's are changed in videoep to OHM_ERROR, OHM_INFO,
+    OHM_WARNING and OHM_DEBUG
+  * Fixes: NB#110315
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Wed, 08 Apr 2009 19:40:00 +0300
+
 ohm-plugins-misc (0.6.30) unstable; urgency=low
 
   * Fixed a HAL bug.
