@@ -71,6 +71,8 @@ static void plugin_init(OhmPlugin *plugin)
     gulong   decision_cb;
     gulong   keychange_cb;
 
+    OHM_DEBUG_INIT(video);
+
     OHM_INFO("Video EP: init ...");
 
     do {
