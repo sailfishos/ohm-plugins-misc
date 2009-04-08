@@ -19,6 +19,8 @@
 #include <glib-object.h>
 
 #include <ohm/ohm-plugin.h>
+#include <ohm/ohm-plugin-log.h>
+#include <ohm/ohm-plugin-debug.h>
 #include <ohm/ohm-fact.h>
 
 #include "videoep.h"
@@ -28,6 +30,13 @@
 typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
 
 videoep_t  *videoep = NULL;
+
+static int DBG_ACTION, DBG_XV;
+
+OHM_DEBUG_PLUGIN(video,
+    OHM_DEBUG_FLAG("action", "Video policy actions", &DBG_ACTION),
+    OHM_DEBUG_FLAG("xvideo", "X Video"             , &DBG_XV    )
+);
 
 OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri));
 OHM_IMPORTABLE(gboolean , unregister_ep, (GObject *ep));
@@ -62,22 +71,22 @@ static void plugin_init(OhmPlugin *plugin)
     gulong   decision_cb;
     gulong   keychange_cb;
 
-    printf("Video EP: init ...\n");
+    OHM_INFO("Video EP: init ...");
 
     do {
         if (register_ep == NULL) {
-            printf("ERROR: 'signaling.register_enforcement_point()' "
-                   "not found\n");
+            OHM_ERROR("videoep: 'signaling.register_enforcement_point()' "
+                      "not found");
             break;
         }
 
         if ((conn = register_ep("videoep")) == NULL) {
-            printf("ERROR: Failed to initialize VieoEP\n");
+            OHM_ERROR("videoep: Failed to initialize VieoEP");
             break;
         }
 
         if ((videoep = malloc(sizeof(*videoep))) == NULL) {
-            printf("ERROR: Can't allocate memory for 'videoep'\n");
+            OHM_ERROR("videoep: Can't allocate memory for 'videoep'");
             break;
         }
 

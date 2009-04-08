@@ -57,7 +57,7 @@ static gboolean txparser(GObject *conn, GObject *transaction, gpointer data)
     gboolean   success;
     gchar     *signal;
     
-    printf("Video EP: got actions\n");
+    OHM_DEBUG(DBG_ACTION, "got actions");
 
     g_object_get(transaction, "txid" , &txid, NULL);
     g_object_get(transaction, "facts", &list, NULL);
@@ -65,7 +65,7 @@ static gboolean txparser(GObject *conn, GObject *transaction, gpointer data)
     
     /* TODO: signal holds the signal name that was sent */
 
-    printf("txid: %d\n", txid);
+    OHM_DEBUG(DBG_ACTION, "txid: %d", txid);
     
     success = TRUE;
 
@@ -90,7 +90,8 @@ static int route_action(videoep_t *videoep, void *data)
     route_t *route = data;
     xrt_clone_type_t clone;
 
-    printf("*** Got video route to '%s' / '%s'\n", route->device,route->tvstd);
+    OHM_DEBUG(DBG_ACTION, "Got video route to '%s' / '%s'",
+              route->device, route->tvstd);
 
     if (xrt_not_connected_to_xserver(videoep->xr))
         xrt_connect_to_xserver(videoep->xr);
@@ -104,14 +105,14 @@ static int route_action(videoep_t *videoep, void *data)
                 else if (!strcmp(route->tvstd, "ntsc"))
                     clone = xrt_clone_ntsc;
                 else {
-                    printf("Video EP: unsupported TV signal standard '%s'. "
-                           "Using 'pal' instead\n", route->tvstd);
+                    OHM_WARNING("Video EP: unsupported TV signal standard "
+                                "'%s'. Using 'pal' instead", route->tvstd);
                     clone = xrt_clone_pal;
                 }
             }
             else {
-                printf("Video EP: No TV signal standard specified. "
-                       "Using default 'pal'\n");
+                OHM_WARNING("Video EP: No TV signal standard specified. "
+                            "Using default 'pal'");
                 clone = xrt_clone_pal;
             }
         }
