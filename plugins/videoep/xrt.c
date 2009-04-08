@@ -161,17 +161,17 @@ static int connect_to_xserver(xrt_t *xr)
     xconn = xcb_connect(xr->display, NULL);
 
     if (xcb_connection_has_error(xconn)) {
-        printf("videoep: xcb connect failed\n");
+        OHM_ERROR("videoep: xcb connect failed");
         goto failed;
     }
 
     if ((fd = xcb_get_file_descriptor(xconn)) < 0) {
-        printf("videoep: no suitable connection\n");
+        OHM_ERROR("videoep: no suitable connection");
         goto failed;
     }
 
     if ((chan  = g_io_channel_unix_new(fd)) == NULL) {
-        printf("videoep: Can't make g_io_channel\n");
+        OHM_ERROR("videoep: Can't make g_io_channel");
         goto failed;
     }
 
@@ -181,19 +181,16 @@ static int connect_to_xserver(xrt_t *xr)
     xr->chan  = chan;
     xr->evsrc = evsrc;
 
-    printf("videoep: connected to X server %s\n", xr->display?xr->display:"");
+    OHM_INFO("videoep: connected to X server %s", xr->display?xr->display:"");
 
     return 0;
 
  failed:
-    if (evsrc) 
-        g_source_remove(evsrc);
 
     if (chan != NULL)
         g_io_channel_unref(chan);
 
-    if (xconn != NULL)
-        xcb_disconnect(xconn);
+    xcb_disconnect(xconn);
 
     return -1;
 }
@@ -235,13 +232,14 @@ static int check_randr(xrt_t *xr)
      * first see whether the X server
      * has the RandR extension or not
      */
-    if ((rext = xcb_get_extension_data(xr->xconn, &xcb_randr_id)) == NULL) {
-        printf("videoep: failed to query extensions\n");
+    if (xr->xconn == NULL ||
+        (rext = xcb_get_extension_data(xr->xconn, &xcb_randr_id)) == NULL) {
+        OHM_ERROR("videoep: failed to query extensions");
         return -1;
     }
 
     if (!rext->present) {
-        printf("videoep: X server does not have RandR extension (not OK)\n");
+        OHM_ERROR("videoep: X server does not have RandR extension (not OK)");
         return -1;
     }
 
@@ -249,32 +247,32 @@ static int check_randr(xrt_t *xr)
      * next check if we have suitable versions of RandR
      * both in server and libxcb side
      */
-    if (xr->xconn == NULL || xcb_connection_has_error(xr->xconn))
+    if (xcb_connection_has_error(xr->xconn))
         return -1;
 
     ckie = xcb_randr_query_version(xr->xconn, 0,0);
 
     if (xcb_connection_has_error(xr->xconn)) {
-        printf("videoep: failed to query RandR version (send request)\n");
+        OHM_ERROR("videoep: failed to query RandR version (send request)");
         return -1;
     }
 
     vrpl = xcb_randr_query_version_reply(xr->xconn, ckie, &gerr);
 
     if (gerr != NULL) {
-        printf("videoep: failed to query RandR version (receive reply)\n");
+        OHM_ERROR("videoep: failed to query RandR version (receive reply)");
         return -1;
     }
 
     server_ok = check_version(required_major_version, required_minor_version,
                               vrpl->major_version, vrpl->minor_version);
 
-    printf("videoep: required minimum version of RandR is %d.%d\n",
-           required_major_version, required_minor_version);
+    OHM_INFO("videoep: required minimum version of RandR is %d.%d",
+             required_major_version, required_minor_version);
 
-    printf("videoep: X server has RandR extension version %d.%d (%s)\n",
-           vrpl->major_version, vrpl->minor_version,
-           server_ok ? "OK" : "not OK");
+    OHM_INFO("videoep: X server has RandR extension version %d.%d (%s)",
+             vrpl->major_version, vrpl->minor_version,
+             server_ok ? "OK" : "not OK");
 
     xcb_ok  = check_version(required_major_version, required_minor_version,
                             XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
@@ -283,10 +281,9 @@ static int check_randr(xrt_t *xr)
 
     free(vrpl);
 
-    printf("videoep: libxcb RandR version is %d.%d (%s)\n",
-           XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION,
-           xcb_ok ? "OK" : "not OK");
-
+    OHM_INFO("videoep: libxcb RandR version is %d.%d (%s)",
+             XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION,
+             xcb_ok ? "OK" : "not OK");
   
     return (server_ok && xcb_ok) ? 0 : -1;
 }
@@ -307,15 +304,17 @@ static int check_xvideo(xrt_t *xr)
      * first see whether the X server
      * has the Xvideo extension or not
      */
-    if ((rext = xcb_get_extension_data(xr->xconn, &xcb_xv_id)) == NULL) {
-        printf("videoep: failed to query extensions\n");
+    if (xr->xconn == NULL || 
+            (rext = xcb_get_extension_data(xr->xconn, &xcb_xv_id)) == NULL) {
+        OHM_ERROR("videoep: failed to query extensions");
         return -1;
     }
 
     if (rext->present)
-        printf("videoep: X server has Xvideo extension (OK)\n");
+        OHM_INFO("videoep: X server has Xvideo extension (OK)");
     else {
-        printf("videoep: X server does not have Xvideo extension (not OK)\n");
+        OHM_INFO("videoep: X server does not have Xvideo "
+                 "extension (not OK)");
         return -1;
     }
 
@@ -323,38 +322,39 @@ static int check_xvideo(xrt_t *xr)
      * next check if we have suitable versions of Xvideo
      * both at X server and libxcb side
      */
-    if (xr->xconn == NULL || xcb_connection_has_error(xr->xconn))
+    if (xcb_connection_has_error(xr->xconn))
         return -1;
 
     ckie = xcb_xv_query_extension(xr->xconn);
 
     if (xcb_connection_has_error(xr->xconn)) {
-        printf("videoep: failed to query Xvideo extension (send request)\n");
+        OHM_ERROR("videoep: failed to query Xvideo extension (send request)");
         return -1;
     }
 
     erpl = xcb_xv_query_extension_reply(xr->xconn, ckie, &gerr);
 
     if (gerr != NULL) {
-        printf("videoep: failed to query Xvideo extension (receive reply)\n");
+        OHM_ERROR("videoep: failed to query Xvideo extension "
+                  "(receive reply)");
         return -1;
     }
 
     server_ok = check_version(required_major_version, required_minor_version,
                               erpl->major, erpl->minor);
 
-    printf("videoep: required minimum version of Xvideo is %d.%d\n",
-           required_major_version, required_minor_version);
+    OHM_INFO("videoep: required minimum version of Xvideo is %d.%d",
+             required_major_version, required_minor_version);
 
-    printf("videoep: X server has Xvideo extension version %d.%d (%s)\n",
-           erpl->major, erpl->minor, server_ok ? "OK" : "not OK");
+    OHM_INFO("videoep: X server has Xvideo extension version %d.%d (%s)",
+             erpl->major, erpl->minor, server_ok ? "OK" : "not OK");
 
     xcb_ok  = check_version(required_major_version, required_minor_version,
                             XCB_XV_MAJOR_VERSION, XCB_XV_MINOR_VERSION);
 
-    printf("videoep: libxcb Xvideo version is %d.%d (%s)\n",
-           XCB_XV_MAJOR_VERSION, XCB_XV_MINOR_VERSION,
-           xcb_ok ? "OK" : "not OK");
+    OHM_INFO("videoep: libxcb Xvideo version is %d.%d (%s)",
+             XCB_XV_MAJOR_VERSION, XCB_XV_MINOR_VERSION,
+             xcb_ok ? "OK" : "not OK");
 
     free(erpl);
   
@@ -398,14 +398,14 @@ static int query_adaptors(xrt_t *xr)
         root   = scrn->root;
 
         if (rque_is_full(&xr->rque)) {
-            printf("videoep: request queue is full\n");
+            OHM_ERROR("videoep: request queue is full");
             return -1;
         }
 
         ckie = xcb_xv_query_adaptors(xr->xconn, root);
 
         if (xcb_connection_has_error(xr->xconn)) {
-            printf("videoep: failed to query Xv adaptors (request)\n");
+            OHM_ERROR("videoep: failed to query Xv adaptors (request)");
             return -1;
         }
 
@@ -433,7 +433,7 @@ static void finish_adaptor_query(xrt_t *xr, void *reply_data, void *user_data)
     int   len;
 
     if (!reply)
-        printf("videoep: failed to find any adaptor\n");
+        OHM_ERROR("videoep: failed to find any adaptor");
     else {
         for (it = xcb_xv_query_adaptors_info_iterator(reply);
              it.rem > 0;
@@ -463,9 +463,9 @@ static void finish_adaptor_query(xrt_t *xr, void *reply_data, void *user_data)
             
             xr->adaptors = adaptor;
             
-            printf("videoep: '%s' adaptor found with %d ports (%d - %d)\n",
-                   adaptor->name, adinf->num_ports,
-                   adaptor->portbeg, adaptor->portend);
+            OHM_INFO("videoep: '%s' adaptor found with %d ports (%d - %d)",
+                     adaptor->name, adinf->num_ports,
+                     adaptor->portbeg, adaptor->portend);
 
             query_attribute(xr, &adaptor->clone);
             query_attribute(xr, &adaptor->tvstd);
@@ -495,14 +495,14 @@ static int query_attrdef(xrt_t *xr, xrt_attrdef_t *def)
         goto failed;
 
     if (rque_is_full(&xr->rque)) {
-        printf("videoep: request queue is full\n");
+        OHM_ERROR("videoep: request queue is full");
         goto failed;
     }
 
     ckie = xcb_intern_atom(xr->xconn, 0, strlen(def->name), def->name);
 
     if (xcb_connection_has_error(xr->xconn)) {
-        printf("videoep: failed to query attribute def '%s'\n", def->name);
+        OHM_ERROR("videoep: failed to query attribute def '%s'", def->name);
         goto failed;
     }
 
@@ -529,7 +529,7 @@ static void finish_attrdef_query(xrt_t *xr, void *reply_data,
     attrdef_queried |= def->bit;
 
     if (!reply)
-        printf("videoep: could not make/get atom '%s'\n", def->name);        
+        OHM_ERROR("videoep: could not make/get atom '%s'", def->name);        
     else {
         def->valid = TRUE;
         def->atom  = reply->atom;
@@ -560,14 +560,14 @@ static int query_attribute(xrt_t *xr, xrt_attribute_t *attr)
         goto failed;
 
     if (rque_is_full(&xr->rque)) {
-        printf("videoep: request queue is full\n");
+        OHM_ERROR("videoep: request queue is full");
         goto failed;
     }
 
     ckie = xcb_xv_get_port_attribute(xr->xconn, adaptor->portbeg, def->atom);
         
     if (xcb_connection_has_error(xr->xconn)) {
-        printf("videoep: failed to query attribute '%s' \n", def->name);
+        OHM_ERROR("videoep: failed to query attribute '%s' ", def->name);
         goto failed;
     }
 
@@ -593,7 +593,7 @@ static void finish_attribute_query(xrt_t *xr, void *reply_data,void *user_data)
         attr->valid = TRUE;
         attr->value = reply->value;
 
-        printf("*** attribute '%s' value %d\n", def->name, attr->value);
+        OHM_DEBUG(DBG_XV, "attribute '%s' value %d", def->name, attr->value);
     }
 
     check_if_attribute_queries_are_complete(xr, attr);
@@ -611,10 +611,10 @@ check_if_attribute_queries_are_complete(xrt_t *xr, xrt_attribute_t *attr)
         adaptor->atflags = 0;
 
         if (adaptor->clone.valid) {
-            printf("videoep: '%s' supports cloning\n", name);
+            OHM_INFO("videoep: '%s' supports cloning", name);
         }
         else {
-            printf("videoep: '%s' does not supports cloning\n", name);
+            OHM_INFO("videoep: '%s' does not supports cloning", name);
         }
     }
 }
@@ -629,7 +629,7 @@ static int set_attribute(xrt_t *xr, xrt_attribute_t *attr, int32_t value)
         return -1;
 
     if (rque_is_full(&xr->rque)) {
-        printf("videoep: request queue is full\n");
+        OHM_ERROR("videoep: request queue is full");
         return -1;
     }
 
@@ -637,7 +637,7 @@ static int set_attribute(xrt_t *xr, xrt_attribute_t *attr, int32_t value)
                                      def->atom, value);
         
     if (xcb_connection_has_error(xr->xconn)) {
-        printf("videoep: failed to query attribute '%s' \n", def->name);
+        OHM_ERROR("videoep: failed to query attribute '%s' ", def->name);
         return -1;
     }
 
@@ -720,13 +720,14 @@ static gboolean xio_cb(GIOChannel *ch, GIOCondition cond, gpointer data)
     gboolean             retval;
 
     if (ch != xr->chan) {
-        printf("videoep: %s(): confused with data structures\n", __FUNCTION__);
+        OHM_ERROR("videoep: %s(): confused with data structures",
+                  __FUNCTION__);
 
         retval = TRUE;
     }
     else {
         if (cond & (G_IO_ERR | G_IO_HUP)) {
-            printf("videoep: X server is gone\n");
+            OHM_ERROR("videoep: X server is gone");
             
             disconnect_from_xserver(xr);
             
@@ -735,7 +736,7 @@ static gboolean xio_cb(GIOChannel *ch, GIOCondition cond, gpointer data)
         else {
 
             while ((ev = xcb_poll_for_event(xr->xconn)) != NULL) {
-                printf("**** got event %d\n", ev->response_type);
+                OHM_DEBUG(DBG_XV, "got event %d", ev->response_type);
             }
 
             while (rque_poll_reply(xr->xconn, &xr->rque, &reply, &hlr, &ud)) {

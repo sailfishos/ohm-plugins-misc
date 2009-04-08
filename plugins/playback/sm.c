@@ -1390,19 +1390,20 @@ static char *strncpylower(char *to, const char *from, int tolen)
 static char *class_to_group(char *klass)
 {
     static struct {char *klass; char *group;}  map[] = {
-        {"None"      , "othermedia"},
-        {"Test"      , "othermedia"},
-        {"Event"     , "event"     },
-        {"VoIP"      , "ipcall"    },
-        {"Media"     , "player"    },
-        {"Background", "background"},
-        {"Ringtone"  , "ringtone"  },
-        {"VoiceUI"   , "voiceui"   },
-        {"Camera"    , "camera"    },
-        {"Game"      , "game"      },
-        {"Alarm"     , "alarm"     },
-        {"Flash"     , "flash"     },
-        {NULL        , "othermedia"}
+        {"None"      , "othermedia"  },
+        {"Test"      , "othermedia"  },
+        {"Event"     , "event"       },
+        {"VoIP"      , "ipcall"      },
+        {"Media"     , "player"      },
+        {"Background", "background"  },
+        {"Ringtone"  , "ringtone"    },
+        {"VoiceUI"   , "voiceui"     },
+        {"Camera"    , "camera"      },
+        {"Game"      , "game"        },
+        {"Alarm"     , "alarm"       },
+        {"Flash"     , "flash"       },
+        {"System"    , "systemsound" },
+        {NULL        , "othermedia"  }
     };
 
     int i;

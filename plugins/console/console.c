@@ -267,6 +267,8 @@ OHM_EXPORTABLE(int, console_open, (char *address,
     addr[len] = '\0';
     portp++;
 
+    memset(&sin, 0, sizeof(sin));
+
     sin.sin_family = AF_INET;
     if (!inet_aton(addr, &sin.sin_addr))
         return -1;

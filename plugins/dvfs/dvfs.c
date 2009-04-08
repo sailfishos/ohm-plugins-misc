@@ -285,8 +285,9 @@ plugin_init(OhmPlugin *plugin)
 static void
 plugin_exit(OhmPlugin *plugin)
 {
-    return;
     (void)plugin;
+
+    return;
 }
 
 
@@ -295,18 +296,18 @@ plugin_exit(OhmPlugin *plugin)
 static void
 plugin_init(OhmPlugin *plugin)
 {
-    OHM_WARNING("Scheduling priority boosting not supported by your OS.");
-
     (void)plugin;
+
+    OHM_WARNING("Scheduling priority boosting not supported by your OS.");
 }
 
 
 static void
 plugin_exit(OhmPlugin *plugin)
 {
-    return;
-
     (void)plugin;
+
+    return;
 }
 
 

@@ -37,9 +37,11 @@ typedef struct _decorator {
 static gboolean property_has_capability(LibHalPropertySet *properties,
         gchar *capability)
 {
-
     LibHalPropertySetIterator iter;
     int len, i;
+
+    if (!properties)
+        return FALSE;
 
     libhal_psi_init(&iter, properties);
 
@@ -90,7 +92,7 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
     GValue *val = NULL;
 
     OHM_DEBUG(DBG_HAL, "> create_fact -- udi: '%s', capability: '%s'\n", udi, capability);
-
+    
     fact = ohm_fact_new(capability);
 
     if (!fact)
@@ -99,6 +101,10 @@ static OhmFact * create_fact(hal_plugin *plugin, const char *udi,
     /* set the identity field with the original UDI value */
     val = ohm_value_from_string(udi);
     ohm_fact_set(fact, "udi", val);
+
+    /* if the device was removed, return the fact with just the UDI. */
+    if (!properties)
+        return fact;
 
     libhal_psi_init(&iter, properties);
     
