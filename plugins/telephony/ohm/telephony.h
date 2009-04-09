@@ -111,6 +111,7 @@ struct call_s {
     char         *peer;                        /* URI of peer if known */
     unsigned int  peer_handle;                 /* handle of our peer */
     unsigned int  local_handle;                /* our handle */
+    int           nmember;
     call_dir_t    dir;                         /* incoming/outgoing */
     int           emergency;                   /* emergency call */
     call_state_t  state;                       /* current state */
@@ -165,6 +166,9 @@ typedef struct {
     call_dir_t      dir;                       /* incoming/outgoing */
     unsigned int    peer_handle;               /* handle of our peer */
     int             emergency;                 /* an emergency call */
+    int             localpend;                 /* pre-collected handle */
+    int             remotepend;                /* pre-collected handle */
+    int             nmember;
 } channel_event_t;
 
 

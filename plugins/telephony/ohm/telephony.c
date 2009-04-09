@@ -103,6 +103,37 @@ int     policy_run_hook(char *hook_name);
 
 
 
+typedef struct {
+    char         *name;
+    char         *path;
+    unsigned int  member;
+    unsigned int  localpend;
+    unsigned int  remotepend;
+    int           nadded;
+} callish_t;
+
+
+static GHashTable *callish;                      /* potential calls */
+static GHashTable *listish;                      /* definitely not calls */
+
+static callish_t *callish_register  (const char *path);
+static void       callish_unregister(const char *path);
+static callish_t *callish_lookup    (const char *path);
+static void       callish_destroy   (callish_t *csh);
+static void       channel_is_listish(const char *path);
+static int        listish_register  (const char *path);
+#if 0
+static int        listish_unregister(const char *path);
+#endif
+static char      *listish_lookup    (const char *path);
+static int        unknown_members_changed(const char *path,
+                                          unsigned int *added, int nadded,
+                                          unsigned int *localpend,
+                                          int nlocalpend,
+                                          unsigned int *remotepend,
+                                          int nremotepend);
+
+
 /*
  * policy and fact-store stuff
  */
@@ -611,6 +642,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     channel_event_t  event;
     int              init_handle, target_handle;
     int              requested, t;
+    callish_t       *csh;
 
     (void)c;
     (void)data;
@@ -660,8 +692,10 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                 if (!strcmp(name, PROP_CHANNEL_TYPE)) {
                     ITER_NEXT(&idict);
                     VARIANT_STRING(&idict, type);
-                    if (type == NULL || strcmp(type, TP_CHANNEL_MEDIA))
+                    if (type == NULL || strcmp(type, TP_CHANNEL_MEDIA)) {
+                        channel_is_listish(path);
                         return DBUS_HANDLER_RESULT_HANDLED;
+                    }
                 }
                 else if (!strcmp(name, PROP_TARGET_ID)) {
                     ITER_NEXT(&idict);
@@ -696,13 +730,20 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
         }
     }
 
-    
+
     if (type != NULL && path != NULL) {
         event.type = EVENT_NEW_CHANNEL;
         event.name = dbus_message_get_sender(msg);
         event.path = path;
         event.call = call_lookup(path);
 
+        if ((csh = callish_lookup(path)) != NULL) {
+            event.localpend  = csh->localpend;
+            event.remotepend = csh->remotepend;
+            event.nmember    = csh->nadded;
+            callish_unregister(path);
+        }
+        
         if (requested == -1 && initiator != NULL) {
             if (!strcmp(initiator, INITIATOR_SELF))
                 event.dir = DIR_OUTGOING;
@@ -765,22 +806,21 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
         dbus_message_iter_get_fixed_array(&_iarr, itemptr, (ptr));      \
         dbus_message_iter_next(&imsg);                                  \
     } while (0)
-    
+
     DBusMessageIter  imsg;
     dbus_uint32_t   *added, *removed, *localpend, *remotepend;
     int              nadded, nremoved, nlocalpend, nremotepend;
     unsigned int     actor;
     status_event_t   event;
+    char             details[1024], *t, *p;
+    int              i, n, l;
 
     (void)c;
     (void)data;
 
     if ((event.path = dbus_message_get_path(msg)) == NULL ||
-        (event.call = call_lookup(event.path))    == NULL) {
+        (event.call = call_lookup(event.path))    == NULL)
         OHM_INFO("MembersChanged for unknown call %s.", event.path); 
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    }
-    
     
     actor = 0;
     
@@ -805,11 +845,53 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     if (dbus_message_iter_get_arg_type(&imsg) == DBUS_TYPE_UINT32)
         dbus_message_iter_get_basic(&imsg, &actor);
     
-    
     OHM_INFO("%s: added %d, removed %d, localpend %d, remotepend %d, actor %u",
              __FUNCTION__, nadded, nremoved, nlocalpend, nremotepend, actor);
+    
 
+    p = details;
+    t = "";
+    l = sizeof(details);
+    
+#define DUMP(what, size)                              \
+    n  = snprintf(p, l, "%s%s: {", t, #what);         \
+    p += n;                                           \
+    l -= n;                                           \
+    for (i = 0; i < size; i++, t = ",") {             \
+        n  = snprintf(p, n, "%s%u", t, what[i]);      \
+        p += n;                                       \
+        l -= n;                                       \
+    }                                                 \
+    n  = snprintf(p, l, "}");                         \
+    p += n;                                           \
+    l -= n                                            \
 
+    DUMP(added     , nadded);
+    DUMP(removed   , nremoved);
+    DUMP(localpend , nlocalpend);
+    DUMP(remotepend, nremotepend);
+    
+    OHM_INFO("signal details: %s", details);
+#undef DUMP    
+    
+
+    if (event.call == NULL) {
+        unknown_members_changed(event.path,
+                                added, nadded,
+                                localpend, nlocalpend,
+                                remotepend, nremotepend);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    
+    if (nadded != 0)
+        event.call->nmember += nadded;
+
+    OHM_INFO("call %s has now %d members", event.path, event.call->nmember);
+
+    if (IS_CONF_MEMBER(event.call) && IS_CONF_PARENT(event.call))
+        return DBUS_HANDLER_RESULT_HANDLED;
+    
+    
     /*
      * generate an event if it looks appropriate
      */
@@ -826,11 +908,23 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
                 event.type = EVENT_CALL_ACCEPTED;
                 event_handler((event_t *)&event);
             }
+            else if (event.call->nmember >= 2) {
+                OHM_INFO("Hmmm.... %s accepted ?", short_path(event.path));
+                event.type = EVENT_CALL_ACCEPTED;
+                event_handler((event_t *)&event);
+            }
         }
     }
-    else if (nlocalpend != 0) {
-        OHM_INFO("Call %s is coming in...", event.path);
-        event.call->local_handle = localpend[0];
+    else if (nlocalpend != 0 || remotepend != 0) {
+        OHM_INFO("Call %s is progressing...", event.path);
+        if (event.call->dir == DIR_INCOMING && nlocalpend) {
+            event.call->local_handle = localpend[0];
+            OHM_INFO("local handle is now %d", event.call->local_handle);
+        }
+        else if (event.call->dir == DIR_OUTGOING && nremotepend) {
+            event.call->peer_handle = remotepend[0];
+            OHM_INFO("remote handle is now %d", event.call->peer_handle);
+        }
     }
     else if (nremoved != 0 && nlocalpend == 0 && nremotepend == 0) {
         /*
@@ -843,8 +937,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
          * we ignore this event if the call is a conference or a conference
          * member.
          */
-        if (actor != 0 && event.call->peer_handle == actor &&
-            !IS_CONF_PARENT(event.call) && !IS_CONF_MEMBER(event.call)) {
+        if (actor != 0 && event.call->peer_handle == actor) {
             OHM_INFO("Call %s has been released remotely...", event.path);
             
             event.type = EVENT_CALL_PEER_HUNGUP;
@@ -1349,6 +1442,12 @@ event_handler(event_t *event)
                                  event->channel.members != NULL,
                                  event->channel.emergency);
             call->dir = event->channel.dir;
+
+            if (event->channel.nmember > 0)
+                call->nmember = event->channel.nmember;
+            if (event->channel.localpend != 0)
+                call->local_handle = event->channel.localpend;
+            
             policy_call_export(call);
         }
         else {
@@ -1493,13 +1592,24 @@ call_init(void)
     GHashFunc      hptr = g_str_hash;
     GEqualFunc     eptr = g_str_equal;
     GDestroyNotify fptr = (GDestroyNotify)call_destroy;
-
+    
     ncscall   = 0;
     nipcall   = 0;
     callid    = 1;
     holdorder = 1;
     if ((calls = g_hash_table_new_full(hptr, eptr, NULL, fptr)) == NULL) {
         OHM_ERROR("failed to allocate call table");
+        exit(1);
+    }
+
+    fptr = (GDestroyNotify)callish_destroy;
+    if ((callish = g_hash_table_new_full(hptr, eptr, NULL, fptr)) == NULL) {
+        OHM_ERROR("failed to allocate callish table");
+        exit(1);
+    }
+
+    if ((listish = g_hash_table_new_full(hptr, eptr, NULL, g_free)) == NULL) {
+        OHM_ERROR("failed to allocate lists table");
         exit(1);
     }
 }
@@ -1513,8 +1623,14 @@ call_exit(void)
 {
     if (calls != NULL)
         g_hash_table_destroy(calls);
+
+    if (callish != NULL)
+        g_hash_table_destroy(callish);
     
-    calls = NULL;
+    if (listish != NULL)
+        g_hash_table_destroy(listish);
+    
+    calls = callish = listish = NULL;
     ncscall = 0;
     nipcall = 0;
 }
@@ -1682,6 +1798,185 @@ call_destroy(call_t *call)
 
 
 /********************
+ * channel_is_listish
+ ********************/
+void
+channel_is_listish(const char *path)
+{
+    if (listish_lookup(path) != NULL)
+        return;
+    else {
+        callish_unregister(path);
+        listish_register(path);
+
+        OHM_INFO("Callish %s turned to listish", short_path(path));
+    }
+}
+
+
+/********************
+ * callish_register
+ ********************/
+static callish_t *
+callish_register(const char *path)
+{
+    callish_t *csh;
+
+    if ((csh = g_new0(callish_t, 1)) == NULL ||
+        (csh->path = g_strdup(path)) == NULL)
+        goto fail;
+
+    g_hash_table_insert(callish, csh->path, csh);
+
+    OHM_INFO("Registered callish %s", short_path(csh->path));
+    
+    return csh;
+    
+ fail:
+    callish_destroy(csh);
+    
+    OHM_ERROR("Failed to allocate new callish %s", path);
+    return NULL;
+}
+
+
+/********************
+ * callish_destroy
+ ********************/
+static void
+callish_destroy(callish_t *csh)
+{
+    if (csh != NULL) {
+        if (csh->path != NULL) {
+            OHM_INFO("Destroying callish %s...", short_path(csh->path));
+            g_free(csh->path);
+        }
+        g_free(csh);
+    }
+}
+
+
+/********************
+ * callish_unregister
+ ********************/
+static void
+callish_unregister(const char *path)
+{
+    callish_t *csh;
+    
+    if (path != NULL && (csh = callish_lookup(path)) != NULL) {
+        OHM_INFO("Unregistering callish %s.", short_path(path));
+        g_hash_table_remove(callish, path);
+    }
+}
+
+
+/********************
+ * callish_lookup
+ ********************/
+static callish_t *
+callish_lookup(const char *path)
+{
+    return (callish_t *)g_hash_table_lookup(callish, path);
+}
+
+
+/********************
+ * listish_register
+ ********************/
+static int
+listish_register(const char *path)
+{
+    char *lsh;
+
+    if ((lsh = g_strdup(path)) == NULL)
+        return FALSE;
+    
+    g_hash_table_insert(listish, lsh, lsh);
+    return TRUE;
+}
+
+
+#if 0
+/********************
+ * listish_unregister
+ ********************/
+static int
+listish_unregister(const char *path)
+{
+    char *lsh;
+
+    if ((lsh = listish_lookup(path)) != NULL) {
+        g_hash_table_remove(listish, lsh);
+        g_free(lsh);
+        
+        return TRUE;
+    }
+    else
+        return FALSE;
+}
+#endif
+
+
+/********************
+ * listish_lookup
+ ********************/
+char *
+listish_lookup(const char *path)
+{
+    return (char *)g_hash_table_lookup(listish, path);
+}
+
+
+/********************
+ * unknown_members_changed
+ ********************/
+static int
+unknown_members_changed(const char *path,
+                        unsigned int *added, int nadded,
+                        unsigned int *localpend, int nlocalpend,
+                        unsigned int *remotepend, int nremotepend)
+{
+    callish_t *csh;
+    
+    if (listish_lookup(path)) {
+        OHM_INFO("%s is not a call...", path);
+        return 0;
+    }
+    
+    if (!nadded && !nlocalpend && !nremotepend) {
+        OHM_INFO("%s is not a call...", path);
+        return 0;
+    }
+
+    if (nadded > 1 || nlocalpend > 1 || nremotepend > 1) {
+        OHM_INFO("%s is not a call...", path);
+        return 0;
+    }
+    
+    if ((csh = callish_lookup(path)) == NULL)
+        if ((csh = callish_register(path)) == NULL)
+            return ENOMEM;
+    
+    if (nadded > 0) {
+        csh->nadded += nadded;
+        if (csh->member != 0)
+            OHM_WARNING("Overwriting member handle %u with %u in %s.",
+                        csh->member, *added, short_path(path));
+        csh->member = *added;
+    }
+
+    if (nremotepend > 0)
+        csh->remotepend = *remotepend;
+    
+    if (nlocalpend > 0)
+        csh->localpend = *localpend;
+
+    return 0;
+}
+
+
+/********************
  * tp_disconnect
  ********************/
 static int
@@ -1812,8 +2107,8 @@ tp_accept(call_t *call)
     iface  = TP_CHANNEL_GROUP;
     method = ADD_MEMBERS;
     
-    printf("*** %s: calling %s.%s of %s in %s\n", __FUNCTION__,
-           iface, method, path, name);
+    printf("*** %s: calling %s.%s of %s in %s (with handle %u)\n", __FUNCTION__,
+           iface, method, path, name, call->local_handle);
 
     if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
         handles[0] = call->local_handle;
