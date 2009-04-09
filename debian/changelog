@@ -1,3 +1,11 @@
+ohm-plugins-misc (0.6.31) unstable; urgency=low
+
+  * Policy on the call acceptance/hold signaling path.
+  * Collect MembersChanged emitted before NewChannels by breaindamaged
+    connection managers.
+
+ -- K. Litkey <krisztian.litkey@nokia.com>  Tue, 07 Apr 2009 20:32:18 +0300
+
 ohm-plugins-misc (0.6.30) unstable; urgency=low
 
   * Fixed a HAL bug.
