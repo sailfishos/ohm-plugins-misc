@@ -118,8 +118,11 @@ sensor_init(sensor_t *sensor)
 static void
 sensor_exit(sensor_t *sensor)
 {
-    if (sensor->fact != NULL)
+    if (sensor->fact != NULL) {
         ohm_fact_store_remove(store, sensor->fact);
+        g_object_unref(sensor->fact);
+        sensor->fact = NULL;
+    }
 }
 
 static int
