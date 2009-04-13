@@ -572,20 +572,20 @@ send_ipc_signal(gpointer data)
         /* open command_array_entry_iter */
         if (!dbus_message_iter_open_container(&command_array_iter, DBUS_TYPE_DICT_ENTRY,
                     NULL, &command_array_entry_iter)) {
-            printf("error opening container\n");
+            OHM_ERROR("signaling: error opening container");
             goto end;
         }
 
         if (!dbus_message_iter_append_basic
                 (&command_array_entry_iter, DBUS_TYPE_STRING, &f)) {
-            printf("error appending OhmFact key\n");
+            OHM_ERROR("signaling: error appending OhmFact key");
             goto end;
         }
 
         /* open fact_iter */
         if (!dbus_message_iter_open_container(&command_array_entry_iter, DBUS_TYPE_ARRAY,
                     "a(sv)", &fact_iter)) {
-            printf("error opening container\n");
+            OHM_ERROR("signaling: error opening container");
             goto end;
         }
 
@@ -599,7 +599,7 @@ send_ipc_signal(gpointer data)
             /* open fact_struct_iter */
             if (!dbus_message_iter_open_container(&fact_iter, DBUS_TYPE_ARRAY,
                         "(sv)", &fact_struct_iter)) {
-                printf("error opening container\n");
+                OHM_ERROR("signaling: error opening container");
                 goto end;
             }
 
@@ -632,31 +632,31 @@ send_ipc_signal(gpointer data)
                 /* open fact_struct_field_iter */
                 if (!dbus_message_iter_open_container(&fact_struct_iter, DBUS_TYPE_STRUCT,
                             NULL, &fact_struct_field_iter)) {
-                    printf("error opening container\n");
+                    OHM_ERROR("signaling: error opening container");
                     goto end;
                 }
 
                 if (!dbus_message_iter_append_basic
                         (&fact_struct_field_iter, DBUS_TYPE_STRING, &field_name)) {
-                    printf("error appending OhmFact field\n");
+                    OHM_ERROR("signaling: error appending OhmFact field");
                     goto end;
                 }
 
                 /* open variant_iter */
                 if (!dbus_message_iter_open_container(&fact_struct_field_iter, DBUS_TYPE_VARIANT, sig, &variant_iter)) {
-                    printf("error opening container\n");
+                    OHM_ERROR("signaling: error opening container");
                     goto end;
                 }
 
                 if (dbus_type == DBUS_TYPE_STRING) {
                     if (!dbus_message_iter_append_basic(&variant_iter, dbus_type, &value)) {
-                        printf("error appending OhmFact value\n");
+                        OHM_ERROR("signaling: error appending OhmFact value");
                         goto end;
                     }
                 }
                 else {
                     if (!dbus_message_iter_append_basic(&variant_iter, dbus_type, value)) {
-                        printf("error appending OhmFact value\n");
+                        OHM_ERROR("signaling: error appending OhmFact value");
                         goto end;
                     }
                 }

@@ -628,7 +628,6 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
             }                                                           \
             CHECK_TYPE(_t, DBUS_TYPE_OBJECT_PATH);                      \
             dbus_message_iter_get_basic(&_arr, (ptrarr) + _n);          \
-            printf("*** got member %s\n", (ptrarr)[_n]);                \
             _n++;                                                       \
         }                                                               \
         ptrarr[_n] = NULL;                                              \
@@ -687,7 +686,6 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                 CHECK_TYPE((t = ITER_TYPE(&idict)), DBUS_TYPE_STRING);
                 
                 dbus_message_iter_get_basic(&idict, &name);
-                printf("*** property %s\n", name);
 
                 if (!strcmp(name, PROP_CHANNEL_TYPE)) {
                     ITER_NEXT(&idict);
@@ -751,8 +749,6 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                 event.dir = DIR_INCOMING;
         }
         
-        printf("*** requested: %d, dir: %d\n", requested, event.dir);
-
         if (event.dir == DIR_INCOMING)
             event.peer_handle = init_handle;
         else
@@ -2107,9 +2103,6 @@ tp_accept(call_t *call)
     iface  = TP_CHANNEL_GROUP;
     method = ADD_MEMBERS;
     
-    printf("*** %s: calling %s.%s of %s in %s (with handle %u)\n", __FUNCTION__,
-           iface, method, path, name, call->local_handle);
-
     if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
         handles[0] = call->local_handle;
         members    = handles;
