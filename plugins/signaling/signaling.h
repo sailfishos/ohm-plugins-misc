@@ -27,6 +27,7 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin-debug.h>
+#include <ohm/ohm-plugin-log.h>
 
 
 #define DBUS_INTERFACE_POLICY    "com.nokia.policy"
