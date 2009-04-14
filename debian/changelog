@@ -1,3 +1,14 @@
+ohm-plugins-misc (0.6.32) unstable; urgency=low
+
+  * Added missing include of ohm-plugin-log to signaling.h.
+  * Replaced some printf'd errors with OHM_ERROR.
+  * Free sensore facts upon exit.
+  * Proper debug initialization.
+  * Cosmetic changes in logging.
+  * Fixed a HAL issue.
+
+ -- K. Litkey <krisztian.litkey@nokia.com>  Tue, 14 Apr 2009 11:26:42 +0300
+
 ohm-plugins-misc (0.6.31) unstable; urgency=low
 
   * Policy on the call acceptance/hold signaling path.
