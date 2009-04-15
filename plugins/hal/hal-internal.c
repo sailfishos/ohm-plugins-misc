@@ -193,6 +193,7 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec,
             if (dbus_error_is_set(&error)) {
                 g_print("Error getting data for HAL object %s. '%s': '%s'\n", 
                         udi, error.name, error.message);
+                dbus_error_free(&error);
                 return FALSE;
             }
 
@@ -311,24 +312,31 @@ static void hal_device_added_cb (LibHalContext *ctx, const char *udi)
 #ifdef OPTIMIZED
     /* get the fact from the HAL */
     properties = libhal_device_get_all_properties(plugin->hal_ctx, udi, &error);
-#endif
-
     if (dbus_error_is_set(&error)) {
         g_print("Error getting data for HAL object %s. '%s': '%s'\n",
                 udi, error.name, error.message);
+        dbus_error_free(&error);
         return;
     }
+#endif
 
     /* see if the device has a capability that someone is interested in */
     OHM_DEBUG(DBG_FACTS,"decorators: '%u'\n", g_slist_length(plugin->decorators));
     
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
-#ifdef OPTIMIZED
-        if (property_has_capability(properties, dec->capability)) {
-#else
+#ifndef OPTIMIZED
         if (libhal_device_query_capability(plugin->hal_ctx, udi, dec->capability, &error)) {
+            if (dbus_error_is_set(&error)) {
+                g_print("Error getting data for HAL object %s. '%s': '%s'\n",
+                        udi, error.name, error.message);
+                dbus_error_free(&error);
+                break; /* do not process this udi further*/
+            }
+#else
+        if (property_has_capability(properties, dec->capability)) {
 #endif
+
             OHM_DEBUG(DBG_FACTS,"device '%s' has capability '%s'\n", udi, dec->capability);
             match = TRUE;
             dec->devices = g_slist_prepend(dec->devices, g_strdup(udi));
@@ -574,6 +582,7 @@ error:
     if (dbus_error_is_set(&error)) {
         OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin. '%s': '%s'\n",
                   error.name, error.message);
+        dbus_error_free(&error);
     }
     else {
         OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin\n");

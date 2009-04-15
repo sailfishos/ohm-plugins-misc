@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.33) unstable; urgency=low
+
+  * Fixes: NB#111153
+  * Also fixes a HAL memory leak in the error handling.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 15 Apr 2009 17:39:54 +0300
+
 ohm-plugins-misc (0.6.32) unstable; urgency=low
 
   * Added missing include of ohm-plugin-log to signaling.h.
