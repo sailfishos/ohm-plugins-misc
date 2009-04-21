@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.34) unstable; urgency=low
+
+  * BT refactoring.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 21 Apr 2009 15:46:57 +0300
+
 ohm-plugins-misc (0.6.33) unstable; urgency=low
 
   * Fixes: NB#111153
