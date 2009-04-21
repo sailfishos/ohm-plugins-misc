@@ -18,6 +18,11 @@
 #define BT_TYPE_A2DP "bta2dp"
 #define BT_TYPE_HSP  "bthsp"
 
+#define BT_STATE_CONNECTING    "connecting"
+#define BT_STATE_CONNECTED     "connected"
+#define BT_STATE_PLAYING       "playing"
+#define BT_STATE_DISCONNECTED  "disconnected"
+
 #define BT_DEVICE "com.nokia.policy.connected_bt_device"
 
 static int DBG_HEADSET, DBG_BT;
@@ -38,6 +43,7 @@ static gboolean bluetooth_deinit(OhmPlugin *);
 static gboolean get_default_adapter(void);
 static int dres_accessory_request(const char *, int, int);
 static int dres_all(void);
+static void get_properties(const gchar *device_path, const gchar *interface);
 
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
 
@@ -587,81 +593,103 @@ end:
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-static gboolean bt_connection_changed(const gchar *type, const gchar *path, gboolean connected)
+static gboolean bt_state_changed(const gchar *type, const gchar *path, const gchar *state)
 {
         
     OhmFact *bt_connected = NULL;
+    gboolean dres = FALSE;
+    gboolean connected = FALSE;
 
     /* OHM_DEBUG(DBG_BT, "Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
        path, (int) val); */
 
     bt_connected = bt_get_connected(path);
 
-    if (connected) {
+    if (!bt_connected) {
+        GValue *gval = NULL;
+
+        /* first time: create a new fact */
+        bt_connected = ohm_fact_new(BT_DEVICE);
+        
         /* add the object path to the bluetooth fact in order to
          * remember the device */
+        gval = ohm_value_from_string(path);
+        ohm_fact_set(bt_connected, "bt_path", gval);
+        
+        ohm_fact_store_insert(fs, bt_connected);
+    }
+
+    if (strcmp(state, BT_STATE_CONNECTED) == 0) {
 
         /* note: assumption is that we have only one device
          * connected at a time */
 
-        GValue *gval_1 = NULL, *gval_2 = NULL;
+        GValue *gval = NULL;
 
-        if (!bt_connected) {
-            /* first time: create a new fact */
-            bt_connected = ohm_fact_new(BT_DEVICE);
-            ohm_fact_store_insert(fs, bt_connected);
-        }
-        else {
-            /* We are connecting even though we already have a fact,
-             * perhaps in this case we are just changing the profile? */
+        /* We have connected even though we already have a fact,
+         * perhaps in this case we are just changing the profile?
+         * Also possible that we went from "playing" state to
+         * "connected" state. */
 
-            OHM_DEBUG(DBG_BT, "We already have a fact for the connecting device!");
-        }
+        GValue *gval_state = NULL;
 
-        gval_1 = ohm_value_from_string(path);
-        ohm_fact_set(bt_connected, "bt_path", gval_1);
+        gval_state = ohm_fact_get(bt_connected, BT_TYPE_HSP);
 
-        gval_2 = ohm_value_from_int(1);
-        ohm_fact_set(bt_connected, type, gval_2);
-    }
-    else {
-        /* remove the object path from the bluetooth fact */
+        if ((gval_state != NULL &&
+                    G_VALUE_TYPE(gval_state) == G_TYPE_STRING)) {
 
-        if (bt_connected) {
-            
-            GValue *gval = NULL, *gval_a2dp = NULL, *gval_hsp = NULL;
-        
-            /* set the type to be disconnected */
-            gval = ohm_value_from_int(0);
-            ohm_fact_set(bt_connected, type, gval);
-            
-            /* remove the fact from the FS if both a2dp and hsp are
-             * disconnected */
-        
-            gval_a2dp = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
-            gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
-        
-            if ((gval_a2dp == NULL ||
-                        G_VALUE_TYPE(gval_a2dp) != G_TYPE_INT ||
-                        g_value_get_int(gval_a2dp) == 0) 
-                    &&
-                        (gval_hsp == NULL ||
-                        G_VALUE_TYPE(gval_hsp) != G_TYPE_INT ||
-                        g_value_get_int(gval_hsp) == 0)) {
+            const gchar *state = g_value_get_string(gval_state);
 
-                ohm_fact_store_remove(fs, bt_connected);
-                g_object_unref(bt_connected);
+            if (strcmp(state, BT_STATE_PLAYING) == 0) {
+                OHM_DEBUG(DBG_BT, "From playing to connected!");
+                /* ok, we went from "playing" to "connected" state */
+            }
+            else if (strcmp(state, BT_STATE_CONNECTING) == 0) {
+                OHM_DEBUG(DBG_BT, "From connecting to connected!");
+                /* ok, we went from "connecting" to "connected" state */
+                connected = TRUE;
             }
         }
-        else {
-            OHM_DEBUG(DBG_BT, "ERROR: disconnect for a non-connected device?");
-        }
+        dres = TRUE;
     }
-    
-    OHM_DEBUG(DBG_BT, "Setting %s to be %s", type, connected ? "connected" : "disconnected");
+    else if (strcmp(state, BT_STATE_DISCONNECTED) == 0) {
+        GValue *gval = NULL;
 
-    dres_accessory_request(type, -1, connected ? 1 : 0);
-    dres_all();
+        /* remove the fact from the FS if both a2dp and hsp are
+         * disconnected */
+
+        if (strcmp(type, BT_TYPE_A2DP) == 0) {
+            gval = ohm_fact_get(bt_connected, BT_TYPE_HSP);
+        }
+        else {
+            gval = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
+        }
+
+        if ((gval == NULL ||
+                    G_VALUE_TYPE(gval) != G_TYPE_STRING ||
+                    strcmp(g_value_get_string(gval), BT_STATE_DISCONNECTED) == 0)) {
+            ohm_fact_store_remove(fs, bt_connected);
+
+            g_object_unref(bt_connected);
+            bt_connected = NULL;
+        }
+        connected = FALSE;
+        dres = TRUE;
+    }
+    else if (strcmp(state, BT_STATE_PLAYING) == 0) {
+        OHM_DEBUG(DBG_BT, "Switched to playing state");
+    }
+    OHM_DEBUG(DBG_BT, "Setting %s to be %s", type, state);
+
+    if (bt_connected) {
+        GValue *gval_state = ohm_value_from_string(state);
+        ohm_fact_set(bt_connected, type, gval_state);
+    }
+
+    if (dres) {
+        dres_accessory_request(type, -1, connected ? 1 : 0);
+        dres_all();
+    }
 
     return TRUE;
 
@@ -671,8 +699,8 @@ static void bt_property_changed(DBusMessage * msg, gchar *type)
 {
     DBusMessageIter msg_i, var_i;
     const gchar *path = dbus_message_get_path(msg); 
-    gchar *property_name;
-    gboolean val;
+    const gchar *property_name;
+    const gchar *val;
 
     /* OHM_DEBUG(DBG_BT, "bluetooth property changed!\n\n"); */
     dbus_message_iter_init(msg, &msg_i);
@@ -684,10 +712,11 @@ static void bt_property_changed(DBusMessage * msg, gchar *type)
     /* get the name of the property */
     dbus_message_iter_get_basic(&msg_i, &property_name);
 
-    /* we are only interested in "Connected" properties */
-    if (strcmp(property_name, "Connected") == 0) {
+    if (strcmp(property_name, "State") == 0 &&
+             strcmp (type, BT_TYPE_HSP) == 0) {
+        
+        OHM_DEBUG(DBG_BT, "BT State signal!\n");
 
-        /* OHM_DEBUG(DBG_BT, "Connected signal!\n"); */
         dbus_message_iter_next(&msg_i);
 
         if (dbus_message_iter_get_arg_type(&msg_i) != DBUS_TYPE_VARIANT) {
@@ -697,14 +726,15 @@ static void bt_property_changed(DBusMessage * msg, gchar *type)
 
         dbus_message_iter_recurse(&msg_i, &var_i);
 
-        if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_BOOLEAN) {
-            /* OHM_DEBUG(DBG_BT, "The variant value is not boolean\n"); */
+        if (dbus_message_iter_get_arg_type(&var_i) != DBUS_TYPE_STRING) {
+            OHM_DEBUG(DBG_BT, "The variant value is not string\n");
             return;
         }
 
         dbus_message_iter_get_basic(&var_i, &val);
 
-        bt_connection_changed(type, path, val);
+        if (val) 
+            bt_state_changed(type, path, val);
     }
 
     return;
@@ -761,17 +791,29 @@ static gboolean bluetooth_deinit(OhmPlugin *plugin)
             gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
 
             if ((gval_a2dp && 
-                        G_VALUE_TYPE(gval_a2dp) == G_TYPE_INT &&
-                        g_value_get_int(gval_a2dp) == 1)) {
-                dres_accessory_request(BT_TYPE_A2DP, -1, 0);
-                resolve_all = TRUE;
+                G_VALUE_TYPE(gval_a2dp) == G_TYPE_STRING)) {
+                
+                const gchar *state = g_value_get_string(gval_hsp);
+                
+                if (strcmp(state, BT_STATE_CONNECTED) == 0 ||
+                        strcmp(state, BT_STATE_PLAYING) == 0) {
+                
+                    dres_accessory_request(BT_TYPE_A2DP, -1, 0);
+                    resolve_all = TRUE;
+                }
             }
 
             if ((gval_hsp && 
-                        G_VALUE_TYPE(gval_hsp) == G_TYPE_INT &&
-                        g_value_get_int(gval_hsp) == 1)) {
-                dres_accessory_request(BT_TYPE_HSP, -1, 0);
-                resolve_all = TRUE;
+                G_VALUE_TYPE(gval_hsp) == G_TYPE_STRING)) {
+
+                const gchar *state = g_value_get_string(gval_hsp);
+                
+                if (strcmp(state, BT_STATE_CONNECTED) == 0 ||
+                        strcmp(state, BT_STATE_PLAYING) == 0) {
+
+                    dres_accessory_request(BT_TYPE_HSP, -1, 0);
+                    resolve_all = TRUE;
+                }
             }
 
             if (resolve_all)
@@ -790,9 +832,14 @@ static void get_properties_cb (DBusPendingCall *pending, void *user_data)
 
     DBusMessage *reply = NULL;
     DBusMessageIter iter, array_iter, dict_iter, variant_iter, uuid_iter;
-    gchar *path = (gchar *) user_data;
-    gboolean is_hsp = FALSE, is_a2dp = FALSE, is_hfp = FALSE, is_connected = FALSE;
-    
+    gchar **dbus_data = user_data;
+    gchar *path = dbus_data[0];
+    gchar *interface = dbus_data[1];
+    gboolean is_hsp = FALSE, is_a2dp = FALSE, is_hfp = FALSE;
+    gchar *state = NULL;
+
+    g_free(dbus_data);
+
     if (pending == NULL) 
         goto error;
 
@@ -867,31 +914,48 @@ static void get_properties_cb (DBusPendingCall *pending, void *user_data)
                 OHM_DEBUG(DBG_BT, "Error: type '%u'\n", dbus_message_iter_get_arg_type(&dict_iter));
             }
         }
+        else if (strcmp(key, "State") == 0) {
+            if (type == DBUS_TYPE_STRING) {
+                dbus_message_iter_get_basic(&variant_iter, &state);
+            }
+        }
+#if 0
         else if (strcmp(key, "Connected") == 0) {
             if (type == DBUS_TYPE_BOOLEAN) {
                 dbus_message_iter_get_basic(&variant_iter, &is_connected);
             }
         }
+#endif
         else {
             /* OHM_DEBUG(DBG_BT, "Non-handled key '%s'\n", key); */
         }
 
-        /* now the beef: if an audio device was there, let's mark it
-         * present */
-
-        if (is_connected) {
-            if (is_a2dp) {
-                bt_connection_changed(BT_TYPE_A2DP, path, TRUE);
-            }
-            if (is_hsp || is_hfp) {
-                bt_connection_changed(BT_TYPE_HSP, path, TRUE);
-            }
-        }
-        
         dbus_message_iter_next(&array_iter);
     }
 
-    OHM_DEBUG(DBG_BT, "Device '%s': has_a2dp=%i, has_hsp=%i, has_hfp=%i, connected=%i\n", path, is_a2dp, is_hsp, is_hfp, is_connected);
+    OHM_DEBUG(DBG_BT, "Device '%s' (%s): has_a2dp=%i, has_hsp=%i, has_hfp=%i, state=%s\n", path, interface, is_a2dp, is_hsp, is_hfp, state ? "state" : "to be queried");
+
+    /* now the beef: if an audio device was there, let's mark it
+     * present */
+
+
+    if (strcmp(interface, "org.bluez.Device") == 0) {
+        if (is_a2dp) {
+            get_properties(path, "org.bluez.AudioSink");
+        }
+        if (is_hsp || is_hfp) {
+            get_properties(path, "org.bluez.Headset");
+        }
+    }
+
+    else if (strcmp(interface, "org.bluez.Headset") == 0 &&
+             state != NULL) {
+        bt_state_changed(BT_TYPE_HSP, path, state);
+    }
+    else if (strcmp(interface, "org.bluez.AudioSink") == 0 &&
+             state != NULL) {
+        bt_state_changed(BT_TYPE_A2DP, path, state);
+    }
 
 error:
 
@@ -899,16 +963,19 @@ error:
         dbus_message_unref (reply);
 
     g_free(path);
+    g_free(interface);
 
     return;
 }
 
-static void get_properties(gchar *device_path)
+static void get_properties(const gchar *device_path, const gchar *interface)
 {
 
     DBusMessage *request = NULL;
     DBusPendingCall *pending_call = NULL;
     DBusConnection *connection = dbus_bus_get(DBUS_BUS_SYSTEM, NULL);
+    
+    gchar **dbus_data = NULL;
     
     if (!connection) {
         goto error;
@@ -917,7 +984,7 @@ static void get_properties(gchar *device_path)
     if ((request =
                 dbus_message_new_method_call ("org.bluez",
                     device_path,
-                    "org.bluez.Device",
+                    interface,
                     "GetProperties")) == NULL) {
         goto error;
 
@@ -929,10 +996,22 @@ static void get_properties(gchar *device_path)
                 -1)) {
         goto error;
     }
+    
+    dbus_data = calloc(2, sizeof (gchar *));
+    if (!dbus_data)
+        goto error;
+
+    dbus_data[0] = g_strdup(device_path);
+    if (!dbus_data[0])
+        goto error;
+
+    dbus_data[1] = g_strdup(interface);
+    if (!dbus_data[1])
+        goto error;
 
     if (!dbus_pending_call_set_notify (pending_call,
                 get_properties_cb,
-                g_strdup(device_path),
+                dbus_data,
                 NULL)) {
 
         dbus_pending_call_cancel (pending_call);
@@ -982,7 +1061,7 @@ static void get_device_list_cb (DBusPendingCall *pending, void *user_data)
 
     for (; n_devices > 0; n_devices--) {
         OHM_DEBUG(DBG_BT, "getting properties of device '%s'\n", devices[n_devices-1]);
-        get_properties(devices[n_devices-1]);
+        get_properties(devices[n_devices-1], "org.bluez.Device");
     }
 
     dbus_free_string_array(devices);
@@ -1101,7 +1180,7 @@ static gboolean get_default_adapter(void)
     DBusMessage *request = NULL;
     DBusPendingCall *pending_call = NULL;
     DBusConnection *connection = dbus_bus_get(DBUS_BUS_SYSTEM, NULL);
-    
+
     if (!connection) {
         goto error;
     }
