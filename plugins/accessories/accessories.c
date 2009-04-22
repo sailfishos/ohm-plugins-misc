@@ -15,6 +15,11 @@
 #define HFP_UUID  "0000111e-0000-1000-8000-00805f9b34fb"
 #define A2DP_UUID "0000110b-0000-1000-8000-00805f9b34fb"
 
+/* TODO: also these*/
+#define BT_INTERFACE_DEVICE "org.bluez.Device"
+#define BT_INTERFACE_A2DP   "org.bluez.AudioSink"
+#define BT_INTERFACE_HSP    "org.bluez.Headset"
+
 #define BT_TYPE_A2DP "bta2dp"
 #define BT_TYPE_HSP  "bthsp"
 
@@ -551,38 +556,41 @@ static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg,
 
         if (bt_connected) {
 
-            GValue *gval = ohm_fact_get(bt_connected, "bt_path");
-            
-            if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
-                    && strcmp(path, g_value_get_string(gval)) == 0) {
+            GValue *gval_a2dp = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
+            GValue *gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
 
-                GValue *gval_a2dp = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
-                GValue *gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
-            
-                if (gval_a2dp &&
-                        G_VALUE_TYPE(gval_a2dp) != G_TYPE_INT &&
-                        g_value_get_int(gval_a2dp) == 1) {
+            if (gval_a2dp &&
+                    G_VALUE_TYPE(gval_a2dp) == G_TYPE_STRING) {
+
+                const gchar *state = g_value_get_string(gval_a2dp);
+
+                if (strcmp(state, BT_STATE_CONNECTED) == 0 ||
+                        strcmp(state, BT_STATE_PLAYING) == 0) {
                     OHM_DEBUG(DBG_BT, "BT A2DP profile to be disconnected");
                     dres_accessory_request(BT_TYPE_A2DP, -1, 0);
                     resolve_all = TRUE;
                 }
-                
-                if (gval_hsp &&
-                        G_VALUE_TYPE(gval_hsp) != G_TYPE_INT &&
-                        g_value_get_int(gval_hsp) == 1) {
+            }
+
+            if (gval_hsp &&
+                    G_VALUE_TYPE(gval_hsp) == G_TYPE_STRING) {
+
+                const gchar *state = g_value_get_string(gval_hsp);
+
+                if (strcmp(state, BT_STATE_CONNECTED) == 0 ||
+                        strcmp(state, BT_STATE_PLAYING) == 0) {
                     OHM_DEBUG(DBG_BT, "BT HSP profile to be disconnected");
                     dres_accessory_request(BT_TYPE_HSP, -1, 0);
                     resolve_all = TRUE;
                 }
-
-
-                if (resolve_all)
-                    dres_all();
-
-                ohm_fact_store_remove(fs, bt_connected);
-                g_object_unref(bt_connected);
-
             }
+
+            if (resolve_all)
+                dres_all();
+
+            ohm_fact_store_remove(fs, bt_connected);
+            g_object_unref(bt_connected);
+
         }
         /* else a bt device disconnected but there were no known bt headsets
          * connected, just disregard */
@@ -599,6 +607,7 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
     OhmFact *bt_connected = NULL;
     gboolean dres = FALSE;
     gboolean connected = FALSE;
+    const gchar *prev_state;
 
     /* OHM_DEBUG(DBG_BT, "Calling dres with first arg '%s', second arg '-1', and third argument '%i'!\n",
        path, (int) val); */
@@ -610,49 +619,60 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
 
         /* first time: create a new fact */
         bt_connected = ohm_fact_new(BT_DEVICE);
-        
+
         /* add the object path to the bluetooth fact in order to
          * remember the device */
         gval = ohm_value_from_string(path);
         ohm_fact_set(bt_connected, "bt_path", gval);
-        
+
         ohm_fact_store_insert(fs, bt_connected);
+        prev_state = NULL;
     }
+    else {
+        GValue *gval_state = ohm_fact_get(bt_connected, type);
+
+        if (gval_state != NULL &&
+                G_VALUE_TYPE(gval_state) == G_TYPE_STRING) {
+            prev_state = g_value_get_string(gval_state);
+        }
+        else
+            prev_state = NULL;
+    }
+
+    OHM_DEBUG(DBG_BT, "type: %s, prev_state: %s, state: %s", type, prev_state ? prev_state : "NULL", state);
 
     if (strcmp(state, BT_STATE_CONNECTED) == 0) {
 
-        /* note: assumption is that we have only one device
-         * connected at a time */
+        if (!prev_state) {
+            connected = TRUE;
+            dres = TRUE;
+        }
+        else {
 
-        GValue *gval = NULL;
+            /* We are interested in HSP going from "playing" to "connected",
+             * since that means that we'll need to route the call audio
+             * away from the BT headset. */
 
-        /* We have connected even though we already have a fact,
-         * perhaps in this case we are just changing the profile?
-         * Also possible that we went from "playing" state to
-         * "connected" state. */
-
-        GValue *gval_state = NULL;
-
-        gval_state = ohm_fact_get(bt_connected, BT_TYPE_HSP);
-
-        if ((gval_state != NULL &&
-                    G_VALUE_TYPE(gval_state) == G_TYPE_STRING)) {
-
-            const gchar *state = g_value_get_string(gval_state);
-
-            if (strcmp(state, BT_STATE_PLAYING) == 0) {
-                OHM_DEBUG(DBG_BT, "From playing to connected!");
-                /* ok, we went from "playing" to "connected" state */
+            if (strcmp(type, BT_TYPE_HSP) == 0) {
+                if (strcmp(prev_state, BT_STATE_PLAYING) == 0) {
+                    OHM_DEBUG(DBG_BT, "%s goes from playing to connected!", type);
+                    OHM_DEBUG(DBG_BT, "TODO: at this point we will want to reroute the audio");
+                }
             }
-            else if (strcmp(state, BT_STATE_CONNECTING) == 0) {
-                OHM_DEBUG(DBG_BT, "From connecting to connected!");
-                /* ok, we went from "connecting" to "connected" state */
+
+            /* in all cases, going from "connecting" to "connected" leads to
+             * us setting the dres device flag */
+            if (strcmp(prev_state, BT_STATE_CONNECTING) == 0) {
+                OHM_DEBUG(DBG_BT, "%s goes from connecting to connected!", type);
                 connected = TRUE;
+                dres = TRUE;
+
             }
         }
-        dres = TRUE;
     }
+
     else if (strcmp(state, BT_STATE_DISCONNECTED) == 0) {
+
         GValue *gval = NULL;
 
         /* remove the fact from the FS if both a2dp and hsp are
@@ -673,12 +693,32 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
             g_object_unref(bt_connected);
             bt_connected = NULL;
         }
-        connected = FALSE;
-        dres = TRUE;
+        if (prev_state) {
+            connected = FALSE;
+            dres = TRUE;
+        }
     }
+
     else if (strcmp(state, BT_STATE_PLAYING) == 0) {
+
         OHM_DEBUG(DBG_BT, "Switched to playing state");
+
+        if (!prev_state) {
+
+            /* we may have a device already in "playing" state when OHM
+               is started */
+
+            connected = TRUE;
+            dres = TRUE;
+        }
+        /* according to docs, the previous state had to be "connected" */
+
+        if (strcmp(type, BT_TYPE_HSP) == 0) {
+            OHM_DEBUG(DBG_BT, "HSP goes from connected to playing!");
+            OHM_DEBUG(DBG_BT, "TODO: at this point we will want to reroute the audio");
+        }
     }
+
     OHM_DEBUG(DBG_BT, "Setting %s to be %s", type, state);
 
     if (bt_connected) {
@@ -687,6 +727,7 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
     }
 
     if (dres) {
+        OHM_DEBUG(DBG_BT, "running dres with type %s and setting device %d", type, connected ? "on": "off");
         dres_accessory_request(type, -1, connected ? 1 : 0);
         dres_all();
     }
@@ -712,9 +753,8 @@ static void bt_property_changed(DBusMessage * msg, gchar *type)
     /* get the name of the property */
     dbus_message_iter_get_basic(&msg_i, &property_name);
 
-    if (strcmp(property_name, "State") == 0 &&
-             strcmp (type, BT_TYPE_HSP) == 0) {
-        
+    if (strcmp(property_name, "State") == 0) {
+
         OHM_DEBUG(DBG_BT, "BT State signal!\n");
 
         dbus_message_iter_next(&msg_i);
@@ -933,26 +973,26 @@ static void get_properties_cb (DBusPendingCall *pending, void *user_data)
         dbus_message_iter_next(&array_iter);
     }
 
-    OHM_DEBUG(DBG_BT, "Device '%s' (%s): has_a2dp=%i, has_hsp=%i, has_hfp=%i, state=%s\n", path, interface, is_a2dp, is_hsp, is_hfp, state ? "state" : "to be queried");
+    OHM_DEBUG(DBG_BT, "Device '%s' (%s): has_a2dp=%i, has_hsp=%i, has_hfp=%i, state=%s\n", path, interface, is_a2dp, is_hsp, is_hfp, state ? state : "to be queried");
 
     /* now the beef: if an audio device was there, let's mark it
      * present */
 
 
-    if (strcmp(interface, "org.bluez.Device") == 0) {
+    if (strcmp(interface, BT_INTERFACE_DEVICE) == 0) {
         if (is_a2dp) {
-            get_properties(path, "org.bluez.AudioSink");
+            get_properties(path, BT_INTERFACE_A2DP);
         }
         if (is_hsp || is_hfp) {
-            get_properties(path, "org.bluez.Headset");
+            get_properties(path, BT_INTERFACE_HSP);
         }
     }
 
-    else if (strcmp(interface, "org.bluez.Headset") == 0 &&
+    else if (strcmp(interface, BT_INTERFACE_HSP) == 0 &&
              state != NULL) {
         bt_state_changed(BT_TYPE_HSP, path, state);
     }
-    else if (strcmp(interface, "org.bluez.AudioSink") == 0 &&
+    else if (strcmp(interface, BT_INTERFACE_A2DP) == 0 &&
              state != NULL) {
         bt_state_changed(BT_TYPE_A2DP, path, state);
     }
@@ -1061,7 +1101,7 @@ static void get_device_list_cb (DBusPendingCall *pending, void *user_data)
 
     for (; n_devices > 0; n_devices--) {
         OHM_DEBUG(DBG_BT, "getting properties of device '%s'\n", devices[n_devices-1]);
-        get_properties(devices[n_devices-1], "org.bluez.Device");
+        get_properties(devices[n_devices-1], BT_INTERFACE_DEVICE);
     }
 
     dbus_free_string_array(devices);
