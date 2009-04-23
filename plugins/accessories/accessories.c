@@ -429,6 +429,36 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
+static gboolean dres_bluetooth_override_request(const char *target)
+{
+#define DRES_VARTYPE(t)  (char *)(t)
+#define DRES_VARVALUE(s) (char *)(s)
+
+    static char *goal = "bluetooth_override_request";
+
+    char *vars[48];
+    int   i;
+    int   status;
+    
+    vars[i=0] = "bluetooth_override_state";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(target);
+    
+    vars[++i] = NULL;
+
+    status = resolve(goal, vars);
+    
+    if (status < 0)
+        OHM_DEBUG(DBG_BT, "resolve() failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_BT, "resolve() failed");
+    
+    return status <= 0 ? FALSE : TRUE;
+
+#undef DRES_VARVALUE
+#undef DRES_VARTYPE
+}
 
 static int dres_accessory_request(const char *name, int driver, int connected)
 {
@@ -655,8 +685,12 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
 
             if (strcmp(type, BT_TYPE_HSP) == 0) {
                 if (strcmp(prev_state, BT_STATE_PLAYING) == 0) {
+
+                    gboolean status;
+
                     OHM_DEBUG(DBG_BT, "%s goes from playing to connected!", type);
-                    OHM_DEBUG(DBG_BT, "TODO: at this point we will want to reroute the audio");
+                    OHM_DEBUG(DBG_BT, "    -> doing a bluetooth override request");
+                    status = dres_bluetooth_override_request("bthsp");
                 }
             }
 
@@ -666,7 +700,6 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
                 OHM_DEBUG(DBG_BT, "%s goes from connecting to connected!", type);
                 connected = TRUE;
                 dres = TRUE;
-
             }
         }
     }
