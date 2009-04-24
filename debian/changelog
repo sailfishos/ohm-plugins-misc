@@ -1,3 +1,13 @@
+ohm-plugins-misc (0.6.35) unstable; urgency=low
+
+  * Playback fix: setting the client's state to the requested one if the
+    property setting would fail.
+  * In playback temporarily increasing the D-Bus timeout for property setting
+  * playback support for bluetooth_override
+  * Fixes: NB#111207
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Fri, 24 Apr 2009 14:25:00 +0300
+
 ohm-plugins-misc (0.6.34) unstable; urgency=low
 
   * BT refactoring.

@@ -612,6 +612,43 @@ static void dbusif_privacy_override_changed(int state)
     dbus_message_unref(msg);
 }
 
+static void dbusif_bluetooth_override_changed(int state)
+{
+    static dbus_uint32_t  txid    = 1;
+    static const char    *path    = DBUS_PLAYBACK_MANAGER_PATH;
+    static const char    *iface   = DBUS_PLAYBACK_MANAGER_INTERFACE;
+    static const char    *signal  = DBUS_BLUETOOTH_SIGNAL;
+
+    DBusMessage          *msg;
+    dbus_bool_t           bluetooth;
+    int                   success;
+
+    if ((msg = dbus_message_new_signal(path, iface, signal)) == NULL) {
+        OHM_ERROR("%s(): failed to create message", __FUNCTION__);
+        return;
+    }
+
+    bluetooth = state ? TRUE : FALSE;
+    success = dbus_message_append_args(msg,
+                                       DBUS_TYPE_BOOLEAN, &bluetooth,
+                                       DBUS_TYPE_INVALID);
+    if (!success) {
+        OHM_ERROR("%s(): failed to build message", __FUNCTION__);
+        return;
+    }
+
+    success = dbus_connection_send(sess_conn, msg, NULL);
+
+    if (!success)
+        OHM_ERROR("%s(): failed to send message", __FUNCTION__);
+    else {
+        OHM_DEBUG(DBG_DBUS, "bluetooth_override=%s", bluetooth?"True":"False");
+        txid++;
+    }
+
+    dbus_message_unref(msg);
+}
+
 static void dbusif_mute_changed(int state)
 {
     static dbus_uint32_t  txid    = 1;
@@ -852,12 +889,13 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     (void)conn;
     (void)user_data;
 
-    static const char  *interface   = DBUS_PLAYBACK_MANAGER_INTERFACE;
-    static const char  *rq_state    = DBUS_PLAYBACK_REQ_STATE_METHOD;
-    static const char  *rq_privacy  = DBUS_PLAYBACK_REQ_PRIVACY_METHOD;
-    static const char  *rq_mute     = DBUS_PLAYBACK_REQ_MUTE_METHOD;
-    static const char  *get_allowed = DBUS_PLAYBACK_GET_ALLOWED_METHOD;
-    static sm_evdata_t  evdata      = { .evid = evid_playback_request };
+    static const char  *interface    = DBUS_PLAYBACK_MANAGER_INTERFACE;
+    static const char  *rq_state     = DBUS_PLAYBACK_REQ_STATE_METHOD;
+    static const char  *rq_privacy   = DBUS_PLAYBACK_REQ_PRIVACY_METHOD;
+    static const char  *rq_bluetooth = DBUS_PLAYBACK_REQ_BLUETOOTH_METHOD;
+    static const char  *rq_mute      = DBUS_PLAYBACK_REQ_MUTE_METHOD;
+    static const char  *get_allowed  = DBUS_PLAYBACK_GET_ALLOWED_METHOD;
+    static sm_evdata_t  evdata       = { .evid = evid_playback_request };
 
     DBusMessage        *reply;
     /* char               *msgpath; */
@@ -868,6 +906,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     char               *pid;
     char               *stream;
     dbus_bool_t         privacy_override;
+    dbus_bool_t         bluetooth_override;
     dbus_bool_t         mute;
     client_t           *cl;
     pbreq_t            *req;
@@ -948,6 +987,35 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
         return DBUS_HANDLER_RESULT_HANDLED;
 
     rq_privacy_failed:
+        dbusif_reply_with_error(msg, NULL, errmsg);
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else if (dbus_message_is_method_call(msg, interface, rq_bluetooth)) {
+
+        /* msgpath = (char *)dbus_message_get_path(msg); */
+        sender  = (char *)dbus_message_get_sender(msg);
+
+        OHM_DEBUG(DBG_DBUS,"received set bluetooth override from %s",sender);
+
+        success = dbus_message_get_args(msg, NULL,
+                                        DBUS_TYPE_BOOLEAN, &bluetooth_override,
+                                        DBUS_TYPE_INVALID);
+        if (!success) {
+            errmsg = "failed to parse set bluetooth override message";
+            goto rq_bluetooth_failed;
+        }
+
+        if (dresif_bluetooth_override_request(bluetooth_override, 0))
+            dbusif_reply(msg);
+        else {
+            dbusif_reply_with_error(msg, DBUS_MAEMO_ERROR_FAILED,
+                                    "Policy error");
+        }
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+
+    rq_bluetooth_failed:
         dbusif_reply_with_error(msg, NULL, errmsg);
 
         return DBUS_HANDLER_RESULT_HANDLED;

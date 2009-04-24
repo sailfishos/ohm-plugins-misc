@@ -109,6 +109,52 @@ static int dresif_privacy_override_request(int privacy_override, int transid)
 #undef DRESIF_VARTYPE
 }
 
+static int dresif_bluetooth_override_request(int bluetooth_override,
+                                             int transid)
+{
+#define DRESIF_VARTYPE(t) (char *)(t)
+    char *vars[48];
+    int   i;
+    int   status;
+#if 0
+    char  buf[64];
+#else
+    (void) transid;
+#endif
+
+    vars[i=0] = "bluetooth_override_state";
+    vars[++i] = DRESIF_VARTYPE('s');
+    vars[++i] = bluetooth_override ? "earpiece" : "default";
+
+#if 0
+    if (transid > 0) {
+        snprintf(buf, sizeof(buf), "%d", transid);
+
+        vars[++i] = "completion_callback";
+        vars[++i] = DRESIF_VARTYPE('s');
+        vars[++i] = "playback.completion_cb";
+
+        vars[++i] = "transaction_id";
+        vars[++i] = DRESIF_VARTYPE('s');
+        vars[++i] = buf;
+    }
+#endif
+
+    vars[++i] = NULL;
+
+    status = resolve("bluetooth_override_request", vars);
+
+    if (status < 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed");
+    
+    return status <= 0 ? FALSE : TRUE;
+
+#undef DRESIF_VARTYPE
+}
+
 static int dresif_mute_request(int mute, int transid)
 {
 #define DRESIF_VARTYPE(t) (char *)(t)

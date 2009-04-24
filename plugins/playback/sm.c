@@ -56,6 +56,7 @@ sm_evdef_t  evdef[evid_max] = {
 static int read_property(sm_evdata_t *, void *);
 static int save_property(sm_evdata_t *, void *);
 static int write_property(sm_evdata_t *, void *);
+static int write_property_err(sm_evdata_t *, void *);
 static int process_pbreq(sm_evdata_t *, void *);
 static int reply_pbreq(sm_evdata_t *, void *);
 static int reply_pbreq_deq(sm_evdata_t *, void *);
@@ -188,7 +189,7 @@ sm_def_t  sm_def = {
          {evid_setstate_changed  , GOTO                  , STATE(setstreq)   },
          {evid_playhint_changed  , GOTO                  , STATE(setstreq)   },
          {evid_setprop_succeeded , GOTO                  , STATE(waitack)    },
-         {evid_setprop_failed    , DO(check_queue)       , STATE(idle)       },
+         {evid_setprop_failed    , DO(write_property_err), STATE(idle)       },
          {evid_client_gone       , DO(fake_stop_pbreq)   , STATE(invalid)    }}
         },
 
@@ -251,6 +252,7 @@ static void  write_property_cb(char *,char *, char *,char *, int,const char *);
 static void  setstate_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void  playhint_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void  privacy_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+static void  bluetooth_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void  mute_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static client_t *find_client_by_fact(fsif_entry_t *);
 static char *strncpylower(char *, const char *, int);
@@ -272,10 +274,11 @@ static void sm_init(OhmPlugin *plugin)
     dbusif_add_hello_notification(fire_hello_signal_event);
     dbusif_add_property_notification("State", fire_state_signal_event);
 
-    fsif_add_watch(FACTSTORE_PLAYBACK, NULL  , "setstate", setstate_cb, NULL);
-    fsif_add_watch(FACTSTORE_PLAYBACK, NULL  , "playhint", playhint_cb, NULL);
-    fsif_add_watch(FACTSTORE_PRIVACY , NULL  , "value"   , privacy_cb , NULL);
-    fsif_add_watch(FACTSTORE_MUTE    , selist, "mute"    , mute_cb    , NULL);
+    fsif_add_watch(FACTSTORE_PLAYBACK , NULL  , "setstate", setstate_cb, NULL);
+    fsif_add_watch(FACTSTORE_PLAYBACK , NULL  , "playhint", playhint_cb, NULL);
+    fsif_add_watch(FACTSTORE_PRIVACY  , NULL  , "value"   , privacy_cb , NULL);
+    fsif_add_watch(FACTSTORE_BLUETOOTH, NULL  , "value"   , bluetooth_cb,NULL);
+    fsif_add_watch(FACTSTORE_MUTE     , selist, "mute"    , mute_cb    , NULL);
 }
 
 static sm_t *sm_create(char *name, void *user_data)
@@ -856,6 +859,20 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
 }
 
 
+static int write_property_err(sm_evdata_t *evdata, void *usrdata)
+{
+    sm_evdata_property_t *evprop = (sm_evdata_property_t *)evdata;
+    client_t             *cl     = (client_t *)usrdata;
+
+    if (evprop->evid == evid_setprop_failed && !strcmp(evprop->name,"State")) {
+        update_state(evdata, usrdata);
+    }
+
+    schedule_deferred_request(cl);
+
+    return TRUE;
+}
+
 static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
 {
     (void)evdata;
@@ -1032,7 +1049,6 @@ static int abort_pbreq_deq(sm_evdata_t *evdata, void *usrdata)
             OHM_DEBUG(DBG_QUE, "state request roll-back: "
                       "setstate changed to '%s'", state);
             client_update_factstore_entry(cl, "setstate", state);
-
 
             dbusif_reply_with_error(req->msg, DBUS_MAEMO_ERROR_DENIED,err);
             break;
@@ -1290,6 +1306,33 @@ static void privacy_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     }
 
     dbusif_privacy_override_changed(state);
+}
+
+static void bluetooth_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
+                         void *usrdata)
+{
+    (void)entry;
+    (void)name;
+    (void)usrdata;
+
+    char *bluetooth;
+    int   state;
+
+    if (fld->type == fldtype_string && fld->value.string)
+        bluetooth = fld->value.string;
+    else {
+        OHM_ERROR("[%s] invalid field type", __FUNCTION__);
+        return;
+    }
+
+    if (bluetooth == NULL) {
+        OHM_ERROR("[%s] invalid field value '<null>'", __FUNCTION__);
+        return;
+    }
+
+    state = strcmp(bluetooth, "default") ? 1 : 0;
+
+    dbusif_bluetooth_override_changed(state);
 }
 
 static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
