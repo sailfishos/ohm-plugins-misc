@@ -148,7 +148,7 @@ fi
 AC_SUBST(pluginlibdir)
 
 # Check for telepathy (for telephony plugins).
-PKG_CHECK_MODULES(LIBTELEPATHY, libtelepathy,
+PKG_CHECK_MODULES(LIBTELEPATHY, libtelepathy-glib,
 		  [has_libtp=true], [has_libtp=false])
 AC_SUBST(LIBTELEPATHY_CFLAGS)
 AC_SUBST(LIBTELEPATHY_LIBS)
