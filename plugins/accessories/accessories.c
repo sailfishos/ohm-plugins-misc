@@ -704,9 +704,6 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
                     gboolean status;
 
                     OHM_DEBUG(DBG_BT, "%s goes from playing to connected!", type);
-                    OHM_DEBUG(DBG_BT, "    -> doing a bluetooth override request");
-
-                    printf("BT HSP from playing to connected!\n");
                     status = run_policy_hook("bthsp_stop_audio");
                     /* status = dres_bluetooth_override_request("bthsp"); */
                 }
