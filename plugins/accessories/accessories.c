@@ -429,6 +429,20 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
+static gboolean run_policy_hook(char *hook)
+{
+    int status = resolve(hook, NULL);
+
+    if (status < 0)
+        OHM_DEBUG(DBG_BT, "resolve() failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_BT, "resolve() failed");
+
+    return status <= 0 ? FALSE : TRUE;
+}
+
+#if 0
 static gboolean dres_bluetooth_override_request(const char *target)
 {
 #define DRES_VARTYPE(t)  (char *)(t)
@@ -459,6 +473,7 @@ static gboolean dres_bluetooth_override_request(const char *target)
 #undef DRES_VARVALUE
 #undef DRES_VARTYPE
 }
+#endif
 
 static int dres_accessory_request(const char *name, int driver, int connected)
 {
@@ -690,7 +705,10 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
 
                     OHM_DEBUG(DBG_BT, "%s goes from playing to connected!", type);
                     OHM_DEBUG(DBG_BT, "    -> doing a bluetooth override request");
-                    status = dres_bluetooth_override_request("bthsp");
+
+                    printf("BT HSP from playing to connected!\n");
+                    status = run_policy_hook("bthsp_stop_audio");
+                    /* status = dres_bluetooth_override_request("bthsp"); */
                 }
             }
 
@@ -747,8 +765,9 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
         /* according to docs, the previous state had to be "connected" */
 
         if (strcmp(type, BT_TYPE_HSP) == 0) {
+            gboolean status;
             OHM_DEBUG(DBG_BT, "HSP goes from connected to playing!");
-            OHM_DEBUG(DBG_BT, "TODO: at this point we will want to reroute the audio");
+            status = run_policy_hook("bthsp_start_audio");
         }
     }
 
@@ -760,7 +779,7 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
     }
 
     if (dres) {
-        OHM_DEBUG(DBG_BT, "running dres with type %s and setting device %d", type, connected ? "on": "off");
+        OHM_DEBUG(DBG_BT, "running dres with type %s and setting device %s", type, connected ? "on": "off");
         dres_accessory_request(type, -1, connected ? 1 : 0);
         dres_all();
     }
@@ -787,8 +806,6 @@ static void bt_property_changed(DBusMessage * msg, gchar *type)
     dbus_message_iter_get_basic(&msg_i, &property_name);
 
     if (strcmp(property_name, "State") == 0) {
-
-        OHM_DEBUG(DBG_BT, "BT State signal!\n");
 
         dbus_message_iter_next(&msg_i);
 
