@@ -1717,7 +1717,8 @@ register_external_enforcement_point(DBusConnection * c, DBusMessage * msg,
         goto err;
     }
 
-    return DBUS_HANDLER_RESULT_HANDLED;
+    /* FIXME: why are we setting this handled? */
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
 err:
 
@@ -1726,7 +1727,7 @@ err:
     /* if (msg) { dbus_message_unref(msg); msg = NULL; } */
     
     OHM_DEBUG(DBG_SIGNALING, "D-Bus error\n");
-    return DBUS_HANDLER_RESULT_HANDLED;
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
     DBusHandlerResult
