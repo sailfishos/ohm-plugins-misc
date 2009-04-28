@@ -10,33 +10,6 @@
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin-debug.h>
 
-/* TODO: these must be in some bluez headers */
-#define HSP_UUID  "00001108-0000-1000-8000-00805f9b34fb"
-#define HFP_UUID  "0000111e-0000-1000-8000-00805f9b34fb"
-#define A2DP_UUID "0000110b-0000-1000-8000-00805f9b34fb"
-
-/* TODO: also these*/
-#define BT_INTERFACE_DEVICE "org.bluez.Device"
-#define BT_INTERFACE_A2DP   "org.bluez.AudioSink"
-#define BT_INTERFACE_HSP    "org.bluez.Headset"
-
-#define BT_TYPE_A2DP "bta2dp"
-#define BT_TYPE_HSP  "bthsp"
-
-#define BT_DEVICE "com.nokia.policy.connected_bt_device"
-
-#define BT_STATE_NONE_S          "none"
-#define BT_STATE_CONNECTING_S    "connecting"
-#define BT_STATE_CONNECTED_S     "connected"
-#define BT_STATE_PLAYING_S       "playing"
-#define BT_STATE_DISCONNECTED_S  "disconnected"
-
-enum bt_state { BT_STATE_NONE, BT_STATE_CONNECTING, BT_STATE_CONNECTED, BT_STATE_PLAYING, BT_STATE_DISCONNECTED, BT_STATE_LAST };
-
-/* state machine for BT state transitions */
-typedef gboolean (*bt_sm_transition)(const gchar *, const gchar *, enum bt_state, enum bt_state);
-static bt_sm_transition bt_transitions[BT_STATE_LAST][BT_STATE_LAST];
-
 static int DBG_HEADSET, DBG_BT;
 
 OHM_DEBUG_PLUGIN(accessories,
@@ -114,6 +87,175 @@ static void plugin_exit(OhmPlugin *plugin)
     headset_deinit(plugin);
     /* bluetooth*/
     bluetooth_deinit(plugin);
+}
+
+
+static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
+{
+    int              driver    = -1;
+    int              connected = -1;
+    int             *valueptr  = &driver;
+    int              value     = -1;
+    DBusMessageIter  msgit;
+    DBusMessageIter  devit;
+    char            *string;
+    char            *end;
+    char            *device;
+
+    (void) c;
+    (void) data;
+
+    if (dbus_message_is_signal(msg, "com.nokia.policy", "info")) {
+
+        dbus_message_iter_init(msg, &msgit);
+
+        for (;;) {
+            if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING)
+                goto done;
+
+            dbus_message_iter_get_basic(&msgit, (void *)&string);
+
+            if (!strcmp(string, "driver")) {
+                valueptr = &driver;
+
+                if (!dbus_message_iter_next(&msgit))
+                    goto done;
+            } else
+
+            if (!strcmp(string, "connected")) {
+                valueptr = &connected;
+
+                if (!dbus_message_iter_next(&msgit))
+                    goto done;
+            }
+            
+            else {
+                value = strtol(string, &end, 10);
+
+                if (*end == '\0' && (value == 0 || value == 1)) {
+                    *valueptr = value;
+                    break;
+                }
+
+                goto done;
+            }
+        }
+        
+        if (!dbus_message_iter_next(&msgit) ||
+            dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_ARRAY)
+            goto done;
+   
+        dbus_message_iter_recurse(&msgit, &devit);
+
+        do {
+            if (dbus_message_iter_get_arg_type(&devit) != DBUS_TYPE_STRING)
+                continue;
+
+            dbus_message_iter_get_basic(&devit, (void *)&device);
+
+            dres_accessory_request(device, driver, connected);
+      
+        } while (dbus_message_iter_next(&devit));
+
+        dres_all();
+
+    done:
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+static gboolean run_policy_hook(char *hook)
+{
+    int status = resolve(hook, NULL);
+
+    if (status < 0)
+        OHM_DEBUG(DBG_BT, "resolve() failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_BT, "resolve() failed");
+
+    return status <= 0 ? FALSE : TRUE;
+}
+
+static int dres_accessory_request(const char *name, int driver, int connected)
+{
+#define DRES_VARTYPE(t)  (char *)(t)
+#define DRES_VARVALUE(s) (char *)(s)
+
+    static char *goal = "accessory_request";
+
+    char *vars[48];
+    int   i;
+    int   status;
+
+    vars[i=0] = "accessory_name";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(name);
+
+    vars[++i] = "accessory_driver";
+    vars[++i] = DRES_VARTYPE('i');
+    vars[++i] = DRES_VARVALUE(driver);
+
+    vars[++i] = "accessory_connected";
+    vars[++i] = DRES_VARTYPE('i');
+    vars[++i] = DRES_VARVALUE(connected);
+
+    vars[++i] = NULL;
+
+    status = resolve(goal, vars);
+
+    if (status < 0)
+        OHM_ERROR("%s: %s() resolving '%s' failed: (%d) %s",
+                  __FILE__, __FUNCTION__, goal, status, strerror(-status));
+    else if (!status)
+        OHM_ERROR("%s: %s() resolving '%s' failed",
+                  __FILE__, __FUNCTION__, goal);
+
+    return status <= 0 ? FALSE : TRUE;
+
+#undef DRES_VARVALUE
+#undef DRES_VARTYPE
+}
+
+
+static int dres_all(void)
+{
+#define DRES_VARTYPE(t)  (char *)(t)
+#define DRES_VARVALUE(s) (char *)(s)
+
+    static char *goal = "all";
+
+    char *vars[48];
+    int   i;
+    int   status;
+    char *callback = (char *)"";
+    char *txid = "0";
+
+    vars[i=0] = "completion_callback";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(callback);
+
+    vars[++i] = "transaction_id";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(txid);
+
+    vars[++i] = NULL;
+
+    status = resolve(goal, vars);
+
+    if (status < 0)
+        OHM_ERROR("%s: %s() resolving '%s' failed: (%d) %s",
+                  __FILE__, __FUNCTION__, goal, status, strerror(-status));
+    else if (!status)
+        OHM_ERROR("%s: %s() resolving '%s' failed",
+                  __FILE__, __FUNCTION__, goal);
+
+    return status <= 0 ? FALSE : TRUE;
+
+#undef DRES_VARVALUE
+#undef DRES_VARTYPE
 }
 
 
@@ -360,176 +502,43 @@ static gboolean headset_init(OhmPlugin *plugin)
 
 /* headset part ends */
 
-static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
-{
-    int              driver    = -1;
-    int              connected = -1;
-    int             *valueptr  = &driver;
-    int              value     = -1;
-    DBusMessageIter  msgit;
-    DBusMessageIter  devit;
-    char            *string;
-    char            *end;
-    char            *device;
-
-    (void) c;
-    (void) data;
-
-    if (dbus_message_is_signal(msg, "com.nokia.policy", "info")) {
-
-        dbus_message_iter_init(msg, &msgit);
-
-        for (;;) {
-            if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING)
-                goto done;
-
-            dbus_message_iter_get_basic(&msgit, (void *)&string);
-
-            if (!strcmp(string, "driver")) {
-                valueptr = &driver;
-
-                if (!dbus_message_iter_next(&msgit))
-                    goto done;
-            } else
-
-            if (!strcmp(string, "connected")) {
-                valueptr = &connected;
-
-                if (!dbus_message_iter_next(&msgit))
-                    goto done;
-            }
-            
-            else {
-                value = strtol(string, &end, 10);
-
-                if (*end == '\0' && (value == 0 || value == 1)) {
-                    *valueptr = value;
-                    break;
-                }
-
-                goto done;
-            }
-        }
-        
-        if (!dbus_message_iter_next(&msgit) ||
-            dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_ARRAY)
-            goto done;
-   
-        dbus_message_iter_recurse(&msgit, &devit);
-
-        do {
-            if (dbus_message_iter_get_arg_type(&devit) != DBUS_TYPE_STRING)
-                continue;
-
-            dbus_message_iter_get_basic(&devit, (void *)&device);
-
-            dres_accessory_request(device, driver, connected);
-      
-        } while (dbus_message_iter_next(&devit));
-
-        dres_all();
-
-    done:
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    }
-
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-}
-
-static gboolean run_policy_hook(char *hook)
-{
-    int status = resolve(hook, NULL);
-
-    if (status < 0)
-        OHM_DEBUG(DBG_BT, "resolve() failed: (%d) %s", status,
-                  strerror(-status));
-    else if (status == 0)
-        OHM_DEBUG(DBG_BT, "resolve() failed");
-
-    return status <= 0 ? FALSE : TRUE;
-}
-
-static int dres_accessory_request(const char *name, int driver, int connected)
-{
-#define DRES_VARTYPE(t)  (char *)(t)
-#define DRES_VARVALUE(s) (char *)(s)
-
-    static char *goal = "accessory_request";
-
-    char *vars[48];
-    int   i;
-    int   status;
-
-    vars[i=0] = "accessory_name";
-    vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(name);
-
-    vars[++i] = "accessory_driver";
-    vars[++i] = DRES_VARTYPE('i');
-    vars[++i] = DRES_VARVALUE(driver);
-
-    vars[++i] = "accessory_connected";
-    vars[++i] = DRES_VARTYPE('i');
-    vars[++i] = DRES_VARVALUE(connected);
-
-    vars[++i] = NULL;
-
-    status = resolve(goal, vars);
-
-    if (status < 0)
-        OHM_ERROR("%s: %s() resolving '%s' failed: (%d) %s",
-                  __FILE__, __FUNCTION__, goal, status, strerror(-status));
-    else if (!status)
-        OHM_ERROR("%s: %s() resolving '%s' failed",
-                  __FILE__, __FUNCTION__, goal);
-
-    return status <= 0 ? FALSE : TRUE;
-
-#undef DRES_VARVALUE
-#undef DRES_VARTYPE
-}
-
-
-static int dres_all(void)
-{
-#define DRES_VARTYPE(t)  (char *)(t)
-#define DRES_VARVALUE(s) (char *)(s)
-
-    static char *goal = "all";
-
-    char *vars[48];
-    int   i;
-    int   status;
-    char *callback = (char *)"";
-    char *txid = "0";
-
-    vars[i=0] = "completion_callback";
-    vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(callback);
-
-    vars[++i] = "transaction_id";
-    vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(txid);
-
-    vars[++i] = NULL;
-
-    status = resolve(goal, vars);
-
-    if (status < 0)
-        OHM_ERROR("%s: %s() resolving '%s' failed: (%d) %s",
-                  __FILE__, __FUNCTION__, goal, status, strerror(-status));
-    else if (!status)
-        OHM_ERROR("%s: %s() resolving '%s' failed",
-                  __FILE__, __FUNCTION__, goal);
-
-    return status <= 0 ? FALSE : TRUE;
-
-#undef DRES_VARVALUE
-#undef DRES_VARTYPE
-}
-
 
 /* bluetooth part begins */    
+
+/* TODO: these must be in some bluez headers */
+#define HSP_UUID  "00001108-0000-1000-8000-00805f9b34fb"
+#define HFP_UUID  "0000111e-0000-1000-8000-00805f9b34fb"
+#define A2DP_UUID "0000110b-0000-1000-8000-00805f9b34fb"
+
+/* TODO: also these*/
+#define BT_INTERFACE_DEVICE "org.bluez.Device"
+#define BT_INTERFACE_A2DP   "org.bluez.AudioSink"
+#define BT_INTERFACE_HSP    "org.bluez.Headset"
+
+#define BT_TYPE_A2DP "bta2dp"
+#define BT_TYPE_HSP  "bthsp"
+
+#define BT_DEVICE "com.nokia.policy.connected_bt_device"
+
+#define BT_STATE_NONE_S          "none"
+#define BT_STATE_CONNECTING_S    "connecting"
+#define BT_STATE_CONNECTED_S     "connected"
+#define BT_STATE_PLAYING_S       "playing"
+#define BT_STATE_DISCONNECTED_S  "disconnected"
+
+enum bt_state { BT_STATE_NONE, BT_STATE_CONNECTING, BT_STATE_CONNECTED, BT_STATE_PLAYING, BT_STATE_DISCONNECTED, BT_STATE_LAST };
+
+/* State transition for BT devices. Return TRUE if dres_all() needs to
+ * be run, FALSE otherwise. The first parameter is device type, the second
+ * is device path, the third is the previous state and the fourth is the
+ * new state. */
+typedef gboolean (*bt_sm_transition)(const gchar *, const gchar *, enum bt_state, enum bt_state);
+
+/* Array for state transition functions: the first dimension is the previous
+ * state, the second is the new state. */
+static bt_sm_transition bt_transitions[BT_STATE_LAST][BT_STATE_LAST];
+
+/* map BT states to internal enum representation */
 
 static enum bt_state map_to_state(const gchar *state)
 {
@@ -555,6 +564,7 @@ static enum bt_state map_to_state(const gchar *state)
     return BT_STATE_NONE;
 }
 
+/* get the fact representing the connected device */
 static OhmFact * bt_get_connected(const gchar *path)
 {
     OhmFact *ret = NULL;
@@ -766,6 +776,32 @@ static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * m
 }
 
 
+static gboolean bt_delete_all_facts()
+{
+    GSList *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
+    gboolean resolve_all;
+
+    OHM_DEBUG(DBG_BT, "Bluez went away!");
+
+    while (list) {
+
+        OhmFact *bt_connected = (OhmFact *) list->data;
+
+        gboolean disconnect_a2dp = disconnect_device(bt_connected, BT_TYPE_A2DP);
+        gboolean disconnect_hsp = disconnect_device(bt_connected, BT_TYPE_HSP);
+
+        ohm_fact_store_remove(fs, bt_connected);
+        g_object_unref(bt_connected);
+
+        if (disconnect_a2dp || disconnect_hsp)
+            resolve_all = TRUE;
+
+        list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
+    }
+
+    return resolve_all;
+}
+
 /* state change functions -- return TRUE if dres_all() needs to be run,
  * otherwise FALSE */
 
@@ -878,59 +914,10 @@ static gboolean bluetooth_init(OhmPlugin *plugin)
 
 static gboolean bluetooth_deinit(OhmPlugin *plugin)
 {
-    GSList *e, *f, *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
-    int resolve_all = FALSE;
-
     (void) plugin;
 
-    for (e = list; e != NULL; e = f) {
-        OhmFact *bt_connected = (OhmFact *) e->data;
-
-        /* this is special treatment for FS */
-        f = g_slist_next(e);
-
-        if (bt_connected) {
-
-            GValue *gval_a2dp = NULL, *gval_hsp = NULL;
-
-            /* disconnect the audio routing to BT and remove the fact */
-
-            gval_a2dp = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
-            gval_hsp = ohm_fact_get(bt_connected, BT_TYPE_HSP);
-
-            if ((gval_a2dp && 
-                G_VALUE_TYPE(gval_a2dp) == G_TYPE_STRING)) {
-                
-                const gchar *state = g_value_get_string(gval_hsp);
-                
-                if (strcmp(state, BT_STATE_CONNECTED_S) == 0 ||
-                        strcmp(state, BT_STATE_PLAYING_S) == 0) {
-                
-                    dres_accessory_request(BT_TYPE_A2DP, -1, 0);
-                    resolve_all = TRUE;
-                }
-            }
-
-            if ((gval_hsp && 
-                G_VALUE_TYPE(gval_hsp) == G_TYPE_STRING)) {
-
-                const gchar *state = g_value_get_string(gval_hsp);
-                
-                if (strcmp(state, BT_STATE_CONNECTED_S) == 0 ||
-                        strcmp(state, BT_STATE_PLAYING_S) == 0) {
-
-                    dres_accessory_request(BT_TYPE_HSP, -1, 0);
-                    resolve_all = TRUE;
-                }
-            }
-
-            if (resolve_all)
-                dres_all();
-
-            ohm_fact_store_remove(fs, bt_connected);
-            g_object_unref(bt_connected);
-        }
-    }
+    if (bt_delete_all_facts())
+        dres_all();
 
     return TRUE;
 }
@@ -1353,28 +1340,8 @@ DBusHandlerResult check_bluez(DBusConnection * c, DBusMessage * msg,
         if (!strcmp(after, "")) {
             /* a service went away, check if it is bluez */
             if (!strcmp(sender, "org.bluez")) {
-
-                gboolean resolve_all = FALSE;
-                GSList *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
-
-                OHM_DEBUG(DBG_BT, "Bluez went away!");
-
-                while (list) {
-
-                    OhmFact *bt_connected = (OhmFact *) list->data;
-
-                    gboolean disconnect_a2dp = disconnect_device(bt_connected, BT_TYPE_A2DP);
-                    gboolean disconnect_hsp = disconnect_device(bt_connected, BT_TYPE_HSP);
-                    
-                    ohm_fact_store_remove(fs, bt_connected);
-                    g_object_unref(bt_connected);
-
-                    if (disconnect_a2dp || disconnect_hsp)
-                        resolve_all = TRUE;
-                    
-                    list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
-                }
-                if (resolve_all)
+                /* delete all facts */
+                if (bt_delete_all_facts())
                     dres_all();
             }
         }
