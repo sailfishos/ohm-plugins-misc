@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.36) unstable; urgency=low
+
+  * Don't log info messages in MC policy filter plugin (Fixes: NB#110556).
+
+ -- K. Litkey <krisztian.litkey@nokia.com>  Tue, 05 May 2009 14:04:04 +0300
+
 ohm-plugins-misc (0.6.35) unstable; urgency=low
 
   * Playback fix: setting the client's state to the requested one if the
