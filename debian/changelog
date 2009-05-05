@@ -1,3 +1,13 @@
+ohm-plugins-misc (0.6.36) unstable; urgency=low
+
+  * Playback fix: setting the client's state to the requested one when sending
+    the property. This 'optimistic' approach is to prevent the falsely
+    filtered revert changes before the state is acknowledged.
+  * improved debug messages: '[dbusid:path pid/stream]' string is added to
+    debug messages in sm.c
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Mon, 04 May 2009 11:08:00 +0300
+
 ohm-plugins-misc (0.6.35) unstable; urgency=low
 
   * Playback fix: setting the client's state to the requested one if the
