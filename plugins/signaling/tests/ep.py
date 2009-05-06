@@ -88,7 +88,7 @@ class ExternalEnforcementPoint(dbus.service.Object):
             for fact in facts:
                 print "  Fact:"
                 for struct in fact:
-                    print "    tag: '" + struct[0] + "', value: '" + struct[1] + "'"
+                    print "    tag: '" + str(struct[0]) + "', value: '" + str(struct[1]) + "'"
 
         if len(args) == 2:
             if args[0] != 0:
