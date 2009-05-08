@@ -14,7 +14,8 @@ OHM_DEBUG_PLUGIN(profile,
     OHM_DEBUG_FLAG("profile", "profile events"   , &DBG_PROFILE),
     OHM_DEBUG_FLAG("facts"  , "fact manipulation", &DBG_FACTS));
 
-profile_plugin *profile_plugin_p;
+static profile_plugin *profile_plugin_p;
+static DBusConnection *bus_conn;
 
 static void
 plugin_init(OhmPlugin * plugin)
@@ -25,8 +26,7 @@ plugin_init(OhmPlugin * plugin)
         g_warning("Failed to initialize profile plugin debugging.");
     
     OHM_DEBUG(DBG_PROFILE, "> Profile plugin init");
-
-    profile_plugin_p = init_profile();
+    
     return;
 }
 
@@ -39,15 +39,74 @@ plugin_exit(OhmPlugin * plugin)
         deinit_profile(profile_plugin_p);
     }
     
+    if (bus_conn != NULL) {
+        dbus_connection_close(bus_conn);
+        bus_conn = NULL;
+    }
+    
     profile_plugin_p = NULL;
     return;
 }
+
+
+/********************
+ * bus_new_session
+ ********************/
+static DBusHandlerResult
+bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    char      *address;
+    DBusError  error;
+    
+    (void)c;
+    (void)data;
+
+    dbus_error_init(&error);
+    
+    if (!dbus_message_get_args(msg, &error,
+                               DBUS_TYPE_STRING, &address,
+                               DBUS_TYPE_INVALID)) {
+        if (dbus_error_is_set(&error)) {
+            OHM_ERROR("Failed to parse session bus notification: %s.",
+                      error.message);
+            dbus_error_free(&error);
+        }
+        else
+            OHM_ERROR("Failed to parse session bus notification.");
+        
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    
+    OHM_INFO("Received session bus notification with address \"%s\".", address);
+    
+    if ((bus_conn = dbus_connection_open(address, &error)) == NULL ||
+        !dbus_bus_register(bus_conn, &error)) {
+        if (dbus_error_is_set(&error)) {
+            OHM_ERROR("Failed to connect to DBUS %s (%s).", address,
+                      error.message);
+            dbus_error_free(&error);
+        }
+        else
+            OHM_ERROR("Failed to connect to DBUS %s.", address);
+        
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    profile_plugin_p = init_profile();
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
 
 OHM_PLUGIN_DESCRIPTION("profile",
         "0.0.1",
         "ismo.h.puustinen@nokia.com",
         OHM_LICENSE_NON_FREE, plugin_init, plugin_exit,
         NULL);
+
+OHM_PLUGIN_DBUS_SIGNALS(
+    { NULL, DBUS_INTERFACE_POLICY, DBUS_POLICY_NEW_SESSION, NULL,
+            bus_new_session, NULL }
+);
 
 static gboolean profile_create_fact(const char *profile, profileval_t *values)
 {
@@ -234,8 +293,11 @@ profile_plugin * init_profile()
         return NULL;
     }
 
-    /* get current profile */
 
+    /* let libprofile know the correct bus connection */
+    profile_set_bus_connection(bus_conn);
+    
+    /* get current profile */
     profile = profile_get_profile();
 
     if (profile && subscribe_to_service()) {
