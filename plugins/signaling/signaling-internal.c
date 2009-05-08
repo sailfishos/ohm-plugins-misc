@@ -1407,8 +1407,6 @@ process_inq(gpointer data)
 
     (void) data;
 
-    OHM_DEBUG(DBG_SIGNALING, "> process_inq");
-
     /*
      * incoming queue (from OHM to this plugin) 
      */
@@ -1559,8 +1557,6 @@ register_enforcement_point(const gchar * uri, gboolean internal)
     EnforcementPoint *ep = NULL;
     gchar *id;
 
-    OHM_DEBUG(DBG_SIGNALING, "> register_enforcement_point");
-
     for (i = enforcement_points; i != NULL; i = g_slist_next(i)) {
     
         g_object_get(i->data, "id", &id, NULL);
@@ -1647,8 +1643,6 @@ update_external_enforcement_points(DBusConnection * c, DBusMessage * msg,
     (void) user_data;
     (void) c;
 
-    OHM_DEBUG(DBG_SIGNALING, "> update_external_enforcement_points");
-
     ret = dbus_message_get_args(msg,
             NULL,
             DBUS_TYPE_STRING,
@@ -1671,8 +1665,6 @@ update_external_enforcement_points(DBusConnection * c, DBusMessage * msg,
         } 
     }
     
-    OHM_DEBUG(DBG_SIGNALING, "< update_external_enforcement_points");
-
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
@@ -1686,8 +1678,6 @@ register_external_enforcement_point(DBusConnection * c, DBusMessage * msg,
     EnforcementPoint *ep = NULL;
     
     (void) user_data;
-
-    OHM_DEBUG(DBG_SIGNALING, "> register_external_enforcement_point");
 
     if (msg == NULL) {
         goto err;

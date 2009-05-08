@@ -27,7 +27,7 @@
 static gboolean get_default_adapter(void);
 static void get_properties(const gchar *device_path, const gchar *interface);
 
-static enum bt_state { BT_STATE_NONE, BT_STATE_CONNECTING, BT_STATE_CONNECTED, BT_STATE_PLAYING, BT_STATE_DISCONNECTED, BT_STATE_LAST };
+enum bt_state { BT_STATE_NONE, BT_STATE_CONNECTING, BT_STATE_CONNECTED, BT_STATE_PLAYING, BT_STATE_DISCONNECTED, BT_STATE_LAST };
 
 /* State transition for BT devices. Return TRUE if dres_all() needs to
  * be run, FALSE otherwise. The first parameter is device type, the second
