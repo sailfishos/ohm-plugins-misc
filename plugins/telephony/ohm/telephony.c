@@ -2698,10 +2698,11 @@ plugin_init(OhmPlugin *plugin)
 
     (void)plugin;
 
-    if (!bus_init(NULL)) {
-        OHM_WARNING("Failed to connect to session DBUS.");
-        OHM_WARNING("Delaying session DBUS initialization...");
-    }
+    /*
+     * Notes: We delay session bus initializtion until we get the correct
+     *        address of the bus from ohm-session-agent.
+     */
+    
     call_init();
     policy_init();
 
