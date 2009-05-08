@@ -241,11 +241,13 @@ static void dbusif_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    /*
+     * Notes: We get only on the system bus here. Session bus initialization
+     *   is delayed until we get the correct address of the bus from our
+     *   ohm-session-agent.
+     */
     
     system_bus_init();
-    
-    if (!session_bus_init(NULL))
-        OHM_WARNING("Session bus initialization delayed.");
 }
 
 
