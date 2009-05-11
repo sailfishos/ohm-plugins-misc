@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.37) unstable; urgency=low
+
+  * Videoep fix: setting the TV out standard without the need to
+    unplug/plug again the cable
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Mon, 11 May 2009 16:37:00 +0300
+
 ohm-plugins-misc (0.6.36) unstable; urgency=low
 
   * Playback fix: setting the client's state to the requested one when sending
