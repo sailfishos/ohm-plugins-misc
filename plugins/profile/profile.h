@@ -26,14 +26,10 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin-debug.h>
-#include <ohm/ohm-plugin-log.h>
 
 #define FACTSTORE_PREFIX "com.nokia.policy"
 #define FACTSTORE_PROFILE             FACTSTORE_PREFIX ".current_profile"
 #define PROFILE_NAME_KEY "value"
-
-#define DBUS_INTERFACE_POLICY   "com.nokia.policy"
-#define DBUS_POLICY_NEW_SESSION "NewSession"
 
 typedef struct _profile_plugin {
     gchar *current_profile;
