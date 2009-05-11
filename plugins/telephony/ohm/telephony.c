@@ -82,13 +82,14 @@ void    call_destroy(call_t *call);
 void    call_foreach(GHFunc callback, gpointer data);
 
 enum {
-    UPDATE_NONE   = 0x00,
-    UPDATE_STATE  = 0x01,
-    UPDATE_DIR    = 0x02,
-    UPDATE_ORDER  = 0x04,
-    UPDATE_PARENT = 0x08,
-    UPDATE_EMERG  = 0x10,
-    UPDATE_ALL    = 0xff,
+    UPDATE_NONE    = 0x00,
+    UPDATE_STATE   = 0x01,
+    UPDATE_DIR     = 0x02,
+    UPDATE_ORDER   = 0x04,
+    UPDATE_PARENT  = 0x08,
+    UPDATE_EMERG   = 0x10,
+    UPDATE_CONNECT = 0x20,
+    UPDATE_ALL     = 0xff,
 };
 
 int     policy_call_export(call_t *call);
@@ -138,13 +139,14 @@ static int        unknown_members_changed(const char *path,
  * policy and fact-store stuff
  */
 
-#define FACT_FIELD_PATH   "path"
-#define FACT_FIELD_ID     "id"
-#define FACT_FIELD_STATE  "state"
-#define FACT_FIELD_DIR    "direction"
-#define FACT_FIELD_ORDER  "order"
-#define FACT_FIELD_PARENT "parent"
-#define FACT_FIELD_EMERG  "emergency"
+#define FACT_FIELD_PATH      "path"
+#define FACT_FIELD_ID        "id"
+#define FACT_FIELD_STATE     "state"
+#define FACT_FIELD_DIR       "direction"
+#define FACT_FIELD_ORDER     "order"
+#define FACT_FIELD_PARENT    "parent"
+#define FACT_FIELD_EMERG     "emergency"
+#define FACT_FIELD_CONNECTED "connected"
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
 
@@ -2234,9 +2236,10 @@ call_activate(call_t *call, const char *action, event_t *event)
                 hold_call_reply(event->call.req, NULL);
         }
     
-        call->state = STATE_ACTIVE;
-        call->order = 0;
-        policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
+        call->state     = STATE_ACTIVE;
+        call->order     = 0;
+        call->connected = TRUE;
+        policy_call_update(call, UPDATE_STATE | UPDATE_ORDER | UPDATE_CONNECT);
 
         if (event->type == EVENT_CALL_ACCEPT_REQUEST)
             policy_run_hook("telephony_call_connect_hook");
@@ -2622,7 +2625,7 @@ policy_call_update(call_t *call, int fields)
     OhmFact    *fact;
     const char *state, *dir, *parent;
     char        id[16];
-    int         order, emerg;
+    int         order, emerg, conn;
     
     if (call == NULL)
         return FALSE;
@@ -2632,10 +2635,11 @@ policy_call_update(call_t *call, int fields)
 
     OHM_INFO("Updating fact for call %s", short_path(call->path));
     
-    state = (fields & UPDATE_STATE) ? state_name(call->state) : NULL;
-    dir   = (fields & UPDATE_DIR)   ? dir_name(call->dir) : NULL;
-    order = (fields & UPDATE_ORDER) ? call->order : 0;
-    emerg = (fields & UPDATE_EMERG) ? call->emergency : 0;
+    state  = (fields & UPDATE_STATE)   ? state_name(call->state) : NULL;
+    dir    = (fields & UPDATE_DIR)     ? dir_name(call->dir) : NULL;
+    order  = (fields & UPDATE_ORDER)   ? call->order : 0;
+    emerg  = (fields & UPDATE_EMERG)   ? call->emergency : 0;
+    conn   = (fields & UPDATE_CONNECT) ? call->connected : 0;
 
     if (fields & UPDATE_PARENT) {
         if (call->parent == NULL) {
@@ -2650,10 +2654,11 @@ policy_call_update(call_t *call, int fields)
     else
         parent = NULL;
     
-    if ((state  && !set_string_field(fact, FACT_FIELD_STATE , state))  ||
-        (dir    && !set_string_field(fact, FACT_FIELD_DIR   , dir))    ||
-        (parent && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
-        (order  && !set_int_field   (fact, FACT_FIELD_ORDER , order))) {
+    if ((state  && !set_string_field(fact, FACT_FIELD_STATE    , state))  ||
+        (dir    && !set_string_field(fact, FACT_FIELD_DIR      , dir))    ||
+        (parent && !set_string_field(fact, FACT_FIELD_PARENT   , parent)) ||
+        (order  && !set_int_field   (fact, FACT_FIELD_ORDER    , order))  ||
+        (conn   && !set_string_field(fact, FACT_FIELD_CONNECTED, "yes"))) {
         OHM_ERROR("Failed to update fact for call %s", short_path(call->path));
         return FALSE;
     }

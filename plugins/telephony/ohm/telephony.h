@@ -117,6 +117,7 @@ struct call_s {
     call_state_t  state;                       /* current state */
     int           order;                       /* autohold order */
     call_t       *parent;                      /* hosting conference if any */
+    int           connected;                   /* whether has been connected */
     OhmFact      *fact;                        /* this call in fact store */
 };
 
