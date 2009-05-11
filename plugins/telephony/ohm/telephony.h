@@ -14,7 +14,6 @@
 #define TP_CHANNEL_GROUP  TP_CHANNEL".Interface.Group"
 #define TP_CHANNEL_HOLD   TP_CHANNEL".Interface.Hold"
 #define TP_CHANNEL_STATE  TP_CHANNEL".Interface.CallState"
-#define TP_CHANNEL_DTMF   TP_CHANNEL".Interface.DTMF"
 #define TP_CHANNEL_MEDIA  TP_CHANNEL".Type.StreamedMedia"
 
 #define TP_CONN_PATH      "/org/freedesktop/Telepathy/Connection"
@@ -28,8 +27,6 @@
 
 #define SENDING_DIALSTRING "SendingDialString"
 #define STOPPED_DIALSTRING "StoppedDialString"
-#define START_TONE         "StartTone"
-#define STOP_TONE          "StopTone"
 
 #define PROP_CHANNEL_TYPE     TP_CHANNEL".ChannelType"
 #define PROP_INITIAL_MEMBERS  TP_CONFERENCE".InitialMembers"
