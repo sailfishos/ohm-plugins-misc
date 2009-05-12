@@ -16,8 +16,7 @@ OHM_DEBUG_PLUGIN(profile,
 
 profile_plugin *profile_plugin_p;
 
-static void
-plugin_init(OhmPlugin * plugin)
+static void plugin_init(OhmPlugin * plugin)
 {
     (void) plugin;
 
@@ -30,8 +29,7 @@ plugin_init(OhmPlugin * plugin)
     return;
 }
 
-static void
-plugin_exit(OhmPlugin * plugin)
+static void plugin_exit(OhmPlugin * plugin)
 {
     (void) plugin;
 
@@ -224,6 +222,8 @@ static gboolean subscribe_to_service()
     return TRUE;
 }
 
+/* non-static for testing purposes */
+
 profile_plugin * init_profile()
 {
     profile_plugin *plugin = g_new0(profile_plugin, 1);
@@ -260,6 +260,8 @@ end:
 
     return plugin;
 }
+
+/* non-static for testing purposes */
 
 void deinit_profile(profile_plugin *plugin)
 {
