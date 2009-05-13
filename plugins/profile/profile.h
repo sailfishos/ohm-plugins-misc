@@ -41,6 +41,8 @@ typedef struct _profile_plugin {
     profile_track_value_fn value_change;
 } profile_plugin;
 
+/* Non-static for testing purposes: these functions are called from the
+ * unit tests. */
 
 profile_plugin * init_profile();
 void deinit_profile(profile_plugin *plugin);

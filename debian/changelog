@@ -1,6 +1,13 @@
+ohm-plugins-misc (0.6.37) unstable; urgency=low
+
+  * Don't reboot if ohm-session-agent keeps failing to start up.
+  * Consider a remotely ended call (peer)hungup only if it has ever been connected (Fixes: NB#115110).
+
+ -- K. Litkey <krisztian.litkey@nokia.com>  Tue, 12 May 2009 15:56:26 +0300
+
 ohm-plugins-misc (0.6.36) unstable; urgency=low
 
-  * Don't log info messages in MC policy filter plugin (Fixes: NB#110556).
+  * Don't log info messages in MC policy filter plugin (Fixes-partly: NB#110556).
 
  -- K. Litkey <krisztian.litkey@nokia.com>  Tue, 05 May 2009 14:04:04 +0300
 
