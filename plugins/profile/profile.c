@@ -26,6 +26,8 @@ plugin_init(OhmPlugin * plugin)
         g_warning("Failed to initialize profile plugin debugging.");
     
     OHM_DEBUG(DBG_PROFILE, "> Profile plugin init");
+
+    profile_connection_disable_autoconnect();
     
     return;
 }
@@ -293,13 +295,14 @@ profile_plugin * init_profile()
         return NULL;
     }
 
-
+    
     /* let libprofile know the correct bus connection */
-    profile_set_bus_connection(bus_conn);
+    profile_connection_set(bus_conn);
     
     /* get current profile */
     profile = profile_get_profile();
 
+    /* start tracking profile changes */
     if (profile && subscribe_to_service()) {
         values = profile_get_values(profile);
     }
