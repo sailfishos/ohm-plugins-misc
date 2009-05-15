@@ -700,6 +700,7 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
 
     sm_evdata_property_t *property = &evdata->property;
     client_t    *cl = (client_t *)usrdata;
+    sm_t        *sm = cl->sm;
     char        *group;
     char         state[64];
     char         name[256];
@@ -711,7 +712,8 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         cl->pid = strdup(property->value);
         client_update_factstore_entry(cl, "pid", cl->pid);
         
-        OHM_DEBUG(DBG_TRANS, "playback pid is set to %s", cl->pid);
+        OHM_DEBUG(DBG_TRANS, "[%s] playback pid is set to %s",
+                  sm->name, cl->pid);
 
         client_get_property(cl, "Class", read_property_cb);
     }
@@ -721,7 +723,8 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         cl->group = strdup(group);
         client_update_factstore_entry(cl, "group", cl->group);
         
-        OHM_DEBUG(DBG_TRANS, "playback group is set to %s", cl->group);
+        OHM_DEBUG(DBG_TRANS, "[%s] playback group is set to %s",
+                  sm->name, cl->group);
 
         client_get_property(cl, "State", read_property_cb);
     }
@@ -731,7 +734,8 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         client_save_state(cl, client_state, state);
         client_update_factstore_entry(cl, "state", cl->state);
         
-        OHM_DEBUG(DBG_TRANS, "playback state is set to %s", cl->state);
+        OHM_DEBUG(DBG_TRANS, "[%s] playback state is set to %s",
+                  sm->name, cl->state);
 
         client_get_property(cl, "Flags", read_property_cb);
     }
@@ -753,7 +757,8 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
 
         client_update_factstore_entry(cl, "flags", &cl->flags);
         
-        OHM_DEBUG(DBG_TRANS, "playback flags are set to 0x%04x", cl->flags);
+        OHM_DEBUG(DBG_TRANS, "[%s] playback flags are set to 0x%04x",
+                  sm->name, cl->flags);
     }
     else {
         OHM_ERROR("[%s] Do not know anything about property '%s'",
@@ -761,10 +766,13 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
     }
 
     if (cl->pid && cl->group && cl->state && cl->flags) {
-        if (cl->stream == NULL)
-            snprintf(name, sizeof(name), "%s", cl->pid);
-        else
-            snprintf(name, sizeof(name), "%s/%s", cl->pid, cl->stream);
+        if (cl->stream == NULL) {
+            snprintf(name, sizeof(name), "%s %s", cl->sm->name, cl->pid);
+        }
+        else {
+            snprintf(name, sizeof(name), "%s %s/%s",
+                     cl->sm->name, cl->pid, cl->stream);
+        }
 
         sm_rename(cl->sm, name);
 
@@ -802,6 +810,7 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
 static int write_property(sm_evdata_t *evdata, void *usrdata)
 {
     client_t  *cl = (client_t *)usrdata;
+    sm_t      *sm = cl->sm;
     char      *setstate;
     char      *playhint;
     char       prvalue[64];
@@ -813,11 +822,12 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
         setstate = evdata->watch.value;
 
         if (cl->state && !strcmp(cl->state, setstate)) {
-            OHM_DEBUG(DBG_TRANS, "do not write 'state' property: client is "
-                      "already in '%s' state", setstate);
+            OHM_DEBUG(DBG_TRANS, "[%s] do not write 'state' property: "
+                      "client is already in '%s' state", sm->name, setstate);
         }
         else {
             client_save_state(cl, client_setstate, setstate);
+
 
             /* capitalize the property value */
             strncpy(prvalue, setstate, sizeof(prvalue));
@@ -834,8 +844,8 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
         playhint = evdata->watch.value;
 
         if (cl->playhint && !strcmp(cl->playhint, playhint)) {
-            OHM_DEBUG(DBG_TRANS, "do not write 'playhint' property: client is "
-                      "already hinted");
+            OHM_DEBUG(DBG_TRANS, "[%s] do not write 'playhint' property: "
+                      "client is already hinted", sm->name);
         }
         else {
             /* capitalize the property value */
@@ -939,8 +949,9 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
             oldstate = client_get_state(cl, client_setstate, NULL,0);
 
             if (!strcmp(state, oldstate)) {
-                OHM_DEBUG(DBG_TRANS, "identical setstate and reqstate (%s)",
-                          state);
+                OHM_DEBUG(DBG_TRANS, "[%s] identical setstate and reqstate "
+                          "(%s)", sm->name, state);
+
                 evid = evid_playback_complete;
                 goto schedule_reply_event;
             }
@@ -951,6 +962,13 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
             if (dresif_state_request(cl, state, req->trid)) {
                 req->waiting = TRUE;
                 client_save_state(cl, client_setstate, state);
+
+                /* optimistic approach: assume the client is already in the
+                   requested state */
+                client_save_state(cl, client_state, state);
+                client_update_factstore_entry(cl, "state", state);
+                OHM_DEBUG(DBG_TRANS, "[%s] playback state is set to %s",
+                          sm->name, setstate);
             }
             else {
                 /* dres failure: undo the data changes */
@@ -1043,12 +1061,16 @@ static int abort_pbreq_deq(sm_evdata_t *evdata, void *usrdata)
         switch (req->type) {
 
         case pbreq_state:
+#if 1
+            update_state(evdata, usrdata);
+#else
             /* We might loose state requests issued by the policy engine */
             state = client_get_state(cl, client_state, NULL,0);
             client_save_state(cl, client_setstate, state);
-            OHM_DEBUG(DBG_QUE, "state request roll-back: "
-                      "setstate changed to '%s'", state);
+            OHM_DEBUG(DBG_QUE, "[sm] state request roll-back: "
+                      "setstate changed to '%s'", sm->name, state);
             client_update_factstore_entry(cl, "setstate", state);
+#endif
 
             dbusif_reply_with_error(req->msg, DBUS_MAEMO_ERROR_DENIED,err);
             break;
@@ -1080,15 +1102,37 @@ static int check_queue(sm_evdata_t *evdata, void *usrdata)
 
 static int update_state(sm_evdata_t *evdata, void *usrdata)
 {
-    sm_evdata_property_t *property = &evdata->property;
-    client_t             *cl       = (client_t *)usrdata;
-    char                  state[64];
+    client_t  *cl = (client_t *)usrdata;
+    sm_t      *sm = cl->sm;
+    char       state[64];
+    char      *evnam;
 
-    strncpylower(state, property->value, sizeof(state));
+    switch (evdata->evid) {
+
+    case evid_setprop_failed:
+    case evid_state_signal:
+        strncpylower(state, evdata->property.value, sizeof(state));
+        break;
+
+    case evid_playback_complete:
+    case evid_playback_failed:
+        strncpylower(state, evdata->pbreply.req->state.name, sizeof(state));
+        break;
+
+    default:
+        evnam = (evdata->evid <= 0 || evdata->evid >= evid_max) ?
+                    "<unknown>" : evdef[evdata->evid].name; 
+
+        OHM_DEBUG(DBG_TRANS, "[%s] invalid event id %s (%d)",
+                  sm->name, evnam, evdata->evid);
+
+        return FALSE;
+    }
+
     client_save_state(cl, client_state, state);
     client_update_factstore_entry(cl, "state", state);
 
-    OHM_DEBUG(DBG_TRANS, "playback state is set to %s", state);
+    OHM_DEBUG(DBG_TRANS, "[%s] playback state is set to %s", sm->name, state);
 
     return TRUE;
 }
@@ -1112,12 +1156,13 @@ static int update_playhint(sm_evdata_t *evdata, void *usrdata)
 #else
     sm_evdata_property_t *property = &evdata->property;
     client_t             *cl       = (client_t *)usrdata;
+    sm_t                 *sm       = cl->sm;
     char                  playhint[64];
 
     strncpylower(playhint, property->value, sizeof(playhint));
     client_save_playback_hint(cl, client_playhint, playhint);
 
-    OHM_DEBUG(DBG_TRANS, "playback hint is set to %s", playhint);
+    OHM_DEBUG(DBG_TRANS, "[%s] playback hint is set to %s", sm->name,playhint);
 #endif
 
     return TRUE;
@@ -1207,6 +1252,7 @@ static void setstate_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     (void)usrdata;
 
     client_t *cl;
+    sm_t     *sm;
     char     *setstate;
 
     if (fld->type == fldtype_string && fld->value.string)
@@ -1216,7 +1262,9 @@ static void setstate_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
         return;
     }
 
-    if ((cl = find_client_by_fact(entry)) == NULL) {
+    if ((cl = find_client_by_fact(entry)) != NULL)
+        sm = cl->sm;
+    else {
         OHM_ERROR("[%s] Can't fire event: no client", __FUNCTION__);
         return;
     }
@@ -1226,10 +1274,11 @@ static void setstate_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
 
     cl->rqsetst.value = strdup(setstate);
 
-    OHM_DEBUG(DBG_QUE, "rqsetst is set to '%s'", cl->rqsetst.value);
+    OHM_DEBUG(DBG_QUE, "[%s] rqsetst is set to '%s'",
+              sm->name, cl->rqsetst.value);
 
     if (cl->rqsetst.evsrc == 0 && cl->rqplayhint.evsrc == 0) {
-        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", cl->sm->name,
+        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", sm->name,
                   evdef[evid_setstate_changed].name);
 
         cl->rqsetst.evsrc = g_idle_add(fire_setstate_changed_event, cl);
@@ -1243,6 +1292,7 @@ static void playhint_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     (void)usrdata;
 
     client_t *cl;
+    sm_t     *sm;
     char     *playhint;
 
     if (fld->type == fldtype_string && fld->value.string)
@@ -1252,7 +1302,9 @@ static void playhint_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
         return;
     }
 
-    if ((cl = find_client_by_fact(entry)) == NULL) {
+    if ((cl = find_client_by_fact(entry)) != NULL)
+        sm = cl->sm;
+    else {
         OHM_ERROR("[%s] Can't fire event: no client", __FUNCTION__);
         return;
     }
@@ -1262,10 +1314,11 @@ static void playhint_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
 
     cl->rqplayhint.value = strdup(playhint);
 
-    OHM_DEBUG(DBG_QUE, "rqplayhint is set to '%s'", cl->rqplayhint.value);
+    OHM_DEBUG(DBG_QUE, "[%s] rqplayhint is set to '%s'",
+              sm->name, cl->rqplayhint.value);
 
     if (cl->rqsetst.evsrc == 0 && cl->rqplayhint.evsrc == 0) {
-        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", cl->sm->name,
+        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", sm->name,
                   evdef[evid_playhint_changed].name);
 
         cl->rqplayhint.evsrc = g_idle_add(fire_playhint_changed_event, cl);
@@ -1464,6 +1517,7 @@ static void schedule_deferred_request(client_t *cl)
 {
     static sm_evdata_t  evdata = { .evid = evid_playback_request };
 
+    sm_t    *sm = cl->sm;
     pbreq_t *req;
 
     if ((req = pbreq_get_first(cl)) != NULL && !req->waiting) {
@@ -1472,7 +1526,7 @@ static void schedule_deferred_request(client_t *cl)
     }
 
     if (cl->rqsetst.value != NULL && cl->rqsetst.evsrc == 0) {
-        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", cl->sm->name,
+        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", sm->name,
                   evdef[evid_setstate_changed].name);
 
         cl->rqsetst.evsrc = g_idle_add(fire_setstate_changed_event, cl);
@@ -1480,14 +1534,14 @@ static void schedule_deferred_request(client_t *cl)
     }
 
     if (cl->rqplayhint.value != NULL && cl->rqplayhint.evsrc == 0) {
-        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", cl->sm->name,
+        OHM_DEBUG(DBG_SM, "[%s] schedule event '%s'", sm->name,
                   evdef[evid_playhint_changed].name);
 
         cl->rqplayhint.evsrc = g_idle_add(fire_playhint_changed_event, cl);
         return;
     }
 
-    OHM_DEBUG(DBG_SM, "[%s] no deferred request", cl->sm->name);
+    OHM_DEBUG(DBG_SM, "[%s] no deferred request", sm->name);
 }
 
 /* 
