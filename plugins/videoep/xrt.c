@@ -128,13 +128,17 @@ static int xrt_clone_to_tvout(xrt_t *xr, xrt_clone_type_t clone)
     xrt_adaptor_t *adaptor;
 
     for (adaptor = xr->adaptors;   adaptor != NULL;  adaptor = adaptor->next) {
-        if (adaptor->clone.valid && (enable != adaptor->clone.value)) {
-            set_attribute(xr, &adaptor->tvstd, standard);
+        if (adaptor->clone.valid) {
+            if (enable   != adaptor->clone.value ||
+                standard != adaptor->tvstd.value   )
+            {
+                set_attribute(xr, &adaptor->tvstd, standard);
 
-            if (set_attribute(xr, &adaptor->clone, enable) < 0)
-                retval = -1;
-            else
-                xcb_flush(xr->xconn);
+                if (set_attribute(xr, &adaptor->clone, enable) < 0)
+                    retval = -1;
+                else
+                    xcb_flush(xr->xconn);
+            }
         }
     }
 

@@ -2,14 +2,20 @@ ohm-plugins-misc (0.6.37) unstable; urgency=low
 
   * Don't reboot if ohm-session-agent keeps failing to start up.
   * Consider a remotely ended call (peer)hungup only if it has ever been connected (Fixes: NB#115110).
+  * Fix setting the TV out standard without cable unplug/plug.
+  * Don't log info messages in MC policy filter plugin (Fixes-partly: NB#110556).
 
  -- K. Litkey <krisztian.litkey@nokia.com>  Tue, 12 May 2009 15:56:26 +0300
 
 ohm-plugins-misc (0.6.36) unstable; urgency=low
 
-  * Don't log info messages in MC policy filter plugin (Fixes-partly: NB#110556).
+  * Playback fix: setting the client's state to the requested one when sending
+    the property. This 'optimistic' approach is to prevent the falsely
+    filtered revert changes before the state is acknowledged.
+  * improved debug messages: '[dbusid:path pid/stream]' string is added to
+    debug messages in sm.c
 
- -- K. Litkey <krisztian.litkey@nokia.com>  Tue, 05 May 2009 14:04:04 +0300
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Mon, 04 May 2009 11:08:00 +0300
 
 ohm-plugins-misc (0.6.35) unstable; urgency=low
 
