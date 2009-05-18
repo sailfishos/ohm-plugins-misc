@@ -1,3 +1,11 @@
+ohm-plugins-misc (0.6.38) unstable; urgency=low
+
+  * Delay libprofile initialization until we discover the session bus address.
+  * Fixes: NB#114856
+  * Fixes: NB#116636
+
+ -- K. Litkey <krisztian.litkey@nokia.com>  Mon, 18 May 2009 19:21:17 +0300
+
 ohm-plugins-misc (0.6.37) unstable; urgency=low
 
   * Don't reboot if ohm-session-agent keeps failing to start up.
