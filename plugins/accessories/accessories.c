@@ -112,6 +112,10 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
                 if (!dbus_message_iter_next(&msgit))
                     goto done;
             }
+
+            if (!strcmp(string, "media")) {
+                goto not_our_signal;
+            }
             
             else {
                 value = strtol(string, &end, 10);
@@ -147,6 +151,7 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
 
+ not_our_signal:
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 

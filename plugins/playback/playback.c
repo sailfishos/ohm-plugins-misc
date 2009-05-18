@@ -12,6 +12,7 @@
 
 #include "playback.h"
 #include "client.h"
+#include "media.h"
 #include "pbreq.h"
 #include "sm.h"
 #include "dbusif.h"
@@ -36,6 +37,7 @@ static void plugin_init(OhmPlugin *plugin)
     OHM_DEBUG_INIT(playback);
 
     client_init(plugin);
+    media_init(plugin);
     pbreq_init(plugin);
     sm_init(plugin);
     dbusif_init(plugin);
@@ -51,6 +53,7 @@ static void plugin_destroy(OhmPlugin *plugin)
 
 
 #include "client.c"
+#include "media.c"
 #include "pbreq.c"
 #include "sm.c"
 #include "dbusif.c"

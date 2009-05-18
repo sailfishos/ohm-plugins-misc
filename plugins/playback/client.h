@@ -6,12 +6,6 @@
 #include "sm.h"
 #include "dbusif.h"
 
-/* FactStore prefix */
-#define FACTSTORE_PREFIX                "com.nokia.policy"
-#define FACTSTORE_PLAYBACK              FACTSTORE_PREFIX ".playback"
-#define FACTSTORE_PRIVACY               FACTSTORE_PREFIX ".privacy_override"
-#define FACTSTORE_BLUETOOTH             FACTSTORE_PREFIX ".bluetooth_override"
-#define FACTSTORE_MUTE                  FACTSTORE_PREFIX ".audio_mute"
 
 #define CLIENT_LIST          \
     struct client_s  *next;  \

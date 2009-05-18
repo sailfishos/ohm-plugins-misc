@@ -2,7 +2,8 @@
 #define __OHM_PLAYBACK_DRESIF_H__
 
 static void dresif_init(OhmPlugin *);
-static int  dresif_state_request(client_t *, char *, int);
+static int  dresif_group_request(char *, int);
+static int  dresif_playback_state_request(client_t *, char *, int);
 static int  dresif_privacy_override_request(int, int);
 static int  dresif_bluetooth_override_request(int, int);
 static int  dresif_mute_request(int, int);

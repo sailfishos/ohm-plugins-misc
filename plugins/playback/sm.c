@@ -789,7 +789,7 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
             
             cl->rqsetst.evsrc = -1; /* disable 'setstate changed' event */
 
-            if (!(state_accepted = dresif_state_request(cl, state, 0))) {
+            if (!(state_accepted = dresif_playback_state_request(cl,state,0))){
                 client_save_state(cl, client_rqsetst, "stop");
                 client_save_state(cl, client_reqstate, "stop");
                 client_update_factstore_entry(cl, "reqstate", "stop");
@@ -959,7 +959,7 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
             client_save_state(cl, client_reqstate, state);
             client_update_factstore_entry(cl, "reqstate", state);
             
-            if (dresif_state_request(cl, state, req->trid)) {
+            if (dresif_playback_state_request(cl, state, req->trid)) {
                 req->waiting = TRUE;
                 client_save_state(cl, client_setstate, state);
 
@@ -1194,7 +1194,7 @@ static int fake_stop_pbreq(sm_evdata_t *evdata, void *usrdata)
         client_save_state(cl, client_reqstate, state);
         client_update_factstore_entry(cl, "reqstate", state);
         
-        dresif_state_request(cl, state, 0);
+        dresif_playback_state_request(cl, state, 0);
     }
 
     return TRUE;
@@ -1486,8 +1486,8 @@ static char *strncpylower(char *to, const char *from, int tolen)
 static char *class_to_group(char *klass)
 {
     static struct {char *klass; char *group;}  map[] = {
-        {"None"      , "othermedia"  },
-        {"Test"      , "othermedia"  },
+        {"None"      , "idle"        },
+        {"Test"      , "idle"        },
         {"Event"     , "event"       },
         {"VoIP"      , "ipcall"      },
         {"Media"     , "player"      },
@@ -1499,7 +1499,7 @@ static char *class_to_group(char *klass)
         {"Alarm"     , "alarm"       },
         {"Flash"     , "flash"       },
         {"System"    , "systemsound" },
-        {NULL        , "othermedia"  }
+        {NULL        , NULL          }
     };
 
     int i;

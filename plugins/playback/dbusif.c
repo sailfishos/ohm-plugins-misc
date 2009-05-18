@@ -25,9 +25,10 @@ static DBusConnection    *sess_conn;   /* connection for D-Bus session bus */
 static prop_notif_t      *notif_reg;   /* property notification registry */
 static hello_cb_t         hello_notif; /* hello notification */
 
+static DBusHandlerResult info(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult name_changed(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult hello(DBusConnection *, DBusMessage *, void *);
-static DBusHandlerResult notify(DBusConnection *, DBusMessage *, void *);
+static DBusHandlerResult notify(DBusConnection *,DBusMessage *, void*);
 static DBusHandlerResult method(DBusConnection *, DBusMessage *, void *);
 
 
@@ -90,6 +91,7 @@ static char *filter_signal(char *buf, size_t size,
 
 static void system_bus_init(void)
 {
+    char      filter[1024];
     DBusError err;
 
     dbus_error_init(&err);
@@ -102,18 +104,34 @@ static void system_bus_init(void)
 
         exit(0);
     }
+
+    if (!dbus_connection_add_filter(sys_conn, info,NULL, NULL)) {
+        OHM_ERROR("Can't add filter 'info'");
+        exit(1);
+    }
+
+    filter_signal(filter, sizeof(filter),
+                  NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_INFO_SIGNAL,
+                  NULL, NULL);
+
+    dbus_bus_add_match(sys_conn, filter, &err);
+    if (dbus_error_is_set(&err)) {
+        OHM_ERROR("Can't add match \"&s\": %s", filter, err.message);
+        dbus_error_free(&err);
+        exit(1);
+    }
+
 }
 
 
 static int session_bus_init(const char *address)
 {
-    char filter[1024];
-    
     static struct DBusObjectPathVTable pb_method = {
         .message_function = method
     };
 
 
+    char       filter[1024];
     DBusError  err;
     int        retval;
     int        success;
@@ -750,6 +768,69 @@ static void dbusif_send_stream_info_to_pep(char *oper, char *group,
  * @}
  */
 
+
+
+static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg,
+                              void *user_data)
+{
+    (void)conn;
+    (void)user_data;
+
+    char              *type;
+    char              *media;
+    char              *group;
+    char              *state;
+    char              *reqstate;
+    gboolean           success;
+    DBusHandlerResult  result;
+
+    result  = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    success = dbus_message_is_signal(msg, DBUS_POLICY_DECISION_INTERFACE,
+                                     DBUS_INFO_SIGNAL);
+
+    if (success) {
+        success = dbus_message_get_args(msg, NULL,
+                                        DBUS_TYPE_STRING, &type,
+                                        DBUS_TYPE_STRING, &media,
+                                        DBUS_TYPE_STRING, &group,
+                                        DBUS_TYPE_STRING, &state,
+                                        DBUS_TYPE_INVALID);
+
+        if (success && !strcmp(type, "media")) {
+
+            result  = DBUS_HANDLER_RESULT_HANDLED;
+            success = TRUE;
+
+            if (strcmp(media, "audio_playback")  &&
+                strcmp(media, "audio_recording") &&
+                strcmp(media, "video_playback")  &&
+                strcmp(media, "video_recording")   )
+            {
+                OHM_ERROR("Malformed info: invalid media '%s'", media);
+                success = FALSE;
+            }  
+
+
+            if (!strcmp(state, "active"))
+                reqstate = "on";
+            else if (!strcmp(state, "inactive"))
+                reqstate = "off";
+            else {
+                OHM_ERROR("Malformed info: invalid state '%s'", state);
+                success = FALSE;
+            }
+
+            if (success) {
+                OHM_DEBUG(DBG_DBUS, "info: media '%s' of group '%s' become %s",
+                          media, group, state);
+
+                media_state_request(media, group, reqstate);
+            }
+        }
+    }
+
+    return result;
+}
 
 
 static DBusHandlerResult name_changed(DBusConnection *conn, DBusMessage *msg,
