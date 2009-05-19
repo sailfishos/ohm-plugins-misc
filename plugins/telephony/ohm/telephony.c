@@ -1244,6 +1244,7 @@ emergency_call_request(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    memset(&event, 0, sizeof(event));
     event.type = active ? EVENT_EMERGENCY_ON : EVENT_EMERGENCY_OFF;
     event.bus  = c;
     event.req  = msg;
