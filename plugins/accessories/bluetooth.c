@@ -179,17 +179,22 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
         GValue *gval = NULL;
 
         /* first time: create a new fact */
+        /* TODO: check that this doesn't leak memory! */
         bt_connected = ohm_fact_new(BT_DEVICE);
-        if (bt_connected == NULL)
-            return FALSE;
+        if (bt_connected == NULL) {
+            OHM_DEBUG(DBG_BT, "could not create the BT fact!");
+        }
+        else {
 
-        /* add the object path to the bluetooth fact in order to
-         * remember the device */
-        gval = ohm_value_from_string(path);
-        ohm_fact_set(bt_connected, "bt_path", gval);
+            /* add the object path to the bluetooth fact in order to
+             * remember the device */
 
-        ohm_fact_store_insert(fs, bt_connected);
-        prev_state = NULL;
+            gval = ohm_value_from_string(path);
+            ohm_fact_set(bt_connected, "bt_path", gval);
+
+            ohm_fact_store_insert(fs, bt_connected);
+            prev_state = NULL;
+        }
     }
     else {
         GValue *gval_state = ohm_fact_get(bt_connected, type);
@@ -286,7 +291,7 @@ static gboolean bt_delete_all_facts()
 {
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
     GSList *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
-    gboolean resolve_all;
+    gboolean resolve_all = FALSE;
 
     OHM_DEBUG(DBG_BT, "Bluez went away!");
 
@@ -325,7 +330,9 @@ static gboolean bt_any_to_disconnected(const gchar *type, const gchar *path, enu
     if (!bt_connected)
         return FALSE;
 
-    disconnect_device(bt_connected, type);
+   if (!disconnect_device(bt_connected, type)) {
+       OHM_DEBUG(DBG_BT, "there was nothing to disconnect");
+    }
 
     /* see if the other profiles are also disconnected: if yes,
      * remove the fact */
