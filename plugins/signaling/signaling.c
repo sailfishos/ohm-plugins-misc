@@ -21,7 +21,7 @@ typedef void (*completion_cb_t)(int transid, int success);
 
 OHM_EXPORTABLE(GObject *, register_internal_enforcement_point, (gchar *uri))
 {
-    EnforcementPoint *ep = register_enforcement_point(uri, TRUE);
+    EnforcementPoint *ep = register_enforcement_point(uri, NULL, TRUE);
 
     /* ref so that the ep won't be deleted before caller has unreffed it */
     g_object_ref(ep);

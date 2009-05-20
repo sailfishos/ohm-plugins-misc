@@ -178,7 +178,7 @@ GType           internal_ep_get_type(void);
 
 /* API functions */
 
-EnforcementPoint * register_enforcement_point(const gchar * uri, gboolean internal);
+EnforcementPoint * register_enforcement_point(const gchar * uri, const gchar *name, gboolean internal);
 
 gboolean unregister_enforcement_point(const gchar *uri);
 
