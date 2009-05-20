@@ -19,6 +19,8 @@
 #define IS_CONF_MEMBER(call) ((call) != NULL && \
                               (call)->parent != NULL && (call)->parent != call)
 
+#define CALL_TIMEOUT (30 * 1000)
+
 static int DBG_CALL;
 
 OHM_DEBUG_PLUGIN(telephony,
@@ -47,6 +49,7 @@ DBUS_SIGNAL_HANDLER(channel_new);
 DBUS_SIGNAL_HANDLER(channels_new);
 DBUS_SIGNAL_HANDLER(channel_closed);
 DBUS_SIGNAL_HANDLER(members_changed);
+DBUS_SIGNAL_HANDLER(stream_added);
 DBUS_SIGNAL_HANDLER(hold_state_changed);
 DBUS_SIGNAL_HANDLER(call_state_changed);
 DBUS_SIGNAL_HANDLER(call_end);
@@ -246,6 +249,9 @@ bus_init(const char *address)
 
     if (!bus_add_match("signal", TP_DIALSTRINGS, STOPPED_DIALSTRING, NULL))
         exit(1);
+
+    if (!bus_add_match("signal", TP_CHANNEL_MEDIA, STREAM_ADDED, NULL))
+        exit(1);
     
     if (!dbus_connection_add_filter(bus, dispatch_signal, NULL, NULL)) {
         OHM_ERROR("Failed to add DBUS filter for signal dispatching.");
@@ -315,6 +321,7 @@ bus_exit(void)
     bus_del_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, STOPPED_DIALSTRING, NULL);
+    bus_del_match("signal", TP_CHANNEL_MEDIA, STREAM_ADDED, NULL);
     
     dbus_connection_unref(bus);
     bus = NULL;
@@ -494,7 +501,7 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
 
     if (dbus_message_get_type(msg) != DBUS_MESSAGE_TYPE_SIGNAL)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    
+
     if (!interface || !member)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -506,10 +513,13 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
 
     if (MATCHES(TP_CHANNEL, CHANNEL_CLOSED))
         return channel_closed(c, msg, data);
-    
+
     if (MATCHES(TP_CHANNEL_GROUP, MEMBERS_CHANGED))
         return members_changed(c, msg, data);
 
+    if (MATCHES(TP_CHANNEL_MEDIA, STREAM_ADDED))
+        return stream_added(c, msg, data);
+    
     if (MATCHES(TP_CHANNEL_HOLD, HOLD_STATE_CHANGED))
         return hold_state_changed(c, msg, data);
 
@@ -956,6 +966,31 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     return DBUS_HANDLER_RESULT_HANDLED;    
 }
 
+
+/********************
+ * stream_added
+ ********************/
+static DBusHandlerResult
+stream_added(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char *path;
+    call_t     *call;
+
+    (void)c;
+    (void)data;
+
+    if ((path = dbus_message_get_path(msg)) != NULL) {
+        if ((call = call_lookup(path)) != NULL) {
+            if (call->timeout != 0) {
+                g_source_remove(call->timeout);
+                call->timeout = 0;
+            }
+        }
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
 
 
 /********************
@@ -1739,6 +1774,35 @@ call_exit(void)
 
 
 /********************
+ * call_timeout
+ ********************/
+static gboolean
+call_timeout(gpointer data)
+{
+    char            *path = (char *)data;
+    channel_event_t  event;
+
+    if (path == NULL)
+        return FALSE;
+
+    if ((event.call = call_lookup(path)) == NULL)
+        return FALSE;
+
+    OHM_INFO("Call %s timed out.", short_path(path));
+
+    event.call->timeout = 0;
+
+    /* emulate a channel closed event */
+    event.path = path;
+    event.type = EVENT_CHANNEL_CLOSED;
+    
+    event_handler((event_t *)&event);
+    
+    return FALSE;
+}
+
+
+/********************
  * call_register
  ********************/
 call_t *
@@ -1795,6 +1859,10 @@ call_register(const char *path, const char *name, const char *peer,
 
     policy_run_hook("telephony_call_start_hook");
     
+    call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
+                                       CALL_TIMEOUT,
+                                       call_timeout, g_strdup(call->path),
+                                       g_free);
     return call;
 }
 
