@@ -4,6 +4,20 @@
 #include <ohm/ohm-plugin-log.h>
 #include <ohm/ohm-plugin-debug.h>
 
+/* FactStore prefix */
+#define FACTSTORE_PREFIX                "com.nokia.policy"
+#define FACTSTORE_PLAYBACK              FACTSTORE_PREFIX ".playback"
+#define FACTSTORE_PRIVACY               FACTSTORE_PREFIX ".privacy_override"
+#define FACTSTORE_BLUETOOTH             FACTSTORE_PREFIX ".bluetooth_override"
+#define FACTSTORE_MUTE                  FACTSTORE_PREFIX ".audio_mute"
+#define FACTSTORE_ACTIVE_POLICY_GROUP   FACTSTORE_PREFIX ".active_policy_group"
+
+/* these should match the corresponding values in playback-types.h */
+#define MEDIA_FLAG_AUDIO_PLAYBACK   0x1
+#define MEDIA_FLAG_VIDEO_PLAYBACK   0x2
+#define MEDIA_FLAG_AUDIO_RECORDING  0x4
+#define MEDIA_FLAG_VIDEO_RECORDING  0x8
+
 static void plugin_init(OhmPlugin *);
 static void plugin_destroy(OhmPlugin *);
 

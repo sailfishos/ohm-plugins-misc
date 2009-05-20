@@ -1,3 +1,13 @@
+ohm-plugins-misc (0.6.39) unstable; urgency=low
+
+  [ Janos Kovacs ]
+  * support for media active/inactive messages
+
+  [ Ismo Puustinen ]
+  * added "name" argument to enforcement point facts.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 20 May 2009 18:15:30 +0300
+
 ohm-plugins-misc (0.6.38) unstable; urgency=low
 
   * Delay libprofile initialization until we discover the session bus address.

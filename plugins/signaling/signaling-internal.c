@@ -1447,12 +1447,12 @@ static gboolean process_inq(gpointer data)
 }
 
 
-static gboolean register_fact(const gchar *uri, gboolean internal)
+static gboolean register_fact(const gchar *uri, const gchar *name, gboolean internal)
 {
     OhmFact *fact  = NULL;
     GValue  *guri  = NULL;
     GValue  *gkind = NULL;
-    
+    GValue  *gname = NULL;
     
     if ((fact = ohm_fact_new(ENFORCEMENT_FACT_NAME)) == NULL) {
         g_error("Failed to create fact for enforcement point %s.", uri);
@@ -1461,13 +1461,21 @@ static gboolean register_fact(const gchar *uri, gboolean internal)
 
     guri = ohm_value_from_string(uri);
     gkind = ohm_value_from_string(internal ? "internal" : "external");
+
+    if (internal)
+        gname = ohm_value_from_string(uri);
+    else if (name)
+        gname = ohm_value_from_string(name);
+    else
+        gname = ohm_value_from_string("");
     
-    if (guri == NULL || gkind == NULL)
+    if (guri == NULL || gkind == NULL || gname == NULL)
         goto fail;
 
     ohm_fact_set(fact, "id" , guri);
     ohm_fact_set(fact, "type", gkind);
-    guri = gkind = NULL;
+    ohm_fact_set(fact, "name", gname);
+    guri = gkind = gname = NULL;
     
     if (ohm_fact_store_insert(store, fact))
         return TRUE;
@@ -1476,6 +1484,10 @@ static gboolean register_fact(const gchar *uri, gboolean internal)
     
     /* intentional fall through */
  fail:
+    if (gname) {
+        g_value_unset(gname);
+        g_free(gname);
+    }
     if (gkind) {
         g_value_unset(gkind);
         g_free(gkind);
@@ -1517,7 +1529,8 @@ static gboolean unregister_fact(const gchar *uri)
 }
 
 
-EnforcementPoint * register_enforcement_point(const gchar * uri,
+EnforcementPoint * register_enforcement_point(const gchar *uri,
+        const gchar *name,
         gboolean internal)
 {
     /*
@@ -1561,7 +1574,7 @@ EnforcementPoint * register_enforcement_point(const gchar * uri,
 
     enforcement_points = g_slist_prepend(enforcement_points, ep);
  
-    register_fact(uri, internal);
+    register_fact(uri, name, internal);
    
     return ep;
 }
@@ -1643,7 +1656,7 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
         void *user_data)
 {
     DBusMessage *reply;
-    const gchar *uri;
+    const gchar *uri, *name;
     gint ret;
     EnforcementPoint *ep = NULL;
     
@@ -1654,8 +1667,18 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
     }
     
     uri = dbus_message_get_sender(msg);
-    ep = register_enforcement_point(uri, FALSE);
+    if (!dbus_message_get_args(msg,
+            NULL,
+            DBUS_TYPE_STRING,
+            &name,
+            DBUS_TYPE_INVALID)) {
 
+        OHM_DEBUG(DBG_SIGNALING, "EP %s did not send a name", uri ? uri : NULL);
+        name = NULL;
+    }
+
+    ep = register_enforcement_point(uri, name, FALSE);
+    
     if (ep == NULL) {
         reply = dbus_message_new_error(msg,
                 DBUS_ERROR_FAILED,

@@ -180,6 +180,8 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
 
         /* first time: create a new fact */
         bt_connected = ohm_fact_new(BT_DEVICE);
+        if (bt_connected == NULL)
+            return FALSE;
 
         /* add the object path to the bluetooth fact in order to
          * remember the device */
@@ -339,7 +341,6 @@ static gboolean bt_any_to_disconnected(const gchar *type, const gchar *path, enu
                 G_VALUE_TYPE(gval) != G_TYPE_STRING ||
                 strcmp(g_value_get_string(gval), BT_STATE_DISCONNECTED_S) == 0)) {
         ohm_fact_store_remove(fs, bt_connected);
-
         g_object_unref(bt_connected);
         bt_connected = NULL;
     }

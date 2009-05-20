@@ -21,6 +21,7 @@
 /* D-Bus signal & method names */
 #define DBUS_POLICY_NEW_SESSION            "NewSession"
 
+#define DBUS_INFO_SIGNAL                   "info"
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL     "NameOwnerChanged"
 #define DBUS_HELLO_SIGNAL                  "Hello"
 #define DBUS_NOTIFY_SIGNAL                 "Notify"

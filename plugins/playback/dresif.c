@@ -7,7 +7,39 @@ static void dresif_init(OhmPlugin *plugin)
 }
 
 
-static int dresif_state_request(client_t *cl, char *state, int transid)
+static int dresif_group_request(char *group, int media)
+{
+#define DRESIF_VARTYPE(t)  (char *)(t)
+#define DRESIF_VARVALUE(v) (char *)(v)
+    char *vars[10];
+    int   i;
+    int   status;
+
+    vars[i=0] = "active_group";
+    vars[++i] = DRESIF_VARTYPE('s');
+    vars[++i] = DRESIF_VARVALUE(group ? group : "");
+
+    vars[++i] = "active_media";
+    vars[++i] = DRESIF_VARTYPE('i');
+    vars[++i] = DRESIF_VARVALUE(media);
+
+    vars[++i] = NULL;
+
+    status = resolve("group_request", vars);
+    
+    if (status < 0)
+        OHM_DEBUG(DBG_DRES, "resolve(group_request) failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_DRES, "resolve(group_request) failed");
+    
+    return status <= 0 ? FALSE : TRUE;
+
+#undef DRESIF_VARVALUE
+#undef DRESIF_VARTYPE
+}
+
+static int dresif_playback_state_request(client_t *cl, char *state,int transid)
 {
 #define DRESIF_VARTYPE(t)  (char *)(t)
 #define DRESIF_VARVALUE(v) (char *)(v)
@@ -53,10 +85,10 @@ static int dresif_state_request(client_t *cl, char *state, int transid)
     status = resolve("playback_request", vars);
     
     if (status < 0)
-        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", status,
-                  strerror(-status));
+        OHM_DEBUG(DBG_DRES, "resolve(playback_request) failed: (%d) %s",
+                  status, strerror(-status));
     else if (status == 0)
-        OHM_DEBUG(DBG_DRES, "resolve() failed");
+        OHM_DEBUG(DBG_DRES, "resolve(playback_request) failed");
     
     return status <= 0 ? FALSE : TRUE;
 
