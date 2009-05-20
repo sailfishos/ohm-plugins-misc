@@ -57,6 +57,11 @@ DBUS_METHOD_HANDLER(dispatch_method);
 DBUS_METHOD_HANDLER(call_request);
 DBUS_METHOD_HANDLER(accept_call_request);
 DBUS_METHOD_HANDLER(hold_call_request);
+DBUS_METHOD_HANDLER(dtmf_start_request);
+DBUS_METHOD_HANDLER(dtmf_stop_request);
+
+static int tp_start_dtmf(call_t *call, unsigned int stream, int tone);
+static int tp_stop_dtmf (call_t *call, unsigned int stream);
 
 static DBusConnection *bus;
 static OhmFact        *emergency;
@@ -82,13 +87,14 @@ void    call_destroy(call_t *call);
 void    call_foreach(GHFunc callback, gpointer data);
 
 enum {
-    UPDATE_NONE   = 0x00,
-    UPDATE_STATE  = 0x01,
-    UPDATE_DIR    = 0x02,
-    UPDATE_ORDER  = 0x04,
-    UPDATE_PARENT = 0x08,
-    UPDATE_EMERG  = 0x10,
-    UPDATE_ALL    = 0xff,
+    UPDATE_NONE    = 0x00,
+    UPDATE_STATE   = 0x01,
+    UPDATE_DIR     = 0x02,
+    UPDATE_ORDER   = 0x04,
+    UPDATE_PARENT  = 0x08,
+    UPDATE_EMERG   = 0x10,
+    UPDATE_CONNECT = 0x20,
+    UPDATE_ALL     = 0xff,
 };
 
 int     policy_call_export(call_t *call);
@@ -138,13 +144,14 @@ static int        unknown_members_changed(const char *path,
  * policy and fact-store stuff
  */
 
-#define FACT_FIELD_PATH   "path"
-#define FACT_FIELD_ID     "id"
-#define FACT_FIELD_STATE  "state"
-#define FACT_FIELD_DIR    "direction"
-#define FACT_FIELD_ORDER  "order"
-#define FACT_FIELD_PARENT "parent"
-#define FACT_FIELD_EMERG  "emergency"
+#define FACT_FIELD_PATH      "path"
+#define FACT_FIELD_ID        "id"
+#define FACT_FIELD_STATE     "state"
+#define FACT_FIELD_DIR       "direction"
+#define FACT_FIELD_ORDER     "order"
+#define FACT_FIELD_PARENT    "parent"
+#define FACT_FIELD_EMERG     "emergency"
+#define FACT_FIELD_CONNECTED "connected"
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
 
@@ -1137,6 +1144,10 @@ dispatch_method(DBusConnection *c, DBusMessage *msg, void *data)
         return accept_call_request(c, msg, data);
     else if (MATCHES(TELEPHONY_INTERFACE, HOLD_REQUEST))
         return hold_call_request(c, msg, data);
+    else if (MATCHES(TELEPHONY_INTERFACE, START_DTMF))
+        return dtmf_start_request(c, msg, data);
+    else if (MATCHES(TELEPHONY_INTERFACE, STOP_DTMF))
+        return dtmf_stop_request(c, msg, data);
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
@@ -1233,6 +1244,7 @@ emergency_call_request(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    memset(&event, 0, sizeof(event));
     event.type = active ? EVENT_EMERGENCY_ON : EVENT_EMERGENCY_OFF;
     event.bus  = c;
     event.req  = msg;
@@ -1355,6 +1367,86 @@ hold_call_request(DBusConnection *c, DBusMessage *msg, void *data)
 }
 
 
+/********************
+ * dtmf_send_reply
+ ********************/
+static void
+dtmf_send_reply(DBusMessage *msg, char *error)
+{
+    DBusMessage *reply;
+
+    if (error == NULL)
+        reply = dbus_message_new_method_return(msg);
+    else
+        reply = dbus_message_new_error(msg, DBUS_ERROR_FAILED, error);
+
+    dbus_connection_send(bus, reply, NULL);
+    dbus_message_unref(reply);
+    dbus_message_unref(msg);
+}
+
+
+/********************
+ * dtmf_start_request
+ ********************/
+static DBusHandlerResult
+dtmf_start_request(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    dtmf_event_t  event;
+    const char   *manager;
+
+    (void)c;
+    (void)data;
+
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_STRING, &manager,
+                               DBUS_TYPE_OBJECT_PATH, &event.path,
+                               DBUS_TYPE_UINT32, &event.stream,
+                               DBUS_TYPE_BYTE, &event.tone,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse StartDTMF request.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    event.type = EVENT_DTMF_START;
+    event.call = call_lookup(event.path);
+    event.req  = dbus_message_ref(msg);
+    event_handler((event_t *)&event);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * dtmf_stop_request
+ ********************/
+static DBusHandlerResult
+dtmf_stop_request(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    dtmf_event_t  event;
+    const char   *manager;
+
+    (void)c;
+    (void)data;
+
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_STRING, &manager,
+                               DBUS_TYPE_OBJECT_PATH, &event.path,
+                               DBUS_TYPE_UINT32, &event.stream,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse StopDTMF request.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    event.type = EVENT_DTMF_STOP;
+    event.call = call_lookup(event.path);
+    event.req  = dbus_message_ref(msg);
+    event_handler((event_t *)&event);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
 
 
 /********************
@@ -1382,6 +1474,8 @@ event_name(int type)
         DESCR(EMERGENCY_OFF        , "<EARLY EMERGENCY CALL END>"),
         DESCR(SENDING_DIALSTRING   , "<DIALSTRING SENDING STARTED>"),
         DESCR(STOPPED_DIALSTRING   , "<DIALSTRING SENDING STOPPED>"),
+        DESCR(DTMF_START           , "<DTMF START REQUEST>"),
+        DESCR(DTMF_STOP            , "<DTMF STOP REQUEST>"),
     };
 
 
@@ -1549,6 +1643,18 @@ event_handler(event_t *event)
 
     case EVENT_STOPPED_DIALSTRING:
         policy_run_hook("telephony_stopped_dialstring");
+        return;
+
+    case EVENT_DTMF_START:
+        policy_run_hook("telephony_start_dtmf");
+        tp_start_dtmf(event->any.call, event->dtmf.stream, event->dtmf.tone);
+        dtmf_send_reply(event->dtmf.req, NULL);
+        return;
+        
+    case EVENT_DTMF_STOP:
+        tp_stop_dtmf(event->any.call, event->dtmf.stream);
+        policy_run_hook("telephony_stop_dtmf");
+        dtmf_send_reply(event->dtmf.req, NULL);
         return;
         
     default: OHM_ERROR("Unknown event 0x%x.", event->type);              return;
@@ -2206,6 +2312,75 @@ call_hold(call_t *call, const char *action, event_t *event)
 
 
 /********************
+ * tp_start_dtmf
+ ********************/
+static int
+tp_start_dtmf(call_t *call, unsigned int stream, int tone)
+{
+    DBusMessage *msg;
+    const char  *name, *path, *iface, *method;
+    int          status;
+    
+    name   = call->name;
+    path   = call->path;
+    iface  = TP_CHANNEL_DTMF;
+    method = START_TONE;
+
+    if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
+        if (dbus_message_append_args(msg,
+                                     DBUS_TYPE_UINT32, &stream,
+                                     DBUS_TYPE_BYTE, &tone,
+                                     DBUS_TYPE_INVALID))
+            status = bus_send(msg, NULL);
+        else {
+            OHM_ERROR("Failed to create D-BUS StartTone message.");
+            status = EINVAL;
+        }
+        
+        dbus_message_unref(msg);
+    }
+    else
+        status = ENOMEM;
+    
+    return status;
+}
+
+
+/********************
+ * tp_stop_dtmf
+ ********************/
+static int
+tp_stop_dtmf(call_t *call, unsigned int stream)
+{
+    DBusMessage *msg;
+    const char  *name, *path, *iface, *method;
+    int          status;
+    
+    name   = call->name;
+    path   = call->path;
+    iface  = TP_CHANNEL_DTMF;
+    method = STOP_TONE;
+
+    if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
+        if (dbus_message_append_args(msg,
+                                     DBUS_TYPE_UINT32, &stream,
+                                     DBUS_TYPE_INVALID))
+            status = bus_send(msg, NULL);
+        else {
+            OHM_ERROR("Failed to create D-BUS StopTone message.");
+            status = EINVAL;
+        }
+        
+        dbus_message_unref(msg);
+    }
+    else
+        status = ENOMEM;
+    
+    return status;
+}
+
+
+/********************
  * call_activate
  ********************/
 static int
@@ -2234,9 +2409,10 @@ call_activate(call_t *call, const char *action, event_t *event)
                 hold_call_reply(event->call.req, NULL);
         }
     
-        call->state = STATE_ACTIVE;
-        call->order = 0;
-        policy_call_update(call, UPDATE_STATE | UPDATE_ORDER);
+        call->state     = STATE_ACTIVE;
+        call->order     = 0;
+        call->connected = TRUE;
+        policy_call_update(call, UPDATE_STATE | UPDATE_ORDER | UPDATE_CONNECT);
 
         if (event->type == EVENT_CALL_ACCEPT_REQUEST)
             policy_run_hook("telephony_call_connect_hook");
@@ -2622,7 +2798,7 @@ policy_call_update(call_t *call, int fields)
     OhmFact    *fact;
     const char *state, *dir, *parent;
     char        id[16];
-    int         order, emerg;
+    int         order, emerg, conn;
     
     if (call == NULL)
         return FALSE;
@@ -2632,10 +2808,11 @@ policy_call_update(call_t *call, int fields)
 
     OHM_INFO("Updating fact for call %s", short_path(call->path));
     
-    state = (fields & UPDATE_STATE) ? state_name(call->state) : NULL;
-    dir   = (fields & UPDATE_DIR)   ? dir_name(call->dir) : NULL;
-    order = (fields & UPDATE_ORDER) ? call->order : 0;
-    emerg = (fields & UPDATE_EMERG) ? call->emergency : 0;
+    state  = (fields & UPDATE_STATE)   ? state_name(call->state) : NULL;
+    dir    = (fields & UPDATE_DIR)     ? dir_name(call->dir) : NULL;
+    order  = (fields & UPDATE_ORDER)   ? call->order : 0;
+    emerg  = (fields & UPDATE_EMERG)   ? call->emergency : 0;
+    conn   = (fields & UPDATE_CONNECT) ? call->connected : 0;
 
     if (fields & UPDATE_PARENT) {
         if (call->parent == NULL) {
@@ -2650,10 +2827,11 @@ policy_call_update(call_t *call, int fields)
     else
         parent = NULL;
     
-    if ((state  && !set_string_field(fact, FACT_FIELD_STATE , state))  ||
-        (dir    && !set_string_field(fact, FACT_FIELD_DIR   , dir))    ||
-        (parent && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
-        (order  && !set_int_field   (fact, FACT_FIELD_ORDER , order))) {
+    if ((state  && !set_string_field(fact, FACT_FIELD_STATE    , state))  ||
+        (dir    && !set_string_field(fact, FACT_FIELD_DIR      , dir))    ||
+        (parent && !set_string_field(fact, FACT_FIELD_PARENT   , parent)) ||
+        (order  && !set_int_field   (fact, FACT_FIELD_ORDER    , order))  ||
+        (conn   && !set_string_field(fact, FACT_FIELD_CONNECTED, "yes"))) {
         OHM_ERROR("Failed to update fact for call %s", short_path(call->path));
         return FALSE;
     }
@@ -2698,10 +2876,11 @@ plugin_init(OhmPlugin *plugin)
 
     (void)plugin;
 
-    if (!bus_init(NULL)) {
-        OHM_WARNING("Failed to connect to session DBUS.");
-        OHM_WARNING("Delaying session DBUS initialization...");
-    }
+    /*
+     * Notes: We delay session bus initializtion until we get the correct
+     *        address of the bus from ohm-session-agent.
+     */
+    
     call_init();
     policy_init();
 

@@ -14,6 +14,7 @@
 #define TP_CHANNEL_GROUP  TP_CHANNEL".Interface.Group"
 #define TP_CHANNEL_HOLD   TP_CHANNEL".Interface.Hold"
 #define TP_CHANNEL_STATE  TP_CHANNEL".Interface.CallState"
+#define TP_CHANNEL_DTMF   TP_CHANNEL".Interface.DTMF"
 #define TP_CHANNEL_MEDIA  TP_CHANNEL".Type.StreamedMedia"
 
 #define TP_CONN_PATH      "/org/freedesktop/Telepathy/Connection"
@@ -27,6 +28,10 @@
 
 #define SENDING_DIALSTRING "SendingDialString"
 #define STOPPED_DIALSTRING "StoppedDialString"
+#define START_TONE         "StartTone"
+#define STOP_TONE          "StopTone"
+#define START_DTMF         "StartDTMF"
+#define STOP_DTMF          "StopDTMF"
 
 #define PROP_CHANNEL_TYPE     TP_CHANNEL".ChannelType"
 #define PROP_INITIAL_MEMBERS  TP_CONFERENCE".InitialMembers"
@@ -117,6 +122,7 @@ struct call_s {
     call_state_t  state;                       /* current state */
     int           order;                       /* autohold order */
     call_t       *parent;                      /* hosting conference if any */
+    int           connected;                   /* whether has been connected */
     OhmFact      *fact;                        /* this call in fact store */
 };
 
@@ -143,6 +149,8 @@ typedef enum {
     EVENT_EMERGENCY_OFF,                       /* early emergency call done */
     EVENT_SENDING_DIALSTRING,                  /* dialstring being sent */
     EVENT_STOPPED_DIALSTRING,                  /* dialstring sent */
+    EVENT_DTMF_START,                          /* DTMF start request */
+    EVENT_DTMF_STOP,                           /* DTMF stop request */
     EVENT_MAX
 } event_id_t;
 
@@ -192,13 +200,22 @@ typedef struct {
 } status_event_t;
 
 
+typedef struct {
+    EVENT_COMMON;
+    DBusMessage  *req;    
+    unsigned int  stream;
+    int           tone;
+} dtmf_event_t;
+
+
 typedef union {
     event_id_t      type;
     any_event_t     any;
     channel_event_t channel;                   /* new, closed*/
     call_event_t    call;                      /* request, ended */
     status_event_t  status;                    /* accepted, held, activated */
-    emerg_event_t   emerg;
+    emerg_event_t   emerg;                     /* emergency call event */
+    dtmf_event_t    dtmf;                      /* DTMF request */
 } event_t;
 
 

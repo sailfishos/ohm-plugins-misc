@@ -157,7 +157,7 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 
 gboolean run_policy_hook(const char *hook)
 {
-    int status = resolve(hook, NULL);
+    int status = resolve((char *) hook, NULL);
 
     if (status < 0)
         OHM_ERROR("resolve() failed for hook %s: (%d) %s", hook, status,

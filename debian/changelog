@@ -1,15 +1,25 @@
-ohm-plugins-misc (0.6.38) unstable; urgency=low
+ohm-plugins-misc (0.6.39) unstable; urgency=low
 
   * support for media active/inactive messages
 
- -- Janos Kovacs <janos.f.kovacs@nokia.com>  Thu, 14 May 2009 16:00:00 +0300
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Wed, 20 May 2009 15:00:00 +0300
+
+ohm-plugins-misc (0.6.38) unstable; urgency=low
+
+  * Delay libprofile initialization until we discover the session bus address.
+  * Fixes: NB#114856
+  * Fixes: NB#116636
+
+ -- K. Litkey <krisztian.litkey@nokia.com>  Mon, 18 May 2009 19:21:17 +0300
 
 ohm-plugins-misc (0.6.37) unstable; urgency=low
 
-  * Videoep fix: setting the TV out standard without the need to
-    unplug/plug again the cable
+  * Don't reboot if ohm-session-agent keeps failing to start up.
+  * Consider a remotely ended call (peer)hungup only if it has ever been connected (Fixes: NB#115110).
+  * Fix setting the TV out standard without cable unplug/plug.
+  * Don't log info messages in MC policy filter plugin (Fixes-partly: NB#110556).
 
- -- Janos Kovacs <janos.f.kovacs@nokia.com>  Mon, 11 May 2009 16:37:00 +0300
+ -- K. Litkey <krisztian.litkey@nokia.com>  Tue, 12 May 2009 15:56:26 +0300
 
 ohm-plugins-misc (0.6.36) unstable; urgency=low
 

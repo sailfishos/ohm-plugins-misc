@@ -420,6 +420,11 @@ grab_fd(int fd, int sock)
         close(gfd);
         return 0;
     }
+
+    if (fd == fileno(stdout))
+        setvbuf(stdout, NULL, _IONBF, 0);
+    else if (fd == fileno(stderr))
+        setvbuf(stderr, NULL, _IONBF, 0);
     
     return GRABBED(gid, gfd);
 }
@@ -438,6 +443,12 @@ ungrab_fd(int grab)
         return ENOENT;
     
     dup2(gfd, gid);
+
+    if (gid == fileno(stdout))
+        setvbuf(stdout, NULL, _IOLBF, 0);
+    else if (gid == fileno(stderr))
+        setvbuf(stderr, NULL, _IOLBF, 0);
+    
     return 0;
 }
 

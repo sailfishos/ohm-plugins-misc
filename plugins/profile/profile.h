@@ -26,10 +26,14 @@
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin-debug.h>
+#include <ohm/ohm-plugin-log.h>
 
 #define FACTSTORE_PREFIX "com.nokia.policy"
 #define FACTSTORE_PROFILE             FACTSTORE_PREFIX ".current_profile"
 #define PROFILE_NAME_KEY "value"
+
+#define DBUS_INTERFACE_POLICY   "com.nokia.policy"
+#define DBUS_POLICY_NEW_SESSION "NewSession"
 
 typedef struct _profile_plugin {
     gchar *current_profile;
@@ -37,6 +41,8 @@ typedef struct _profile_plugin {
     profile_track_value_fn value_change;
 } profile_plugin;
 
+/* Non-static for testing purposes: these functions are called from the
+ * unit tests. */
 
 profile_plugin * init_profile();
 void deinit_profile(profile_plugin *plugin);

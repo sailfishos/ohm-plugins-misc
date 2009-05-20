@@ -24,14 +24,12 @@ typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean su
 
 static gboolean process_inq(gpointer data);
 
-    static Transaction *
-transaction_lookup(guint txid)
+static Transaction * transaction_lookup(guint txid)
 {
     return (Transaction *)g_hash_table_lookup(transactions, &txid);
 }
 
-    gboolean
-init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
+gboolean init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
 {
     DBG_SIGNALING = flag_signaling;
     DBG_FACTS     = flag_facts;
@@ -59,8 +57,7 @@ init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
     return TRUE;
 }
 
-    gboolean
-deinit_signaling()
+gboolean deinit_signaling()
 {
     GSList *i;
 
@@ -141,8 +138,7 @@ enum {
     PROP_FACTS
 };
 
-    static GSList *
-result_list(GSList *ep_list)
+static GSList * result_list(GSList *ep_list)
 {
     GSList *retval = NULL, *i = NULL;
     gchar *id;
@@ -156,8 +152,7 @@ result_list(GSList *ep_list)
     return retval;
 }
 
-    static void
-transaction_get_property(GObject *object,
+static void transaction_get_property(GObject *object,
         guint property_id,
         GValue *value,
         GParamSpec *pspec)
@@ -214,8 +209,7 @@ external_ep_strategy_get_property(GObject *object,
     }
 }
 
-    static void
-internal_ep_strategy_get_property(GObject *object,
+static void internal_ep_strategy_get_property(GObject *object,
         guint property_id,
         GValue *value,
         GParamSpec *pspec)
@@ -231,8 +225,7 @@ internal_ep_strategy_get_property(GObject *object,
     }
 }
 
-    static void
-transaction_set_property(GObject *object,
+static void transaction_set_property(GObject *object,
         guint property_id,
         const GValue *value,
         GParamSpec *pspec)
@@ -266,8 +259,7 @@ transaction_set_property(GObject *object,
     }
 }
 
-    static void
-external_ep_strategy_set_property(GObject *object,
+static void external_ep_strategy_set_property(GObject *object,
         guint property_id,
         const GValue *value,
         GParamSpec *pspec)
@@ -284,8 +276,7 @@ external_ep_strategy_set_property(GObject *object,
     }
 }
 
-    static void
-internal_ep_strategy_set_property(GObject *object,
+static void internal_ep_strategy_set_property(GObject *object,
         guint property_id,
         const GValue *value,
         GParamSpec *pspec)
@@ -303,12 +294,11 @@ internal_ep_strategy_set_property(GObject *object,
 }
 
 
-    static void
-enforcement_point_base_init(gpointer g_class)
+static void enforcement_point_base_init(gpointer g_class)
 {
     static gboolean initialized = FALSE;
 
-    OHM_DEBUG(DBG_SIGNALING, "interface init\n");
+    OHM_DEBUG(DBG_SIGNALING, "interface init");
 
     if (!initialized) {
         /*
@@ -355,19 +345,20 @@ enforcement_point_base_init(gpointer g_class)
 /*
  * send_decision 
  */
-    gboolean
-enforcement_point_send_decision(EnforcementPoint * self, Transaction *transaction)
+gboolean enforcement_point_send_decision(EnforcementPoint * self,
+        Transaction *transaction)
 {
     return EP_STRATEGY_GET_INTERFACE(self)->send_decision(self, transaction);
 }
 
-static void internal_ep_cb(EnforcementPoint *self, Transaction *t, gboolean success)
+static void internal_ep_cb(EnforcementPoint *self, Transaction *t,
+        gboolean success)
 {
     enforcement_point_receive_ack(self, t, success);
 }
 
-    gboolean 
-internal_ep_send_decision(EnforcementPoint *self, Transaction *transaction)
+gboolean internal_ep_send_decision(EnforcementPoint *self,
+        Transaction *transaction)
 {
     guint txid;
     InternalEPStrategy *s = INTERNAL_EP_STRATEGY(self);
@@ -376,7 +367,7 @@ internal_ep_send_decision(EnforcementPoint *self, Transaction *transaction)
             "txid", &txid,
             NULL);
 
-    OHM_DEBUG(DBG_SIGNALING, "Internal EP send decision, txid '%u'\n", txid);
+    OHM_DEBUG(DBG_SIGNALING, "Internal EP send decision, txid '%u'", txid);
     
     if (txid == 0) {
         g_signal_emit (INTERNAL_EP_STRATEGY(self), signals [ON_KEY_CHANGE], 0, transaction);
@@ -400,8 +391,7 @@ internal_ep_send_decision(EnforcementPoint *self, Transaction *transaction)
     return TRUE;
 }
 
-    static int
-map_to_dbus_type(GValue *gval, gchar *sig, void **value)
+static int map_to_dbus_type(GValue *gval, gchar *sig, void **value)
 {
 
     int retval;
@@ -477,8 +467,7 @@ map_to_dbus_type(GValue *gval, gchar *sig, void **value)
     return retval;
 }
 
-    static          gboolean
-send_ipc_signal(gpointer data)
+static gboolean send_ipc_signal(gpointer data)
 {
     pending_signal *signal = data;
     Transaction    *transaction = signal->transaction;
@@ -543,7 +532,7 @@ send_ipc_signal(gpointer data)
      *
      */
 
-    OHM_DEBUG(DBG_SIGNALING, "sending signal with txid '%u'\n", txid);
+    OHM_DEBUG(DBG_SIGNALING, "sending signal with txid '%u'", txid);
 
     if ((dbus_signal =
                 dbus_message_new_signal(path, interface, signal_name)) == NULL)
@@ -698,8 +687,8 @@ end:
     return FALSE;
 }
 
-    gboolean
-external_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
+gboolean external_ep_send_decision(EnforcementPoint * self,
+        Transaction *transaction)
 {
     /*
      * do not really send anything here, just set up the transaction
@@ -721,7 +710,7 @@ external_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
             &facts,
             NULL);
 
-    OHM_DEBUG(DBG_SIGNALING, "External EP send decision, txid '%u'\n", txid);
+    OHM_DEBUG(DBG_SIGNALING, "External EP send decision, txid '%u'", txid);
 
     for (i = k->pending_signals; i != NULL; i = g_slist_next(i)) {
         signal = i->data;
@@ -757,14 +746,12 @@ external_ep_send_decision(EnforcementPoint * self, Transaction *transaction)
 
 /* unregister */
 
-    gboolean
-enforcement_point_unregister(EnforcementPoint * self)
+gboolean enforcement_point_unregister(EnforcementPoint * self)
 {
     return EP_STRATEGY_GET_INTERFACE(self)->unregister(self);
 }
 
-    gboolean
-internal_ep_unregister(EnforcementPoint * self)
+gboolean internal_ep_unregister(EnforcementPoint * self)
 {
     InternalEPStrategy *s = INTERNAL_EP_STRATEGY(self);
     GSList *i = NULL;
@@ -779,8 +766,7 @@ internal_ep_unregister(EnforcementPoint * self)
     return TRUE;
 }
 
-    gboolean
-external_ep_unregister(EnforcementPoint * self)
+gboolean external_ep_unregister(EnforcementPoint * self)
 {
     ExternalEPStrategy *s = EXTERNAL_EP_STRATEGY(self);
     GSList *i = NULL;
@@ -798,14 +784,14 @@ external_ep_unregister(EnforcementPoint * self)
 
 /* stop_transaction */
 
-    gboolean
-enforcement_point_stop_transaction(EnforcementPoint * self, Transaction *transaction)
+gboolean enforcement_point_stop_transaction(EnforcementPoint * self,
+        Transaction *transaction)
 {
     return EP_STRATEGY_GET_INTERFACE(self)->stop_transaction(self, transaction);
 }
 
-    gboolean
-internal_ep_stop_transaction(EnforcementPoint * self, Transaction *transaction)
+gboolean internal_ep_stop_transaction(EnforcementPoint * self,
+        Transaction *transaction)
 {
     InternalEPStrategy *s = INTERNAL_EP_STRATEGY(self);
 
@@ -814,8 +800,8 @@ internal_ep_stop_transaction(EnforcementPoint * self, Transaction *transaction)
     return TRUE;
 }
 
-    gboolean
-external_ep_stop_transaction(EnforcementPoint * self, Transaction *transaction)
+gboolean external_ep_stop_transaction(EnforcementPoint * self,
+        Transaction *transaction)
 {
     ExternalEPStrategy *s = EXTERNAL_EP_STRATEGY(self);
 
@@ -826,19 +812,19 @@ external_ep_stop_transaction(EnforcementPoint * self, Transaction *transaction)
 
 /* receive_ack */
 
-    gboolean
-enforcement_point_receive_ack(EnforcementPoint * self, Transaction *transaction, guint status)
+gboolean enforcement_point_receive_ack(EnforcementPoint * self,
+        Transaction *transaction, guint status)
 {
     return EP_STRATEGY_GET_INTERFACE(self)->receive_ack(self, transaction, status);
 }
 
-    gboolean
-internal_ep_receive_ack(EnforcementPoint * self, Transaction *transaction, guint status)
+gboolean internal_ep_receive_ack(EnforcementPoint * self,
+        Transaction *transaction, guint status)
 {
 
     InternalEPStrategy *s = INTERNAL_EP_STRATEGY(self);
 
-    OHM_DEBUG(DBG_SIGNALING, "Internal enforcement_point '%s', %s received!\n",
+    OHM_DEBUG(DBG_SIGNALING, "Internal enforcement_point '%s', %s received!",
             s->id,
             status ? "ACK" : "NACK");
 
@@ -853,14 +839,14 @@ internal_ep_receive_ack(EnforcementPoint * self, Transaction *transaction, guint
     return TRUE;
 }
 
-    gboolean
-external_ep_receive_ack(EnforcementPoint * self, Transaction *transaction, guint status)
+gboolean external_ep_receive_ack(EnforcementPoint * self, 
+        Transaction *transaction, guint status)
 {
     /* future: do stuff that has to do with analyzing the ack? */
     
     ExternalEPStrategy *s = EXTERNAL_EP_STRATEGY(self);
     
-    OHM_DEBUG(DBG_SIGNALING, "External enforcement_point '%s', %s received!\n",
+    OHM_DEBUG(DBG_SIGNALING, "External enforcement_point '%s', %s received!",
             s->id,
             status ? "ACK" : "NACK");
 
@@ -880,8 +866,7 @@ external_ep_receive_ack(EnforcementPoint * self, Transaction *transaction, guint
  * initialization 
  */
 
-    static void 
-transaction_instance_init(GTypeInstance * instance,
+static void transaction_instance_init(GTypeInstance * instance,
         gpointer g_class) 
 {
 
@@ -896,32 +881,30 @@ transaction_instance_init(GTypeInstance * instance,
     self->built_ready = FALSE;
 }
 
-    static void
-external_ep_dispose(GObject *object)
+static void external_ep_dispose(GObject *object)
 {
     ExternalEPStrategy *self = EXTERNAL_EP_STRATEGY(object);
-    OHM_DEBUG(DBG_SIGNALING, "external_ep_dispose\n");
+    OHM_DEBUG(DBG_SIGNALING, "external_ep_dispose");
     
     g_free(self->id);
     self->id = NULL;
 }
     
-    static void
-internal_ep_dispose(GObject *object)
+static void internal_ep_dispose(GObject *object)
 {
     InternalEPStrategy *self = INTERNAL_EP_STRATEGY(object);
-    OHM_DEBUG(DBG_SIGNALING, "internal_ep_dispose\n");
+    OHM_DEBUG(DBG_SIGNALING, "internal_ep_dispose");
     
     g_free(self->id);
     self->id = NULL;
 }
 
-    static void
-transaction_dispose(GObject *object) {
+static void transaction_dispose(GObject *object)
+{
 
     GSList *i = NULL;
     Transaction *self = TRANSACTION(object);
-    OHM_DEBUG(DBG_SIGNALING, "transaction_dispose\n");
+    OHM_DEBUG(DBG_SIGNALING, "transaction_dispose");
     
     /* Note that the EPs might have been unregistered during the transaction,
      * therefore these may be the last references to them */
@@ -953,7 +936,8 @@ transaction_dispose(GObject *object) {
 }
 
     static void
-transaction_class_init(gpointer g_class, gpointer class_data) {
+transaction_class_init(gpointer g_class, gpointer class_data)
+{
     
     GObjectClass *gobject = (GObjectClass *) g_class;
     GParamSpec *param_spec;
@@ -1071,13 +1055,13 @@ transaction_class_init(gpointer g_class, gpointer class_data) {
 
 }
 
-    static void
-internal_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
+static void internal_ep_strategy_interface_init(gpointer g_iface,
+        gpointer iface_data)
 {
     
     (void) iface_data;
 
-    OHM_DEBUG(DBG_SIGNALING, "initing internal interface\n");
+    OHM_DEBUG(DBG_SIGNALING, "initing internal interface");
 
     EnforcementPointInterface *iface =
         (EnforcementPointInterface *) g_iface;
@@ -1095,28 +1079,27 @@ internal_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
         internal_ep_unregister;
 }
 
-    static void
-internal_ep_strategy_instance_init(GTypeInstance * instance,
+static void internal_ep_strategy_instance_init(GTypeInstance * instance,
         gpointer g_class)
 {
     InternalEPStrategy *self = INTERNAL_EP_STRATEGY(instance);
 
     (void) g_class;
 
-    OHM_DEBUG(DBG_SIGNALING, "initing internal strategy\n");
+    OHM_DEBUG(DBG_SIGNALING, "initing internal strategy");
     self->id = NULL;
 }
 
 
-    static void
-external_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
+static void external_ep_strategy_interface_init(gpointer g_iface,
+        gpointer iface_data)
 {
     EnforcementPointInterface *iface =
         (EnforcementPointInterface *) g_iface;
 
     (void) iface_data;
     
-    OHM_DEBUG(DBG_SIGNALING, "initing external interface\n");
+    OHM_DEBUG(DBG_SIGNALING, "initing external interface");
     
     iface->send_decision =
         (gboolean(*)(EnforcementPoint *, Transaction *))
@@ -1132,20 +1115,19 @@ external_ep_strategy_interface_init(gpointer g_iface, gpointer iface_data)
         external_ep_unregister;
 }
 
-    static void
-external_ep_strategy_instance_init(GTypeInstance * instance,
+static void external_ep_strategy_instance_init(GTypeInstance * instance,
         gpointer g_class)
 {
     ExternalEPStrategy *self = EXTERNAL_EP_STRATEGY(instance);
 
     (void) g_class;
 
-    OHM_DEBUG(DBG_SIGNALING, "initing external strategy\n");
+    OHM_DEBUG(DBG_SIGNALING, "initing external strategy");
     self->id = NULL;
 }
 
-    static void
-external_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
+static void external_ep_strategy_class_init(gpointer g_class,
+        gpointer class_data) {
 
     GObjectClass *gobject = (GObjectClass *) g_class;
     
@@ -1159,8 +1141,8 @@ external_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
     g_object_class_override_property (gobject, PROP_ID, "id");
 } 
 
-    static void
-internal_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
+static void internal_ep_strategy_class_init(gpointer g_class,
+        gpointer class_data) {
 
     GObjectClass *gobject = (GObjectClass *) g_class;
 
@@ -1174,8 +1156,7 @@ internal_ep_strategy_class_init(gpointer g_class, gpointer class_data) {
     g_object_class_override_property (gobject, PROP_ID, "id");
 } 
 
-    GType
-transaction_get_type(void)
+GType transaction_get_type(void)
 {
     static GType    type = 0;
     if (type == 0) {
@@ -1197,8 +1178,7 @@ transaction_get_type(void)
     return type;
 }
 
-    GType
-enforcement_point_get_type(void)
+GType enforcement_point_get_type(void)
 {
     static GType    type = 0;
     if (type == 0) {
@@ -1221,8 +1201,7 @@ enforcement_point_get_type(void)
 }
 
 
-    GType
-external_ep_get_type(void)
+GType external_ep_get_type(void)
 {
     static GType    type = 0;
     if (type == 0) {
@@ -1252,8 +1231,7 @@ external_ep_get_type(void)
     return type;
 }
 
-    GType
-internal_ep_get_type(void)
+GType internal_ep_get_type(void)
 {
     static GType    type = 0;
     if (type == 0) {
@@ -1285,21 +1263,19 @@ internal_ep_get_type(void)
 
 /* transaction methods */
 
-    gboolean
-transaction_done(Transaction *self)
+gboolean transaction_done(Transaction *self)
 {
-
     if (!self->built_ready)
         return FALSE;
         
-    OHM_DEBUG(DBG_SIGNALING, "transaction_done unanswered ep count '%i'\n", g_slist_length(self->not_answered));
+    OHM_DEBUG(DBG_SIGNALING, "transaction_done unanswered ep count '%i'", g_slist_length(self->not_answered));
 
     return g_slist_length(self->not_answered) ? FALSE : TRUE;
 
 }
 
-    void
-transaction_add_ep(Transaction *self, EnforcementPoint *ep) {
+void transaction_add_ep(Transaction *self, EnforcementPoint *ep)
+{
 
     /* ref in case that the EP goes away and we still want to use the
      * results  */
@@ -1308,22 +1284,22 @@ transaction_add_ep(Transaction *self, EnforcementPoint *ep) {
 
     self->not_answered = g_slist_prepend(self->not_answered, ep);
 
-    OHM_DEBUG(DBG_SIGNALING, "Added ep %p to transaction %i, unanswered ep count now %i\n", ep, self->txid, g_slist_length(self->not_answered));
+    OHM_DEBUG(DBG_SIGNALING, "Added ep %p to transaction %i, unanswered ep count now %i", ep, self->txid, g_slist_length(self->not_answered));
 }
 
-    void
-transaction_remove_ep(Transaction *self, EnforcementPoint *ep) {
+void transaction_remove_ep(Transaction *self, EnforcementPoint *ep)
+{
 
     self->not_answered = g_slist_remove(self->not_answered, ep);
     
-    OHM_DEBUG(DBG_SIGNALING, "Removed ep %p to transaction %i, unanswered ep count now %i\n", ep, self->txid, g_slist_length(self->not_answered));
+    OHM_DEBUG(DBG_SIGNALING, "Removed ep %p to transaction %i, unanswered ep count now %i", ep, self->txid, g_slist_length(self->not_answered));
 
     g_object_unref(ep);
 }
 
 
-    void
-transaction_ack_ep(Transaction *self, EnforcementPoint *ep, gboolean ack)
+void transaction_ack_ep(Transaction *self, EnforcementPoint *ep, 
+        gboolean ack)
 {
     gchar *id;
 
@@ -1345,17 +1321,16 @@ transaction_ack_ep(Transaction *self, EnforcementPoint *ep, gboolean ack)
     return;
 }
 
-    void
-transaction_complete(Transaction *self)
+void transaction_complete(Transaction *self)
 {
     GSList *i;
     
-    OHM_DEBUG(DBG_SIGNALING, "transaction complete!\n");
+    OHM_DEBUG(DBG_SIGNALING, "transaction complete!");
 
     if (g_slist_length(self->not_answered) != 0) {
         /* we are here because of a timeout (TODO: or because of a
          * non-transaction decision, but refactor this away soon) */
-        OHM_DEBUG(DBG_SIGNALING, "not all enforcement points answered\n");
+        OHM_DEBUG(DBG_SIGNALING, "not all enforcement points answered");
 
         for (i = self->not_answered; i != 0; i = g_slist_next(i)) {
             EnforcementPoint *ep = i->data;
@@ -1377,7 +1352,7 @@ transaction_complete(Transaction *self)
 #ifdef ONLY_ONE_TRANSACTION
     /* go on and process the next transaction */
     if (!g_queue_is_empty(inq)) {
-        OHM_DEBUG(DBG_SIGNALING, "transaction queue '%p' not empty (%i left), scheduling processing\n",
+        OHM_DEBUG(DBG_SIGNALING, "transaction queue '%p' not empty (%i left), scheduling processing",
                 inq, g_queue_get_length(inq));
         /* Let's not delay the processing because of test issues :-) */
         process_inq(NULL);
@@ -1385,16 +1360,14 @@ transaction_complete(Transaction *self)
 #endif
 }
 
-    static gboolean
-timeout_transaction(gpointer data)
+static gboolean timeout_transaction(gpointer data)
 {
-    OHM_DEBUG(DBG_SIGNALING, "timer launched on transaction!\n");
+    OHM_DEBUG(DBG_SIGNALING, "timer launched on transaction!");
     transaction_complete(data);
     return FALSE;
 }
 
-    static          gboolean
-process_inq(gpointer data)
+static gboolean process_inq(gpointer data)
 {
     /*
      * Runs (mostly) in the idle loop, sends out the decisions, checks if the
@@ -1407,8 +1380,6 @@ process_inq(gpointer data)
 
     (void) data;
 
-    OHM_DEBUG(DBG_SIGNALING, "> process_inq\n");
-
     /*
      * incoming queue (from OHM to this plugin) 
      */
@@ -1416,27 +1387,27 @@ process_inq(gpointer data)
     while (!g_queue_is_empty(inq)) {
 #endif
 
-    /* printf("Before popping, inq: '%p', length: '%i'\n", inq, g_queue_get_length(inq)); */
+    /* printf("Before popping, inq: '%p', length: '%i'", inq, g_queue_get_length(inq)); */
 
     if (inq == NULL || g_queue_is_empty(inq)) {
-        OHM_DEBUG(DBG_SIGNALING, "Error! Nothing to process, even though processing was scheduled.\n");
+        OHM_DEBUG(DBG_SIGNALING, "Error! Nothing to process, even though processing was scheduled.");
         return FALSE;
     }
 
     t = g_queue_pop_head(inq);
     
-    /* printf("After popping, inq: '%p', length: '%i'\n", inq, g_queue_get_length(inq)); */
+    /* printf("After popping, inq: '%p', length: '%i'", inq, g_queue_get_length(inq)); */
 
     g_hash_table_insert(transactions, &t->txid, t);
 
     for (e = enforcement_points; e != NULL; e = g_slist_next(e)) {
         EnforcementPoint *ep = e->data;
-        OHM_DEBUG(DBG_SIGNALING, "process: ep 0x%p\n", ep);
+        OHM_DEBUG(DBG_SIGNALING, "process: ep 0x%p", ep);
 
         transaction_add_ep(t, ep);
         ret = enforcement_point_send_decision(ep, t);
         if (!ret) {
-            OHM_DEBUG(DBG_SIGNALING, "Error sending the decision\n");
+            OHM_DEBUG(DBG_SIGNALING, "Error sending the decision");
             /* TODO; signal that the transaction failed? NAK? */
         }
     }
@@ -1444,7 +1415,7 @@ process_inq(gpointer data)
     /* all enforcement points are notified, the transaction is now
      * ready to be handled */
 
-    OHM_DEBUG(DBG_SIGNALING, "transaction '%u' is now built\n", t->txid);
+    OHM_DEBUG(DBG_SIGNALING, "transaction '%u' is now built", t->txid);
 
     t->built_ready = TRUE;
 
@@ -1465,7 +1436,7 @@ process_inq(gpointer data)
 
         g_object_get(t, "timeout", &timeout, NULL);
 
-        /* printf("setting timeout: %u\n", timeout); */
+        /* printf("setting timeout: %u", timeout); */
         t->timeout_id = g_timeout_add(timeout, timeout_transaction, t);
     }
 #ifndef ONLY_ONE_TRANSACTION
@@ -1476,8 +1447,7 @@ process_inq(gpointer data)
 }
 
 
-static gboolean
-register_fact(const gchar *uri, gboolean internal)
+static gboolean register_fact(const gchar *uri, gboolean internal)
 {
     OhmFact *fact  = NULL;
     GValue  *guri  = NULL;
@@ -1520,8 +1490,7 @@ register_fact(const gchar *uri, gboolean internal)
 }
 
 
-static gboolean
-unregister_fact(const gchar *uri)
+static gboolean unregister_fact(const gchar *uri)
 {
     GSList     *l;
     OhmFact    *fact;
@@ -1548,8 +1517,8 @@ unregister_fact(const gchar *uri)
 }
 
 
-    EnforcementPoint *
-register_enforcement_point(const gchar * uri, gboolean internal)
+EnforcementPoint * register_enforcement_point(const gchar * uri,
+        gboolean internal)
 {
     /*
      * Registers an internal or external enforcement point 
@@ -1558,8 +1527,6 @@ register_enforcement_point(const gchar * uri, gboolean internal)
     GSList *i = NULL;
     EnforcementPoint *ep = NULL;
     gchar *id;
-
-    OHM_DEBUG(DBG_SIGNALING, "> register_enforcement_point\n");
 
     for (i = enforcement_points; i != NULL; i = g_slist_next(i)) {
     
@@ -1574,7 +1541,7 @@ register_enforcement_point(const gchar * uri, gboolean internal)
     }
 
     if (ep != NULL) {
-        OHM_DEBUG(DBG_SIGNALING, "Could not register: ep '%s' already registered\n", uri);
+        OHM_DEBUG(DBG_SIGNALING, "Could not register: ep '%s' already registered", uri);
         return NULL;
     }
 
@@ -1585,12 +1552,12 @@ register_enforcement_point(const gchar * uri, gboolean internal)
     }
 
     if (ep == NULL) {
-        OHM_DEBUG(DBG_SIGNALING, "Could not create new enforcement_point '%s'\n", uri);
+        OHM_DEBUG(DBG_SIGNALING, "Could not create new enforcement_point '%s'", uri);
     }
 
     g_object_set(ep, "id", uri, NULL);
 
-    OHM_DEBUG(DBG_SIGNALING, "Created ep '%s' at 0x%p\n", uri, ep);
+    OHM_DEBUG(DBG_SIGNALING, "Created ep '%s' at 0x%p", uri, ep);
 
     enforcement_points = g_slist_prepend(enforcement_points, ep);
  
@@ -1599,8 +1566,7 @@ register_enforcement_point(const gchar * uri, gboolean internal)
     return ep;
 }
 
-    gboolean
-unregister_enforcement_point(const gchar *uri)
+gboolean unregister_enforcement_point(const gchar *uri)
 {
 
     /* free memory and remove from the ep list */
@@ -1626,7 +1592,7 @@ unregister_enforcement_point(const gchar *uri)
         return FALSE;
     }
 
-    OHM_DEBUG(DBG_SIGNALING, "Unregister: '%s' was found\n", uri);
+    OHM_DEBUG(DBG_SIGNALING, "Unregister: '%s' was found", uri);
 
     enforcement_point_unregister(ep);
     enforcement_points = g_slist_remove(enforcement_points, ep);
@@ -1637,8 +1603,8 @@ unregister_enforcement_point(const gchar *uri)
     return TRUE;
 }
     
-    DBusHandlerResult
-update_external_enforcement_points(DBusConnection * c, DBusMessage * msg,
+DBusHandlerResult update_external_enforcement_points(DBusConnection * c,
+        DBusMessage * msg,
         void *user_data)
 {
     gchar *sender = NULL, *before = NULL, *after = NULL;
@@ -1646,8 +1612,6 @@ update_external_enforcement_points(DBusConnection * c, DBusMessage * msg,
 
     (void) user_data;
     (void) c;
-
-    OHM_DEBUG(DBG_SIGNALING, "> update_external_enforcement_points\n");
 
     ret = dbus_message_get_args(msg,
             NULL,
@@ -1663,21 +1627,19 @@ update_external_enforcement_points(DBusConnection * c, DBusMessage * msg,
         if (!strcmp(after, "")) {
             /* a service went away, unregister if it was one of ours */
             if (unregister_enforcement_point(sender)) {
-                OHM_DEBUG(DBG_SIGNALING, "Removed service '%s'\n", sender);
+                OHM_DEBUG(DBG_SIGNALING, "Removed service '%s'", sender);
             }
             else {
-                OHM_DEBUG(DBG_SIGNALING, "Terminated service '%s' wasn't registered\n", sender);
+                OHM_DEBUG(DBG_SIGNALING, "Terminated service '%s' wasn't registered", sender);
             }
         } 
     }
     
-    OHM_DEBUG(DBG_SIGNALING, "< update_external_enforcement_points\n");
-
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
-    DBusHandlerResult
-register_external_enforcement_point(DBusConnection * c, DBusMessage * msg,
+DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
+        DBusMessage * msg,
         void *user_data)
 {
     DBusMessage *reply;
@@ -1686,8 +1648,6 @@ register_external_enforcement_point(DBusConnection * c, DBusMessage * msg,
     EnforcementPoint *ep = NULL;
     
     (void) user_data;
-
-    OHM_DEBUG(DBG_SIGNALING, "> register_external_enforcement_point\n");
 
     if (msg == NULL) {
         goto err;
@@ -1726,12 +1686,12 @@ err:
     
     /* if (msg) { dbus_message_unref(msg); msg = NULL; } */
     
-    OHM_DEBUG(DBG_SIGNALING, "D-Bus error\n");
+    OHM_DEBUG(DBG_SIGNALING, "D-Bus error");
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-    DBusHandlerResult
-unregister_external_enforcement_point(DBusConnection * c, DBusMessage * msg,
+DBusHandlerResult unregister_external_enforcement_point(DBusConnection * c,
+        DBusMessage * msg,
         void *user_data)
 {
     DBusMessage *reply;
@@ -1778,13 +1738,12 @@ err:
     
     /* if (msg) { dbus_message_unref(msg); msg = NULL; } */
     
-    OHM_DEBUG(DBG_SIGNALING, "D-Bus error\n");
+    OHM_DEBUG(DBG_SIGNALING, "D-Bus error");
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 
-    static          guint
-get_txid()
+static guint get_txid()
 {
     static guint    txid = 0;
 
@@ -1798,8 +1757,10 @@ get_txid()
 /*
  * return the Transaction, NULL if no need for real transaction
  */
-    Transaction *
-queue_decision(gchar *signal, GSList *facts, gint proposed_txid, gboolean need_transaction, guint timeout)
+Transaction * queue_decision(gchar *signal, GSList *facts,
+        gint proposed_txid,
+        gboolean need_transaction,
+        guint timeout)
 {
     /*
      * Puts a policy decision to the decision queue and asks the
@@ -1860,8 +1821,8 @@ queue_decision(gchar *signal, GSList *facts, gint proposed_txid, gboolean need_t
     return transaction;
 }
     
-    DBusHandlerResult
-dbus_ack(DBusConnection * c, DBusMessage * msg, void *data)
+DBusHandlerResult dbus_ack(DBusConnection * c, DBusMessage * msg,
+        void *data)
 {
     /*
      * Get and ack from an external source, validate it and
@@ -1882,7 +1843,7 @@ dbus_ack(DBusConnection * c, DBusMessage * msg, void *data)
     Transaction *transaction = NULL;
 
 #if 1
-    OHM_DEBUG(DBG_SIGNALING, "got signal %s.%s, sender %s\n", interface ?: "NULL", member,
+    OHM_DEBUG(DBG_SIGNALING, "got signal %s.%s, sender %s", interface ?: "NULL", member,
             sender ?: "NULL");
 #endif
 
@@ -1909,7 +1870,7 @@ dbus_ack(DBusConnection * c, DBusMessage * msg, void *data)
     transaction = transaction_lookup(txid);
 
     if (transaction == NULL) {
-        OHM_DEBUG(DBG_SIGNALING, "unknown transaction %u, ignored\n", txid);
+        OHM_DEBUG(DBG_SIGNALING, "unknown transaction %u, ignored", txid);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
@@ -1919,12 +1880,12 @@ dbus_ack(DBusConnection * c, DBusMessage * msg, void *data)
 
         g_object_get(tmp, "id", &id, NULL);
 
-        OHM_DEBUG(DBG_SIGNALING, "comparing id '%s' and sender '%s'\n", id, sender);
+        OHM_DEBUG(DBG_SIGNALING, "comparing id '%s' and sender '%s'", id, sender);
 
         if (!strcmp(id, sender)) {
             /* we found the sender */
             ep = tmp;
-            OHM_DEBUG(DBG_SIGNALING, "transaction 0x%x %sed by peer '%s'\n", txid,
+            OHM_DEBUG(DBG_SIGNALING, "transaction 0x%x %sed by peer '%s'", txid,
                     status ? "ACK" : "NAK", id);
 
             g_free(id);
@@ -1934,7 +1895,7 @@ dbus_ack(DBusConnection * c, DBusMessage * msg, void *data)
     }
 
     if (ep == NULL) {
-        OHM_DEBUG(DBG_SIGNALING, "transaction ACK/NAK from unknown peer %s, ignored...\n", sender);
+        OHM_DEBUG(DBG_SIGNALING, "transaction ACK/NAK from unknown peer %s, ignored...", sender);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
