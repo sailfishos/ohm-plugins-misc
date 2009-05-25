@@ -274,11 +274,16 @@ static void sm_init(OhmPlugin *plugin)
     dbusif_add_hello_notification(fire_hello_signal_event);
     dbusif_add_property_notification("State", fire_state_signal_event);
 
-    fsif_add_watch(FACTSTORE_PLAYBACK , NULL  , "setstate", setstate_cb, NULL);
-    fsif_add_watch(FACTSTORE_PLAYBACK , NULL  , "playhint", playhint_cb, NULL);
-    fsif_add_watch(FACTSTORE_PRIVACY  , NULL  , "value"   , privacy_cb , NULL);
-    fsif_add_watch(FACTSTORE_BLUETOOTH, NULL  , "value"   , bluetooth_cb,NULL);
-    fsif_add_watch(FACTSTORE_MUTE     , selist, "mute"    , mute_cb    , NULL);
+#define ADD_FIELD_WATCH(f,s,n,cb) fsif_add_field_watch(f, s, n, cb,NULL)
+
+    ADD_FIELD_WATCH(FACTSTORE_PLAYBACK , NULL  , "setstate", setstate_cb );
+    ADD_FIELD_WATCH(FACTSTORE_PLAYBACK , NULL  , "playhint", playhint_cb );
+    ADD_FIELD_WATCH(FACTSTORE_PRIVACY  , NULL  , "value"   , privacy_cb  );
+    ADD_FIELD_WATCH(FACTSTORE_BLUETOOTH, NULL  , "value"   , bluetooth_cb);
+    ADD_FIELD_WATCH(FACTSTORE_MUTE     , selist, "mute"    , mute_cb     );
+
+#undef ADD_FIELD_WATCH
+
 }
 
 static sm_t *sm_create(char *name, void *user_data)
@@ -1055,7 +1060,9 @@ static int abort_pbreq_deq(sm_evdata_t *evdata, void *usrdata)
     client_t *cl  = (client_t *)usrdata;
     sm_t     *sm  = cl->sm;
     pbreq_t  *req = evdata->pbreply.req;
+#if 0
     char     *state;
+#endif
 
     if (req != NULL) {
         switch (req->type) {

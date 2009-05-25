@@ -2,6 +2,9 @@ ohm-plugins-misc (0.6.39) unstable; urgency=low
 
   [ Janos Kovacs ]
   * support for media active/inactive messages
+  * denying media messages from unregistered enforcement points
+    (ie. 3rd parties)
+  * resetting the active groups if the related enforcement point is gone
 
   [ Ismo Puustinen ]
   * added "name" argument to enforcement point facts.

@@ -19,10 +19,12 @@
 #include "dresif.h"
 #include "fsif.h"
 
-static int DBG_CLIENT, DBG_DBUS, DBG_DRES, DBG_FS, DBG_SM, DBG_TRANS, DBG_QUE;
+static int DBG_CLIENT, DBG_MEDIA, DBG_DBUS, DBG_DRES, DBG_FS, \
+           DBG_SM, DBG_TRANS, DBG_QUE;
 
 OHM_DEBUG_PLUGIN(playback,
     OHM_DEBUG_FLAG("client", "playback client"    , &DBG_CLIENT),
+    OHM_DEBUG_FLAG("media" , "media"              , &DBG_MEDIA ), 
     OHM_DEBUG_FLAG("dbusif", "D-Bus interface"    , &DBG_DBUS  ),
     OHM_DEBUG_FLAG("dres"  , "dres interface"     , &DBG_DRES  ),
     OHM_DEBUG_FLAG("fact"  , "factstore interface", &DBG_FS    ),

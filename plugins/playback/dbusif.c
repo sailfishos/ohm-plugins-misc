@@ -778,6 +778,7 @@ static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg,
     (void)conn;
     (void)user_data;
 
+    char              *epid;
     char              *type;
     char              *media;
     char              *group;
@@ -791,6 +792,8 @@ static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg,
                                      DBUS_INFO_SIGNAL);
 
     if (success) {
+        epid = (char *)dbus_message_get_sender(msg);
+
         success = dbus_message_get_args(msg, NULL,
                                         DBUS_TYPE_STRING, &type,
                                         DBUS_TYPE_STRING, &media,
@@ -826,7 +829,7 @@ static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg,
                 OHM_DEBUG(DBG_DBUS, "info: media '%s' of group '%s' become %s",
                           media, group, state);
 
-                media_state_request(media, group, reqstate);
+                media_state_request(epid, media, group, reqstate);
             }
         }
     }

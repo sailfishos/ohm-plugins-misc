@@ -4,6 +4,12 @@
 #include <sys/time.h>
 
 typedef enum {
+    fact_watch_unknown = 0,
+    fact_watch_insert,
+    fact_watch_remove
+} fsif_fact_watch_e;
+
+typedef enum {
     fldtype_invalid = 0,
     fldtype_string,
     fldtype_integer,
@@ -32,7 +38,10 @@ typedef struct {
 
 typedef struct _OhmFact fsif_entry_t;
 
-typedef void (*fsif_watch_cb_t)(fsif_entry_t *,char *, fsif_field_t *, void *);
+typedef void (*fsif_field_watch_cb_t)(fsif_entry_t *, char *, fsif_field_t *,
+                                      void *);
+typedef void (*fsif_fact_watch_cb_t)(fsif_entry_t *, char *, fsif_fact_watch_e,
+                                     void *);
 
 static void fsif_init(OhmPlugin *);
 static int  fsif_add_factstore_entry(char *, fsif_field_t *);
@@ -40,8 +49,10 @@ static int  fsif_delete_factstore_entry(char *, fsif_field_t *);
 static int  fsif_update_factstore_entry(char *, fsif_field_t *,fsif_field_t *);
 static void fsif_get_field_by_entry(fsif_entry_t *, fsif_fldtype_t, char *,
                                     void *);
-static int  fsif_add_watch(char *, fsif_field_t *, char *,
-                           fsif_watch_cb_t, void *);
+static int  fsif_add_fact_watch(char *, fsif_fact_watch_e,
+                                fsif_fact_watch_cb_t, void *);
+static int  fsif_add_field_watch(char *, fsif_field_t *, char *,
+                                 fsif_field_watch_cb_t, void *);
 
 
 #endif /* __OHM_PLAYBACK_FSIF_H__ */

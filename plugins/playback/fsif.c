@@ -1,5 +1,16 @@
 #include <ohm/ohm-fact.h>
 
+typedef enum {
+    watch_unknown = 0,
+    watch_insert,
+    watch_remove,
+    watch_update
+} watch_type_e;
+
+#if (watch_insert != fact_watch_insert) || (watch_remove != fact_watch_remove)
+#error "unmatching enumerations fact_watch_insert and watch_type_e"
+#endif
+
 typedef struct watch_fact_s {
     struct watch_fact_s   *next;
     char                  *factname;
@@ -11,24 +22,36 @@ typedef struct watch_entry_s {
     int                    id;
     fsif_field_t          *selist;
     char                  *fldname;
-    fsif_watch_cb_t        callback;
+    union {
+        fsif_field_watch_cb_t  field_watch;
+        fsif_fact_watch_cb_t   fact_watch;
+    }                      callback;
     void                  *usrdata;
 } watch_entry_t;
 
 static OhmFactStore  *fs;
-static watch_fact_t  *wfacts;
+static int            watch_id = 1;
+static watch_fact_t  *wfact_inserts;
+static watch_fact_t  *wfact_removes;
+static watch_fact_t  *wfact_updates;
 
 static OhmFact      *find_entry(char *, fsif_field_t *);
 static int           matching_entry(OhmFact *, fsif_field_t *);
 static void          get_field(OhmFact *, fsif_fldtype_t, char *, void *);
 static void          set_field(OhmFact *, fsif_fldtype_t, char *, void *);
-static watch_fact_t *find_watch_fact(char *);
+static watch_fact_t *find_watch(char *, watch_type_e);
 static fsif_field_t *copy_selector(fsif_field_t *);
 #if 0
 static void          free_selector(fsif_field_t *);
 #endif
+#if 0
+static char        **copy_string_list(char **);
+static void          free_string_list(char **);
+#endif
 static char         *print_selector(fsif_field_t *, char *, int);
 static char         *print_value(fsif_fldtype_t, void *, char *, int);
+static void          inserted_cb(void *, OhmFact *);
+static void          removed_cb(void *, OhmFact *);
 static void          updated_cb(void *, OhmFact *, GQuark, gpointer);
 static char         *time_str(unsigned long long, char *, int);
 
@@ -39,7 +62,9 @@ static void fsif_init(OhmPlugin *plugin)
 
     fs = ohm_fact_store_get_fact_store();
 
-    g_signal_connect(G_OBJECT(fs), "updated", G_CALLBACK(updated_cb), NULL);
+    g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
+    g_signal_connect(G_OBJECT(fs), "inserted", G_CALLBACK(inserted_cb), NULL);
+    g_signal_connect(G_OBJECT(fs), "removed" , G_CALLBACK(removed_cb) , NULL);
 }
 
 static int fsif_add_factstore_entry(char *name, fsif_field_t *fldlist)
@@ -139,26 +164,34 @@ static void fsif_get_field_by_entry(fsif_entry_t *entry, fsif_fldtype_t type,
 }
 
 
-static int fsif_add_watch(char *factname, fsif_field_t *selist, char *fldname,
-                          fsif_watch_cb_t callback, void *usrdata)
+static int fsif_add_fact_watch(char *factname,
+                               fsif_fact_watch_e type,
+                               fsif_fact_watch_cb_t callback,
+                               void *usrdata)
 {
-    static int     id = 1;
-
-    watch_fact_t  *wfact;
-    watch_entry_t *wentry;
+    watch_fact_t   *wfact;
+    watch_fact_t  **wfact_head;
+    watch_entry_t  *wentry;
 
     if (!factname || !callback)
         return -1;
+    
+    switch(type) {
+    case fact_watch_insert:    wfact_head = &wfact_inserts;    break;
+    case fact_watch_remove:    wfact_head = &wfact_removes;    break;
+    default:                   return -1;
+    }
 
-    if ((wfact = find_watch_fact(factname)) == NULL) {
+
+    if ((wfact = find_watch(factname, type)) == NULL) {
         if ((wfact = malloc(sizeof(*wfact))) == NULL)
             return -1;
         else {
             memset(wfact, 0, sizeof(*wfact));
-            wfact->next     = wfacts;
+            wfact->next     = *wfact_head;
             wfact->factname = strdup(factname);
 
-            wfacts = wfact;
+            *wfact_head = wfact;
         }
     }
 
@@ -166,17 +199,59 @@ static int fsif_add_watch(char *factname, fsif_field_t *selist, char *fldname,
         return -1;
     else {
         memset(wentry, 0, sizeof(*wentry));
-        wentry->next     = wfact->entries;
-        wentry->id       = id++;
-        wentry->selist   = copy_selector(selist);
-        wentry->fldname  = fldname ? strdup(fldname) : NULL;
-        wentry->callback = callback;
-        wentry->usrdata  = usrdata;
+        wentry->next                = wfact->entries;
+        wentry->id                  = watch_id++;
+        wentry->callback.fact_watch = callback;
+        wentry->usrdata             = usrdata;
         
         wfact->entries = wentry;
     }
 
-    OHM_DEBUG(DBG_FS, "watch point %d added for '%s%s%s'", wentry->id,
+    OHM_DEBUG(DBG_FS, "fact watch point %d added for '%s'",
+              wentry->id, factname);
+
+    return wentry->id;
+}
+
+static int fsif_add_field_watch(char *factname,
+                                fsif_field_t *selist,
+                                char *fldname,
+                                fsif_field_watch_cb_t callback,
+                                void *usrdata)
+{
+    watch_fact_t  *wfact;
+    watch_entry_t *wentry;
+
+    if (!factname || !callback)
+        return -1;
+
+    if ((wfact = find_watch(factname, watch_update)) == NULL) {
+        if ((wfact = malloc(sizeof(*wfact))) == NULL)
+            return -1;
+        else {
+            memset(wfact, 0, sizeof(*wfact));
+            wfact->next     = wfact_updates;
+            wfact->factname = strdup(factname);
+
+            wfact_updates = wfact;
+        }
+    }
+
+    if ((wentry = malloc(sizeof(*wentry))) == NULL)
+        return -1;
+    else {
+        memset(wentry, 0, sizeof(*wentry));
+        wentry->next                 = wfact->entries;
+        wentry->id                   = watch_id++;
+        wentry->selist               = copy_selector(selist);
+        wentry->fldname              = fldname ? strdup(fldname) : NULL;
+        wentry->callback.field_watch = callback;
+        wentry->usrdata              = usrdata;
+        
+        wfact->entries = wentry;
+    }
+
+    OHM_DEBUG(DBG_FS, "field watch point %d added for '%s%s%s'", wentry->id,
               factname, fldname?":":"", fldname?fldname:"");
 
     return wentry->id;
@@ -337,14 +412,25 @@ static void set_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
     ohm_fact_set(fact, name, gv);
 }
 
-static watch_fact_t *find_watch_fact(char *name)
+static watch_fact_t *find_watch(char *name, watch_type_e type)
 {
     watch_fact_t *wfact;
 
     if (name != NULL) {
-        for (wfact = wfacts;  wfact != NULL;   wfact = wfact->next) {
+
+        switch (type) {
+        case watch_insert:   wfact = wfact_inserts;   break;
+        case watch_remove:   wfact = wfact_removes;   break;
+        case watch_update:   wfact = wfact_updates;   break;
+        default:             return NULL;
+        }
+
+        while (wfact != NULL) {
+
             if (!strcmp(name, wfact->factname))
                 return wfact;
+
+            wfact = wfact->next;
         }
     }
 
@@ -414,22 +500,16 @@ static fsif_field_t *copy_selector(fsif_field_t *selist)
 #if 0
 static void free_selector(fsif_field_t *selist)
 {
-#define FREE(v)                \
-    do {                       \
-        if ((v) != NULL)       \
-            free((void *)(v)); \
-    } while(0)
-
     fsif_field_t  *se;
 
     if (selist != NULL) {
         for (se = selist;  se->type != fldtype_invalid;  se++) {
-            FREE(se->name);
+            free(se->name);
 
             switch(se->type) {
 
             case fldtype_string:
-                FREE(se->value.string);
+                free(se->value.string);
                 break;
 
             default:
@@ -439,9 +519,40 @@ static void free_selector(fsif_field_t *selist)
 
         free(selist);
     }
-
-#undef FREE
 }
+#endif
+
+#if 0
+static char **copy_string_list(char **inplist)
+{
+    char **outlist;
+    int    i;
+
+    for (i = 0;  inplist[i];  i++)
+        ;
+
+    if ((outlist = calloc(i + 1,  sizeof(char *))) != NULL) {
+        for (i = 0;  inplist[i];  i++) {
+            outlist[i] = strdup(inplist[i]);
+        }
+    }
+
+    return outlist;
+}
+
+
+static void  free_string_list(char **list)
+{
+    int i;
+
+    if (list != NULL) {
+        for (i = 0;  list[i];  i++)
+            free(list[i]);
+
+        free(list);
+    }
+}
+
 #endif
 
 static char *print_selector(fsif_field_t *selist, char *buf, int len)
@@ -502,6 +613,50 @@ static char *print_value(fsif_fldtype_t type, void *vptr, char *buf, int len)
     return s;
 }
 
+static void inserted_cb(void *data, OhmFact *fact)
+{
+    (void)data;
+
+    char          *name;
+    watch_fact_t  *wfact;
+    watch_entry_t *wentry;
+    
+    name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
+
+    if ((wfact = find_watch(name, watch_insert)) != NULL) {
+
+        OHM_DEBUG(DBG_FS, "fact watch point: fact '%s' inserted", name);
+
+        for (wentry = wfact->entries;  wentry != NULL;  wentry = wentry->next){
+
+            wentry->callback.fact_watch(fact, name, fact_watch_insert,
+                                        wentry->usrdata); 
+        } /* for */
+    } /* if find_watch */
+}
+
+static void removed_cb(void *data, OhmFact *fact)
+{
+    (void)data;
+
+    char          *name;
+    watch_fact_t  *wfact;
+    watch_entry_t *wentry;
+    
+    name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
+
+    if ((wfact = find_watch(name, watch_remove)) != NULL) {
+
+        OHM_DEBUG(DBG_FS, "fact watch point: fact '%s' removed", name);
+
+        for (wentry = wfact->entries;  wentry != NULL;  wentry = wentry->next){
+
+            wentry->callback.fact_watch(fact, name, fact_watch_remove,
+                                        wentry->usrdata); 
+        } /* for */
+    } /* if find_watch */
+}
+
 static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
 {
     (void)data;
@@ -516,7 +671,7 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
     
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
-    if (value != NULL && (wfact = find_watch_fact(name)) != NULL) {
+    if (value != NULL && (wfact = find_watch(name, watch_update)) != NULL) {
 
         for (wentry = wfact->entries;  wentry != NULL;  wentry = wentry->next){
 
@@ -560,15 +715,15 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
                 
                 valstr = print_value(fld.type, (void *)&fld.value,
                                      valb, sizeof(valb)); 
-                OHM_DEBUG(DBG_FS, "watch point: '%s:%s' changed to '%s'",
-                          name, fld.name, valstr);
+                OHM_DEBUG(DBG_FS, "field watch point: field '%s:%s' "
+                          "changed to '%s'", name, fld.name, valstr);
 
-                wentry->callback(fact, name, &fld, wentry->usrdata);
+                wentry->callback.field_watch(fact, name, &fld,wentry->usrdata);
                 
                 return;
             } /* if matching_entry */
         } /* for */
-    } /* if find_watch_fact */
+    } /* if find_watch */
 }
 
 static char *time_str(unsigned long long t, char *buf , int len)
