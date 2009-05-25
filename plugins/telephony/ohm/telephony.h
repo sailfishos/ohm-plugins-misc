@@ -52,6 +52,7 @@
 #define CLOSE              "Close"
 #define REQUEST_HOLD       "RequestHold"
 #define ADD_MEMBERS        "AddMembers"
+#define STREAM_ADDED       "StreamAdded"
 
 #define POLICY_INTERFACE    "com.nokia.policy"
 #define POLICY_PATH         "/com/nokia/policy"
@@ -124,6 +125,7 @@ struct call_s {
     call_t       *parent;                      /* hosting conference if any */
     int           connected;                   /* whether has been connected */
     OhmFact      *fact;                        /* this call in fact store */
+    guint         timeout;                     /* stream add timeout */
 };
 
 
