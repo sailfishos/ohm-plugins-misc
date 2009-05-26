@@ -953,16 +953,26 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
          * we ignore this event if the call is a conference or a conference
          * member.
          */
-        if (actor != 0 && event.call->peer_handle == actor) {
-            OHM_INFO("Call %s has been released remotely...", event.path);
+        if (actor != 0) {
+            if (event.call->peer_handle == actor) {
+            peer_hungup:
+                OHM_INFO("Call %s has been released remotely...", event.path);
             
-            event.type = EVENT_CALL_PEER_HUNGUP;
-            event_handler((event_t *)&event);
+                event.type = EVENT_CALL_PEER_HUNGUP;
+                event_handler((event_t *)&event);
+            }
+            else {
+            local_hungup:
+                OHM_INFO("Call %s has been released locally...", event.path);
+                event.type = EVENT_CALL_LOCAL_HUNGUP;
+                event_handler((event_t *)&event);
+            }
         }
         else {
-            OHM_INFO("Call %s has been released locally...", event.path);
-            event.type = EVENT_CALL_LOCAL_HUNGUP;
-            event_handler((event_t *)&event);
+            if (removed[0] == event.call->peer_handle)
+                goto peer_hungup;
+            else
+                goto local_hungup;
         }
     }
     
