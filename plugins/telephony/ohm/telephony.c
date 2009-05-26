@@ -84,7 +84,7 @@ static int         holdorder;                    /* autohold order */
 
 call_t *call_register(const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
-                      int conference, int emergency);
+                      int conference, int emergency, int has_stream);
 call_t *call_lookup(const char *path);
 void    call_destroy(call_t *call);
 void    call_foreach(GHFunc callback, gpointer data);
@@ -119,6 +119,7 @@ typedef struct {
     unsigned int  localpend;
     unsigned int  remotepend;
     int           nadded;
+    int           has_stream;
 } callish_t;
 
 
@@ -141,6 +142,7 @@ static int        unknown_members_changed(const char *path,
                                           int nlocalpend,
                                           unsigned int *remotepend,
                                           int nremotepend);
+static int        unknown_stream_added(const char *path);
 
 
 /*
@@ -756,6 +758,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
             event.localpend  = csh->localpend;
             event.remotepend = csh->remotepend;
             event.nmember    = csh->nadded;
+            event.has_stream = csh->has_stream;
             callish_unregister(path);
         }
         
@@ -986,6 +989,8 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
                 call->timeout = 0;
             }
         }
+        else
+            unknown_stream_added(path);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     else
@@ -1565,7 +1570,8 @@ event_handler(event_t *event)
                                  event->channel.peer,
                                  event->channel.peer_handle,
                                  event->channel.members != NULL,
-                                 event->channel.emergency);
+                                 event->channel.emergency,
+                                 event->channel.has_stream);
             call->dir = event->channel.dir;
 
             if (event->channel.nmember > 0)
@@ -1807,7 +1813,8 @@ call_timeout(gpointer data)
  ********************/
 call_t *
 call_register(const char *path, const char *name, const char *peer,
-              unsigned int peer_handle, int conference, int emergency)
+              unsigned int peer_handle, int conference, int emergency,
+              int has_stream)
 {
     call_t *call;
 
@@ -1859,10 +1866,11 @@ call_register(const char *path, const char *name, const char *peer,
 
     policy_run_hook("telephony_call_start_hook");
     
-    call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
-                                       CALL_TIMEOUT,
-                                       call_timeout, g_strdup(call->path),
-                                       g_free);
+    if (!has_stream)
+        call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
+                                           CALL_TIMEOUT,
+                                           call_timeout, g_strdup(call->path),
+                                           g_free);
     return call;
 }
 
@@ -2142,6 +2150,23 @@ unknown_members_changed(const char *path,
     if (nlocalpend > 0)
         csh->localpend = *localpend;
 
+    return 0;
+}
+
+
+/********************
+ * unknown_stream_added
+ ********************/
+static int
+unknown_stream_added(const char *path)
+{
+    callish_t *csh;
+
+    if ((csh = callish_lookup(path)) != NULL) {
+        OHM_INFO("Callish %s has now a stream.", short_path(path));
+        csh->has_stream = TRUE;
+    }
+    
     return 0;
 }
 
