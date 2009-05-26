@@ -15,6 +15,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <time.h>
 
 #include <glib.h>
@@ -34,6 +36,8 @@
 
 #define DBUS_INTERFACE_POLICY   "com.nokia.policy"
 #define DBUS_POLICY_NEW_SESSION "NewSession"
+#define PROFILE_SAVE_DIR  "/var/lib/ohm"
+#define PROFILE_SAVE_PATH PROFILE_SAVE_DIR"/profile"
 
 typedef struct _profile_plugin {
     gchar *current_profile;
