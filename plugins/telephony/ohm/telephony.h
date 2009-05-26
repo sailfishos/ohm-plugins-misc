@@ -125,6 +125,7 @@ struct call_s {
     call_t       *parent;                      /* hosting conference if any */
     int           connected;                   /* whether has been connected */
     OhmFact      *fact;                        /* this call in fact store */
+    int           has_stream;                  /* has stream */
     guint         timeout;                     /* stream add timeout */
 };
 
@@ -179,6 +180,7 @@ typedef struct {
     int             localpend;                 /* pre-collected handle */
     int             remotepend;                /* pre-collected handle */
     int             nmember;
+    int             has_stream;
 } channel_event_t;
 
 
