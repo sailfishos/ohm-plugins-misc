@@ -9,6 +9,9 @@ ohm-plugins-misc (0.6.39) unstable; urgency=low
   [ Ismo Puustinen ]
   * added "name" argument to enforcement point facts.
 
+  [ Krisztian Litkey ]
+  * Save/restore last known profile state.
+
  -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 20 May 2009 18:15:30 +0300
 
 ohm-plugins-misc (0.6.38) unstable; urgency=low
