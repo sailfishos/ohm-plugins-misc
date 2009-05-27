@@ -7,6 +7,9 @@ ohm-plugins-misc (0.6.39) unstable; urgency=low
   * resetting the active groups if the related enforcement point is gone
   * fixing the playback manager's state machine to answer overlapping,
     subsequent playback requests
+  * fixing the state change rollback after denying request
+    (ringtone stop request for instance)
+  * client save_state debug messages
 
   [ Ismo Puustinen ]
   * added "name" argument to enforcement point facts.

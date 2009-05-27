@@ -274,21 +274,42 @@ static char *client_get_state(client_t *cl, client_stype_t type,
 static void client_save_state(client_t *cl, client_stype_t type, char *value)
 {
     char **store;
+    char  *name;
 
     if (cl != NULL) {
 
         switch (type) {
-        case client_reqstate:   store = &cl->reqstate;       break;
-        case client_state:      store = &cl->state;          break;
-        case client_setstate:   store = &cl->setstate;       break;
-        case client_rqsetst:    store = &cl->rqsetst.value;  break;
-        default:                                             return;
+
+        case client_reqstate:
+            store = &cl->reqstate;
+            name  = "reqstate";
+            break;
+
+        case client_state:
+            store = &cl->state;
+            name  = "state";
+            break;
+
+        case client_setstate:
+            store = &cl->setstate;
+            name  = "setstate";
+            break;
+
+        case client_rqsetst:
+            store = &cl->rqsetst.value;
+            name  = "rqsetst";
+            break;
+
+        default:
+            return;
         }
 
-        if (*store != NULL)
-            free((void *)*store);
-
+        free((void *)*store);
         *store = value ? strdup(value) : NULL;
+
+        OHM_DEBUG(DBG_CLIENT, "[%s:%s %s] set client->%s to %s",
+                  cl->dbusid, cl->object, cl->pid, name,
+                  value ? value : "<null>");
     }
 }
 

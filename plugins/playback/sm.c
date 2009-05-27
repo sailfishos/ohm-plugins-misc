@@ -600,7 +600,7 @@ static int fire_setstate_changed_event(void *data)
     cl->rqsetst.evsrc = 0;
     
     if (*rqsetst == '\0')
-        OHM_ERROR("something went twrong: rqsetst.value == NULL");
+        OHM_ERROR("something went wrong: rqsetst.value == NULL");
     else if (!strcmp(state, rqsetst)) {
         OHM_DEBUG(DBG_QUE, "[%s] not firing identical event", sm->name);
 
@@ -973,7 +973,7 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
                 client_save_state(cl, client_state, state);
                 client_update_factstore_entry(cl, "state", state);
                 OHM_DEBUG(DBG_TRANS, "[%s] playback state is set to %s",
-                          sm->name, setstate);
+                          sm->name, state);
             }
             else {
                 /* dres failure: undo the data changes */
@@ -1121,8 +1121,11 @@ static int update_state(sm_evdata_t *evdata, void *usrdata)
         strncpylower(state, evdata->property.value, sizeof(state));
         break;
 
-    case evid_playback_complete:
     case evid_playback_failed:
+        client_get_state(cl, client_setstate, state,sizeof(state));
+        break;
+
+    case evid_playback_complete:
         strncpylower(state, evdata->pbreply.req->state.name, sizeof(state));
         break;
 
