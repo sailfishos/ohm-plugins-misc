@@ -10,12 +10,14 @@ ohm-plugins-misc (0.6.39) unstable; urgency=low
   * fixing the state change rollback after denying request
     (ringtone stop request for instance)
   * client save_state debug messages
+  * Fixes: NB#119125
 
   [ Ismo Puustinen ]
   * added "name" argument to enforcement point facts.
 
   [ Krisztian Litkey ]
   * Save/restore last known profile state.
+  * Fixes: NB#118970
 
  -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 20 May 2009 18:15:30 +0300
 
