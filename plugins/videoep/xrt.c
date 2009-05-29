@@ -190,9 +190,10 @@ static int connect_to_xserver(xrt_t *xr)
     return 0;
 
  failed:
-
+#if 0  /* currently it's always NULL; remainder for possible future changes */
     if (chan != NULL)
         g_io_channel_unref(chan);
+#endif
 
     xcb_disconnect(xconn);
 
