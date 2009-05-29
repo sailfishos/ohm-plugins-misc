@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.39ubuntu1) jaunty; urgency=low
+
+  * Changed info signal parsing. Fixes: NB#119727
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 29 May 2009 17:58:48 +0300
+
 ohm-plugins-misc (0.6.39) unstable; urgency=low
 
   [ Janos Kovacs ]
