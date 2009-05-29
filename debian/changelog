@@ -1,3 +1,16 @@
+ohm-plugins-misc (0.6.40) unstable; urgency=low
+
+  * To keep coverity happy, some more or less intentional dead-code
+    commented out in videoep/xrt.c
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Fri, 29 May 2009 18:30:00 +0300
+
+ohm-plugins-misc (0.6.39ubuntu1) jaunty; urgency=low
+
+  * Changed info signal parsing. Fixes: NB#119727
+	
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 29 May 2009 17:58:48 +0300
+
 ohm-plugins-misc (0.6.39) unstable; urgency=low
 
   [ Janos Kovacs ]
@@ -10,12 +23,14 @@ ohm-plugins-misc (0.6.39) unstable; urgency=low
   * fixing the state change rollback after denying request
     (ringtone stop request for instance)
   * client save_state debug messages
+  * Fixes: NB#119125
 
   [ Ismo Puustinen ]
   * added "name" argument to enforcement point facts.
 
   [ Krisztian Litkey ]
   * Save/restore last known profile state.
+  * Fixes: NB#118970
 
  -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 20 May 2009 18:15:30 +0300
 

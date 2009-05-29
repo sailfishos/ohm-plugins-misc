@@ -1,9 +1,10 @@
 #include "accessories.h"
 
-static int DBG_HEADSET, DBG_BT;
+static int DBG_HEADSET, DBG_BT, DBG_INFO;
 
 OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("headset", "Wired headset events" , &DBG_HEADSET),
+    OHM_DEBUG_FLAG("info", "Info signal events" , &DBG_INFO),
     OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT));
 
 
@@ -88,14 +89,27 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 
     (void) c;
     (void) data;
+    
+    /* This is an example of what we should get:
+
+       string "connected"
+       string "1"
+       array [
+          string "fmtx"
+       ]
+
+    */
 
     if (dbus_message_is_signal(msg, "com.nokia.policy", "info")) {
+    
+        OHM_DEBUG(DBG_INFO, "received an info message");
 
         dbus_message_iter_init(msg, &msgit);
 
         for (;;) {
-            if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING)
+            if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING) {
                 goto done;
+            }
 
             dbus_message_iter_get_basic(&msgit, (void *)&string);
 
@@ -104,19 +118,16 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 
                 if (!dbus_message_iter_next(&msgit))
                     goto done;
-            } else
-
-            if (!strcmp(string, "connected")) {
+            }
+            else if (!strcmp(string, "connected")) {
                 valueptr = &connected;
 
                 if (!dbus_message_iter_next(&msgit))
                     goto done;
             }
-
-            if (!strcmp(string, "media")) {
+            else if (!strcmp(string, "media")) {
                 goto not_our_signal;
             }
-            
             else {
                 value = strtol(string, &end, 10);
 
@@ -141,6 +152,8 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 
             dbus_message_iter_get_basic(&devit, (void *)&device);
 
+            OHM_DEBUG(DBG_INFO, "info, setting device '%s' with driver value: '%d' to connected value: '%d'",
+                    device ? device : "NULL", driver, connected);
             dres_accessory_request(device, driver, connected);
       
         } while (dbus_message_iter_next(&devit));
@@ -164,6 +177,8 @@ gboolean run_policy_hook(const char *hook)
                   strerror(-status));
     else if (status == 0)
         OHM_ERROR("resolve() failed for hook %s", hook);
+
+    OHM_DEBUG(DBG_BT, "ran policy hook '%s' with status %d", hook ? hook : "NULL", status);
 
     return status <= 0 ? FALSE : TRUE;
 }
