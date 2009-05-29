@@ -834,8 +834,10 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     (void)c;
     (void)data;
 
-    if ((event.path = dbus_message_get_path(msg)) == NULL ||
-        (event.call = call_lookup(event.path))    == NULL)
+    if ((event.path = dbus_message_get_path(msg)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    if ((event.call = call_lookup(event.path)) == NULL)
         OHM_INFO("MembersChanged for unknown call %s.", event.path); 
     
     actor = 0;
@@ -2050,9 +2052,7 @@ callish_destroy(callish_t *csh)
 static void
 callish_unregister(const char *path)
 {
-    callish_t *csh;
-    
-    if (path != NULL && (csh = callish_lookup(path)) != NULL) {
+    if (path != NULL && callish_lookup(path) != NULL) {
         OHM_INFO("Unregistering callish %s.", short_path(path));
         g_hash_table_remove(callish, path);
     }
