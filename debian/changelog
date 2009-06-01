@@ -1,15 +1,13 @@
 ohm-plugins-misc (0.6.40) unstable; urgency=low
 
+  [ Janos Kovacs ]
   * To keep coverity happy, some more or less intentional dead-code
     commented out in videoep/xrt.c
 
- -- Janos Kovacs <janos.f.kovacs@nokia.com>  Fri, 29 May 2009 18:30:00 +0300
-
-ohm-plugins-misc (0.6.39ubuntu1) jaunty; urgency=low
-
+  [ Ismo Puustinen ]
   * Changed info signal parsing. Fixes: NB#119727
-	
- -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 29 May 2009 17:58:48 +0300
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Mon, 01 Jun 2009 10:11:23 +0300
 
 ohm-plugins-misc (0.6.39) unstable; urgency=low
 
