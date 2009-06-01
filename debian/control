@@ -14,6 +14,15 @@ Description: Miscallaneous OHM Nokia plugins.
  .
  OHM Nokia miscallaneous plugins.
 
+Package: ohm-plugin-console
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0
+XB-GIT-ID: ${Git-Id}
+Description: OHM debug console plugin.
+ This package contains a very simple interactive debug console for OHM.
+ .
+ This package contains a very simple interactive debug console for OHM.
+
 Package: ohm-plugins-misc-dbg
 Priority: extra
 Section: utils
