@@ -53,6 +53,7 @@
 #define REQUEST_HOLD       "RequestHold"
 #define ADD_MEMBERS        "AddMembers"
 #define STREAM_ADDED       "StreamAdded"
+#define STREAM_REMOVED     "StreamRemoved"
 
 #define POLICY_INTERFACE    "com.nokia.policy"
 #define POLICY_PATH         "/com/nokia/policy"
@@ -108,6 +109,13 @@ typedef enum {
     DIR_MAX
 } call_dir_t;
 
+
+enum {
+    TP_STREAM_TYPE_AUDIO = 0,
+    TP_STREAM_TYPE_VIDEO,
+};
+
+
 typedef struct call_s call_t;
 
 struct call_s {
@@ -125,7 +133,8 @@ struct call_s {
     call_t       *parent;                      /* hosting conference if any */
     int           connected;                   /* whether has been connected */
     OhmFact      *fact;                        /* this call in fact store */
-    int           has_stream;                  /* has stream */
+    unsigned int  audio;                       /* audio stream ID or 0 */
+    unsigned int  video;                       /* video stream ID or 0 */
     guint         timeout;                     /* stream add timeout */
 };
 
@@ -179,8 +188,9 @@ typedef struct {
     int             emergency;                 /* an emergency call */
     int             localpend;                 /* pre-collected handle */
     int             remotepend;                /* pre-collected handle */
-    int             nmember;
-    int             has_stream;
+    int             nmember;                   /* number of members */
+    unsigned int    audio;                     /* audio stream ID or 0 */
+    unsigned int    video;                     /* video stream ID or 0 */
 } channel_event_t;
 
 

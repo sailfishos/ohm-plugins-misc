@@ -50,6 +50,7 @@ DBUS_SIGNAL_HANDLER(channels_new);
 DBUS_SIGNAL_HANDLER(channel_closed);
 DBUS_SIGNAL_HANDLER(members_changed);
 DBUS_SIGNAL_HANDLER(stream_added);
+DBUS_SIGNAL_HANDLER(stream_removed);
 DBUS_SIGNAL_HANDLER(hold_state_changed);
 DBUS_SIGNAL_HANDLER(call_state_changed);
 DBUS_SIGNAL_HANDLER(call_end);
@@ -84,7 +85,8 @@ static int         holdorder;                    /* autohold order */
 
 call_t *call_register(const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
-                      int conference, int emergency, int has_stream);
+                      int conference, int emergency,
+                      unsigned int audio, unsigned int video);
 call_t *call_lookup(const char *path);
 void    call_destroy(call_t *call);
 void    call_foreach(GHFunc callback, gpointer data);
@@ -97,6 +99,7 @@ enum {
     UPDATE_PARENT  = 0x08,
     UPDATE_EMERG   = 0x10,
     UPDATE_CONNECT = 0x20,
+    UPDATE_VIDEO   = 0x40,
     UPDATE_ALL     = 0xff,
 };
 
@@ -119,7 +122,8 @@ typedef struct {
     unsigned int  localpend;
     unsigned int  remotepend;
     int           nadded;
-    int           has_stream;
+    unsigned int  audio;
+    unsigned int  video;
 } callish_t;
 
 
@@ -142,7 +146,9 @@ static int        unknown_members_changed(const char *path,
                                           int nlocalpend,
                                           unsigned int *remotepend,
                                           int nremotepend);
-static int        unknown_stream_added(const char *path);
+static int        unknown_stream_added(const char *path, unsigned int id,
+                                       unsigned int handle, unsigned int type);
+static int        unknown_stream_removed(const char *path, unsigned int id);
 
 
 /*
@@ -157,6 +163,7 @@ static int        unknown_stream_added(const char *path);
 #define FACT_FIELD_PARENT    "parent"
 #define FACT_FIELD_EMERG     "emergency"
 #define FACT_FIELD_CONNECTED "connected"
+#define FACT_FIELD_VIDEO     "video"
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
 
@@ -254,6 +261,9 @@ bus_init(const char *address)
 
     if (!bus_add_match("signal", TP_CHANNEL_MEDIA, STREAM_ADDED, NULL))
         exit(1);
+
+    if (!bus_add_match("signal", TP_CHANNEL_MEDIA, STREAM_REMOVED, NULL))
+        exit(1);
     
     if (!dbus_connection_add_filter(bus, dispatch_signal, NULL, NULL)) {
         OHM_ERROR("Failed to add DBUS filter for signal dispatching.");
@@ -324,6 +334,7 @@ bus_exit(void)
     bus_del_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, STOPPED_DIALSTRING, NULL);
     bus_del_match("signal", TP_CHANNEL_MEDIA, STREAM_ADDED, NULL);
+    bus_del_match("signal", TP_CHANNEL_MEDIA, STREAM_REMOVED, NULL);
     
     dbus_connection_unref(bus);
     bus = NULL;
@@ -521,6 +532,12 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
 
     if (MATCHES(TP_CHANNEL_MEDIA, STREAM_ADDED))
         return stream_added(c, msg, data);
+
+    if (MATCHES(TP_CHANNEL_MEDIA, STREAM_REMOVED))
+        return stream_removed(c, msg, data);
+
+    if (MATCHES(TP_CHANNEL_MEDIA, STREAM_REMOVED))
+        return stream_removed(c, msg, data);
     
     if (MATCHES(TP_CHANNEL_HOLD, HOLD_STATE_CHANGED))
         return hold_state_changed(c, msg, data);
@@ -758,7 +775,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
             event.localpend  = csh->localpend;
             event.remotepend = csh->remotepend;
             event.nmember    = csh->nadded;
-            event.has_stream = csh->has_stream;
+            event.audio      = csh->audio;
+            event.video      = csh->video;
             callish_unregister(path);
         }
         
@@ -988,21 +1006,72 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
 static DBusHandlerResult
 stream_added(DBusConnection *c, DBusMessage *msg, void *data)
 {
-    const char *path;
-    call_t     *call;
+    const char   *path;
+    call_t       *call;
+    unsigned int  id, handle, type;
 
     (void)c;
     (void)data;
 
     if ((path = dbus_message_get_path(msg)) != NULL) {
+        
+        id = handle = type = 0U;
+        dbus_message_get_args(msg, NULL,
+                              DBUS_TYPE_UINT32, &id,
+                              DBUS_TYPE_UINT32, &handle,
+                              DBUS_TYPE_UINT32, &type,
+                              DBUS_TYPE_INVALID);
+        
         if ((call = call_lookup(path)) != NULL) {
             if (call->timeout != 0) {
                 g_source_remove(call->timeout);
                 call->timeout = 0;
             }
+            
+            if (type == TP_STREAM_TYPE_VIDEO) {
+                call->video = id;
+                policy_call_update(call, UPDATE_VIDEO);
+            }
+            else
+                call->audio = id;
         }
         else
-            unknown_stream_added(path);
+            unknown_stream_added(path, id, handle, type);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+
+/********************
+ * stream_removed
+ ********************/
+static DBusHandlerResult
+stream_removed(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char   *path;
+    call_t       *call;
+    unsigned int  id;
+
+    (void)c;
+    (void)data;
+
+    if ((path = dbus_message_get_path(msg)) != NULL) {
+        
+        id = 0U;
+        dbus_message_get_args(msg, NULL, DBUS_TYPE_UINT32, &id);
+        
+        if ((call = call_lookup(path)) != NULL) {
+            if (id == call->audio)
+                call->audio = 0U;
+            else if (id == call->video) {
+                call->video = 0U;
+                policy_call_update(call, UPDATE_VIDEO);
+            }
+        }
+        else
+            unknown_stream_removed(path, id);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     else
@@ -1583,7 +1652,7 @@ event_handler(event_t *event)
                                  event->channel.peer_handle,
                                  event->channel.members != NULL,
                                  event->channel.emergency,
-                                 event->channel.has_stream);
+                                 event->channel.audio, event->channel.video);
             call->dir = event->channel.dir;
 
             if (event->channel.nmember > 0)
@@ -1826,7 +1895,7 @@ call_timeout(gpointer data)
 call_t *
 call_register(const char *path, const char *name, const char *peer,
               unsigned int peer_handle, int conference, int emergency,
-              int has_stream)
+              unsigned int audio, unsigned int video)
 {
     call_t *call;
 
@@ -1878,7 +1947,7 @@ call_register(const char *path, const char *name, const char *peer,
 
     policy_run_hook("telephony_call_start_hook");
     
-    if (!has_stream)
+    if (!audio && !video)
         call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
                                            CALL_TIMEOUT,
                                            call_timeout, g_strdup(call->path),
@@ -2168,13 +2237,42 @@ unknown_members_changed(const char *path,
  * unknown_stream_added
  ********************/
 static int
-unknown_stream_added(const char *path)
+unknown_stream_added(const char *path, unsigned int id, unsigned int handle,
+                     unsigned int type)
+{
+    callish_t *csh;
+
+    (void)handle;
+
+    if ((csh = callish_lookup(path)) != NULL) {
+        OHM_INFO("Callish %s has now a %s stream.", short_path(path),
+                 type == TP_STREAM_TYPE_AUDIO ? "audio" : "video");
+        
+        if (type == TP_STREAM_TYPE_VIDEO)
+            csh->video = id;
+        else
+            csh->audio = id;
+    }
+    
+    return 0;
+}
+
+
+/********************
+ * unknown_stream_removed
+ ********************/
+static int
+unknown_stream_removed(const char *path, unsigned int id)
 {
     callish_t *csh;
 
     if ((csh = callish_lookup(path)) != NULL) {
-        OHM_INFO("Callish %s has now a stream.", short_path(path));
-        csh->has_stream = TRUE;
+        OHM_INFO("Callish %s has lost stream %d.", short_path(path), id);
+        
+        if (id == csh->audio)
+            csh->audio = 0U;
+        else if (id == csh->video)
+            csh->video = 0U;
     }
     
     return 0;
@@ -2846,8 +2944,9 @@ int
 policy_call_export(call_t *call)
 {
     OhmFact    *fact;
-    const char *state, *dir, *path;
+    const char *state, *dir, *path, *video;
     char        id[16], parent[16];
+    
     
     if (call == NULL)
         return FALSE;
@@ -2863,18 +2962,21 @@ policy_call_export(call_t *call)
     path  = call->path;
     state = state_name(call->state);
     dir   = dir_name(call->dir);
+    video = call->video ? "yes" : "no";
     snprintf(id, sizeof(id), "%d", call->id);
     if (call->parent == call)
         snprintf(parent, sizeof(parent), "%d", call->id);
     else
         parent[0] = '\0';
 
-    if (!set_string_field(fact, FACT_FIELD_PATH , path) ||
-        !set_string_field(fact, FACT_FIELD_STATE, state)||
-        !set_string_field(fact, FACT_FIELD_DIR  , dir)  ||
-        !set_string_field(fact, FACT_FIELD_ID   , id)   ||
+    if (!set_string_field(fact, FACT_FIELD_PATH , path)  ||
+        !set_string_field(fact, FACT_FIELD_STATE, state) ||
+        !set_string_field(fact, FACT_FIELD_DIR  , dir)   ||
+        !set_string_field(fact, FACT_FIELD_ID   , id)    ||
+        !set_string_field(fact, FACT_FIELD_VIDEO, video) ||
         (parent[0] && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
-        (call->emergency && !set_string_field(fact, FACT_FIELD_EMERG, "yes"))) {
+        (call->emergency && !set_string_field(fact, FACT_FIELD_EMERG, "yes")) ||
+        (call->video && !set_string_field(fact, FACT_FIELD_VIDEO, "yes"))) {
         OHM_ERROR("Failed to export call %s to factstore.", path);
         g_object_unref(fact);
         return FALSE;
@@ -2899,7 +3001,7 @@ int
 policy_call_update(call_t *call, int fields)
 {
     OhmFact    *fact;
-    const char *state, *dir, *parent;
+    const char *state, *dir, *parent, *video;
     char        id[16];
     int         order, emerg, conn;
     
@@ -2916,6 +3018,7 @@ policy_call_update(call_t *call, int fields)
     order  = (fields & UPDATE_ORDER)   ? call->order : 0;
     emerg  = (fields & UPDATE_EMERG)   ? call->emergency : 0;
     conn   = (fields & UPDATE_CONNECT) ? call->connected : 0;
+    video  = (fields & UPDATE_VIDEO)   ? (call->video ? "yes" : "no") : NULL;
 
     if (fields & UPDATE_PARENT) {
         if (call->parent == NULL) {
@@ -2944,6 +3047,11 @@ policy_call_update(call_t *call, int fields)
         return FALSE;
     }
 
+    if (video && !set_string_field(fact, FACT_FIELD_VIDEO, video)) {
+        OHM_ERROR("Failed to update fact for call %s", short_path(call->path));
+        return FALSE;
+    }
+    
     return TRUE;
 }
 
