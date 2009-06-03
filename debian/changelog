@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.41) unstable; urgency=low
+
+  * Expose video calls with with video=yes in factstore (necessary to fix NB#120181).
+  * Separated console plugin to a subpackage of its own.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 03 Jun 2009 17:07:53 +0300
+
 ohm-plugins-misc (0.6.40) unstable; urgency=low
 
   [ Janos Kovacs ]
