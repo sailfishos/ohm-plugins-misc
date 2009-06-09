@@ -1125,6 +1125,16 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    /* Notes: as of week 24 telepathy-gabble puts the channel on hold
+     * before emitting closed. Ignore it as it makes no sense and it
+     * screws up our autounhold logic.
+     */
+    if (event.call->state == STATE_LOCAL_HUNGUP ||
+        event.call->state == STATE_PEER_HUNGUP) {
+        OHM_INFO("Ignoring hold state change for locally hungup call...");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
     event_handler((event_t *)&event);
     
     return DBUS_HANDLER_RESULT_HANDLED;    
