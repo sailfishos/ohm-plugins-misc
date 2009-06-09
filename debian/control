@@ -31,3 +31,19 @@ Depends: ohm-plugins-misc (= ${binary:Version})
 XB-GIT-ID: ${Git-Id}
 Description: Debug symbols for OHM miscallaneous plugins.
  Debug symbols for OHM miscallaneous plugins.
+
+Package: libep
+Architecture: any
+Depends: ${shlibs:Depends}
+XB-GIT-ID: ${Git-Id}
+Description: Policy signaling helper library.
+ A helper library for parsing D-Bus signals sent by OHM signaling plugin.
+
+Package: libep-dev
+Architecture: any
+Section: libdevel
+Depends: ${shlibs:Depends}
+XB-GIT-ID: ${Git-Id}
+Description: Policy signaling helper library header files.
+ Header files for libep.
+

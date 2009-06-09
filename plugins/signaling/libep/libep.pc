@@ -1,0 +1,11 @@
+prefix=/usr
+exec_prefix=/usr
+libdir=/usr/lib
+includedir=/usr/include/libep
+
+Name: libep
+Description: Policy enforcement point signal processing API
+Version: 0.1
+Libs: -L/usr/lib -lep
+Cflags: -I/usr/include/libep
+Requires: dbus-1

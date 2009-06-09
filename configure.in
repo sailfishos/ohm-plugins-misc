@@ -176,6 +176,7 @@ AC_CONFIG_FILES([Makefile
                  plugins/profile/tests/Makefile
                  plugins/signaling/Makefile
                  plugins/signaling/tests/Makefile
+                 plugins/signaling/libep/Makefile
                  plugins/telephony/Makefile
                  plugins/telephony/ohm/Makefile
                  plugins/telephony/mission-control/Makefile
