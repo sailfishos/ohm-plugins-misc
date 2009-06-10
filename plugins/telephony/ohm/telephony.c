@@ -19,7 +19,8 @@
 #define IS_CONF_MEMBER(call) ((call) != NULL && \
                               (call)->parent != NULL && (call)->parent != call)
 
-#define CALL_TIMEOUT (30 * 1000)
+#define CALL_TIMEOUT  (30 * 1000)
+#define EVENT_TIMEOUT (10 * 1000)
 
 static int DBG_CALL;
 
@@ -114,41 +115,26 @@ int     policy_audio_update(void);
 int     policy_run_hook(char *hook_name);
 
 
+static void event_enqueue(const char *path,
+                          DBusConnection *c, DBusMessage *msg, void *data);
+static void event_dequeue(char *path);
+static void event_destroy(GSList *events);
+
 
 typedef struct {
-    char         *name;
-    char         *path;
-    unsigned int  member;
-    unsigned int  localpend;
-    unsigned int  remotepend;
-    int           nadded;
-    unsigned int  audio;
-    unsigned int  video;
-} callish_t;
+    char           *path;
+    DBusConnection *c;
+    DBusMessage    *msg;
+    void           *data;
+    guint           timeout;
+} bus_event_t;
 
+typedef struct {
+    char   *path;
+    GSList *events;
+} bus_eventq_t;
 
-static GHashTable *callish;                      /* potential calls */
-static GHashTable *listish;                      /* definitely not calls */
-
-static callish_t *callish_register  (const char *path);
-static void       callish_unregister(const char *path);
-static callish_t *callish_lookup    (const char *path);
-static void       callish_destroy   (callish_t *csh);
-static void       channel_is_listish(const char *path);
-static int        listish_register  (const char *path);
-#if 0
-static int        listish_unregister(const char *path);
-#endif
-static char      *listish_lookup    (const char *path);
-static int        unknown_members_changed(const char *path,
-                                          unsigned int *added, int nadded,
-                                          unsigned int *localpend,
-                                          int nlocalpend,
-                                          unsigned int *remotepend,
-                                          int nremotepend);
-static int        unknown_stream_added(const char *path, unsigned int id,
-                                       unsigned int handle, unsigned int type);
-static int        unknown_stream_removed(const char *path, unsigned int id);
+static GHashTable *deferred;                     /* deferred events */
 
 
 /*
@@ -677,7 +663,6 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
     channel_event_t  event;
     int              init_handle, target_handle;
     int              requested, t;
-    callish_t       *csh;
 
     (void)c;
     (void)data;
@@ -726,10 +711,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                 if (!strcmp(name, PROP_CHANNEL_TYPE)) {
                     ITER_NEXT(&idict);
                     VARIANT_STRING(&idict, type);
-                    if (type == NULL || strcmp(type, TP_CHANNEL_MEDIA)) {
-                        channel_is_listish(path);
+                    if (type == NULL || strcmp(type, TP_CHANNEL_MEDIA))
                         return DBUS_HANDLER_RESULT_HANDLED;
-                    }
                 }
                 else if (!strcmp(name, PROP_TARGET_ID)) {
                     ITER_NEXT(&idict);
@@ -764,22 +747,12 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
         }
     }
 
-
     if (type != NULL && path != NULL) {
         event.type = EVENT_NEW_CHANNEL;
         event.name = dbus_message_get_sender(msg);
         event.path = path;
         event.call = call_lookup(path);
 
-        if ((csh = callish_lookup(path)) != NULL) {
-            event.localpend  = csh->localpend;
-            event.remotepend = csh->remotepend;
-            event.nmember    = csh->nadded;
-            event.audio      = csh->audio;
-            event.video      = csh->video;
-            callish_unregister(path);
-        }
-        
         if (requested == -1 && initiator != NULL) {
             if (!strcmp(initiator, INITIATOR_SELF))
                 event.dir = DIR_OUTGOING;
@@ -791,8 +764,10 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
             event.peer_handle = init_handle;
         else
             event.peer_handle = target_handle;
-        
+
         event_handler((event_t *)&event);
+
+        event_dequeue(path);
     }
     
     return DBUS_HANDLER_RESULT_HANDLED;
@@ -912,10 +887,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     
 
     if (event.call == NULL) {
-        unknown_members_changed(event.path,
-                                added, nadded,
-                                localpend, nlocalpend,
-                                remotepend, nremotepend);
+        event_enqueue(event.path, c, msg, data);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     
@@ -1036,7 +1008,8 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
                 call->audio = id;
         }
         else
-            unknown_stream_added(path, id, handle, type);
+            event_enqueue(path, c, msg, data);
+        
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     else
@@ -1071,7 +1044,8 @@ stream_removed(DBusConnection *c, DBusMessage *msg, void *data)
             }
         }
         else
-            unknown_stream_removed(path, id);
+            event_enqueue(path, c, msg, data);
+        
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     else
@@ -1633,8 +1607,6 @@ event_print(event_t *event)
                  event->call.dir == DIR_INCOMING ? "incoming" : "outgoing");
         break;
     case EVENT_NEW_CHANNEL:
-        OHM_INFO("call direction fixup: %s",
-                 event->call.dir == DIR_INCOMING ? "incoming" : "outgoing");
         break;
     default:
         break;
@@ -1812,6 +1784,147 @@ event_handler(event_t *event)
 }
 
 
+/********************
+ * event_free
+ ********************/
+static void
+event_free(bus_event_t *e)
+{
+    if (e) {
+        dbus_connection_unref(e->c);
+        dbus_message_unref(e->msg);
+        g_free(e->path);
+        g_free(e);
+    }
+}
+
+
+/********************
+ * event_timeout
+ ********************/
+static gboolean
+event_timeout(gpointer data)
+{
+    bus_event_t *e, *h;
+    GSList      *events;
+
+    e = (bus_event_t *)data;
+
+    OHM_DEBUG(DBG_CALL, "Deferred event for %s timed out...", e->path);
+    
+    if ((events = g_hash_table_lookup(deferred, e->path)) != NULL)
+        g_hash_table_steal(deferred, e->path);
+    
+    events = g_slist_remove(events, e);
+    event_free(e);
+    
+    if (events != NULL) {
+        h = (bus_event_t *)events->data;
+        g_hash_table_insert(deferred, h->path, h);
+    }
+    
+    return FALSE;
+}
+
+
+/********************
+ * event_enqueue
+ ********************/
+static void
+event_enqueue(const char *path, DBusConnection *c, DBusMessage *msg, void *data)
+{
+    bus_event_t *e;
+    GSList      *events;
+
+    OHM_DEBUG(DBG_CALL, "Delaying event for %s...", path);
+    
+    if ((e = g_new0(bus_event_t, 1)) == NULL ||
+        (e->path = g_strdup(path)) == NULL) {
+        OHM_ERROR("Failed to allocate delyed DBUS event.");
+        goto fail;
+    }
+
+    e->c    = dbus_connection_ref(c);
+    e->msg  = dbus_message_ref(msg);
+    e->data = data;
+    
+    e->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT, EVENT_TIMEOUT,
+                                    event_timeout, e, NULL);
+    
+    if ((events = g_hash_table_lookup(deferred, path)) != NULL)
+        g_hash_table_steal(deferred, path);
+    
+    events = g_slist_append(events, e);
+    g_hash_table_insert(deferred, e->path, events);
+    
+    return;
+    
+    
+ fail:
+    if (e) {
+        if (e->path)
+            g_free(e->path);
+        if (e->c)
+            dbus_connection_unref(e->c);
+        if (e->msg)
+            dbus_message_unref(e->msg);
+        g_free(e);
+    }
+}
+
+
+/********************
+ * event_dequeue
+ ********************/
+static void
+event_dequeue(char *path)
+{
+    bus_event_t *e;
+    GSList      *events, *p, *n;
+
+    OHM_DEBUG(DBG_CALL, "Processing deferred events for %s...", path);
+    
+    if ((events = g_hash_table_lookup(deferred, path)) != NULL) {
+        g_hash_table_steal(deferred, path);
+        
+        for (p = events; p != NULL; p = n) {
+            n = p->next;
+            e = (bus_event_t *)p->data;
+
+            g_source_remove(e->timeout);
+            dispatch_signal(e->c, e->msg, e->data);
+
+            event_free(e);
+        }
+
+        g_slist_free(events);
+    }
+}
+
+
+/********************
+ * event_destroy
+ ********************/
+static void
+event_destroy(GSList *events)
+{
+    bus_event_t *e;
+    GSList      *p, *n;
+
+    OHM_DEBUG(DBG_CALL, "Destroying deferred events...");
+    
+    for (p = events; p != NULL; p = n) {
+        n = p->next;
+        e = (bus_event_t *)p->data;
+
+        g_source_remove(e->timeout);
+        event_free(e);
+    }
+
+    g_slist_free(events);
+}
+
+
 
 /*****************************************************************************
  *                           *** call administration ***                     *
@@ -1836,16 +1949,12 @@ call_init(void)
         exit(1);
     }
 
-    fptr = (GDestroyNotify)callish_destroy;
-    if ((callish = g_hash_table_new_full(hptr, eptr, NULL, fptr)) == NULL) {
-        OHM_ERROR("failed to allocate callish table");
+    fptr = (GDestroyNotify)event_destroy;
+    if ((deferred = g_hash_table_new_full(hptr, eptr, NULL, fptr)) == NULL) {
+        OHM_ERROR("failed to allocate delayed event table");
         exit(1);
     }
 
-    if ((listish = g_hash_table_new_full(hptr, eptr, NULL, g_free)) == NULL) {
-        OHM_ERROR("failed to allocate lists table");
-        exit(1);
-    }
 }
 
 
@@ -1858,13 +1967,10 @@ call_exit(void)
     if (calls != NULL)
         g_hash_table_destroy(calls);
 
-    if (callish != NULL)
-        g_hash_table_destroy(callish);
-    
-    if (listish != NULL)
-        g_hash_table_destroy(listish);
-    
-    calls = callish = listish = NULL;
+    if (deferred != NULL)
+        g_hash_table_destroy(deferred);
+
+    calls = deferred = NULL;
     ncscall = 0;
     nipcall = 0;
 }
@@ -2063,229 +2169,6 @@ call_destroy(call_t *call)
         }
         g_free(call);
     }
-}
-
-
-/********************
- * channel_is_listish
- ********************/
-void
-channel_is_listish(const char *path)
-{
-    if (listish_lookup(path) != NULL)
-        return;
-    else {
-        callish_unregister(path);
-        listish_register(path);
-
-        OHM_INFO("Callish %s turned to listish", short_path(path));
-    }
-}
-
-
-/********************
- * callish_register
- ********************/
-static callish_t *
-callish_register(const char *path)
-{
-    callish_t *csh;
-
-    if ((csh = g_new0(callish_t, 1)) == NULL ||
-        (csh->path = g_strdup(path)) == NULL)
-        goto fail;
-
-    g_hash_table_insert(callish, csh->path, csh);
-
-    OHM_INFO("Registered callish %s", short_path(csh->path));
-    
-    return csh;
-    
- fail:
-    callish_destroy(csh);
-    
-    OHM_ERROR("Failed to allocate new callish %s", path);
-    return NULL;
-}
-
-
-/********************
- * callish_destroy
- ********************/
-static void
-callish_destroy(callish_t *csh)
-{
-    if (csh != NULL) {
-        if (csh->path != NULL) {
-            OHM_INFO("Destroying callish %s...", short_path(csh->path));
-            g_free(csh->path);
-        }
-        g_free(csh);
-    }
-}
-
-
-/********************
- * callish_unregister
- ********************/
-static void
-callish_unregister(const char *path)
-{
-    if (path != NULL && callish_lookup(path) != NULL) {
-        OHM_INFO("Unregistering callish %s.", short_path(path));
-        g_hash_table_remove(callish, path);
-    }
-}
-
-
-/********************
- * callish_lookup
- ********************/
-static callish_t *
-callish_lookup(const char *path)
-{
-    return (callish_t *)g_hash_table_lookup(callish, path);
-}
-
-
-/********************
- * listish_register
- ********************/
-static int
-listish_register(const char *path)
-{
-    char *lsh;
-
-    if ((lsh = g_strdup(path)) == NULL)
-        return FALSE;
-    
-    g_hash_table_insert(listish, lsh, lsh);
-    return TRUE;
-}
-
-
-#if 0
-/********************
- * listish_unregister
- ********************/
-static int
-listish_unregister(const char *path)
-{
-    char *lsh;
-
-    if ((lsh = listish_lookup(path)) != NULL) {
-        g_hash_table_remove(listish, lsh);
-        g_free(lsh);
-        
-        return TRUE;
-    }
-    else
-        return FALSE;
-}
-#endif
-
-
-/********************
- * listish_lookup
- ********************/
-char *
-listish_lookup(const char *path)
-{
-    return (char *)g_hash_table_lookup(listish, path);
-}
-
-
-/********************
- * unknown_members_changed
- ********************/
-static int
-unknown_members_changed(const char *path,
-                        unsigned int *added, int nadded,
-                        unsigned int *localpend, int nlocalpend,
-                        unsigned int *remotepend, int nremotepend)
-{
-    callish_t *csh;
-    
-    if (listish_lookup(path)) {
-        OHM_INFO("%s is not a call...", path);
-        return 0;
-    }
-    
-    if (!nadded && !nlocalpend && !nremotepend) {
-        OHM_INFO("%s is not a call...", path);
-        return 0;
-    }
-
-    if (nadded > 1 || nlocalpend > 1 || nremotepend > 1) {
-        OHM_INFO("%s is not a call...", path);
-        return 0;
-    }
-    
-    if ((csh = callish_lookup(path)) == NULL)
-        if ((csh = callish_register(path)) == NULL)
-            return ENOMEM;
-    
-    if (nadded > 0) {
-        csh->nadded += nadded;
-        if (csh->member != 0)
-            OHM_WARNING("Overwriting member handle %u with %u in %s.",
-                        csh->member, *added, short_path(path));
-        csh->member = *added;
-    }
-
-    if (nremotepend > 0)
-        csh->remotepend = *remotepend;
-    
-    if (nlocalpend > 0)
-        csh->localpend = *localpend;
-
-    return 0;
-}
-
-
-/********************
- * unknown_stream_added
- ********************/
-static int
-unknown_stream_added(const char *path, unsigned int id, unsigned int handle,
-                     unsigned int type)
-{
-    callish_t *csh;
-
-    (void)handle;
-
-    if ((csh = callish_lookup(path)) != NULL) {
-        OHM_INFO("Callish %s has now a %s stream.", short_path(path),
-                 type == TP_STREAM_TYPE_AUDIO ? "audio" : "video");
-        
-        if (type == TP_STREAM_TYPE_VIDEO)
-            csh->video = id;
-        else
-            csh->audio = id;
-    }
-    
-    return 0;
-}
-
-
-/********************
- * unknown_stream_removed
- ********************/
-static int
-unknown_stream_removed(const char *path, unsigned int id)
-{
-    callish_t *csh;
-
-    if ((csh = callish_lookup(path)) != NULL) {
-        OHM_INFO("Callish %s has lost stream %d.", short_path(path), id);
-        
-        if (id == csh->audio)
-            csh->audio = 0U;
-        else if (id == csh->video)
-            csh->video = 0U;
-    }
-    
-    return 0;
 }
 
 
