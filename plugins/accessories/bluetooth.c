@@ -341,6 +341,10 @@ static gboolean bt_any_to_disconnected(const gchar *type, const gchar *path, enu
         gval = ohm_fact_get(bt_connected, BT_TYPE_HSP);
     }
     else {
+        /* HSP device goes to disconnected state. We need to forget the
+         * bluetooth override state. */
+        run_policy_hook("bthsp_start_audio");
+
         gval = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
     }
 
