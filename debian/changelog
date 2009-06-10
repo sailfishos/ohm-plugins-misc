@@ -5,9 +5,9 @@ ohm-plugins-misc (0.6.42) unstable; urgency=low
 
   [ Ismo Puustinen ]
   * Forget bluetooth override state when device goes disconnected
-    (Fixes: NB#121743).
+    (Fixes: NB#121743, Fixes: NB#121625).
 
- -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 10 Jun 2009 13:10:00 +0300
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 10 Jun 2009 13:30:52 +0300
 
 ohm-plugins-misc (0.6.41) unstable; urgency=low
 
