@@ -12,6 +12,7 @@
 #include <ohm/ohm-fact.h>
 
 #include "telephony.h"
+#include "list.h"
 
 #define PLUGIN_NAME   "telephony"
 #define IS_CELLULAR(p) (!strncmp(p, TP_RING, sizeof(TP_RING) - 1))
@@ -28,7 +29,6 @@ OHM_DEBUG_PLUGIN(telephony,
                  OHM_DEBUG_FLAG("call", "call events", &DBG_CALL));
 
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
-
 
 
 /*
@@ -115,13 +115,8 @@ int     policy_audio_update(void);
 int     policy_run_hook(char *hook_name);
 
 
-static void event_enqueue(const char *path,
-                          DBusConnection *c, DBusMessage *msg, void *data);
-static void event_dequeue(char *path);
-static void event_destroy(GSList *events);
-
-
 typedef struct {
+    list_hook_t     hook;
     char           *path;
     DBusConnection *c;
     DBusMessage    *msg;
@@ -129,10 +124,11 @@ typedef struct {
     guint           timeout;
 } bus_event_t;
 
-typedef struct {
-    char   *path;
-    GSList *events;
-} bus_eventq_t;
+
+static void event_enqueue(const char *path,
+                          DBusConnection *c, DBusMessage *msg, void *data);
+static void event_dequeue(char *path);
+static void event_destroy(bus_event_t *events);
 
 static GHashTable *deferred;                     /* deferred events */
 
@@ -830,9 +826,13 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     if ((event.path = dbus_message_get_path(msg)) == NULL)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     
-    if ((event.call = call_lookup(event.path)) == NULL)
+    if ((event.call = call_lookup(event.path)) == NULL) {
         OHM_INFO("MembersChanged for unknown call %s.", event.path); 
+        event_enqueue(event.path, c, msg, data);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
     
+
     actor = 0;
     
     
@@ -885,11 +885,6 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     OHM_INFO("signal details: %s", details);
 #undef DUMP    
     
-
-    if (event.call == NULL) {
-        event_enqueue(event.path, c, msg, data);
-        return DBUS_HANDLER_RESULT_HANDLED;
-    }
     
     if (nadded != 0)
         event.call->nmember += nadded;
@@ -1641,7 +1636,7 @@ event_handler(event_t *event)
                 call->nmember = event->channel.nmember;
             if (event->channel.localpend != 0)
                 call->local_handle = event->channel.localpend;
-            
+
             policy_call_export(call);
         }
         else {
@@ -1805,23 +1800,25 @@ event_free(bus_event_t *e)
 static gboolean
 event_timeout(gpointer data)
 {
-    bus_event_t *e, *h;
-    GSList      *events;
-
+    bus_event_t *events, *e;
+    
     e = (bus_event_t *)data;
 
     OHM_DEBUG(DBG_CALL, "Deferred event for %s timed out...", e->path);
     
-    if ((events = g_hash_table_lookup(deferred, e->path)) != NULL)
+    if ((events = g_hash_table_lookup(deferred, e->path)) == NULL)
+        OHM_ERROR("Failed to look up deferred events for %s.", e->path);
+    else {
         g_hash_table_steal(deferred, e->path);
-    
-    events = g_slist_remove(events, e);
-    event_free(e);
-    
-    if (events != NULL) {
-        h = (bus_event_t *)events->data;
-        g_hash_table_insert(deferred, h->path, h);
+        
+        if (!list_empty(&e->hook)) {
+            events = list_entry(e->hook.next, bus_event_t, hook);
+            list_delete(&e->hook);
+            g_hash_table_insert(deferred, events->path, events);
+        }
     }
+
+    event_free(e);
     
     return FALSE;
 }
@@ -1833,9 +1830,8 @@ event_timeout(gpointer data)
 static void
 event_enqueue(const char *path, DBusConnection *c, DBusMessage *msg, void *data)
 {
-    bus_event_t *e;
-    GSList      *events;
-
+    bus_event_t *events, *e;
+    
     OHM_DEBUG(DBG_CALL, "Delaying event for %s...", path);
     
     if ((e = g_new0(bus_event_t, 1)) == NULL ||
@@ -1844,18 +1840,18 @@ event_enqueue(const char *path, DBusConnection *c, DBusMessage *msg, void *data)
         goto fail;
     }
 
+    list_init(&e->hook);
     e->c    = dbus_connection_ref(c);
     e->msg  = dbus_message_ref(msg);
     e->data = data;
     
     e->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT, EVENT_TIMEOUT,
                                     event_timeout, e, NULL);
-    
+
     if ((events = g_hash_table_lookup(deferred, path)) != NULL)
-        g_hash_table_steal(deferred, path);
-    
-    events = g_slist_append(events, e);
-    g_hash_table_insert(deferred, e->path, events);
+        list_append(&events->hook, &e->hook);
+    else
+        g_hash_table_insert(deferred, e->path, e);
     
     return;
     
@@ -1879,17 +1875,20 @@ event_enqueue(const char *path, DBusConnection *c, DBusMessage *msg, void *data)
 static void
 event_dequeue(char *path)
 {
-    bus_event_t *e;
-    GSList      *events, *p, *n;
+    bus_event_t *events, *e;
+    list_hook_t *p, *n;
 
     OHM_DEBUG(DBG_CALL, "Processing deferred events for %s...", path);
-    
+
     if ((events = g_hash_table_lookup(deferred, path)) != NULL) {
         g_hash_table_steal(deferred, path);
         
-        for (p = events; p != NULL; p = n) {
-            n = p->next;
-            e = (bus_event_t *)p->data;
+        g_source_remove(events->timeout);
+        dispatch_signal(events->c, events->msg, events->data);
+        
+        list_foreach(&events->hook, p, n) {
+            e = list_entry(p, bus_event_t, hook);
+            list_delete(&e->hook);
 
             g_source_remove(e->timeout);
             dispatch_signal(e->c, e->msg, e->data);
@@ -1897,7 +1896,7 @@ event_dequeue(char *path)
             event_free(e);
         }
 
-        g_slist_free(events);
+        event_free(events);
     }
 }
 
@@ -1906,22 +1905,22 @@ event_dequeue(char *path)
  * event_destroy
  ********************/
 static void
-event_destroy(GSList *events)
+event_destroy(bus_event_t *events)
 {
     bus_event_t *e;
-    GSList      *p, *n;
-
+    list_hook_t *p, *n;
+    
     OHM_DEBUG(DBG_CALL, "Destroying deferred events...");
     
-    for (p = events; p != NULL; p = n) {
-        n = p->next;
-        e = (bus_event_t *)p->data;
-
+    g_source_remove(events->timeout);
+    list_foreach(&events->hook, p, n) {
+        e = list_entry(p, bus_event_t, hook);
+        list_delete(&e->hook);
         g_source_remove(e->timeout);
         event_free(e);
     }
 
-    g_slist_free(events);
+    event_free(events);
 }
 
 
@@ -1944,6 +1943,7 @@ call_init(void)
     nipcall   = 0;
     callid    = 1;
     holdorder = 1;
+
     if ((calls = g_hash_table_new_full(hptr, eptr, NULL, fptr)) == NULL) {
         OHM_ERROR("failed to allocate call table");
         exit(1);
@@ -2062,7 +2062,7 @@ call_register(const char *path, const char *name, const char *peer,
         policy_run_hook("telephony_first_call_hook");
 
     policy_run_hook("telephony_call_start_hook");
-    
+
     if (!audio && !video)
         call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
                                            CALL_TIMEOUT,
@@ -2087,6 +2087,7 @@ call_unregister(const char *path)
     OHM_INFO("Unregistering call %s (#%d).", short_path(path), call->id);
     
     cs = !strncmp(path, TP_RING, sizeof(TP_RING) - 1);
+
     g_hash_table_remove(calls, path);
     
     if (cs)
@@ -2147,7 +2148,6 @@ void
 call_foreach(GHFunc callback, gpointer data)
 {
     g_hash_table_foreach(calls, callback, data);
-    
 }
 
 
