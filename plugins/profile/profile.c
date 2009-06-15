@@ -47,7 +47,7 @@ static void plugin_exit(OhmPlugin * plugin)
     }
     
     if (bus_conn != NULL) {
-        dbus_connection_close(bus_conn);
+        dbus_connection_unref(bus_conn);
         bus_conn = NULL;
     }
     
