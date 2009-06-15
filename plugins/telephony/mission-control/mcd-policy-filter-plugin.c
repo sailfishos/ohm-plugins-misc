@@ -24,15 +24,15 @@
         f("[%s] %s: "fmt, PLUGIN_NAME, __FUNCTION__, ## args);   \
     } while(0)
 
-#define ERROR(fmt, args...)   EMIT(g_error  , fmt, ## args)
-#define WARNING(fmt, args...) EMIT(g_warning, fmt, ## args)
+#define ERROR(fmt, args...)   EMIT(g_message, "E: "fmt, ## args)
+#define WARNING(fmt, args...) EMIT(g_message, "W: "fmt, ## args)
 #ifdef ALLOW_INFO_LOGGING
-#define INFO(fmt, args...)    EMIT(g_message, fmt, ## args)
+#define INFO(fmt, args...)    EMIT(g_message, "I: "fmt, ## args)
 #else
 #define INFO(fmt, args...)    do { } while (0)
 #endif
 
-#define DBUS_ERROR(err) ((err).message ? (err).message : "unknown")
+#define DBUS_ERROR(err) (dbus_error_is_set(&(err)) ? (err).message : "unknown")
 
 static int  policy_call_request(const char *, int, McdDispatcherContext *);
 static void policy_call_reply  (DBusPendingCall *, void *);
