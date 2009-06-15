@@ -2058,11 +2058,6 @@ call_register(const char *path, const char *name, const char *peer,
     
     OHM_INFO("Call %s (#%d) registered.", path, ncscall + nipcall);
 
-    if (ncscall + nipcall == 1)
-        policy_run_hook("telephony_first_call_hook");
-
-    policy_run_hook("telephony_call_start_hook");
-
     if (!audio && !video)
         call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
                                            CALL_TIMEOUT,
@@ -2537,6 +2532,11 @@ call_create(call_t *call, const char *action, event_t *event)
 
     call->state = STATE_CREATED;
     policy_call_update(call, UPDATE_STATE);
+
+    if (ncscall + nipcall == 1)
+        policy_run_hook("telephony_first_call_hook");
+    
+    policy_run_hook("telephony_call_start_hook");
 
     return 0;
 }
