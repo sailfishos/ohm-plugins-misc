@@ -15,7 +15,9 @@ static int DBG_SIGNALING, DBG_FACTS;
 GSList         *enforcement_points = NULL;
 DBusConnection *connection;
 GHashTable     *transactions;
-GQueue         *inq = NULL;
+#ifdef ONLY_ONE_TRANSACTION
+GHashTable     *signal_queues;
+#endif
 
 static OhmFactStore *store;
 
@@ -28,6 +30,13 @@ static Transaction * transaction_lookup(guint txid)
 {
     return (Transaction *)g_hash_table_lookup(transactions, &txid);
 }
+
+#ifdef ONLY_ONE_TRANSACTION
+static GQueue * signal_queue_lookup(gchar *signal)
+{
+    return (GQueue *)g_hash_table_lookup(signal_queues, signal);
+}
+#endif
 
 gboolean init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
 {
@@ -45,14 +54,18 @@ gboolean init_signaling(DBusConnection *c, int flag_signaling, int flag_facts)
         return FALSE;
     }
     
-    inq = g_queue_new();
-    if (inq == NULL) {
-        g_error("Failed to create incoming queue.");
+#ifdef ONLY_ONE_TRANSACTION
+    signal_queues = g_hash_table_new_full(g_str_hash,
+            g_str_equal,
+            NULL,
+            (GDestroyNotify) g_queue_free);
+    if (signal_queues == NULL) {
+        g_error("Failed to create signal queue hash table.");
         return FALSE;
     }
-    
-    connection = c;
+#endif
 
+    connection = c;
 
     return TRUE;
 }
@@ -74,8 +87,10 @@ gboolean deinit_signaling()
     if (transactions)
         g_hash_table_destroy(transactions);
 
-    if (inq)
-        g_queue_free(inq);
+#ifdef ONLY_ONE_TRANSACTION
+    if (signal_queues)
+        g_hash_table_destroy(signal_queues);
+#endif
 
     store = NULL;
 
@@ -1324,6 +1339,9 @@ void transaction_ack_ep(Transaction *self, EnforcementPoint *ep,
 void transaction_complete(Transaction *self)
 {
     GSList *i;
+#ifdef ONLY_ONE_TRANSACTION
+    GQueue *queue;
+#endif
     
     OHM_DEBUG(DBG_SIGNALING, "transaction complete!");
 
@@ -1347,17 +1365,30 @@ void transaction_complete(Transaction *self)
     if (self->timeout_id)
         g_source_remove(self->timeout_id);
 
-    g_object_unref(self);
-    
 #ifdef ONLY_ONE_TRANSACTION
-    /* go on and process the next transaction */
-    if (!g_queue_is_empty(inq)) {
-        OHM_DEBUG(DBG_SIGNALING, "transaction queue '%p' not empty (%i left), scheduling processing",
-                inq, g_queue_get_length(inq));
-        /* Let's not delay the processing because of test issues :-) */
-        process_inq(NULL);
+    queue = signal_queue_lookup(self->signal);
+
+    if (queue) {
+        OHM_DEBUG(DBG_SIGNALING, "found queue '%s' (%p)",
+                self->signal, queue);
+
+        /* go on and process the next transaction */
+        if (!g_queue_is_empty(queue)) {
+            OHM_DEBUG(DBG_SIGNALING,
+                    "transaction queue '%p' not empty (%i left), scheduling processing",
+                    queue, g_queue_get_length(queue));
+            /* Let's not delay the processing because of test issues :-) */
+            process_inq(queue);
+        }
+        else {
+            /* This was the last item in the queue, so remove it from
+             * the hash map. Note that the queue is also freed. */
+            OHM_DEBUG(DBG_SIGNALING, "queue is empty, removing it from the map");
+            g_hash_table_remove(signal_queues, self->signal);
+        }
     }
 #endif
+    g_object_unref(self);
 }
 
 static gboolean timeout_transaction(gpointer data)
@@ -1376,27 +1407,26 @@ static gboolean process_inq(gpointer data)
 
     GSList           *e = NULL;
     gboolean        ret = TRUE;
-    Transaction *t      = NULL;
-
-    (void) data;
+    Transaction      *t = NULL;
+    GQueue       *queue = (GQueue *) data;
 
     /*
      * incoming queue (from OHM to this plugin) 
      */
 #ifndef ONLY_ONE_TRANSACTION
-    while (!g_queue_is_empty(inq)) {
+    while (!g_queue_is_empty(queue)) {
 #endif
 
-    /* printf("Before popping, inq: '%p', length: '%i'", inq, g_queue_get_length(inq)); */
+    /* printf("Before popping, inq: '%p', length: '%i'", queue, g_queue_get_length(queue)); */
 
-    if (inq == NULL || g_queue_is_empty(inq)) {
+    if (queue == NULL || g_queue_is_empty(queue)) {
         OHM_DEBUG(DBG_SIGNALING, "Error! Nothing to process, even though processing was scheduled.");
         return FALSE;
     }
 
-    t = g_queue_pop_head(inq);
+    t = g_queue_pop_head(queue);
     
-    /* printf("After popping, inq: '%p', length: '%i'", inq, g_queue_get_length(inq)); */
+    /* printf("After popping, inq: '%p', length: '%i'", queue, g_queue_get_length(queue)); */
 
     g_hash_table_insert(transactions, &t->txid, t);
 
@@ -1407,8 +1437,9 @@ static gboolean process_inq(gpointer data)
         transaction_add_ep(t, ep);
         ret = enforcement_point_send_decision(ep, t);
         if (!ret) {
+            /* This shouldn't actually happen, since both external and
+             * internal message sending are asynchronous. */
             OHM_DEBUG(DBG_SIGNALING, "Error sending the decision");
-            /* TODO; signal that the transaction failed? NAK? */
         }
     }
 
@@ -1422,8 +1453,8 @@ static gboolean process_inq(gpointer data)
     if (t->txid == 0 || transaction_done(t)) {
         /* If txid == 0, the transaction doesn't require any acks
          * and the enforcement points won't send them, so we can
-         * complete right away. Also, the internal EP:s are ready by
-         * now, and if there are only those the */
+         * complete right away. Also, the internal EP:s might be ready
+         * by now. */
         transaction_complete(t);
     }
 
@@ -1441,6 +1472,7 @@ static gboolean process_inq(gpointer data)
     }
 #ifndef ONLY_ONE_TRANSACTION
     }
+    g_queue_free(queue);
 #endif
 
     return FALSE;
@@ -1793,8 +1825,12 @@ Transaction * queue_decision(gchar *signal, GSList *facts,
     Transaction            *transaction;
     guint                   txid = 0;
     gboolean               needs_processing = FALSE;
+    GQueue                *queue = NULL;
 
     /* create a new empty transaction */
+
+    if (signal == NULL)
+        return NULL;
 
     transaction = g_object_new(TRANSACTION_TYPE, NULL);
 
@@ -1823,15 +1859,39 @@ Transaction * queue_decision(gchar *signal, GSList *facts,
             timeout,
             NULL);
 
+#ifdef ONLY_ONE_TRANSACTION
+    /* fetch the correct queue from the queue map */
+    queue = signal_queue_lookup(signal);
+    if (!queue) {
+        /* no existing queue for signal, so create a new one and add it
+         * to the signal_queues map */
+
+        queue = g_queue_new();
+        if (!queue) {
+            g_object_unref(transaction);
+            return NULL;
+        }
+        g_hash_table_insert(signal_queues, signal, queue);
+    }
+#else
+    queue = g_queue_new();
+    if (!queue) {
+        g_object_unref(transaction);
+        return NULL;
+    }
+#endif
+
     /* if the list is empty, there is no processing already pending */
-    if (g_queue_is_empty(inq))
+    if (g_queue_is_empty(queue))
         needs_processing = TRUE;
 
-    g_queue_push_tail(inq, transaction);
+    g_queue_push_tail(queue, transaction);
+    OHM_DEBUG(DBG_SIGNALING, "added transaction %p to queue '%s' (%p)",
+            transaction, signal, queue);
 
     if (needs_processing) {
         /* add the policy decision to the queue to be processed later */
-        g_idle_add(process_inq, NULL);
+        g_idle_add(process_inq, queue);
     }
 
     if (!need_transaction) {
