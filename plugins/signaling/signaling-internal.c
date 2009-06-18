@@ -1378,7 +1378,7 @@ void transaction_complete(Transaction *self)
                     "transaction queue '%p' not empty (%i left), scheduling processing",
                     queue, g_queue_get_length(queue));
             /* Let's not delay the processing because of test issues :-) */
-            process_inq(queue);
+            process_inq(g_strdup(self->signal));
         }
         else {
             /* This was the last item in the queue, so remove it from
@@ -1408,25 +1408,24 @@ static gboolean process_inq(gpointer data)
     GSList           *e = NULL;
     gboolean        ret = TRUE;
     Transaction      *t = NULL;
-    GQueue       *queue = (GQueue *) data;
+    gchar       *signal = (gchar *) data;
+    GQueue       *queue = signal_queue_lookup(signal);
 
-    /*
-     * incoming queue (from OHM to this plugin) 
-     */
+    g_free(signal);
+
 #ifndef ONLY_ONE_TRANSACTION
-    while (!g_queue_is_empty(queue)) {
+    while (queue != NULL && !g_queue_is_empty(queue)) {
 #endif
 
-    /* printf("Before popping, inq: '%p', length: '%i'", queue, g_queue_get_length(queue)); */
-
     if (queue == NULL || g_queue_is_empty(queue)) {
-        OHM_DEBUG(DBG_SIGNALING, "Error! Nothing to process, even though processing was scheduled.");
+        OHM_DEBUG(DBG_SIGNALING,
+                "Error! Nothing to process, even though processing was scheduled.");
         return FALSE;
     }
 
     t = g_queue_pop_head(queue);
     
-    /* printf("After popping, inq: '%p', length: '%i'", queue, g_queue_get_length(queue)); */
+    OHM_DEBUG(DBG_SIGNALING, "Processing transaction %p", t);
 
     g_hash_table_insert(transactions, &t->txid, t);
 
@@ -1891,7 +1890,8 @@ Transaction * queue_decision(gchar *signal, GSList *facts,
 
     if (needs_processing) {
         /* add the policy decision to the queue to be processed later */
-        g_idle_add(process_inq, queue);
+
+        g_idle_add(process_inq, g_strdup(signal));
     }
 
     if (!need_transaction) {

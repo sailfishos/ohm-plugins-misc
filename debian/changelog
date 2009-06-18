@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.43) unstable; urgency=low
+
+  * Prevent race conditions with event queues.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Thu, 18 Jun 2009 16:38:32 +0300
+
 ohm-plugins-misc (0.6.42) unstable; urgency=low
 
   [ Krisztian Litkey ]
