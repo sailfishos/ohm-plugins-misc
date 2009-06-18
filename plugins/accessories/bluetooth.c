@@ -183,6 +183,7 @@ static gboolean bt_state_changed(const gchar *type, const gchar *path, const gch
         bt_connected = ohm_fact_new(BT_DEVICE);
         if (bt_connected == NULL) {
             OHM_DEBUG(DBG_BT, "could not create the BT fact!");
+            prev_state = NULL;
         }
         else {
 
