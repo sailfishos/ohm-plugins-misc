@@ -4,51 +4,32 @@ static OhmPlugin *dbus_plugin;                 /* this plugin */
 static bus_t *system_bus;                      /* system bus */
 static bus_t *session_bus;                     /* session bus */
 
-static hash_table_t   *sys_objs;
-static hash_table_t   *sess_objs;
-static DBusConnection *sys_conn;
-static DBusConnection *sess_conn;
-
-
-typedef struct {
-    const char                    *path;
-    DBusObjectPathMessageFunction  handler;
-    void                          *data;
-} object_t;
-
-
-
-/********************
- * free_object
- ********************/
-static void
-free_object(void *ptr)
-{
-    object_t *obj = (object_t *)ptr;
-
-    FREE(obj->path);
-    FREE(obj);
-}
+static bus_t *bus_create(DBusBusType type);
+static void bus_destroy(bus_t *bus);
+static int bus_connect(bus_t *bus, const char *address);
+static void bus_disconnect(bus_t *bus);
 
 
 /********************
  * bus_init
  ********************/
 int
-bus_init(void)
+bus_init(OhmPlugin *plugin)
 {
-    if ((system_bus  = bus_create(DBUS_BUS_SYSTEM , TRUE))  == NULL ||
-        (session_bus = bus_create(DBUS_BUS_SESSION, FALSE)) == NULL) {
+    if ((system_bus  = bus_create(DBUS_BUS_SYSTEM))  == NULL ||
+        (session_bus = bus_create(DBUS_BUS_SESSION)) == NULL) {
         OHM_ERROR("dbus: failed to allocate bus");
         bus_exit();
         return FALSE;
     }
 
-    if (!bus_connect(system_bus)) {
+    if (!bus_connect(system_bus, NULL)) {
         bus_exit();
         return FALSE;
     }
         
+    dbus_plugin = plugin;
+    
     return TRUE;
 }
 
@@ -67,13 +48,15 @@ bus_exit(void)
         bus_destroy(session_bus);
         session_bus = NULL;
     }
+
+    dbus_plugin = NULL;
 }
 
 
 /********************
  * bus_create
  ********************/
-bus_t *
+static bus_t *
 bus_create(DBusBusType type)
 {
     bus_t *bus;
@@ -88,18 +71,13 @@ bus_create(DBusBusType type)
 /********************
  * bus_destroy
  ********************/
-void
+static void
 bus_destroy(bus_t *bus)
 {
     if (bus) {
         if (bus->objects) {
             hash_table_destroy(bus->objects);
             bus->objects = NULL;
-        }
-
-        if (bus->methods) {
-            hash_table_destroy(bus->methods);
-            bus->methods = NULL;
         }
 
         if (bus->signals) {
@@ -122,12 +100,12 @@ bus_destroy(bus_t *bus)
 /********************
  * bus_connect
  ********************/
-int
+static int
 bus_connect(bus_t *bus, const char *address)
 {
     DBusError err;
 
-    dbus_error_init(&error);
+    dbus_error_init(&err);
     
     if (address != NULL) {
         if ((bus->conn = dbus_connection_open(address, &err)) == NULL) {
@@ -152,11 +130,11 @@ bus_connect(bus_t *bus, const char *address)
         }
     }
 
-    dbus_error_free(&error);
+    dbus_error_free(&err);
     return TRUE;
 
  failed:
-    dbus_error_free(&error);
+    dbus_error_free(&err);
     return FALSE;
 }
 
@@ -164,11 +142,11 @@ bus_connect(bus_t *bus, const char *address)
 /********************
  * bus_disconnect
  ********************/
-void
+static void
 bus_disconnect(bus_t *bus)
 {
     if (bus->conn) {
-        dbus_connection_unref(bus);
+        dbus_connection_unref(bus->conn);
         bus->conn = NULL;
     }
 }

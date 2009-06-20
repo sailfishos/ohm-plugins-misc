@@ -1,31 +1,41 @@
+#include <stdio.h>
+
 #include "dbus-plugin.h"
 #include "list.h"
 
 extern int DBG_SIGNAL;                         /* debug flag for signals */
 
-static OhmPlugin    *dbus_plugin;              /* this plugin */
-
-static hash_table_t *sys_signals;
-static hash_table_t *sess_signals;
-
-static void siglist_purge(void *ptr);
+static OhmPlugin *dbus_plugin;                 /* this plugin */
 
 
 typedef struct {
-    const char  *key;                          /* signal lookup key */
-    const char  *rule;                         /* signal D-BUS match rule */
+    char        *key;                          /* signal lookup key */
+    char        *rule;                         /* signal D-BUS match rule */
     list_hook_t  signals;                      /* signal handlers */
 } siglist_t;
 
 
 typedef struct {
-    const char                    *interface;
-    const char                    *member;
-    const char                    *signature;
-    const char                    *path;
+    char                          *signature;
+    char                          *sender;
     DBusObjectPathMessageFunction  handler;
     void                          *data;
+    list_hook_t                    hook;
 } signal_t;
+
+
+static int signal_add_filter(bus_t *bus);
+static void signal_del_filter(bus_t *bus);
+static DBusHandlerResult signal_dispatch(DBusConnection *c, DBusMessage *msg,
+                                         void *data);
+
+static siglist_t *siglist_add(bus_t *bus, const char *key, const char *rule);
+static int        siglist_del(bus_t *bus, siglist_t *siglist);
+static siglist_t *siglist_lookup(bus_t *bus, const char *key);
+static void siglist_purge(void *ptr);
+
+static void siglist_add_match(bus_t *bus, siglist_t *siglist);
+static void siglist_del_match(bus_t *bus, siglist_t *siglist);
 
 
 
@@ -72,8 +82,8 @@ signal_exit(void)
     system  = bus_by_type(DBUS_BUS_SYSTEM);
     session = bus_by_type(DBUS_BUS_SESSION);
 
-    signal_del_dispatcher(system);
-    signal_del_dispatcher(session);
+    signal_del_filter(system);
+    signal_del_filter(session);
 
     if (system->signals) {
         hash_table_destroy(system->signals);
@@ -92,7 +102,7 @@ signal_exit(void)
 /********************
  * signal_add_filter
  ********************/
-int
+static int
 signal_add_filter(bus_t *bus)
 {
     if (bus->conn == NULL)
@@ -138,10 +148,8 @@ signal_key(char *buf, size_t size,
  ********************/
 static inline char *
 signal_rule(char *buf, size_t size,
-            const char *interface, const char *member, const char *signature,
-            const char *path)
+            const char *interface, const char *member, const char *path)
 {
-    
     int n;
 
     n = snprintf(buf, size, "type=signal");
@@ -179,16 +187,11 @@ signal_rule(char *buf, size_t size,
 static void
 signal_purge(signal_t *sig)
 {
-#define MEMBER_FREE(member) if ((sig)->member) FREE((sig)->member
-
-    MEMBER_FREE(interface);
-    MEMBER_FREE(member);
-    MEMBER_FREE(signature);
-    MEMBER_FREE(path);
-
-    FREE(sig);
-
-#undef MEMBER_FREE
+    if (sig) {
+        FREE(sig->signature);
+        FREE(sig->sender);
+        FREE(sig);
+    }
 }
 
 
@@ -197,7 +200,7 @@ signal_purge(signal_t *sig)
  ********************/
 int
 signal_add(DBusBusType type, const char *path, const char *interface,
-           const char *member, const char *signature,
+           const char *member, const char *signature, const char *sender,
            DBusObjectPathMessageFunction handler, void *data)
 {
     bus_t      *bus;
@@ -206,6 +209,8 @@ signal_add(DBusBusType type, const char *path, const char *interface,
     char        key_buf[1024], rule_buf[1024];
     const char *key, *rule;
 
+    (void)sender; /* XXX TODO use sender (and signature) */
+    
     if ((bus = bus_by_type(type)) == NULL)
         return FALSE;
 
@@ -216,23 +221,21 @@ signal_add(DBusBusType type, const char *path, const char *interface,
         goto failed;
 
     list_init(&sig->hook);
-    sig->interface = interface ? STRDUP(interface) : NULL;
-    sig->member    = STRDUP(member);
     sig->signature = signature ? STRDUP(signature) : NULL;
-    sig->path      = path ? STRDUP(path) : NULL;
+    sig->sender    = sender    ? STRDUP(sender)    : NULL;
     sig->handler   = handler;
     sig->data      = data;
 
     signal_key(key_buf, sizeof(key_buf), interface, member, signature, path);
-    signal_rule(rule_buf, sizeof(rule_buf), interface, member, signature, path);
+    signal_rule(rule_buf, sizeof(rule_buf), interface, member, path);
 
     if ((siglist = siglist_lookup(bus, key_buf)) != NULL)
-        list_append(siglist, &sig->hook);
+        list_append(&siglist->signals, &sig->hook);
     else {
         if ((siglist = siglist_add(bus, key_buf, rule_buf)) == NULL)
             goto failed;
         
-        list_append(siglist, &sig->hook);
+        list_append(&siglist->signals, &sig->hook);
     }
     
     return TRUE;
@@ -250,13 +253,16 @@ signal_add(DBusBusType type, const char *path, const char *interface,
  ********************/
 int
 signal_del(DBusBusType type, const char *path, const char *interface,
-           const char *member, const char *signature,
+           const char *member, const char *signature, const char *sender,
            DBusObjectPathMessageFunction handler)
 {
-    bus_t     *bus;
-    siglist_t *siglist;
-    signal_t  *sig, *s;
-    char       key[1024];
+    bus_t       *bus;
+    siglist_t   *siglist;
+    signal_t    *sig, *s;
+    list_hook_t *p, *n;
+    char         key[1024];
+
+    (void)sender;  /* XXX TODO use sender */
 
     if ((bus = bus_by_type(type)) == NULL)
         return FALSE;
@@ -265,7 +271,7 @@ signal_del(DBusBusType type, const char *path, const char *interface,
 
     if ((siglist = siglist_lookup(bus, key)) != NULL) {
         sig = NULL;
-        list_foreach(siglist->signals, p, n) {
+        list_foreach(&siglist->signals, p, n) {
             s = list_entry(p, signal_t, hook);
             
             if (s->handler == handler) {
@@ -292,7 +298,7 @@ signal_del(DBusBusType type, const char *path, const char *interface,
 /********************
  * signal_dispatch
  ********************/
-DBusHandlerResult
+static DBusHandlerResult
 signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
 {
     const char   *path      = dbus_message_get_path(msg);
@@ -308,6 +314,8 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     list_hook_t  *p, *n;
     int           handled;
     
+    (void)data;
+
     OHM_DEBUG(DBG_SIGNAL, "dbus: got signal %s.%s(%s) from %s/%s",
               interface, member, signature, sender, path ? path : "-");
     
@@ -316,17 +324,21 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
 #define INVOKE_HANDLER(s) \
     (sig)->handler(c, msg, (s)->data) == DBUS_HANDLER_RESULT_HANDLED
 
-#define INVOKE_MATCHING()                                               \
-    signal_key(key, sizeof(key), interface, member, signature, path);   \
-    if ((siglist = hash_table_lookup(signals, key)) != NULL) {          \
-        list_foreach(&siglist->signals, p, n) {                         \
-            sig = list_entry(p, signal_t, hook);                        \
-                                                                        \
-            OHM_DEBUG(DBG_METHOD, "dbus: routing to handler %p (%s)",   \
-                      signal->handler, key);                            \
-            handled |= INVOKE_HANDLER(sig);                             \
-        }                                                               \
-    }                                                                   \
+#define INVOKE_MATCHING()                                                \
+    signal_key(key, sizeof(key), interface, member, signature, path);    \
+    if ((siglist = siglist_lookup(bus, key)) != NULL) {                  \
+        list_foreach(&siglist->signals, p, n) {                          \
+            sig = list_entry(p, signal_t, hook);                         \
+                                                                         \
+            if ((sig->signature && strcmp(sig->signature, signature)) || \
+                (sig->sender && strcmp(sig->sender, sender)))            \
+                continue;                                                \
+                                                                         \
+            OHM_DEBUG(DBG_SIGNAL, "dbus: routing to handler %p (%s)",    \
+                      sig->handler, key);                                \
+            handled |= INVOKE_HANDLER(sig);                              \
+        }                                                                \
+    }                                                                    \
     
     signal_key(key, sizeof(key), interface, member, signature, path);
     INVOKE_MATCHING();
@@ -381,9 +393,10 @@ siglist_add(bus_t *bus, const char *key, const char *rule)
  * siglist_del
  ********************/
 static int
-siglist_del(bus_t *bus, const char *key)
+siglist_del(bus_t *bus, siglist_t *siglist)
 {
-    return hash_table_remove(bus->signasl, key);
+    siglist_del_match(bus, siglist);
+    return hash_table_remove(bus->signals, siglist->key);
 }
 
 
@@ -415,7 +428,7 @@ siglist_purge(void *ptr)
         }
 
         FREE(siglist->key);
-        FREE(siglist->match);
+        FREE(siglist->rule);
         FREE(siglist);
     }
 }
@@ -428,7 +441,7 @@ void
 siglist_add_match(bus_t *bus, siglist_t *siglist)
 {
     if (bus->conn)
-        dbus_add_match(bus->conn, siglist->rule, NULL);
+        dbus_bus_add_match(bus->conn, siglist->rule, NULL);
 }
 
 
@@ -439,7 +452,7 @@ void
 siglist_del_match(bus_t *bus, siglist_t *siglist)
 {
     if (bus->conn && siglist->rule)
-        dbus_remove_match(bus->conn, siglist->rule, NULL);
+        dbus_bus_remove_match(bus->conn, siglist->rule, NULL);
 }
 
 
@@ -451,6 +464,8 @@ add_match(gpointer key, gpointer value, gpointer data)
 {
     siglist_t *siglist = (siglist_t *)value;
     bus_t     *bus     = (bus_t *)data;
+
+    (void)key;
 
     siglist_add_match(bus, siglist);
 }

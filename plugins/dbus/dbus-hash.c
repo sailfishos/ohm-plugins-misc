@@ -27,7 +27,7 @@ hash_table_destroy(hash_table_t *ht)
  * hash_table_insert
  ********************/
 int
-hash_table_insert(hash_table_t *ht, const char *key, void *value)
+hash_table_insert(hash_table_t *ht, char *key, void *value)
 {
     g_hash_table_insert(ht, key, value);
     return TRUE;
@@ -78,7 +78,7 @@ hash_table_empty(hash_table_t *ht)
  * hash_table_foreach
  ********************/
 void
-hash_table_foreach(hash_table_t *ht, GHFunc *callback, void *data)
+hash_table_foreach(hash_table_t *ht, GHFunc callback, void *data)
 {
     g_hash_table_foreach(ht, callback, data);
 }

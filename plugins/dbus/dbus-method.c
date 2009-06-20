@@ -1,34 +1,32 @@
+#include <stdio.h>
+
 #include "dbus-plugin.h"
 
 extern int DBG_METHOD;                         /* debug flag for methods */
 
-static OhmPlugin    *dbus_plugin;              /* this plugin */
-
-static hash_table_t *sys_objects;              /* system bus object table */
-static hash_table_t *sess_objects;             /* session bus object table */
-
-static hash_table_t *object_add(DBusBusType, const char *);
-static int           object_del(DBusBusType, const char *);
-static hash_table_t *object_lookup(DBusBusType, const char *);
-static void          object_purge(void *);
-
-static void free_key(void *);
-
+static OhmPlugin *dbus_plugin;                 /* this plugin */
 
 typedef struct {
-    const char   *path;                        /* object path */
+    char         *path;                        /* object path */
     bus_t        *bus;                         /* bus this object is on */
     hash_table_t *methods;                     /* object method table */
 } object_t;
 
-
 typedef struct {
-    const char                    *interface;
-    const char                    *member;
-    const char                    *signature;
+    char                          *interface;
+    char                          *member;
+    char                          *signature;
     DBusObjectPathMessageFunction  handler;
     void                          *data;
 } method_t;
+
+
+static object_t *object_add(bus_t *, const char *);
+static int       object_del(object_t *);
+static object_t *object_lookup(bus_t *, const char *);
+static int       object_register(object_t *object);
+static void      object_unregister(object_t *object);
+static void      object_purge(void *);
 
 
 /********************
@@ -122,11 +120,11 @@ method_add(DBusBusType type, const char *path, const char *interface,
            const char *member, const char *signature,
            DBusObjectPathMessageFunction handler, void *data)
 {
-    bus_t        *bus;
-    object_t     *object;
-    method_t     *method;
-    char          key_buf[1024];
-    const char   *key = NULL;
+    bus_t    *bus;
+    object_t *object;
+    method_t *method;
+    char      key_buf[1024];
+    char     *key = NULL;
 
     if ((bus = bus_by_type(type)) == NULL)
         return FALSE;
@@ -182,7 +180,8 @@ method_del(DBusBusType type, const char *path, const char *interface,
     bus_t    *bus;
     object_t *object;
     method_t *method;
-    
+    char      key[1024];
+
     if ((bus = bus_by_type(type)) == NULL)
         return FALSE;
 
@@ -267,7 +266,6 @@ static object_t *
 object_add(bus_t *bus, const char *path)
 {
     object_t *object;
-    char     *key;
 
     if (ALLOC_OBJ(object) == NULL)
         goto failed;
@@ -303,23 +301,27 @@ object_add(bus_t *bus, const char *path)
  * object_del
  ********************/
 static int
-object_del(bus_t *bus, const char *path)
+object_del(object_t *object)
 {
-    return hash_table_remove(bus->objects, path);
+    return hash_table_remove(object->bus->objects, object->path);
 }
 
 
 /********************
  * object_register
  ********************/
-int
+static int
 object_register(object_t *object)
 {
-    bus_t *bus = object->bus;
+    DBusObjectPathVTable  vtable;
+    bus_t                *bus = object->bus;
+
+    vtable.message_function    = method_dispatch;
+    vtable.unregister_function = NULL;
 
     if (bus->conn != NULL)
         return dbus_connection_register_object_path(bus->conn, object->path,
-                                                    method_dispatch, object);
+                                                    &vtable, object);
     else
         return TRUE;                    /* will retry once we're connected */
 }
@@ -371,6 +373,9 @@ void
 register_object(gpointer key, gpointer value, gpointer data)
 {
     object_t *object = (object_t *)value;
+
+    (void)key;
+    (void)data;
 
     object_register(object);
 }
