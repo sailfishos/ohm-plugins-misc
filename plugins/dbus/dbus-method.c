@@ -175,7 +175,7 @@ method_add(DBusBusType type, const char *path, const char *interface,
 int
 method_del(DBusBusType type, const char *path, const char *interface,
            const char *member, const char *signature,
-           DBusObjectPathMessageFunction handler)
+           DBusObjectPathMessageFunction handler, void *data)
 {
     bus_t    *bus;
     object_t *object;
@@ -191,7 +191,7 @@ method_del(DBusBusType type, const char *path, const char *interface,
         (method = hash_table_lookup(object->methods, key)) == NULL)
         return FALSE;
     
-    if (method->handler != handler) {
+    if (method->handler != handler || method->data != data) {
         OHM_WARNING("dbus: %s:%s has handler %p instead of %p",
                     path, key, method->handler, handler);
         return FALSE;
@@ -199,7 +199,7 @@ method_del(DBusBusType type, const char *path, const char *interface,
 
     hash_table_remove(object->methods, key);
     
-    OHM_DEBUG(DBG_METHOD, "dbus: unregistered method %s:%s", path, key);
+    OHM_DEBUG(DBG_METHOD, "unregistered method %s:%s", path, key);
 
     if (hash_table_empty(object->methods)) {
         OHM_DEBUG(DBG_METHOD, "destroying object %s with no methods", path);
@@ -227,7 +227,6 @@ method_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     object_t   *object    = (object_t *)data;
     method_t   *method;
     char        key[1024];
-
 
     if (bus == NULL)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
