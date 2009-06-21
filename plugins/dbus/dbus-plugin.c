@@ -22,7 +22,8 @@ plugin_init(OhmPlugin *plugin)
     if (OHM_DEBUG_INIT(dbus))
         OHM_WARNING("dbus: failed to register for debugging");
 
-    if (!bus_init(plugin) || !method_init(plugin) || !signal_init(plugin)) {
+    if (!bus_init(plugin) || !watch_init(plugin) ||
+        !method_init(plugin) || !signal_init(plugin)) {
         plugin_exit(plugin);
         exit(1);
     }
@@ -39,6 +40,7 @@ plugin_exit(OhmPlugin *plugin)
 
     signal_exit();
     method_exit();
+    watch_exit();
     bus_exit();
 }
 
@@ -47,6 +49,9 @@ plugin_exit(OhmPlugin *plugin)
  *                           *** public plugin API ***                       *
  *****************************************************************************/
 
+/********************
+ * add_method
+ ********************/
 OHM_EXPORTABLE(int, add_method, (DBusBusType type,
                                  const char *path, const char *interface,
                                  const char *member, const char *signature,
@@ -56,15 +61,23 @@ OHM_EXPORTABLE(int, add_method, (DBusBusType type,
     return method_add(type, path, interface, member, signature, handler, data);
 }
 
+
+/********************
+ * del_method
+ ********************/
 OHM_EXPORTABLE(int, del_method, (DBusBusType type,
                                  const char *path, const char *interface,
                                  const char *member, const char *signature,
-                                 DBusObjectPathMessageFunction handler))
+                                 DBusObjectPathMessageFunction handler,
+                                 void *data))
 {
-    return method_del(type, path, interface, member, signature, handler);
+    return method_del(type, path, interface, member, signature, handler, data);
 }
 
 
+/********************
+ * add_signal
+ ********************/
 OHM_EXPORTABLE(int, add_signal, (DBusBusType type,
                                  const char *path, const char *interface,
                                  const char *member, const char *signature,
@@ -78,15 +91,45 @@ OHM_EXPORTABLE(int, add_signal, (DBusBusType type,
 }
 
 
+/********************
+ * del_signal
+ ********************/
 OHM_EXPORTABLE(int, del_signal, (DBusBusType type,
                                  const char *path, const char *interface,
                                  const char *member, const char *signature,
                                  const char *sender,
-                                 DBusObjectPathMessageFunction handler))
+                                 DBusObjectPathMessageFunction handler,
+                                 void *data))
 {
     return signal_del(type,
                       path, interface, member, signature, sender,
-                      handler);
+                      handler, data);
+}
+
+
+/********************
+ * add_watch
+ ********************/
+OHM_EXPORTABLE(int, add_watch, (DBusBusType type,
+                                const char *name,
+                                void (*handler)(const char *, const char *,
+                                                const char *, void *),
+                                void *data))
+{
+    return watch_add(type, name, handler, data);
+}
+
+
+/********************
+ * del_watch
+ ********************/
+OHM_EXPORTABLE(int, del_watch, (DBusBusType type,
+                                const char *name,
+                                void (*handler)(const char *, const char *,
+                                                const char *, void *),
+                                void *data))
+{
+    return watch_del(type, name, handler, data);
 }
 
 
@@ -100,13 +143,14 @@ OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        OHM_LICENSE_NON_FREE, /* OHM_LICENSE_LGPL */
                        plugin_init, plugin_exit, NULL);
 
-OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 4,
+OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 6,
                             OHM_EXPORT(add_method, "add_method"),
                             OHM_EXPORT(del_method, "del_method"),
                             OHM_EXPORT(add_signal, "add_signal"),
-                            OHM_EXPORT(del_signal, "del_signal")
+                            OHM_EXPORT(del_signal, "del_signal"),
+                            OHM_EXPORT(add_watch , "add_watch"),
+                            OHM_EXPORT(del_watch , "del_watch")
 #if 0
-                            OHM_EXPORT(name_track, "track_name")
                             OHM_EXPORT(name_register, "register_name"),
                             OHM_EXPORT(name_release , "release_name")
 #endif

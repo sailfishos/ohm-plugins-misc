@@ -19,7 +19,7 @@ typedef GHashTable hash_table_t;
 typedef struct {
     DBusBusType     type;                  /* DBUS_BUS_{SYSTEM, SESSION} */
     DBusConnection *conn;                  /* connection if it is up */
-    hash_table_t   *names;                 /* exported or watched names */
+    hash_table_t   *watches;               /* watched names */
     hash_table_t   *objects;               /* exported objects */
     hash_table_t   *signals;               /* signals we listen for */
 } bus_t;
@@ -43,7 +43,9 @@ int method_add(DBusBusType type, const char *path, const char *interface,
 
 int method_del(DBusBusType type, const char *path, const char *interface,
                const char *member, const char *signature,
-               DBusObjectPathMessageFunction handler);
+               DBusObjectPathMessageFunction handler, void *data);
+
+void method_bus_up(bus_t *bus);
 
 /* dbus-signal.c */
 int  signal_init(OhmPlugin *);
@@ -55,14 +57,23 @@ int signal_add(DBusBusType type, const char *path, const char *interface,
 
 int signal_del(DBusBusType type, const char *path, const char *interface,
                const char *member, const char *signature, const char *sender,
-               DBusObjectPathMessageFunction handler);
+               DBusObjectPathMessageFunction handler, void *data);
 
-int name_track(bus_t *bus, const char *name,
-               void (*handler)(DBusConnection *, const char *, const char *),
-               void *data);
-
-void method_bus_up(bus_t *bus);
 void signal_bus_up(bus_t *bus);
+
+/* dbus-watch.c */
+int  watch_init(OhmPlugin *plugin);
+void watch_exit(void);
+
+int watch_add(DBusBusType type, const char *name,
+              void (*handler)(const char *, const char *, const char *, void *),
+              void *data);
+int watch_del(DBusBusType type, const char *name,
+              void (*handler)(const char *, const char *, const char *, void *),
+              void *data);
+
+void watch_bus_up(bus_t *bus);
+
 
 /*
  * hash tables (just a wrapper around GHashTable)

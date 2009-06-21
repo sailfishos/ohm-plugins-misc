@@ -85,9 +85,9 @@ bus_destroy(bus_t *bus)
             bus->signals = NULL;
         }
 
-        if (bus->names) {
-            hash_table_destroy(bus->names);
-            bus->names = NULL;
+        if (bus->watches) {
+            hash_table_destroy(bus->watches);
+            bus->watches = NULL;
         }
 
         bus_disconnect(bus);
@@ -187,10 +187,10 @@ bus_by_connection(DBusConnection *conn)
 static void
 bus_connection_up(bus_t *bus)
 {
+    watch_bus_up(bus);
     method_bus_up(bus);
     signal_bus_up(bus);
 }
-
 
 
 
