@@ -37,7 +37,7 @@ static void siglist_purge(void *ptr);
 static void siglist_add_match(bus_t *bus, siglist_t *siglist);
 static void siglist_del_match(bus_t *bus, siglist_t *siglist);
 
-
+static void session_bus_event(bus_t *, int, void *);
 
 /********************
  * signal_init
@@ -65,6 +65,12 @@ signal_init(OhmPlugin *plugin)
         return FALSE;
     }
     
+
+    if (!bus_watch(session, session_bus_event, NULL)) {
+        OHM_ERROR("dbus: failed to install session bus watch");
+        signal_exit();
+        return FALSE;
+    }
 
     dbus_plugin = plugin;
     return TRUE;
@@ -344,9 +350,11 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     signal_key(key, sizeof(key), NULL, member, NULL, NULL);
     INVOKE_MATCHING();
     
-    return handled ?
-        DBUS_HANDLER_RESULT_HANDLED : DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-
+    if (handled)
+        OHM_DEBUG(DBG_SIGNAL, "dbus: signal was processed by some handlers");
+    
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;       /* let others see it */
+    
 #undef INVOKE_HANDLER
 #undef INVOKE_MATCHING
 }
@@ -461,13 +469,17 @@ add_match(gpointer key, gpointer value, gpointer data)
 
 
 /********************
- * signal_bus_up
+ * session_bus_event
  ********************/
-void
-signal_bus_up(bus_t *bus)
+static void
+session_bus_event(bus_t *bus, int event, void *data)
 {
-    signal_add_filter(bus);
-    hash_table_foreach(bus->signals, add_match, bus);
+    (void)data;
+    
+    if (event == BUS_EVENT_CONNECTED) {
+        signal_add_filter(bus);
+        hash_table_foreach(bus->signals, add_match, bus);
+    }
 }
 
 

@@ -28,6 +28,8 @@ static int       object_register(object_t *object);
 static void      object_unregister(object_t *object);
 static void      object_purge(void *);
 
+static void session_bus_event(bus_t *, int, void *);
+
 
 /********************
  * method_init
@@ -45,6 +47,12 @@ method_init(OhmPlugin *plugin)
     
     if (system->objects == NULL || session->objects == NULL) {
         OHM_ERROR("dbus: failed to create method object tables");
+        method_exit();
+        return FALSE;
+    }
+
+    if (!bus_watch(session, session_bus_event, NULL)) {
+        OHM_ERROR("dbus: failed to install session bus watch");
         method_exit();
         return FALSE;
     }
@@ -381,12 +389,15 @@ register_object(gpointer key, gpointer value, gpointer data)
 
 
 /********************
- * method_bus_up
+ * session_bus_event
  ********************/
-void
-method_bus_up(bus_t *bus)
+static void
+session_bus_event(bus_t *bus, int event, void *data)
 {
-    hash_table_foreach(bus->objects, register_object, NULL);
+    (void)data;
+    
+    if (event == BUS_EVENT_CONNECTED)
+        hash_table_foreach(bus->objects, register_object, NULL);
 }
 
 

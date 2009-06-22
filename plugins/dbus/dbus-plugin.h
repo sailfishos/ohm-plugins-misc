@@ -9,6 +9,7 @@
 #include <dbus/dbus.h>
 
 #include "mm.h"
+#include "list.h"
 
 #define PLUGIN_PREFIX   dbus
 #define PLUGIN_NAME    "dbus"
@@ -22,8 +23,13 @@ typedef struct {
     hash_table_t   *watches;               /* watched names */
     hash_table_t   *objects;               /* exported objects */
     hash_table_t   *signals;               /* signals we listen for */
+    list_hook_t     notify;                /* bus event watchers */
 } bus_t;
 
+
+enum {
+    BUS_EVENT_CONNECTED = 1,               /* bus connection is up */
+};
 
 
 /* dbus-bus.c */
@@ -31,6 +37,8 @@ int  bus_init(OhmPlugin *plugin);
 void bus_exit(void);
 bus_t *bus_by_type(DBusBusType type);
 bus_t *bus_by_connection(DBusConnection *conn);
+int bus_connect(bus_t *bus, const char *address);
+int bus_watch(bus_t *bus, void (*callback)(bus_t *, int, void *), void *data);
 
 
 /* dbus-method.c */

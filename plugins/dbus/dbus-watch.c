@@ -27,6 +27,7 @@ static void watchlist_del_filter(bus_t *bus);
 static int watchlist_add_match(bus_t *bus, watchlist_t *watchlist);
 static int watchlist_del_match(bus_t *bus, watchlist_t *watchlist);
 
+static void session_bus_event(bus_t *bus, int event, void *data);
 
 
 /********************
@@ -56,6 +57,13 @@ watch_init(OhmPlugin *plugin)
         return FALSE;
     }
 
+    if (!bus_watch(session, session_bus_event, NULL)) {
+        OHM_ERROR("dbus: failed to install session bus watch");
+        watch_exit();
+        return FALSE;
+    }
+    
+    
     dbus_plugin = plugin;
     return TRUE;
 }
@@ -384,13 +392,17 @@ add_match(gpointer key, gpointer value, gpointer data)
 
 
 /********************
- * watch_bus_up
+ * session_bus_event
  ********************/
-void
-watch_bus_up(bus_t *bus)
+static void
+session_bus_event(bus_t *bus, int event, void *data)
 {
-    watchlist_add_filter(bus);
-    hash_table_foreach(bus->watches, add_match, bus);
+    (void)data;
+    
+    if (event == BUS_EVENT_CONNECTED) {
+        watchlist_add_filter(bus);
+        hash_table_foreach(bus->watches, add_match, bus);
+    }
 }
 
 

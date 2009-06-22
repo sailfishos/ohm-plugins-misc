@@ -4,10 +4,18 @@ static OhmPlugin *dbus_plugin;                 /* this plugin */
 static bus_t *system_bus;                      /* system bus */
 static bus_t *session_bus;                     /* session bus */
 
+typedef struct {
+    list_hook_t   hook;
+    void        (*callback)(bus_t *, int, void *);
+    void         *data;
+} bus_watch_t;
+
+
 static bus_t *bus_create(DBusBusType type);
 static void bus_destroy(bus_t *bus);
-static int bus_connect(bus_t *bus, const char *address);
 static void bus_disconnect(bus_t *bus);
+static void bus_event(bus_t *bus, int event);
+
 
 
 /********************
@@ -98,9 +106,45 @@ bus_destroy(bus_t *bus)
 
 
 /********************
+ * bus_watch
+ ********************/
+int
+bus_watch(bus_t *bus, void (*callback)(bus_t *, int, void *), void *data)
+{
+    bus_watch_t *watch;
+
+    if (ALLOC_OBJ(watch) == NULL)
+        return FALSE;
+
+    list_init(&watch->hook);
+    watch->callback = callback;
+    watch->data     = data;
+
+    list_append(&bus->notify, &watch->hook);
+    return TRUE;
+}
+
+
+/********************
+ * bus_event
+ ********************/
+static void
+bus_event(bus_t *bus, int event)
+{
+    bus_watch_t *watch;
+    list_hook_t *p, *n;
+
+    list_foreach(&bus->notify, p, n) {
+        watch = list_entry(p, bus_watch_t, hook);
+        watch->callback(bus, event, watch->data);
+    }
+}
+
+
+/********************
  * bus_connect
  ********************/
-static int
+int
 bus_connect(bus_t *bus, const char *address)
 {
     DBusError err;
@@ -130,7 +174,8 @@ bus_connect(bus_t *bus, const char *address)
         }
     }
 
-    dbus_error_free(&err);
+    bus_event(bus, BUS_EVENT_CONNECTED);
+    
     return TRUE;
 
  failed:
@@ -178,18 +223,6 @@ bus_by_connection(DBusConnection *conn)
         return session_bus;
     else
         return NULL;
-}
-
-
-/********************
- * bus_connection_up
- ********************/
-static void
-bus_connection_up(bus_t *bus)
-{
-    watch_bus_up(bus);
-    method_bus_up(bus);
-    signal_bus_up(bus);
 }
 
 

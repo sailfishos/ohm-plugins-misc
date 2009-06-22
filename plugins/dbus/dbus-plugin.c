@@ -11,6 +11,8 @@ OHM_DEBUG_PLUGIN(dbus,
 
 
 static void plugin_exit(OhmPlugin *plugin);
+static DBusHandlerResult session_bus_up(DBusConnection *c,
+                                        DBusMessage *msg, void *data);
 
 
 /********************
@@ -27,6 +29,15 @@ plugin_init(OhmPlugin *plugin)
         plugin_exit(plugin);
         exit(1);
     }
+
+    
+    if (!signal_add(DBUS_BUS_SESSION, NULL,
+                    "com.nokia.policy", "NewSession", "s", NULL,
+                    session_bus_up, NULL)) {
+        OHM_WARNING("dbus: failed to register session bus signal handler");
+        plugin_exit(plugin);
+        exit(1);
+    }
 }
 
 
@@ -38,11 +49,47 @@ plugin_exit(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    signal_del(DBUS_BUS_SESSION, NULL,
+               "com.nokia.policy", "NewSession", "s", NULL,
+               session_bus_up, NULL);
+    
     signal_exit();
     method_exit();
     watch_exit();
     bus_exit();
 }
+
+
+/********************
+ * session_bus_up
+ ********************/
+static DBusHandlerResult
+session_bus_up(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    bus_t      *bus;
+    const char *address;
+    DBusError   err;
+
+    (void)c;
+    (void)data;
+
+    if ((bus = bus_by_type(DBUS_BUS_SESSION)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    dbus_error_init(&err);
+    if (!dbus_message_get_args(msg, &err,
+                               DBUS_TYPE_STRING, &address, DBUS_TYPE_INVALID)) {
+        OHM_ERROR("dbus: failed to parse session bus notification (%s)",
+                  dbus_error_is_set(&err) ? err.message : "unknown error");
+        dbus_error_free(&err);
+    }
+    else
+        bus_connect(bus, address);
+    
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+
 
 
 /*****************************************************************************
