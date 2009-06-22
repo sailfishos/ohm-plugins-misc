@@ -233,8 +233,8 @@ OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 6,
                             OHM_EXPORT(add_watch , "add_watch"),
                             OHM_EXPORT(del_watch , "del_watch")
 #if 0
-                            OHM_EXPORT(name_register, "register_name"),
-                            OHM_EXPORT(name_release , "release_name")
+                            OHM_EXPORT(register_name, "register_name"),
+                            OHM_EXPORT(release_name , "release_name")
 #endif
 );
 
