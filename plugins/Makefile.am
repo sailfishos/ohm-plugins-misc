@@ -8,6 +8,7 @@ SUBDIRS = 	     \
 	gconf        \
 	dvfs         \
 	sensors
+#	dbus
 
 if HAVE_LIBPROFILE
 SUBDIRS += profile
