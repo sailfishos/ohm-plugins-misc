@@ -2,6 +2,8 @@
 
 #include "dbus-plugin.h"
 
+static OhmPlugin *dbus_plugin;                /* this plugin */
+
 /* debug flags */
 int DBG_SIGNAL, DBG_METHOD;
 
@@ -24,13 +26,11 @@ plugin_init(OhmPlugin *plugin)
     if (!OHM_DEBUG_INIT(dbus))
         OHM_WARNING("dbus: failed to register for debugging");
 
-    if (!bus_init(plugin) || !watch_init(plugin) ||
-        !method_init(plugin) || !signal_init(plugin)) {
+    if (!bus_init() || !watch_init() || !method_init() || !signal_init()) {
         plugin_exit(plugin);
         exit(1);
     }
 
-    
     if (!signal_add(DBUS_BUS_SYSTEM, NULL,
                     "com.nokia.policy", "NewSession", "s", NULL,
                     session_bus_up, NULL)) {
@@ -38,6 +38,8 @@ plugin_init(OhmPlugin *plugin)
         plugin_exit(plugin);
         exit(1);
     }
+
+    dbus_plugin = plugin;
 }
 
 
@@ -57,6 +59,8 @@ plugin_exit(OhmPlugin *plugin)
     method_exit();
     watch_exit();
     bus_exit();
+
+    dbus_plugin = NULL;
 }
 
 
@@ -108,7 +112,12 @@ OHM_EXPORTABLE(int, add_method, (DBusBusType type,
                                  DBusObjectPathMessageFunction handler,
                                  void *data))
 {
-    return method_add(type, path, interface, member, signature, handler, data);
+    if (method_add(type, path, interface, member, signature, handler, data)) {
+        g_object_ref(dbus_plugin);
+        return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 
@@ -121,7 +130,12 @@ OHM_EXPORTABLE(int, del_method, (DBusBusType type,
                                  DBusObjectPathMessageFunction handler,
                                  void *data))
 {
-    return method_del(type, path, interface, member, signature, handler, data);
+    if (method_del(type, path, interface, member, signature, handler, data)) {
+        g_object_unref(dbus_plugin);
+        return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 
@@ -135,9 +149,13 @@ OHM_EXPORTABLE(int, add_signal, (DBusBusType type,
                                  DBusObjectPathMessageFunction handler,
                                  void *data))
 {
-    return signal_add(type,
-                      path, interface, member, signature, sender,
-                      handler, data);
+    if (signal_add(type, path, interface, member, signature, sender,
+                   handler, data)) {
+        g_object_ref(dbus_plugin);
+        return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 
@@ -151,9 +169,13 @@ OHM_EXPORTABLE(int, del_signal, (DBusBusType type,
                                  DBusObjectPathMessageFunction handler,
                                  void *data))
 {
-    return signal_del(type,
-                      path, interface, member, signature, sender,
-                      handler, data);
+    if (signal_del(type, path, interface, member, signature, sender,
+                   handler, data)) {
+        g_object_unref(dbus_plugin);
+        return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 
@@ -166,7 +188,12 @@ OHM_EXPORTABLE(int, add_watch, (DBusBusType type,
                                                 const char *, void *),
                                 void *data))
 {
-    return watch_add(type, name, handler, data);
+    if (watch_add(type, name, handler, data)) {
+        g_object_ref(dbus_plugin);
+        return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 
@@ -179,7 +206,12 @@ OHM_EXPORTABLE(int, del_watch, (DBusBusType type,
                                                 const char *, void *),
                                 void *data))
 {
-    return watch_del(type, name, handler, data);
+    if (watch_del(type, name, handler, data)) {
+        g_object_unref(dbus_plugin);
+        return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 

@@ -5,8 +5,10 @@
 
 extern int DBG_SIGNAL;                         /* debug flag for signals */
 
-static OhmPlugin *dbus_plugin;                 /* this plugin */
 
+/*
+ * a list of signal handlers (with the same hash key)
+ */
 
 typedef struct {
     char        *key;                          /* signal lookup key */
@@ -15,13 +17,17 @@ typedef struct {
 } siglist_t;
 
 
+/*
+ * a single signal handler
+ */
+
 typedef struct {
-    char                          *signature;
-    char                          *path;
-    char                          *sender;
-    DBusObjectPathMessageFunction  handler;
-    void                          *data;
-    list_hook_t                    hook;
+    char                          *signature;  /* expected signature if any */
+    char                          *path;       /* expected path if any */
+    char                          *sender;     /* expected sender if any */
+    DBusObjectPathMessageFunction  handler;    /* signal handler */
+    void                          *data;       /* opaque handler data */
+    list_hook_t                    hook;       /* more handlers */
 } signal_t;
 
 
@@ -40,11 +46,12 @@ static void siglist_del_match(bus_t *bus, siglist_t *siglist);
 
 static void session_bus_event(bus_t *, int, void *);
 
+
 /********************
  * signal_init
  ********************/
 int
-signal_init(OhmPlugin *plugin)
+signal_init(void)
 {
     bus_t *system, *session;
 
@@ -67,13 +74,12 @@ signal_init(OhmPlugin *plugin)
     }
     
 
-    if (!bus_watch(session, session_bus_event, NULL)) {
+    if (!bus_watch_add(session, session_bus_event, NULL)) {
         OHM_ERROR("dbus: failed to install session bus watch");
         signal_exit();
         return FALSE;
     }
 
-    dbus_plugin = plugin;
     return TRUE;
 }
 
@@ -92,6 +98,8 @@ signal_exit(void)
     signal_del_filter(system);
     signal_del_filter(session);
 
+    bus_watch_del(session, session_bus_event, NULL);
+
     if (system->signals) {
         hash_table_destroy(system->signals);
         system->signals = NULL;
@@ -101,8 +109,6 @@ signal_exit(void)
         hash_table_destroy(session->signals);
         session->signals = NULL;
     }
-
-    dbus_plugin = NULL;
 }
 
 
@@ -128,7 +134,7 @@ signal_del_filter(bus_t *bus)
     if (bus->conn == NULL)
         return;
     
-    dbus_connection_remove_filter(bus->conn, signal_dispatch, bus);
+    dbus_connection_remove_filter(bus->conn, signal_dispatch, NULL);
 }
 
 
@@ -249,7 +255,6 @@ signal_add(DBusBusType type, const char *path, const char *interface,
     }
         
     list_append(&siglist->signals, &sig->hook);
-    g_object_ref(dbus_plugin);
     return TRUE;
 }
 
@@ -287,7 +292,6 @@ signal_del(DBusBusType type, const char *path, const char *interface,
                 if (list_empty(&siglist->signals))
                     siglist_del(bus, siglist);
     
-                g_object_unref(dbus_plugin);
                 return TRUE;
             }
         }
@@ -321,7 +325,7 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     if (bus == NULL)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    OHM_DEBUG(DBG_SIGNAL, "dbus: got signal %s.%s(%s) from %s/%s",
+    OHM_DEBUG(DBG_SIGNAL, "got signal %s.%s(%s) from %s/%s",
               interface, member, signature, sender, path ? path : "-");
 
     handled = FALSE;
@@ -332,7 +336,7 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
             sig = list_entry(p, signal_t, hook);
             
             if (signal_matches(sig, signature, path, sender)) {
-                OHM_DEBUG(DBG_SIGNAL, "dbus: routing to handler %s %p",
+                OHM_DEBUG(DBG_SIGNAL, "routing to handler %s %p",
                           key, sig->handler);
                 
                 handled |= sig->handler(c, msg, sig->data);
@@ -346,7 +350,7 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
             sig = list_entry(p, signal_t, hook);
             
             if (signal_matches(sig, signature, path, sender)) {
-                OHM_DEBUG(DBG_SIGNAL, "dbus: routing to handler %s %p",
+                OHM_DEBUG(DBG_SIGNAL, "routing to handler %s %p",
                           key, sig->handler);
                 
                 handled |= sig->handler(c, msg, sig->data);
@@ -355,7 +359,7 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     }
     
     if (handled)
-        OHM_DEBUG(DBG_SIGNAL, "dbus: signal was processed by some handlers");
+        OHM_DEBUG(DBG_SIGNAL, "signal was handled by some handlers");
     
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;     /* let through to others */
     

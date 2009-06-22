@@ -1,6 +1,5 @@
 #include "dbus-plugin.h"
 
-static OhmPlugin *dbus_plugin;                 /* this plugin */
 static bus_t *system_bus;                      /* system bus */
 static bus_t *session_bus;                     /* session bus */
 
@@ -22,7 +21,7 @@ static void bus_event(bus_t *bus, int event);
  * bus_init
  ********************/
 int
-bus_init(OhmPlugin *plugin)
+bus_init(void)
 {
     if ((system_bus  = bus_create(DBUS_BUS_SYSTEM))  == NULL ||
         (session_bus = bus_create(DBUS_BUS_SESSION)) == NULL) {
@@ -36,8 +35,6 @@ bus_init(OhmPlugin *plugin)
         return FALSE;
     }
         
-    dbus_plugin = plugin;
-    
     return TRUE;
 }
 
@@ -56,8 +53,6 @@ bus_exit(void)
         bus_destroy(session_bus);
         session_bus = NULL;
     }
-
-    dbus_plugin = NULL;
 }
 
 
@@ -108,10 +103,10 @@ bus_destroy(bus_t *bus)
 
 
 /********************
- * bus_watch
+ * bus_watch_add
  ********************/
 int
-bus_watch(bus_t *bus, void (*callback)(bus_t *, int, void *), void *data)
+bus_watch_add(bus_t *bus, void (*callback)(bus_t *, int, void *), void *data)
 {
     bus_watch_t *watch;
 
@@ -124,6 +119,29 @@ bus_watch(bus_t *bus, void (*callback)(bus_t *, int, void *), void *data)
 
     list_append(&bus->notify, &watch->hook);
     return TRUE;
+}
+
+
+/********************
+ * bus_watch_del
+ ********************/
+int
+bus_watch_del(bus_t *bus, void (*callback)(bus_t *, int, void *), void *data)
+{
+    bus_watch_t *watch;
+    list_hook_t *p, *n;
+
+    list_foreach(&bus->notify, p, n) {
+        watch = list_entry(p, bus_watch_t, hook);
+
+        if (watch->callback == callback && watch->data == data) {
+            list_delete(&watch->hook);
+            FREE(watch);
+            return TRUE;
+        }
+    }
+    
+    return FALSE;
 }
 
 
@@ -195,6 +213,8 @@ bus_disconnect(bus_t *bus)
     if (bus->conn) {
         dbus_connection_unref(bus->conn);
         bus->conn = NULL;
+        OHM_INFO("dbus: disconnected from %s bus",
+                 bus->type == DBUS_BUS_SYSTEM ? "system" : "session");
     }
 }
 

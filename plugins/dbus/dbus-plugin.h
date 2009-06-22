@@ -33,16 +33,20 @@ enum {
 
 
 /* dbus-bus.c */
-int  bus_init(OhmPlugin *plugin);
+int  bus_init(void);
 void bus_exit(void);
 bus_t *bus_by_type(DBusBusType type);
 bus_t *bus_by_connection(DBusConnection *conn);
 int bus_connect(bus_t *bus, const char *address);
-int bus_watch(bus_t *bus, void (*callback)(bus_t *, int, void *), void *data);
+int bus_watch_add(bus_t *bus,
+                  void (*callback)(bus_t *, int, void *), void *data);
+int bus_watch_del(bus_t *bus,
+                  void (*callback)(bus_t *, int, void *), void *data);
+
 
 
 /* dbus-method.c */
-int  method_init(OhmPlugin *plugin);
+int  method_init(void);
 void method_exit(void);
 
 int method_add(DBusBusType type, const char *path, const char *interface,
@@ -56,7 +60,7 @@ int method_del(DBusBusType type, const char *path, const char *interface,
 void method_bus_up(bus_t *bus);
 
 /* dbus-signal.c */
-int  signal_init(OhmPlugin *);
+int  signal_init(void);
 void signal_exit(void);
 
 int signal_add(DBusBusType type, const char *path, const char *interface,
@@ -70,7 +74,7 @@ int signal_del(DBusBusType type, const char *path, const char *interface,
 void signal_bus_up(bus_t *bus);
 
 /* dbus-watch.c */
-int  watch_init(OhmPlugin *plugin);
+int  watch_init(void);
 void watch_exit(void);
 
 int watch_add(DBusBusType type, const char *name,

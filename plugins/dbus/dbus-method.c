@@ -4,8 +4,6 @@
 
 extern int DBG_METHOD;                         /* debug flag for methods */
 
-static OhmPlugin *dbus_plugin;                 /* this plugin */
-
 typedef struct {
     char         *path;                        /* object path */
     bus_t        *bus;                         /* bus this object is on */
@@ -35,7 +33,7 @@ static void session_bus_event(bus_t *, int, void *);
  * method_init
  ********************/
 int
-method_init(OhmPlugin *plugin)
+method_init(void)
 {
     bus_t *system, *session;
     
@@ -51,13 +49,12 @@ method_init(OhmPlugin *plugin)
         return FALSE;
     }
 
-    if (!bus_watch(session, session_bus_event, NULL)) {
+    if (!bus_watch_add(session, session_bus_event, NULL)) {
         OHM_ERROR("dbus: failed to install session bus watch");
         method_exit();
         return FALSE;
     }
     
-    dbus_plugin = plugin;
     return TRUE;
 }
 
@@ -73,6 +70,8 @@ method_exit(void)
     system  = bus_by_type(DBUS_BUS_SYSTEM);
     session = bus_by_type(DBUS_BUS_SESSION);
     
+    bus_watch_del(session, session_bus_event, NULL);
+
     if (system->objects) {
         hash_table_destroy(system->objects);
         system->objects = NULL;
@@ -82,8 +81,6 @@ method_exit(void)
         hash_table_destroy(session->objects);
         session->objects = NULL;
     }
-    
-    dbus_plugin = NULL;
 }
 
 
@@ -163,10 +160,9 @@ method_add(DBusBusType type, const char *path, const char *interface,
     if (!hash_table_insert(object->methods, key, method))
         goto failed;
     
-    OHM_DEBUG(DBG_METHOD, "dbus: registered handler %p for %s:%s",
-              handler, path, key);
+    OHM_DEBUG(DBG_METHOD,
+              "registered handler %p for %s:%s", handler, path, key);
 
-    g_object_ref(dbus_plugin);
     return TRUE;
     
  failed:
@@ -207,15 +203,15 @@ method_del(DBusBusType type, const char *path, const char *interface,
 
     hash_table_remove(object->methods, key);
     
-    OHM_DEBUG(DBG_METHOD, "unregistered method %s:%s", path, key);
+    OHM_DEBUG(DBG_METHOD,
+              "unregistered handler %p for %s:%s", method->handler, path, key);
 
     if (hash_table_empty(object->methods)) {
-        OHM_DEBUG(DBG_METHOD, "destroying object %s with no methods", path);
+        OHM_DEBUG(DBG_METHOD, "object %s became empty, destroying it", path);
         object_unregister(object);
         object_del(object);
     }
 
-    g_object_unref(dbus_plugin);
     return TRUE;
 }
 
@@ -239,26 +235,26 @@ method_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     if (bus == NULL)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     
-    OHM_DEBUG(DBG_METHOD, "dbus: got method call %s.%s(%s) for %s from %s",
+    OHM_DEBUG(DBG_METHOD, "got method call %s.%s(%s) for %s from %s",
               interface, member, signature, path ? path : NULL, sender);
 
     method_key(key, sizeof(key), interface, member, signature);
     if ((method = hash_table_lookup(object->methods, key)) != NULL) {
-        OHM_DEBUG(DBG_METHOD, "dbus: routing to handler %p (%s)",
-                  method->handler, key);
+        OHM_DEBUG(DBG_METHOD,
+                  "routing to handler %p (%s)", method->handler, key);
         return method->handler(c, msg, method->data);
     }
 
     method_key(key, sizeof(key), interface, member, NULL);
     if ((method = hash_table_lookup(object->methods, key)) != NULL) {
-        OHM_DEBUG(DBG_METHOD, "dbus: routing to handler %p (%s)",
-                  method->handler, key);
+        OHM_DEBUG(DBG_METHOD,
+                  "routing to handler %p (%s)", method->handler, key);
         return method->handler(c, msg, method->data);
     }
 
     if ((method = hash_table_lookup(object->methods, member)) != NULL) {
-        OHM_DEBUG(DBG_METHOD, "dbus: routing to handler %p (%s)",
-                  method->handler, member);
+        OHM_DEBUG(DBG_METHOD,
+                  "routing to handler %p (%s)", method->handler, member);
         return method->handler(c, msg, method->data);
     }
 

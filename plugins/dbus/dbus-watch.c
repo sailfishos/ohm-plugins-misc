@@ -3,8 +3,6 @@
 #include "dbus-plugin.h"
 #include "list.h"
 
-static OhmPlugin *dbus_plugin;                      /* this plugin */
-
 
 typedef struct {
     char        *name;
@@ -34,7 +32,7 @@ static void session_bus_event(bus_t *bus, int event, void *data);
  * watch_init
  ********************/
 int
-watch_init(OhmPlugin *plugin)
+watch_init(void)
 {
     bus_t *system, *session;
 
@@ -54,17 +52,15 @@ watch_init(OhmPlugin *plugin)
     if (!watchlist_add_filter(system)) {
         OHM_ERROR("dbus: failed to add watch dispatcher for system bus");
         watch_exit();
-        return FALSE;
+       return FALSE;
     }
 
-    if (!bus_watch(session, session_bus_event, NULL)) {
+    if (!bus_watch_add(session, session_bus_event, NULL)) {
         OHM_ERROR("dbus: failed to install session bus watch");
         watch_exit();
         return FALSE;
     }
     
-    
-    dbus_plugin = plugin;
     return TRUE;
 }
 
@@ -82,7 +78,8 @@ watch_exit(void)
 
    watchlist_del_filter(system);
    watchlist_del_filter(session);
-   
+
+   bus_watch_del(session, session_bus_event, NULL);
    
    if (system && system->watches) {
        hash_table_destroy(system->watches);
@@ -93,8 +90,6 @@ watch_exit(void)
        hash_table_destroy(session->watches);
        session->watches = NULL;
    }
-
-   dbus_plugin = NULL;
 }
 
 
@@ -137,7 +132,6 @@ watch_add(DBusBusType type, const char *name,
     }
         
     list_append(&watchlist->watches, &watch->hook);
-    g_object_ref(dbus_plugin);
     return TRUE;
 }
 
@@ -169,7 +163,6 @@ watch_del(DBusBusType type, const char *name,
                 if (list_empty(&watchlist->watches))
                     watchlist_del(bus, watchlist);
                 
-                g_object_unref(dbus_plugin);
                 return TRUE;
             }
         }
@@ -372,7 +365,7 @@ static void
 watchlist_del_filter(bus_t *bus)
 {
     if (bus->conn != NULL)
-        dbus_connection_remove_filter(bus->conn, watch_dispatch, bus);
+        dbus_connection_remove_filter(bus->conn, watch_dispatch, NULL);
 }
 
 
