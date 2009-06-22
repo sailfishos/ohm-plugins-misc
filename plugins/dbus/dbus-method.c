@@ -227,7 +227,7 @@ DBusHandlerResult
 method_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
 {
     const char *path      = dbus_message_get_path(msg);
-    const char *interface = dbus_message_get_path(msg);
+    const char *interface = dbus_message_get_interface(msg);
     const char *member    = dbus_message_get_member(msg);
     const char *signature = dbus_message_get_signature(msg);
     const char *sender    = dbus_message_get_sender(msg);

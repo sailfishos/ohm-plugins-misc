@@ -21,7 +21,7 @@ static DBusHandlerResult session_bus_up(DBusConnection *c,
 static void
 plugin_init(OhmPlugin *plugin)
 {
-    if (OHM_DEBUG_INIT(dbus))
+    if (!OHM_DEBUG_INIT(dbus))
         OHM_WARNING("dbus: failed to register for debugging");
 
     if (!bus_init(plugin) || !watch_init(plugin) ||
@@ -31,7 +31,7 @@ plugin_init(OhmPlugin *plugin)
     }
 
     
-    if (!signal_add(DBUS_BUS_SESSION, NULL,
+    if (!signal_add(DBUS_BUS_SYSTEM, NULL,
                     "com.nokia.policy", "NewSession", "s", NULL,
                     session_bus_up, NULL)) {
         OHM_WARNING("dbus: failed to register session bus signal handler");
@@ -83,8 +83,11 @@ session_bus_up(DBusConnection *c, DBusMessage *msg, void *data)
                   dbus_error_is_set(&err) ? err.message : "unknown error");
         dbus_error_free(&err);
     }
-    else
+    else {
+        OHM_INFO("dbus: received session bus notification with address \"%s\"",
+                 address);
         bus_connect(bus, address);
+    }
     
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }

@@ -69,8 +69,10 @@ bus_create(DBusBusType type)
 {
     bus_t *bus;
 
-    if (ALLOC_OBJ(bus) != NULL)
+    if (ALLOC_OBJ(bus) != NULL) {
         bus->type = type;
+        list_init(&bus->notify);
+    }
     
     return bus;
 }

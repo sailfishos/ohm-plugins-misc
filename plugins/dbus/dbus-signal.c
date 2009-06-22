@@ -158,7 +158,7 @@ signal_rule(char *buf, size_t size,
 {
     int n;
 
-    n = snprintf(buf, size, "type=signal");
+    n = snprintf(buf, size, "type='signal'");
     if (n < 0 || n >= (int)size)
         goto overflow;
     
@@ -292,7 +292,7 @@ static DBusHandlerResult
 signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
 {
     const char   *path      = dbus_message_get_path(msg);
-    const char   *interface = dbus_message_get_path(msg);
+    const char   *interface = dbus_message_get_interface(msg);
     const char   *member    = dbus_message_get_member(msg);
     const char   *signature = dbus_message_get_signature(msg);
     const char   *sender    = dbus_message_get_sender(msg);
@@ -316,7 +316,6 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     ((sig)->handler(c, msg, (s)->data) == DBUS_HANDLER_RESULT_HANDLED)
     
 #define INVOKE_MATCHING()                                               \
-    signal_key(key, sizeof(key), interface, member, signature, path);   \
     if ((siglist = siglist_lookup(bus, key)) != NULL) {                 \
         list_foreach(&siglist->signals, p, n) {                         \
             sig = list_entry(p, signal_t, hook);                        \
