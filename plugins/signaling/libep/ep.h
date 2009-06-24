@@ -43,7 +43,8 @@ struct ep_decision {
 typedef int     ep_answer_token;
 typedef void    (*ep_answer_cb) (ep_answer_token token, int success);
 typedef void    (*ep_decision_cb) (const char *decision_name, 
-        struct ep_decision **decisions, ep_answer_cb cb, ep_answer_token token);
+        struct ep_decision **decisions, ep_answer_cb cb, ep_answer_token token,
+        void *user_data);
 
 
 
@@ -56,7 +57,7 @@ int ep_unregister   (DBusConnection *connection);
 /* function for setting up the policy decision filter */
 
 int ep_filter   (const char **decision_names, const char *signal, 
-        ep_decision_cb cb);
+        ep_decision_cb cb, void *user_data);
 
 
 /* functions for handling the decision structures */
