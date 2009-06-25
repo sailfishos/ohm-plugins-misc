@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.45) unstable; urgency=low
+
+  * Fix early emergency call regression.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 25 Jun 2009 19:09:54 +0300
+
 ohm-plugins-misc (0.6.44) unstable; urgency=low
 
   * Bumped version for a new release.
