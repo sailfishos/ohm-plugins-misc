@@ -104,6 +104,9 @@ enum {
     UPDATE_ALL     = 0xff,
 };
 
+int emergency_activate(int activate, event_t *event);
+
+
 int     policy_call_export(call_t *call);
 int     policy_call_update(call_t *call, int fields);
 void    policy_call_delete(call_t *call);
@@ -1360,7 +1363,7 @@ emergency_call_request(DBusConnection *c, DBusMessage *msg, void *data)
 static int
 emergency_active(int active)
 {
-    return set_string_field(emergency, "active", active ? "yes" : "no");
+    return set_string_field(emergency, "state", active ? "active" : "off");
 }
 
 
@@ -1759,7 +1762,9 @@ event_handler(event_t *event)
     default: OHM_ERROR("Unknown event 0x%x.", event->type);              return;
     }
     
-    if (call == NULL)
+    if (call == NULL &&
+        event->type != EVENT_EMERGENCY_ON &&
+        event->type != EVENT_EMERGENCY_OFF)
         return;
     
     status = policy_actions(event);
@@ -2571,9 +2576,31 @@ call_action(call_t *call, const char *action, event_t *event)
 }
 
 
+/********************
+ * emergency_activate
+ ********************/
+int
+emergency_activate(int activate, event_t *event)
+{
+    OHM_INFO("%s early emergency call.", activate ? "ACTIVATE" : "DEACTIVATE");
+    
+    if (activate) {
+        if (ncscall + nipcall == 0)
+            policy_run_hook("telephony_first_call_hook");
 
+        policy_run_hook("telephony_call_active_hook");
+    }
+    else {
+        policy_run_hook("telephony_call_end_hook");
 
+        if (ncscall + nipcall == 0)
+            policy_run_hook("telephony_last_call_hook");
+    }
 
+    emergency_call_reply(event->emerg.bus, event->emerg.req, NULL);
+    
+    return 0;
+}
 
 
 /*****************************************************************************
@@ -2647,12 +2674,14 @@ state_name(int state)
 int
 policy_actions(event_t *event)
 {
-    int  callid    = event->any.call->id;
-    int  callstate = event->any.state;
+    int  callid, callstate;
     char id[16], state[32], *vars[2 * 2 + 1];
 
     if (event->type == EVENT_EMERGENCY_ON || event->type == EVENT_EMERGENCY_OFF)
         return TRUE;
+
+    callid    = event->any.call->id;
+    callstate = event->any.state;
 
     snprintf(id, sizeof(id), "%d", callid);
     snprintf(state, sizeof(state), "%s", state_name(callstate));
@@ -2688,7 +2717,7 @@ policy_enforce(event_t *event)
     if ((l = ohm_fact_store_get_facts_by_name(store, FACT_ACTIONS)) == NULL) {
         if (event->type == EVENT_EMERGENCY_ON ||
             event->type == EVENT_EMERGENCY_OFF) {
-            emergency_call_reply(event->emerg.bus, event->emerg.req, NULL);
+            emergency_activate(event->type == EVENT_EMERGENCY_ON, event);
             return 0;
         }
         else
