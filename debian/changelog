@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.44) unstable; urgency=low
+
+  * Bumped version for a new release.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 25 Jun 2009 12:10:53 +03
+
 ohm-plugins-misc (0.6.43) unstable; urgency=low
 
   * Prevent race conditions with event queues (Fixes: NB#123553).
