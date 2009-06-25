@@ -17,6 +17,7 @@ struct cb_data {
     char            *signal;
     char           **decision_names;
     ep_decision_cb   cb;
+    void            *user_data;
 };
 
 /* trivial list implementation for keeping track of the policy decisions */
@@ -486,32 +487,45 @@ static void handle_message (DBusMessage *msg, struct cb_data *data)
             decisions = (struct ep_decision **) ep_list_convert_to_array(&decision_list);
             ep_list_free_all(&decision_list);
 
-            /* count the callbacks */
+            /* count the callbacks if a transaction is needed */
             if (trans_data) {
+                if (data->decision_names[0]) {
+                    i = 0;
+                    cb_decision_name = data->decision_names[i];
+                    while (cb_decision_name) {
+                        if (strcmp(cb_decision_name, actname) == 0) {
+                            trans_data->refcount++;
+#if 0
+                            printf("libep: increased transaction data '%p' refcount to %u for name '%s'\n",
+                                    trans_data, trans_data->refcount, cb_decision_name);
+#endif
+                        }
+                        cb_decision_name = data->decision_names[++i];
+                    }
+                }
+                else {
+                    /* subscribe to all decisions */
+                    trans_data->refcount++;
+                }
+            }
+
+            if (data->decision_names[0]) {
                 i = 0;
                 cb_decision_name = data->decision_names[i];
+
+                /* send the decisions */
                 while (cb_decision_name) {
                     if (strcmp(cb_decision_name, actname) == 0) {
-                        trans_data->refcount++;
-#if 0
-                        printf("libep: increased transaction data '%p' refcount to %u for name '%s'\n",
-                                trans_data, trans_data->refcount, cb_decision_name);
-#endif
+                        data->cb(actname, decisions, ep_ready, txid, data->user_data);
+                        found = TRUE;
                     }
                     cb_decision_name = data->decision_names[++i];
                 }
             }
-
-            i = 0;
-            cb_decision_name = data->decision_names[i];
-            
-            /* send the decisions */
-            while (cb_decision_name) {
-                if (strcmp(cb_decision_name, actname) == 0) {
-                    data->cb(actname, decisions, ep_ready, txid);
-                    found = TRUE;
-                }
-                cb_decision_name = data->decision_names[++i];
+            else {
+                /* call the callback for all decisions */
+                data->cb(actname, decisions, ep_ready, txid, data->user_data);
+                found = TRUE;
             }
             
             free_decisions(decisions);
@@ -721,7 +735,7 @@ static void free_cb (struct cb_data *data)
 }
 
 int ep_filter (const char **names, const char *signal, 
-        ep_decision_cb cb)
+        ep_decision_cb cb, void *user_data)
 {
 
     struct cb_data *data = calloc(1, sizeof(struct cb_data));
@@ -731,10 +745,14 @@ int ep_filter (const char **names, const char *signal,
     if (!data)
         goto failed;
 
+    data->user_data = user_data;
+
     /* copy the names */
 
-    for (tmp = (char **)names; *tmp != NULL; tmp++) {
-        names_len++;
+    if (names) {
+        for (tmp = (char **)names; *tmp != NULL; tmp++) {
+            names_len++;
+        }
     }
 
     data->decision_names = calloc(names_len+1, sizeof(char *));

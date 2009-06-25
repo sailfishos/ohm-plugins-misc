@@ -9,7 +9,8 @@
 static void decision_cb(const char *decision_name,
         struct ep_decision **decisions,
         ep_answer_cb answer_cb,
-        ep_answer_token token) {
+        ep_answer_token token,
+        void *user_data) {
 
     printf("main: policy decision received: '%s'\n", decision_name);
 
@@ -95,7 +96,7 @@ int main() {
         goto error;
 
     /* put the relevant D-Bus filters and internal handlers in place */
-    if (!ep_filter((const char **) names, "actions", decision_cb))
+    if (!ep_filter((const char **) names, "actions", decision_cb, NULL))
         goto error;
 
     /* register to the policy manager */
