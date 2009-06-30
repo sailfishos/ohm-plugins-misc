@@ -1509,6 +1509,7 @@ static char *class_to_group(char *klass)
         {"Alarm"     , "alarm"       },
         {"Flash"     , "flash"       },
         {"System"    , "systemsound" },
+        {"Input"     , "inputsound"  },
         {NULL        , NULL          }
     };
 
