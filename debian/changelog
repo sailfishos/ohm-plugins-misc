@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.46) unstable; urgency=low
+
+  * Added new playback class/group Input/inputsound.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 30 Jun 2009 15:48:02 +0300
+
 ohm-plugins-misc (0.6.45) unstable; urgency=low
 
   * Fix early emergency call regression (Fixes: NB#125101).
