@@ -216,7 +216,7 @@ static gboolean bt_state_changed(const gchar *type,
         const gchar *state)
 {
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
-    const gchar *prev_state = NULL;
+    gchar *prev_state = NULL;
     OhmFact *bt_connected = bt_get_connected(path);
     gboolean run_dres = FALSE;
     GValue *gval_state;
