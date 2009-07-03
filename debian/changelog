@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.47) unstable; urgency=low
+
+  * Support for cmtautohold policy decision.
+  * Support for rejecting calls as busy.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 03 Jul 2009 18:02:55 +0300
+
 ohm-plugins-misc (0.6.46) unstable; urgency=low
 
   [ Krisztian Litkey ]
