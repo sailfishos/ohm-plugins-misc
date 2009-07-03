@@ -50,6 +50,7 @@
 #define HOLD_STATE_CHANGED "HoldStateChanged"
 #define CALL_STATE_CHANGED "CallStateChanged"
 #define CLOSE              "Close"
+#define REMOVE_MEMBERS     "RemoveMembersWithReason"
 #define REQUEST_HOLD       "RequestHold"
 #define ADD_MEMBERS        "AddMembers"
 #define STREAM_ADDED       "StreamAdded"
@@ -258,6 +259,15 @@ enum {
     TP_CALLSTATE_FORWARDED = 0x10
 };
 
+
+/*
+ * telepathy disconnect (member remove) reasons
+ */
+
+enum {
+    TP_REMOVE_REASON_NONE = 0,
+    TP_REMOVE_REASON_BUSY = 3
+};
 
 
 #endif /* __OHM_PLUGIN_TELEPHONY_H__ */

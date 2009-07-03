@@ -1688,9 +1688,9 @@ event_handler(event_t *event)
 
     case EVENT_CALL_REQUEST:
         if (call == NULL) {
-            OHM_WARNING("Denying CALL_REQUEST for unknown call %s.",
+            OHM_WARNING("Allowing CALL_REQUEST for unknown call %s.",
                         event->call.path);
-            call_reply(event->call.req, FALSE);
+            call_reply(event->call.req, TRUE);
             return;
         }
         else {
@@ -2176,26 +2176,49 @@ call_destroy(call_t *call)
  * tp_disconnect
  ********************/
 static int
-tp_disconnect(call_t *call)
+tp_disconnect(call_t *call, const char *action)
 {
     DBusMessage *msg;
-    const char  *name, *path, *iface, *method;
+    const char  *name, *path;
     int          status;
 
     name   = call->name;
     path   = call->path;
-    iface  = TP_CHANNEL;
-    method = CLOSE;
 
-    if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
+
+    if (!strcmp(action, "busy")) {
+        msg = dbus_message_new_method_call(name, path,
+                                           TP_CHANNEL_GROUP, REMOVE_MEMBERS);
+        if (msg != NULL) {
+            dbus_uint32_t  handle[1] = { call->local_handle ?: 1 };
+            dbus_uint32_t *handles = handle;
+            dbus_uint32_t  reason  = TP_REMOVE_REASON_BUSY;
+            const char    *message = "";
+
+            if (!dbus_message_append_args(msg,
+                                          DBUS_TYPE_ARRAY,
+                                          DBUS_TYPE_UINT32, &handles, 1,
+                                          DBUS_TYPE_STRING, &message,
+                                          DBUS_TYPE_UINT32, &reason,
+                                          DBUS_TYPE_INVALID)) {
+                dbus_message_unref(msg);
+                msg = NULL;
+            }
+        }
+        else
+            status = ENOMEM;
+    }
+    else
+        msg = dbus_message_new_method_call(name, path, TP_CHANNEL, CLOSE);
+    
+    if (msg != NULL) {
         status = bus_send(msg, NULL);
         dbus_message_unref(msg);
     }
     else {
-        OHM_ERROR("Failed to allocate D-BUS Close request.");
+        OHM_ERROR("Failed to allocate D-BUS request for disconnect.");
         status = ENOMEM;
     }
-
     
     return status;
 }
@@ -2253,15 +2276,19 @@ call_hungup(call_t *call, const char *action, event_t *event)
 static int
 call_disconnect(call_t *call, const char *action, event_t *event)
 {
-    OHM_INFO("DISCONNECT %s.", short_path(call->path));
+    OHM_INFO("DISCONNECT (%s) %s.", action, short_path(call->path));
 
-    (void)action;
-
+    if (strcmp(action, "disconnected"))
+        if (tp_disconnect(call, action) != 0)
+            OHM_ERROR("Failed to disconnect call %s.", call->path);
+    
     if (call == event->any.call) {
         switch (event->any.state) {
         case STATE_CREATED:
         case STATE_CALLOUT:
+#if 0
             call_reply(event->call.req, FALSE);
+#endif
             /* fall through */
         case STATE_DISCONNECTED:
         case STATE_PEER_HUNGUP:
@@ -2276,13 +2303,16 @@ call_disconnect(call_t *call, const char *action, event_t *event)
     }
 
     /* disconnect and wait for the Close signal before removing */
-    if (tp_disconnect(call) != 0) {
-        OHM_ERROR("Failed to disconnect call %s.", call->path);
-        return EIO;
+    if (!strcmp(action, "disconnected")) {
+        if (tp_disconnect(call, action) != 0) {
+            OHM_ERROR("Failed to disconnect call %s.", call->path);
+            return EIO;
+        }
+        else
+            return 0;
     }
-    else
-        return 0;
 
+    return 0;
 }
 
 
@@ -2560,6 +2590,7 @@ call_action(call_t *call, const char *action, event_t *event)
         { "peerhungup"  , call_hungup     },
         { "localhungup" , call_hungup     },
         { "disconnected", call_disconnect },
+        { "busy"        , call_disconnect },
         { "onhold"      , call_hold       },
         { "autohold"    , call_hold       },
         { "active"      , call_activate   },
