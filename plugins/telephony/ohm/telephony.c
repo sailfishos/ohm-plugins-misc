@@ -2396,8 +2396,7 @@ tp_hold(call_t *call, int status)
 static int
 call_hold(call_t *call, const char *action, event_t *event)
 {    
-    OHM_INFO("%sHOLD %s.", !strcmp(action, "autohold") ? "AUTO" : "",
-             short_path(call->path));
+    OHM_INFO("HOLD (%s) %s.", action, short_path(call->path));
 
     if (call == event->any.call) {
         if (event->type == EVENT_CALL_HOLD_REQUEST) {
@@ -2418,13 +2417,14 @@ call_hold(call_t *call, const char *action, event_t *event)
         return 0;
     }
     else {   /* call being held or autoheld because of some other event */
-        if (!strcmp(action, "autohold"))
+        if (!strcmp(action, "autohold") || !strcmp(action, "cmtautohold"))
             call->order = holdorder++;
         
-        if (tp_hold(call, TRUE) != 0) {
-            OHM_ERROR("Failed to disconnect call %s.", call->path);
-            return EIO;
-        }
+        if (!strcmp(action, "autohold"))
+            if (tp_hold(call, TRUE) != 0) {
+                OHM_ERROR("Failed to disconnect call %s.", call->path);
+                return EIO;
+            }
         
         call->state = STATE_AUTOHOLD;
     }
@@ -2593,6 +2593,7 @@ call_action(call_t *call, const char *action, event_t *event)
         { "busy"        , call_disconnect },
         { "onhold"      , call_hold       },
         { "autohold"    , call_hold       },
+        { "cmtautohold" , call_hold       },
         { "active"      , call_activate   },
         { "created"     , call_create     },
         { NULL, NULL }
