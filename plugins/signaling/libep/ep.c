@@ -404,6 +404,7 @@ static void handle_message (DBusMessage *msg, struct cb_data *data)
 
                 if (dbus_message_iter_get_arg_type(&actit) != DBUS_TYPE_ARRAY) {
                     success = FALSE;
+                    free(decision);
                     continue;
                 }
                 dbus_message_iter_recurse(&actit, &structit);
@@ -417,6 +418,7 @@ static void handle_message (DBusMessage *msg, struct cb_data *data)
 
                     if (dbus_message_iter_get_arg_type(&structit) != DBUS_TYPE_STRUCT) {
                         success = FALSE;
+                        free(pair);
                         continue;
                     }
                     dbus_message_iter_recurse(&structit, &structfieldit);
@@ -426,6 +428,7 @@ static void handle_message (DBusMessage *msg, struct cb_data *data)
 
                     if (dbus_message_iter_get_arg_type(&structfieldit) != DBUS_TYPE_STRING) {
                         success = FALSE;
+                        free(pair);
                         continue;
                     }
 
@@ -435,11 +438,13 @@ static void handle_message (DBusMessage *msg, struct cb_data *data)
 
                     if (!dbus_message_iter_next(&structfieldit)) {
                         success = FALSE;
+                        free(pair);
                         continue;
                     }
 
                     if (dbus_message_iter_get_arg_type(&structfieldit) != DBUS_TYPE_VARIANT) {
                         success = FALSE;
+                        free(pair);
                         continue;
                     }
                     dbus_message_iter_recurse(&structfieldit, &variantit);
@@ -723,6 +728,9 @@ int ep_unregister (DBusConnection *c)
 static void free_cb (struct cb_data *data)
 {
     char **tmp = NULL;
+
+    if (data == NULL)
+        return;
 
     for (tmp = data->decision_names; tmp != NULL; tmp++) {
         free(*tmp);
