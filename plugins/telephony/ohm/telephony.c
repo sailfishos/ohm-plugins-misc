@@ -2540,6 +2540,8 @@ call_activate(call_t *call, const char *action, event_t *event)
 
         if (event->type == EVENT_CALL_ACCEPT_REQUEST)
             policy_run_hook("telephony_call_connect_hook");
+        else if (event->type == EVENT_CALL_ACTIVATE_REQUEST)
+            policy_run_hook("telephony_call_offhold_hook");
         else
             policy_run_hook("telephony_call_active_hook");
     }
