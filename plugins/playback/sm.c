@@ -1368,7 +1368,7 @@ static void privacy_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
         return;
     }
 
-    dbusif_privacy_override_changed(state);
+    dbusif_signal_privacy_override(state);
 }
 
 static void bluetooth_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
@@ -1395,7 +1395,7 @@ static void bluetooth_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
 
     state = strcmp(bluetooth, "default") ? 1 : 0;
 
-    dbusif_bluetooth_override_changed(state);
+    dbusif_signal_bluetooth_override(state);
 }
 
 static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
@@ -1446,7 +1446,7 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
         return;
     }
 
-    dbusif_mute_changed(state);
+    dbusif_signal_mute(state);
     
 }
 

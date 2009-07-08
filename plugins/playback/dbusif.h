@@ -62,9 +62,9 @@ static void dbusif_get_property(char *, char *, char *, get_property_cb_t);
 static void dbusif_set_property(char *, char *, char *, char *,
                                 set_property_cb_t);
 static void dbusif_add_property_notification(char *, notify_property_cb_t);
-static void dbusif_privacy_override_changed(int);
-static void dbusif_bluetooth_override_changed(int);
-static void dbusif_mute_changed(int);
+static void dbusif_signal_privacy_override(int);
+static void dbusif_signal_bluetooth_override(int);
+static void dbusif_signal_mute(int);
 static void dbusif_add_hello_notification(hello_cb_t);
 static void dbusif_send_stream_info_to_pep(char *, char *, char *, char *);
 

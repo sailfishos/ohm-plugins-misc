@@ -10,6 +10,7 @@
 #define FACTSTORE_PRIVACY               FACTSTORE_PREFIX ".privacy_override"
 #define FACTSTORE_BLUETOOTH             FACTSTORE_PREFIX ".bluetooth_override"
 #define FACTSTORE_MUTE                  FACTSTORE_PREFIX ".audio_mute"
+#define FACTSTORE_GENERAL_MUTE          FACTSTORE_PREFIX ".mute"
 #define FACTSTORE_ACTIVE_POLICY_GROUP   FACTSTORE_PREFIX ".active_policy_group"
 #define FACTSTORE_ENFORCEMENT_POINT     FACTSTORE_PREFIX ".enforcement_point"
 

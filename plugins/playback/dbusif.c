@@ -388,7 +388,8 @@ static void dbusif_reply(DBusMessage *msg)
     serial = dbus_message_get_serial(msg);
     reply  = dbus_message_new_method_return(msg);
 
-    OHM_DEBUG(DBG_DBUS, "replying to playback method");
+    OHM_DEBUG(DBG_DBUS, "replying to playback method %s",
+              dbus_message_get_member(msg));
 
     dbus_connection_send(sess_conn, reply, &serial);
     dbus_message_unref(reply);
@@ -595,7 +596,7 @@ static void dbusif_add_property_notification(char *prname,
     }
 }
 
-static void dbusif_privacy_override_changed(int state)
+static void dbusif_signal_privacy_override(int state)
 {
     static dbus_uint32_t  txid    = 1;
     static const char    *path    = DBUS_PLAYBACK_MANAGER_PATH;
@@ -632,7 +633,7 @@ static void dbusif_privacy_override_changed(int state)
     dbus_message_unref(msg);
 }
 
-static void dbusif_bluetooth_override_changed(int state)
+static void dbusif_signal_bluetooth_override(int state)
 {
     static dbus_uint32_t  txid    = 1;
     static const char    *path    = DBUS_PLAYBACK_MANAGER_PATH;
@@ -640,7 +641,7 @@ static void dbusif_bluetooth_override_changed(int state)
     static const char    *signal  = DBUS_BLUETOOTH_SIGNAL;
 
     DBusMessage          *msg;
-    dbus_bool_t           bluetooth;
+    dbus_int32_t          bluetooth;
     int                   success;
 
     if ((msg = dbus_message_new_signal(path, iface, signal)) == NULL) {
@@ -648,9 +649,9 @@ static void dbusif_bluetooth_override_changed(int state)
         return;
     }
 
-    bluetooth = state ? TRUE : FALSE;
+    bluetooth = state;
     success = dbus_message_append_args(msg,
-                                       DBUS_TYPE_BOOLEAN, &bluetooth,
+                                       DBUS_TYPE_INT32, &bluetooth,
                                        DBUS_TYPE_INVALID);
     if (!success) {
         OHM_ERROR("%s(): failed to build message", __FUNCTION__);
@@ -669,7 +670,7 @@ static void dbusif_bluetooth_override_changed(int state)
     dbus_message_unref(msg);
 }
 
-static void dbusif_mute_changed(int state)
+static void dbusif_signal_mute(int state)
 {
     static dbus_uint32_t  txid    = 1;
     static const char    *path    = DBUS_PLAYBACK_MANAGER_PATH;
@@ -975,25 +976,32 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
     (void)conn;
     (void)user_data;
 
-    static const char  *interface    = DBUS_PLAYBACK_MANAGER_INTERFACE;
-    static const char  *rq_state     = DBUS_PLAYBACK_REQ_STATE_METHOD;
-    static const char  *rq_privacy   = DBUS_PLAYBACK_REQ_PRIVACY_METHOD;
-    static const char  *rq_bluetooth = DBUS_PLAYBACK_REQ_BLUETOOTH_METHOD;
-    static const char  *rq_mute      = DBUS_PLAYBACK_REQ_MUTE_METHOD;
-    static const char  *get_allowed  = DBUS_PLAYBACK_GET_ALLOWED_METHOD;
-    static sm_evdata_t  evdata       = { .evid = evid_playback_request };
+    static const char  *interface     = DBUS_PLAYBACK_MANAGER_INTERFACE;
+    static const char  *rq_state      = DBUS_PLAYBACK_REQ_STATE_METHOD;
+    static const char  *rq_privacy    = DBUS_PLAYBACK_REQ_PRIVACY_METHOD;
+    static const char  *rq_bluetooth  = DBUS_PLAYBACK_REQ_BLUETOOTH_METHOD;
+    static const char  *rq_mute       = DBUS_PLAYBACK_REQ_MUTE_METHOD;
+    static const char  *get_allowed   = DBUS_PLAYBACK_GET_ALLOWED_METHOD;
+    static const char  *get_privacy   = DBUS_PLAYBACK_GET_PRIVACY_METHOD;
+    static const char  *get_bluetooth = DBUS_PLAYBACK_GET_BLUETOOTH_METHOD;
+    static const char  *get_mute      = DBUS_PLAYBACK_GET_MUTE_METHOD;
+    static sm_evdata_t  evdata        = { .evid = evid_playback_request };
 
     DBusMessage        *reply;
     /* char               *msgpath; */
     char               *objpath;
     char               *sender;
     dbus_uint32_t       serial;
-    char               *state;
+    char               *new_state;
     char               *pid;
     char               *stream;
     dbus_bool_t         privacy_override;
     dbus_bool_t         bluetooth_override;
     dbus_bool_t         mute;
+    const char         *privacy_value;
+    const char         *bluetooth_value;
+    int                 mute_value;
+    int                 state;
     client_t           *cl;
     pbreq_t            *req;
     const char         *errmsg;
@@ -1012,7 +1020,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
 
         success = dbus_message_get_args(msg, NULL,
                                         DBUS_TYPE_OBJECT_PATH, &objpath,
-                                        DBUS_TYPE_STRING, &state,
+                                        DBUS_TYPE_STRING, &new_state,
                                         DBUS_TYPE_STRING, &pid,
                                         DBUS_TYPE_STRING, &stream,
                                         DBUS_TYPE_INVALID);
@@ -1033,7 +1041,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
         }
 
         req->type = pbreq_state;
-        req->state.name   = state ? strdup(state) : NULL;
+        req->state.name   = new_state ? strdup(new_state) : NULL;
         req->state.pid    = strdup(pid);
         req->state.stream = stream[0] ? strdup(stream) : NULL;
         
@@ -1179,6 +1187,48 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg,
         dbusif_reply_with_error(msg, NULL, errmsg);
 
         return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else if (dbus_message_is_method_call(msg, interface, get_privacy)) {
+        privacy_value = NULL;
+        if (!fsif_get_field_by_name(FACTSTORE_PRIVACY, fldtype_string,
+                                    "value", &privacy_value)) {
+            dbusif_reply_with_error(msg, DBUS_MAEMO_ERROR_FAILED,
+                                    "Policy error");
+        }
+        else {
+            dbusif_reply(msg);
+            state = privacy_value && strcmp(privacy_value, "default");
+            dbusif_signal_privacy_override(state);
+        }
+    }
+    else if (dbus_message_is_method_call(msg, interface, get_bluetooth)) {
+        bluetooth_value = NULL;
+        if (!fsif_get_field_by_name(FACTSTORE_BLUETOOTH, fldtype_string,
+                                    "value", &bluetooth_value)) {
+            dbusif_reply_with_error(msg, DBUS_MAEMO_ERROR_FAILED,
+                                    "Policy error");
+        }
+        else {
+            dbusif_reply(msg);
+            if      (!strcmp(bluetooth_value, "disconnected")) state = -1;
+            else if (!strcmp(bluetooth_value, "default"))      state =  0;
+            else                                               state =  1;
+            
+            dbusif_signal_bluetooth_override(state);
+        }
+    }
+    else if (dbus_message_is_method_call(msg, interface, get_mute)) {
+        mute_value = 0;
+        if (!fsif_get_field_by_name(FACTSTORE_GENERAL_MUTE, fldtype_integer,
+                                    "value", &mute_value)) {
+            dbusif_reply_with_error(msg, DBUS_MAEMO_ERROR_FAILED,
+                                    "Policy error");
+        }
+        else {
+            dbusif_reply(msg);
+            state = mute_value;
+            dbusif_signal_mute(state);
+        }
     }
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;

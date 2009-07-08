@@ -49,6 +49,8 @@ static int  fsif_delete_factstore_entry(char *, fsif_field_t *);
 static int  fsif_update_factstore_entry(char *, fsif_field_t *,fsif_field_t *);
 static void fsif_get_field_by_entry(fsif_entry_t *, fsif_fldtype_t, char *,
                                     void *);
+static int fsif_get_field_by_name(const char *name, fsif_fldtype_t type,
+                                  char *field, void *vptr);
 static int  fsif_add_fact_watch(char *, fsif_fact_watch_e,
                                 fsif_fact_watch_cb_t, void *);
 static int  fsif_add_field_watch(char *, fsif_field_t *, char *,

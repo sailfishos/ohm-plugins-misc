@@ -37,7 +37,7 @@ static watch_fact_t  *wfact_updates;
 
 static OhmFact      *find_entry(char *, fsif_field_t *);
 static int           matching_entry(OhmFact *, fsif_field_t *);
-static void          get_field(OhmFact *, fsif_fldtype_t, char *, void *);
+static int           get_field(OhmFact *, fsif_fldtype_t, char *, void *);
 static void          set_field(OhmFact *, fsif_fldtype_t, char *, void *);
 static watch_fact_t *find_watch(char *, watch_type_e);
 static fsif_field_t *copy_selector(fsif_field_t *);
@@ -163,6 +163,26 @@ static void fsif_get_field_by_entry(fsif_entry_t *entry, fsif_fldtype_t type,
     }
 }
 
+
+static int fsif_get_field_by_name(const char *name, fsif_fldtype_t type,
+                                  char *field, void *vptr)
+{
+    OhmFact *fact;
+    GSList  *list;
+
+    if (name == NULL || field == NULL || vptr == NULL)
+        return FALSE;
+    
+    list = ohm_fact_store_get_facts_by_name(fs, name);
+
+    if (g_slist_length(list) != 1)
+        return FALSE;
+
+    fact = (OhmFact *)list->data;
+    
+    return get_field(fact, type, field, vptr);
+}
+    
 
 static int fsif_add_fact_watch(char *factname,
                                fsif_fact_watch_e type,
@@ -329,7 +349,7 @@ static int matching_entry(OhmFact *fact, fsif_field_t *selist)
     return TRUE;
 }
 
-static void get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
+static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
 {
     GValue  *gv;
 
@@ -379,7 +399,7 @@ static void get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
         break;
     }
 
-    return;
+    return TRUE;
 
  type_mismatch:
     OHM_ERROR("[%s] Type mismatch when fetching field '%s'",__FUNCTION__,name);
@@ -393,6 +413,8 @@ static void get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
     case fldtype_time:        *(unsigned long long *)vptr = 0ULL;       break;
     default:                                                            break;
     }
+
+    return FALSE;
 } 
 
 static void set_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
