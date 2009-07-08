@@ -413,6 +413,7 @@ static void dbusif_reply_with_error(DBusMessage *msg,
               description);
 
     dbus_connection_send(sess_conn, reply, &serial);
+    dbus_message_unref(reply);
 }
 
 
