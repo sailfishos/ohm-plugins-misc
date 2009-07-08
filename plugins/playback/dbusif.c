@@ -640,7 +640,6 @@ static void dbusif_bluetooth_override_changed(int state)
     static const char    *signal  = DBUS_BLUETOOTH_SIGNAL;
 
     DBusMessage          *msg;
-    dbus_bool_t           bluetooth;
     int                   success;
 
     if ((msg = dbus_message_new_signal(path, iface, signal)) == NULL) {
@@ -648,9 +647,8 @@ static void dbusif_bluetooth_override_changed(int state)
         return;
     }
 
-    bluetooth = state ? TRUE : FALSE;
     success = dbus_message_append_args(msg,
-                                       DBUS_TYPE_BOOLEAN, &bluetooth,
+                                       DBUS_TYPE_INT32, &state,
                                        DBUS_TYPE_INVALID);
     if (!success) {
         OHM_ERROR("%s(): failed to build message", __FUNCTION__);
@@ -662,7 +660,7 @@ static void dbusif_bluetooth_override_changed(int state)
     if (!success)
         OHM_ERROR("%s(): failed to send message", __FUNCTION__);
     else {
-        OHM_DEBUG(DBG_DBUS, "bluetooth_override=%s", bluetooth?"True":"False");
+        OHM_DEBUG(DBG_DBUS, "bluetooth_override=%i", state);
         txid++;
     }
 
