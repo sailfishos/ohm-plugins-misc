@@ -154,27 +154,19 @@ static int dresif_bluetooth_override_request(int bluetooth_override,
     (void) transid;
 #endif
 
-    vars[i=0] = "bluetooth_override_state";
-    vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = bluetooth_override ? "earpiece" : "default";
+    if (bluetooth_override) {
 
-#if 0
-    if (transid > 0) {
-        snprintf(buf, sizeof(buf), "%d", transid);
-
-        vars[++i] = "completion_callback";
+        vars[i=0] = "bluetooth_override_state";
         vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = "playback.completion_cb";
+        vars[++i] = "earpiece";
+        vars[++i] = NULL;
 
-        vars[++i] = "transaction_id";
-        vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = buf;
+        status = resolve("bluetooth_override_request", vars);
     }
-#endif
-
-    vars[++i] = NULL;
-
-    status = resolve("bluetooth_override_request", vars);
+    else {
+        /* reset the BT override to either "disconnected" or "default" */
+        status = resolve("reset_bluetooth_override", NULL);
+    }
 
     if (status < 0)
         OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", status,

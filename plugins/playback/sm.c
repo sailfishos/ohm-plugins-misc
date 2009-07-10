@@ -1393,7 +1393,15 @@ static void bluetooth_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
         return;
     }
 
-    state = strcmp(bluetooth, "default") ? 1 : 0;
+    if (strcmp(bluetooth, "disconnected") == 0) {
+        state = -1;
+    }
+    else if (strcmp(bluetooth, "default") == 0) {
+        state = 0;
+    }
+    else {
+        state = 1;
+    }
 
     dbusif_signal_bluetooth_override(state);
 }
