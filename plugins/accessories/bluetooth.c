@@ -454,15 +454,18 @@ static gboolean bt_any_to_connected(const gchar *type,
     OHM_DEBUG(DBG_BT, "running dres with type %s and setting device on", type);
     dres_accessory_request(type, -1, 1);
 
-#if 0
-    /* this might not be neede, since the BT status is reseted when HSP
+    /* this might not be needed, since the BT status is reseted when HSP
      * goes to "playing" state */
     if (strcmp(type, BT_TYPE_HSP) == 0) {
         /* HSP device goes to connected state. We need to see that the
          * bluetooth override state is reseted. */
+
+        /* This isn't very clear, but this function is not run when
+         * BTHSP goes from "playing" to "connected", since there is a
+         * separate function for that. Because of this we can safely set
+         * the BT override to "default" state here. */
         run_policy_hook("bthsp_connect");
     }
-#endif
 
     return TRUE;
 }
