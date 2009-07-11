@@ -130,24 +130,29 @@ static void define_hfp_status(OhmFact *fact, gboolean hfp)
 static gboolean disconnect_device(OhmFact *fact, const gchar *type)
 {
     GValue *gval;
+    
+    OHM_DEBUG(DBG_BT, "Disconnecting fact %p profile %s", fact, type);
 
-    if (!fact)
+    if (!fact) {
         return FALSE;
+    }
 
     gval = ohm_fact_get(fact, type);
-
+    
     if (gval &&
             G_VALUE_TYPE(gval) == G_TYPE_STRING) {
 
-        const gchar *state = g_value_get_string(gval);
+        OHM_DEBUG(DBG_BT, "%s profile to be disconnected", type);
+        dres_accessory_request(type, -1, 0);
 
-        if (strcmp(state, BT_STATE_CONNECTED_S) == 0 ||
-                strcmp(state, BT_STATE_PLAYING_S) == 0) {
-            OHM_DEBUG(DBG_BT, "%s profile to be disconnected", type);
-            dres_accessory_request(type, -1, 0);
-            return TRUE;
+        if (strcmp(type, BT_TYPE_HSP) == 0) {
+            /* HSP device goes to disconnected state. We need to forget the
+             * bluetooth override state. */
+            run_policy_hook("bthsp_disconnect");
         }
+        return TRUE;
     }
+    OHM_DEBUG(DBG_BT, "Could not get type information from the fact");
 
     return FALSE;
 }
@@ -405,7 +410,7 @@ static gboolean bt_any_to_disconnected(const gchar *type,
     GValue *gval = NULL;
 
     OHM_DEBUG(DBG_BT, "running dres with type %s and setting device off", type);
-
+    
     if (!bt_connected)
         return FALSE;
 
@@ -420,10 +425,6 @@ static gboolean bt_any_to_disconnected(const gchar *type,
         gval = ohm_fact_get(bt_connected, BT_TYPE_HSP);
     }
     else {
-        /* HSP device goes to disconnected state. We need to forget the
-         * bluetooth override state. */
-        run_policy_hook("bthsp_start_audio");
-
         gval = ohm_fact_get(bt_connected, BT_TYPE_A2DP);
     }
 
@@ -435,7 +436,8 @@ static gboolean bt_any_to_disconnected(const gchar *type,
         bt_connected = NULL;
     }
 
-    dres_accessory_request(type, -1, 0);
+    /* this is now ran in disconnect_device */
+    /* dres_accessory_request(type, -1, 0); */
 
     return TRUE;
 }
@@ -451,6 +453,19 @@ static gboolean bt_any_to_connected(const gchar *type,
 
     OHM_DEBUG(DBG_BT, "running dres with type %s and setting device on", type);
     dres_accessory_request(type, -1, 1);
+
+    /* this might not be needed, since the BT status is reseted when HSP
+     * goes to "playing" state */
+    if (strcmp(type, BT_TYPE_HSP) == 0) {
+        /* HSP device goes to connected state. We need to see that the
+         * bluetooth override state is reseted. */
+
+        /* This isn't very clear, but this function is not run when
+         * BTHSP goes from "playing" to "connected", since there is a
+         * separate function for that. Because of this we can safely set
+         * the BT override to "default" state here. */
+        run_policy_hook("bthsp_connect");
+    }
 
     return TRUE;
 }
