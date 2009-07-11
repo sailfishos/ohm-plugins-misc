@@ -409,8 +409,8 @@ static void dbusif_reply_with_error(DBusMessage *msg,
     serial = dbus_message_get_serial(msg);
     reply  = dbus_message_new_error(msg, error, description);
 
-    OHM_DEBUG(DBG_DBUS, "replying to playback method with error '%s'",
-              description);
+    OHM_DEBUG(DBG_DBUS, "replying to playback method %s with error '%s'",
+              dbus_message_get_member(msg), description);
 
     dbus_connection_send(sess_conn, reply, &serial);
     dbus_message_unref(reply);
