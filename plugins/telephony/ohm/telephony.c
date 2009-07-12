@@ -1150,15 +1150,31 @@ call_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    if (state & TP_CALLSTATE_RINGING)
+        OHM_INFO("Call %s is remotely ringing.", short_path(event.call->path));
+    if (state & TP_CALLSTATE_QUEUED)
+        OHM_INFO("Call %s is remotely queued.", short_path(event.call->path));
+    if (state & TP_CALLSTATE_HELD)
+        OHM_INFO("Call %s is remotely held.", short_path(event.call->path));
+    if (state & TP_CALLSTATE_FORWARDED)
+        OHM_INFO("Call %s is forwarded.", short_path(event.call->path));
+
+#if 0
+    /*
+     * These are remote events and we do not generate events for them ATM.
+     */
+    
     if (!(state & TP_CALLSTATE_HELD) && event.call->state == STATE_ON_HOLD)
         event.type = EVENT_CALL_ACTIVATED;
     else if ((state & TP_CALLSTATE_HELD) && event.call->state == STATE_ACTIVE)
         event.type = EVENT_CALL_HELD;
     else
         return DBUS_HANDLER_RESULT_HANDLED;
-             
+    
     event_handler((event_t *)&event);
-    return DBUS_HANDLER_RESULT_HANDLED;    
+#endif
+
+    return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 
