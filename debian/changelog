@@ -1,3 +1,16 @@
+ohm-plugins-misc (0.6.49) unstable; urgency=low
+
+  [Krisztian Litkey]
+  * Don't treat remote hold as local one.
+  * Memory leak fix: don't leak DBUS error replies.
+  * Added support for querying mute, privacy-, and bluetooth override.
+  * Separated telephony offhold hook from active (remote accept) hook.
+
+  [Ismo Puustinen]
+  * Set BT override state to "default" when BT headset is "connected".
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 13 Jul 2009 01:29:07 +0300
+
 ohm-plugins-misc (0.6.48) unstable; urgency=low
 
   * Added support for three-state BT override.
