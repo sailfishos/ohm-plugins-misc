@@ -11,7 +11,6 @@
 #include <mission-control/mcd-plugin.h>
 #include <mission-control/mcd-dispatcher.h>
 #include <mission-control/mcd-dispatcher-context.h>
-#include <gconf/gconf-client.h>
 
 #include "mcd-policy-filter-plugin.h"
 
