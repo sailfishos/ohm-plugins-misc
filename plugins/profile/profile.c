@@ -357,7 +357,7 @@ static int profile_load_state(void)
 
 
 static void profile_value_change(const char *profile, const char *key,
-        const char *val, const char *type)
+                                 const char *val, const char *type, void *dummy)
 {
 
     /* A value has changed in the currently active value */
@@ -370,6 +370,7 @@ static void profile_value_change(const char *profile, const char *key,
     
     (void) profile;
     (void) type;
+    (void) dummy;
 
     OHM_DEBUG(DBG_PROFILE, "profile value change: '%s', '%s'\n", key, val);
 
@@ -406,11 +407,13 @@ static void profile_value_change(const char *profile, const char *key,
     return;
 }
 
-static void profile_name_change(const char *profile)
+static void profile_name_change(const char *profile, void *dummy)
 {
     /* Active profile has changed */
 
     /* get values for the new profile */
+
+    (void)dummy;
 
     profileval_t *values = NULL;
 
@@ -436,11 +439,11 @@ static gboolean subscribe_to_service()
 {
     /* subscribe to the profile change notification */
     
-    profile_track_set_profile_cb(profile_name_change);
+    profile_track_set_profile_cb_with_data(profile_name_change, NULL);
 
     /* subscribe to the value change in profile notification */
     
-    profile_track_set_active_cb(profile_value_change);
+    profile_track_set_active_cb_with_data(profile_value_change, NULL);
 
     if (profile_tracker_init() < 0) {
         return FALSE;
