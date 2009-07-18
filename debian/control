@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: Krisztian Litkey <krisztian.litkey@nokia.com>
 Standards-Version: 3.7.2
-Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev, libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 0.0.7), libtrace-dev, libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev, libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 0.0.7), libtrace-dev, libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libsp-timestamp-dev
 
 Package: ohm-plugins-misc
 Architecture: any
@@ -23,6 +23,13 @@ Description: OHM debug console plugin.
  This package contains a very simple interactive debug console for OHM.
  .
  This package contains a very simple interactive debug console for OHM.
+
+Package: ohm-plugin-timestamp
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0, libsp-timestamp1
+XB-GIT-ID: ${Git-Id}
+Description: OHM plugin for sp-timestamp.
+ This package contains a trivial plugin that simply wraps sp-timestamp.
 
 Package: ohm-plugins-misc-dbg
 Priority: extra

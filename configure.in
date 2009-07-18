@@ -163,6 +163,17 @@ else
   AC_MSG_NOTICE([Telephony plugins WILL NOT be built.])
 fi
 
+# Check for sp-timestamps.
+PKG_CHECK_MODULES(SP_TIMESTAMP, sp_timestamp,
+                              [has_sp_timestamp=true],
+                              [has_stp_timestamp=false])
+AM_CONDITIONAL(HAVE_SP_TIMESTAMP, test x$has_sp_timestamp = xtrue)
+if test x$has_sp_timestamp = xtrue;
+then
+  AC_MSG_NOTICE([SP timestamp plugin WILL BE built.])
+else
+  AC_MSG_NOTICE([SP timestamp plugin WILL NOT BE be built.])
+fi
 
 AC_CONFIG_FILES([Makefile
                  plugins/Makefile
@@ -183,6 +194,7 @@ AC_CONFIG_FILES([Makefile
                  plugins/videoep/Makefile
                  plugins/dvfs/Makefile
 		 plugins/sensors/Makefile
+		 plugins/timestamp/Makefile
 		 ohm-session-agent/Makefile
  		 doc/Makefile])
 AC_OUTPUT

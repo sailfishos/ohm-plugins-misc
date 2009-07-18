@@ -42,5 +42,7 @@ DEB_INSTALL_DOCS_ohm-plugins-misc := --no-act
 DEB_INSTALL_CHANGELOGS_ohm-plugins-misc := --no-act
 DEB_INSTALL_DOCS_ohm-plugin-console := --no-act
 DEB_INSTALL_CHANGELOGS_ohm-plugin-console := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-timestamp := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-timestamp := --no-act
 
 
