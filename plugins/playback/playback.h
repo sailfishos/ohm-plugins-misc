@@ -23,6 +23,12 @@
 static void plugin_init(OhmPlugin *);
 static void plugin_destroy(OhmPlugin *);
 
+/* (sp_)timestamping macros */
+#define TIMESTAMP_ADD(step) do {                \
+        if (timestamp_add)                      \
+            timestamp_add(step);                \
+    } while (0)
+
 #endif /* __OHM_PLAYBACK_H__ */
 
 /* 

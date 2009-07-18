@@ -48,6 +48,8 @@ static int dresif_playback_state_request(client_t *cl, char *state,int transid)
     int   i;
     int   status;
 
+    TIMESTAMP_ADD("playback state request");
+
     vars[i=0] = "playback_dbusid";
     vars[++i] = DRESIF_VARTYPE('s');
     vars[++i] = DRESIF_VARVALUE(cl->dbusid ? cl->dbusid : "");
@@ -82,7 +84,9 @@ static int dresif_playback_state_request(client_t *cl, char *state,int transid)
 
     vars[++i] = NULL;
 
+    TIMESTAMP_ADD("playback state request -- request resolving");
     status = resolve("playback_request", vars);
+    TIMESTAMP_ADD("playback state request -- resolved");
     
     if (status < 0)
         OHM_DEBUG(DBG_DRES, "resolve(playback_request) failed: (%d) %s",

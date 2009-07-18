@@ -909,6 +909,8 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
     int          update_str;
     int          success;
 
+    TIMESTAMP_ADD("process playback request");
+
     if ((req = pbreq_get_first(cl)) == NULL || req->waiting)
         success = FALSE;
     else {
@@ -1013,6 +1015,8 @@ static int process_pbreq(sm_evdata_t *evdata, void *usrdata)
             break;
         }
     }
+
+    TIMESTAMP_ADD("playback request processed");
     return success;
 }
 

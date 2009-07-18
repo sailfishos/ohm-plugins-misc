@@ -14,6 +14,12 @@
 #include "telephony.h"
 #include "list.h"
 
+/* (sp_)timestamping macros */
+#define TIMESTAMP_ADD(step) do {                \
+        if (timestamp_add)                      \
+            timestamp_add(step);                \
+    } while (0)
+
 #define PLUGIN_NAME   "telephony"
 #define IS_CELLULAR(p) (!strncmp(p, TP_RING, sizeof(TP_RING) - 1))
 #define IS_CONF_PARENT(call) ((call) != NULL && (call)->parent == (call))
@@ -29,6 +35,8 @@ OHM_DEBUG_PLUGIN(telephony,
                  OHM_DEBUG_FLAG("call", "call events", &DBG_CALL));
 
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
+OHM_IMPORTABLE(void, timestamp_add, (const char *step));
+
 
 
 /*
@@ -1614,6 +1622,8 @@ event_print(event_t *event)
     const char *name = event_name(event->any.type);
     const char *path = event->any.path ? event->any.path : "<UNKNOWN>";
 
+    TIMESTAMP_ADD(name);
+
     OHM_INFO("event %s for %s", name, short_path(path));
     switch (event->any.type) {
     case EVENT_CALL_REQUEST:
@@ -1782,8 +1792,10 @@ event_handler(event_t *event)
         event->type != EVENT_EMERGENCY_ON &&
         event->type != EVENT_EMERGENCY_OFF)
         return;
-    
+
+    TIMESTAMP_ADD("telephony: resolve policy actions");
     status = policy_actions(event);
+    TIMESTAMP_ADD("telephony: resolved policy actions");
 
     if (status <= 0) {
         OHM_ERROR("Failed to get policy actions for event %s of call %s.",
@@ -1976,6 +1988,7 @@ call_init(void)
         exit(1);
     }
 
+    TIMESTAMP_ADD("telephony: call_init");
 }
 
 
@@ -2035,6 +2048,8 @@ call_register(const char *path, const char *name, const char *peer,
               unsigned int audio, unsigned int video)
 {
     call_t *call;
+
+    TIMESTAMP_ADD("telephony: call_register");
 
     if (path == NULL)
         return NULL;
@@ -2228,6 +2243,7 @@ tp_disconnect(call_t *call, const char *action)
         msg = dbus_message_new_method_call(name, path, TP_CHANNEL, CLOSE);
     
     if (msg != NULL) {
+        TIMESTAMP_ADD("telephony: request telepathy to disconnect");
         status = bus_send(msg, NULL);
         dbus_message_unref(msg);
     }
@@ -2293,6 +2309,8 @@ static int
 call_disconnect(call_t *call, const char *action, event_t *event)
 {
     OHM_INFO("DISCONNECT (%s) %s.", action, short_path(call->path));
+
+    TIMESTAMP_ADD("telephony: call_disconnect");
 
     if (strcmp(action, "disconnected"))
         if (tp_disconnect(call, action) != 0)
@@ -2387,6 +2405,8 @@ tp_hold(call_t *call, int status)
     path   = call->path;
     iface  = TP_CHANNEL_HOLD;
     method = REQUEST_HOLD;
+
+    TIMESTAMP_ADD("telephony: request telepathy to hold the channel");
 
     if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
         if (dbus_message_append_args(msg, DBUS_TYPE_BOOLEAN, &held,
@@ -2726,6 +2746,7 @@ policy_actions(event_t *event)
 {
     int  callid, callstate;
     char id[16], state[32], *vars[2 * 2 + 1];
+    int  retval;
 
     if (event->type == EVENT_EMERGENCY_ON || event->type == EVENT_EMERGENCY_OFF)
         return TRUE;
@@ -2745,7 +2766,11 @@ policy_actions(event_t *event)
     OHM_INFO("Resolving telephony_request with &%s=%s, &%s=%s.",
              vars[0], vars[1], vars[2], vars[3]);
 
-    return resolve("telephony_request", vars);
+    TIMESTAMP_ADD("telephony: resolve request");
+    retval = resolve("telephony_request", vars);
+    TIMESTAMP_ADD("telephony: request resolved");
+
+    return retval;
 }
 
 
@@ -2833,8 +2858,15 @@ policy_enforce(event_t *event)
 int
 policy_audio_update(void)
 {
+    int retval;
+    
     OHM_INFO("Resolving telephony_audio_update.");
-    return resolve("telephony_audio_update", NULL);
+
+    TIMESTAMP_ADD("telephony: resolve audio update");
+    retval = resolve("telephony_audio_update", NULL);
+    TIMESTAMP_ADD("telephony: resolved audio update");
+
+    return retval;
 }
 
 
@@ -2844,8 +2876,15 @@ policy_audio_update(void)
 int
 policy_run_hook(char *hook_name)
 {
+    int retval;
+    
     OHM_INFO("Running resolver hook %s.", hook_name);
-    return resolve(hook_name, NULL);
+    
+    TIMESTAMP_ADD("telephony: resolve hook");
+    retval = resolve(hook_name, NULL);
+    TIMESTAMP_ADD("telephony: resolved hook");
+
+    return retval;
 }
 
 
@@ -3044,8 +3083,20 @@ policy_call_delete(call_t *call)
 
 
 /*****************************************************************************
- *                    *** fake ringtone player interface ***                 *
+ *                            *** OHM plugin glue ***                        *
  *****************************************************************************/
+
+static void timestamp_init(void)
+{
+    char *signature;
+  
+    signature = (char *)timestamp_add_SIGNATURE;
+  
+    if (ohm_module_find_method("timestamp", &signature,(void *)&timestamp_add))
+        OHM_INFO("telephony: timestamping is enabled.");
+    else
+        OHM_INFO("telephony: timestamping is disabled.");
+}
 
 
 /********************
@@ -3066,6 +3117,7 @@ plugin_init(OhmPlugin *plugin)
     
     call_init();
     policy_init();
+    timestamp_init();
 
     return;
 }

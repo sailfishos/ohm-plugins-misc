@@ -34,6 +34,20 @@ OHM_DEBUG_PLUGIN(playback,
 );
 
 
+OHM_IMPORTABLE(void, timestamp_add, (const char *step));
+
+static void timestamp_init(void)
+{
+    char *signature;
+  
+    signature = (char *)timestamp_add_SIGNATURE;
+  
+    if (ohm_module_find_method("timestamp", &signature,(void *)&timestamp_add))
+        OHM_INFO("playback: timestamping is enabled.");
+    else
+        OHM_INFO("playback: timestamping is disabled.");
+}
+
 static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(playback);
@@ -45,6 +59,8 @@ static void plugin_init(OhmPlugin *plugin)
     dbusif_init(plugin);
     dresif_init(plugin);
     fsif_init(plugin);
+
+    timestamp_init();
 }
 
 static void plugin_destroy(OhmPlugin *plugin)
