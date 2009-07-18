@@ -1,3 +1,11 @@
+ohm-plugins-misc (0.6.50) unstable; urgency=low
+
+  * Added timestamping points from timestamp to development branch (Fixes: NB#128728).
+  * Added trivial timestamp plugin (just wraps sp_timestamp).
+  * Replaced calls to deprecated libprofile functions with the preferred ones.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Sat, 18 Jul 2009 19:34:19 +0300
+
 ohm-plugins-misc (0.6.49) unstable; urgency=low
 
   [Krisztian Litkey]
