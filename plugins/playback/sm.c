@@ -754,9 +754,25 @@ static int save_property(sm_evdata_t *evdata, void *usrdata)
         }
 
 #ifdef __FLASH_HACK__
-        if ((cl->flags & 1) && !strcmp(cl->group, "flash")) {
-            cl->flags &= ~1;
-            cl->flags |= 16;
+        if (cl->flags & 1) {
+            if (!strcmp(cl->group,"flash")) {
+                /*
+                 * for flash players audio -> flash
+                 * to avoid preemption of other media players
+                 * ie. to be able to see flash while another player
+                 * plays music
+                 */
+                cl->flags &= ~1;
+                cl->flags |= 16;
+            }
+            else if (!strcmp(cl->group,"ringtone")) {
+                /*
+                 * for ringtone beside audio we also set flash
+                 * in order tha ringtone playback request might preempt
+                 * flash players
+                 */
+                cl->flags |= 16;
+            }
         }
 #endif
 
