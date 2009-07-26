@@ -195,6 +195,7 @@ AC_CONFIG_FILES([Makefile
                  plugins/dvfs/Makefile
 		 plugins/sensors/Makefile
 		 plugins/timestamp/Makefile
+		 plugins/delay/Makefile
 		 ohm-session-agent/Makefile
  		 doc/Makefile])
 AC_OUTPUT

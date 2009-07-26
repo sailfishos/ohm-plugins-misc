@@ -123,6 +123,30 @@ static int fsif_delete_factstore_entry(char *name, fsif_field_t *selist)
     return success;
 }
 
+static int fsif_destroy_factstore_entry(fsif_entry_t *fact)
+{
+    char  *dump;
+    int    success;
+
+    if (fact == NULL)
+        success = FALSE;
+    else {
+        dump = ohm_structure_to_string(OHM_STRUCTURE(fact));
+
+        ohm_fact_store_remove(fs, fact);
+
+        g_object_unref(fact);
+
+        OHM_DEBUG(DBG_FS, "Factstore entry deleted: %s", dump);
+
+        g_free(dump);
+        
+        success = TRUE;
+    }
+ 
+    return success;
+}
+
 static int fsif_update_factstore_entry(char *name, fsif_field_t *selist,
                                        fsif_field_t *fldlist)
 {
@@ -155,11 +179,35 @@ static int fsif_update_factstore_entry(char *name, fsif_field_t *selist,
 }
 
 
+static fsif_entry_t *fsif_get_entry(char *name, fsif_field_t *selist)
+{
+    OhmFact  *fact;
+    char     *selstr;
+    char      selb[256];
+    char     *result;
+
+    selstr = print_selector(selist, selb, sizeof(selb));
+    fact   = find_entry(name, selist);
+    result = (fact != NULL) ? "" : "not ";
+
+    OHM_DEBUG(DBG_FS, "Factsore lookup %s%s %ssucceeded", name,selstr, result);
+
+    return fact;
+}
+
 static void fsif_get_field_by_entry(fsif_entry_t *entry, fsif_fldtype_t type,
                                     char *name, void *vptr)
 {
     if (entry != NULL && name != NULL && vptr != NULL) {
         get_field(entry, type, name, vptr);
+    }
+}
+
+static void fsif_set_field_by_entry(fsif_entry_t *entry, fsif_fldtype_t type,
+                                    char *name, void *vptr)
+{
+    if (entry != NULL && name != NULL && vptr != NULL) {
+        set_field(entry, type, name, vptr);
     }
 }
 
@@ -642,12 +690,13 @@ static void inserted_cb(void *data, OhmFact *fact)
     char          *name;
     watch_fact_t  *wfact;
     watch_entry_t *wentry;
-    
+
     if (fact == NULL) {
         OHM_ERROR("%s() called with null fact pointer", __FUNCTION__);
         return;
     }
-        
+    
+
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
     if ((wfact = find_watch(name, watch_insert)) != NULL) {
@@ -669,12 +718,12 @@ static void removed_cb(void *data, OhmFact *fact)
     char          *name;
     watch_fact_t  *wfact;
     watch_entry_t *wentry;
-    
+
     if (fact == NULL) {
         OHM_ERROR("%s() called with null fact pointer", __FUNCTION__);
         return;
     }
-        
+    
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
     if ((wfact = find_watch(name, watch_remove)) != NULL) {
@@ -700,7 +749,7 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
     fsif_field_t   fld;
     char           valb[256];
     char          *valstr;
-    
+
     if (fact == NULL) {
         OHM_ERROR("%s() called with null fact pointer", __FUNCTION__);
         return;
