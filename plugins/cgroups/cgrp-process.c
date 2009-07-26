@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 
 #include <linux/socket.h>
@@ -9,6 +13,8 @@
 #include <linux/cn_proc.h>
 
 #include "cgrp-plugin.h"
+
+#undef __USE_NON_BLOCKING__
 
 #ifndef SOL_NETLINK
 #  define SOL_NETLINK 270
@@ -23,7 +29,7 @@ static pid_t mypid = 0;
 static GIOChannel *gioc = NULL;
 static guint       gsrc = 0;
 
-static int  proc_subscribe  (void);
+static int  proc_subscribe  (cgrp_context_t *ctx);
 static int  proc_unsubscribe(void);
 static void proc_dump_event (struct proc_event *event);
 static int  proc_request    (enum proc_cn_mcast_op req);
@@ -40,16 +46,14 @@ static gboolean event_cb(GIOChannel *chnl, GIOCondition mask, gpointer data);
  * proc_init
  ********************/
 int
-proc_init(OhmPlugin *plugin)
+proc_init(cgrp_context_t *ctx)
 {
-    (void)plugin;
+    (void)ctx;
     
     mypid = getpid();
     
-    if (!netlink_create() || !proc_subscribe()) {
-        proc_exit();
+    if (!netlink_create() || !proc_subscribe(ctx))
         return FALSE;
-    }
     
     return TRUE;
 }
@@ -59,8 +63,10 @@ proc_init(OhmPlugin *plugin)
  * proc_exit
  ********************/
 void
-proc_exit(void)
+proc_exit(cgrp_context_t *ctx)
 {
+    (void)ctx;
+
     proc_unsubscribe();
     netlink_close();
 
@@ -72,7 +78,7 @@ proc_exit(void)
  * proc_subscribe
  ********************/
 static int
-proc_subscribe(void)
+proc_subscribe(cgrp_context_t *ctx)
 {
     GIOCondition mask;
     
@@ -83,7 +89,15 @@ proc_subscribe(void)
         return FALSE;
     
     mask = G_IO_IN | G_IO_HUP;
-    gsrc = g_io_add_watch(gioc, mask, event_cb, NULL);
+    gsrc = g_io_add_watch(gioc, mask, event_cb, ctx);
+
+#ifdef __USE_NON_BLOCKING__
+    if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
+        OHM_ERROR("cgrp: failed to set O_NONBLOCK (%d: %s)", errno,
+                  strerror(errno));
+        exit(1);
+    }
+#endif
     
     return gsrc != 0;
 }
@@ -182,7 +196,8 @@ proc_recv(unsigned char *buf, size_t bufsize)
     size = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
     
     if ((size = recv(sock, nlh, size, 0)) < 0 || !NLMSG_OK(nlh, size)) {
-        OHM_ERROR("cgrp: failed to receive process event");
+        if (errno != EAGAIN)
+            OHM_ERROR("cgrp: failed to receive process event");
         return NULL;
     }
 
@@ -248,19 +263,53 @@ proc_dump_event(struct proc_event *event)
 static gboolean
 event_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 {
+    cgrp_context_t    *ctx = (cgrp_context_t *)data;
     unsigned char      buf[EVENT_BUF_SIZE];
     struct proc_event *event;
+#ifdef __USE_NON_BLOCKING__
+    int                more;
+#endif
 
     (void)chnl;
     (void)data;
 
     if (mask & G_IO_IN) {
-        if ((event = proc_recv(buf, sizeof(buf))) != NULL) {
-            proc_dump_event(event);
+#ifdef __USE_NON_BLOCKING__
+        more = TRUE;
+        while (more) {
+#endif
+            if ((event = proc_recv(buf, sizeof(buf))) != NULL) {
+                /*proc_dump_event(event);*/
+                switch (event->what) {
+                case PROC_EVENT_FORK:
+                    classify_process(ctx, event->event_data.fork.child_pid);
+                    break;
+                case PROC_EVENT_EXEC:
+                    classify_process(ctx, event->event_data.exec.process_pid);
+                    break;
+#ifdef __USE_NON_BLOCKING__
+                case PROC_EVENT_NONE:
+                    printf("*** event NONE ***\n");
+                    more = FALSE;
+                    break;
+#endif
+                default:
+                    break;
+                }
+            }
+            else {
+#ifdef __USE_NON_BLOCKING__
+                if (errno == EAGAIN) {
+                    errno = 0;
+                    more = FALSE;
+                }
+                else
+#endif
+                    OHM_WARNING("cgrp: failed to read process event");
+            }
+#ifdef __USE_NON_BLOCKING__
         }
-        else {
-            OHM_WARNING("cgrp: failed to read process event");
-        }
+#endif
     }
     
     if (mask & G_IO_HUP) {
@@ -299,6 +348,7 @@ netlink_create(void)
         OHM_ERROR("cgrp: failed to set netlink membership");
         goto fail;
     }
+    
 
     return TRUE;
 
@@ -324,6 +374,206 @@ netlink_close(void)
 }
 
 
+/********************
+ * process_get_binary
+ ********************/
+const char *
+process_get_binary(cgrp_process_t *process)
+{
+    char    exe[PATH_MAX];
+    ssize_t len;
+
+    if (process->binary && process->binary[0])
+        return process->binary;
+    
+    sprintf(exe, "/proc/%u/exe", process->pid);
+    
+    if ((len = readlink(exe, exe, sizeof(exe) - 1)) < 0)
+        return NULL;
+    exe[len] = '\0';
+
+    /*
+     * Notes: if the buffer is not NULL, we use it assuming it points to a
+     *        buffer of at least PATH_MAX bytes. This is used during process
+     *        discovery to avoid having to allocate a dynamic buffer for
+     *        processes that are ignored.
+     */
+    if (process->binary != NULL)
+        strcpy(process->binary, exe);
+    else
+        if ((process->binary = STRDUP(exe)) == NULL)
+            return NULL;
+    
+    return process->binary;
+}
+
+
+/********************
+ * process_get_cmdline
+ ********************/
+const char *
+process_get_cmdline(cgrp_proc_attr_t *attr)
+{
+    if (attr->mask & CGRP_PROC_CMDLINE)
+        return attr->cmdline;
+
+    if (process_get_argv(attr) != NULL)
+        return attr->cmdline;
+    else
+        return NULL;
+}
+
+
+/********************
+ * process_get_argv
+ ********************/
+char **
+process_get_argv(cgrp_proc_attr_t *attr)
+{
+    char   buf[CGRP_MAX_CMDLINE], *s, *ap, *cp;
+    char **argvp, *argp, *cmdp;
+    int    narg, fd, size;
+
+    if (attr->mask & CGRP_PROC_CMDLINE)
+        return attr->argv;
+
+    if ((cmdp = attr->cmdline) == NULL || (argvp = attr->argv) == NULL)
+        return NULL;
+
+    sprintf(buf, "/proc/%u/cmdline", attr->pid);
+    if ((fd = open(buf, O_RDONLY)) < 0)
+        return NULL;
+    size = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+
+    if (size <= 0)
+        return NULL;
+
+    if (size >= CGRP_MAX_CMDLINE)
+        size = CGRP_MAX_CMDLINE - 1;
+    buf[size - 1] = '\0';
+
+    argp = argvp[0];
+    narg = 0;
+    
+    attr->mask |= (1ULL << CGRP_PROC_CMDLINE);
+
+    for (s = buf, ap = argp, cp = cmdp; size > 0; s++, size--) {
+        if (*s)
+            *ap++ = *cp++ = *s;
+        else {
+            *ap++ = '\0';
+            *cp++ = ' ';
+            if (narg < CGRP_MAX_ARGS - 1) {
+                attr->mask |= (1ULL << CGRP_PROC_ARG(narg));
+                argvp[narg++] = argp;
+                argp          = ap;
+            }
+        }
+    }
+    
+    attr->argc = narg;
+    return attr->argv;
+}
+
+
+/********************
+ * process_get_euid
+ ********************/
+uid_t
+process_get_euid(cgrp_proc_attr_t *attr)
+{
+    struct stat st;
+    char        dir[PATH_MAX];
+    
+    if (attr->mask & (1ULL << CGRP_PROC_EUID))
+        return attr->euid;
+    
+    snprintf(dir, sizeof(dir), "/proc/%u", attr->pid);
+    if (stat(dir, &st) < 0)
+        return (uid_t)-1;
+    
+    attr->euid = st.st_uid;
+    attr->egid = st.st_gid;
+
+    attr->mask |= (1ULL << CGRP_PROC_EUID) | (1ULL << CGRP_PROC_EGID);
+    return attr->euid;
+}
+
+
+/********************
+ * process_get_egid
+ ********************/
+gid_t
+process_get_egid(cgrp_proc_attr_t *attr)
+{
+    if (attr->mask & (1ULL << CGRP_PROC_EGID))
+        return attr->egid;
+
+    if (process_get_euid(attr) != (uid_t)-1)
+        return attr->egid;
+    else
+        return (gid_t)-1;
+}
+
+
+/********************
+ * process_set_group
+ ********************/
+int
+process_set_group(cgrp_context_t *ctx,
+                  cgrp_process_t *process, cgrp_group_t *group)
+{
+    cgrp_group_t *current = process->group;
+
+    if (current == group)
+        return TRUE;
+    
+    if (current != NULL)
+        list_delete(&process->group_hook);
+    
+    process->group = group;
+    list_append(&process->group_hook, &group->processes);
+    
+    if (group->partition)
+        return partition_process(group->partition, process->pid);
+    else if (current && current->partition)
+        return partition_process(ctx->root, process->pid);
+    
+    return TRUE;
+}
+
+
+/********************
+ * process_clear_group
+ ********************/
+int
+process_clear_group(cgrp_process_t *process)
+{
+    if (process->group != NULL) {
+        list_delete(&process->group_hook);
+        process->group = NULL;
+    }
+
+    return TRUE;
+}
+
+
+/********************
+ * process_ignore
+ ********************/
+int
+process_ignore(cgrp_context_t *ctx, cgrp_process_t *process)
+{
+    pid_t pid  = process->pid;
+
+    process_clear_group(process);
+    proc_hash_unhash(ctx, process);
+    FREE(process->binary);
+    FREE(process);
+
+    return partition_process(ctx->root, pid);
+}
 
 
 /* 
