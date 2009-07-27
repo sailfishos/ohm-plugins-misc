@@ -21,6 +21,11 @@ typedef struct {
     u32_t value;
 } token_uint32_t;
 
+typedef struct {
+    COMMON_TOKEN_FIELDS;
+    s32_t value;
+} token_sint32_t;
+
 #endif /* __PARSER_TYPES_H__ */
 
 

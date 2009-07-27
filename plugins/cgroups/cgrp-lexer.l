@@ -26,6 +26,8 @@ typedef enum {
     PATH,
     STRING,
     ARG,
+    UINT,
+    SINT,
 } lexer_type_t;
 
 
@@ -100,6 +102,12 @@ static int  ringoffs = 0;
         switch(type) {                                               \
         case ARG:                                                    \
 	    yylval.uint32.value = PARSE_INT(u32_t, __value+3);       \
+	    break;                                                   \
+        case UINT:                                                   \
+	    yylval.uint32.value = PARSE_INT(u32_t, __value);         \
+	    break;                                                   \
+        case SINT:                                                   \
+	    yylval.uint32.value = PARSE_INT(s32_t, __value);         \
 	    break;                                                   \
 	default:                                                     \
             lexer_error(lineno, "invalid numeric type %s", #type);   \
@@ -206,10 +214,15 @@ COMMENT_TRAIL   [ \t]*#.*$
 
 KW_GLOBAL       global
 KW_PARTITION    partition
-KW_PATH         path
-KW_GROUP        group
 KW_DESCRIPTION  description
-KW_PROCESS      process
+KW_PATH         path
+KW_RULE         rule
+KW_BINARY       binary
+KW_CMDLINE      commandline
+KW_GROUP        group
+KW_TYPE         type
+KW_KERNEL       kernel
+KW_USER         user
 KW_IGNORE       ignore
 
 HEADER_OPEN     \[
@@ -241,10 +254,14 @@ SINT            [+|-]?[0-9]+
 
 {KW_GLOBAL}        { TOKEN(KW_GLOBAL);      }
 {KW_PARTITION}     { TOKEN(KW_PARTITION);   }
-{KW_PATH}          { TOKEN(KW_PATH);        }
-{KW_GROUP}         { TOKEN(KW_GROUP);       }
 {KW_DESCRIPTION}   { TOKEN(KW_DESCRIPTION); }
-{KW_PROCESS}       { TOKEN(KW_PROCESS);     }
+{KW_PATH}          { TOKEN(KW_PATH);        }
+{KW_RULE}          { TOKEN(KW_RULE);        }
+{KW_BINARY}        { TOKEN(KW_BINARY);      }
+{KW_CMDLINE}       { TOKEN(KW_CMDLINE);     }
+{KW_TYPE}          { TOKEN(KW_TYPE);        }
+{KW_KERNEL}        { TOKEN(KW_KERNEL);      }
+{KW_USER}          { TOKEN(KW_USER);        }
 {KW_IGNORE}        { TOKEN(KW_IGNORE);      }
 
 {HEADER_OPEN}      { TOKEN(HEADER_OPEN);    }
@@ -263,5 +280,7 @@ SINT            [+|-]?[0-9]+
 {IDENT}            { TOKEN_STR(IDENT);      }
 {PATH}             { TOKEN_STR(PATH);       }
 {STRING}           { TOKEN_STR(STRING);     }
+{UINT}             { TOKEN_NUM(UINT);       }
+{SINT}             { TOKEN_NUM(SINT);       }
 
 <<EOF>>            { yyterminate();         }

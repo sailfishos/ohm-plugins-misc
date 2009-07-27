@@ -56,10 +56,15 @@ void yyerror(cgrp_context_t *, const char *);
 
 %token TOKEN_KW_GLOBAL
 %token TOKEN_KW_PARTITION
-%token TOKEN_KW_PATH
-%token TOKEN_KW_GROUP
 %token TOKEN_KW_DESCRIPTION
-%token TOKEN_KW_PROCESS
+%token TOKEN_KW_PATH
+%token TOKEN_KW_RULE
+%token TOKEN_KW_BINARY
+%token TOKEN_KW_CMDLINE
+%token TOKEN_KW_GROUP
+%token TOKEN_KW_TYPE
+%token TOKEN_KW_KERNEL
+%token TOKEN_KW_USER
 %token TOKEN_KW_IGNORE
 
 %token TOKEN_ASTERISK "*"
@@ -80,6 +85,8 @@ void yyerror(cgrp_context_t *, const char *);
 %token <string> TOKEN_IDENT
 %token <string> TOKEN_PATH
 %token <string> TOKEN_STRING
+%token <uint32> TOKEN_UINT
+%token <sint32> TOKEN_SINT
 
 
 %%
@@ -152,7 +159,7 @@ procdefs: procdef
     | procdefs procdef
     ;
 
-procdef: "[" TOKEN_KW_PROCESS procdef_name "]"
+procdef: "[" TOKEN_KW_RULE procdef_name "]"
          procdef_statements {
          cgrp_procdef_t procdef;
 
@@ -220,7 +227,12 @@ prop_expr: prop "==" value { $$ = prop_expr($1, CGRP_OP_EQUAL, &$3); }
     |      prop "!=" value { $$ = prop_expr($1, CGRP_OP_NOTEQ, &$3); }
     ;
 
-prop: TOKEN_ARG { $$ = CGRP_PROP_ARG($1.value); }
+prop: TOKEN_ARG        { $$ = CGRP_PROP_ARG($1.value); }
+    | TOKEN_KW_BINARY  { $$ = CGRP_PROP_BINARY;        }
+    | TOKEN_KW_CMDLINE { $$ = CGRP_PROP_CMDLINE;       }
+    | TOKEN_KW_TYPE    { $$ = CGRP_PROP_TYPE;          }
+    | TOKEN_KW_USER    { $$ = CGRP_PROP_EUID;          }
+    | TOKEN_KW_GROUP   { $$ = CGRP_PROP_EGID;          }
     ;
 
 value: TOKEN_STRING {

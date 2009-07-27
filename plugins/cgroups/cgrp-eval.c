@@ -1,6 +1,8 @@
 #include "cgrp-plugin.h"
 
 
+static int prop_type_check(cgrp_prop_expr_t *);
+
 /********************
  * bool_expr
  ********************/
@@ -40,8 +42,68 @@ prop_expr(cgrp_prop_type_t prop, cgrp_prop_op_t op, cgrp_value_t *value)
     expr->prop  = prop;
     expr->op    = op;
     expr->value = *value;
+
+    prop_type_check(expr);
     
     return (cgrp_expr_t *)expr;
+}
+
+
+/********************
+ * prop_type_check
+ ********************/
+int
+prop_type_check(cgrp_prop_expr_t *expr)
+{
+    char  *user;
+    uid_t  uid;
+    char  *group;
+    gid_t  gid;
+    
+    switch (expr->prop) {
+    case CGRP_PROP_EUID:
+        if (expr->value.type == CGRP_VALUE_TYPE_UINT32)
+            return TRUE;
+
+        if (expr->value.type == CGRP_VALUE_TYPE_STRING) {
+            user = expr->value.str;
+            if ((uid = cgrp_getuid(user)) == (uid_t)-1) {
+                OHM_ERROR("cgrp: invalid user id '%s'", user);
+                return FALSE;
+            }
+            FREE(user);
+            expr->value.type = CGRP_VALUE_TYPE_UINT32;
+            expr->value.u32  = uid;
+
+            return TRUE;
+        }
+
+        OHM_ERROR("cgrp: invalid user id expression");
+        return FALSE;
+        
+    case CGRP_PROP_EGID:
+        if (expr->value.type == CGRP_VALUE_TYPE_UINT32)
+            return TRUE;
+
+        if (expr->value.type == CGRP_VALUE_TYPE_STRING) {
+            group = expr->value.str;
+            if ((gid = cgrp_getgid(group)) == (gid_t)-1) {
+                OHM_ERROR("cgrp: invalid group id '%s'", group);
+                return FALSE;
+            }
+            FREE(group);
+            expr->value.type = CGRP_VALUE_TYPE_UINT32;
+            expr->value.u32  = gid;
+
+            return TRUE;
+        }
+
+        OHM_ERROR("cgrp: invalid user id expression");
+        return FALSE;
+        
+    default:
+        return TRUE;
+    }
 }
 
 
@@ -271,6 +333,7 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *procattr)
         else
             v1.str = "";
         break;
+
     default:
         OHM_ERROR("cgrp: invalid prop type 0x%x", expr->prop);
         return FALSE;

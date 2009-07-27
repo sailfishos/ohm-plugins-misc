@@ -94,13 +94,15 @@ typedef enum {
     CGRP_VALUE_TYPE_UNKNOWN = 0,
     CGRP_VALUE_TYPE_STRING,
     CGRP_VALUE_TYPE_UINT32,
+    CGRP_VALUE_TYPE_SINT32,
 } cgrp_value_type_t;
 
 typedef struct {
     cgrp_value_type_t type;
     union {
-        const char *str;
-        u32_t       u32;
+        char  *str;
+        u32_t  u32;
+        s32_t  s32;
     };
 } cgrp_value_t;
 
@@ -145,6 +147,11 @@ typedef enum {
     CGRP_PROP_ARG0,
     /* CGRP_PROP_ARG(1) ... CGRP_PROP_ARG(CGRP_MAX_ARGS - 1) */
     CGRP_PROP_ARG_MAX = CGRP_PROP_ARG0 + CGRP_MAX_ARGS - 1,
+    CGRP_PROP_BINARY,
+    CGRP_PROP_CMDLINE,
+    CGRP_PROP_TYPE,
+    CGRP_PROP_EUID,
+    CGRP_PROP_EGID,
 } cgrp_prop_type_t;
 
 #define CGRP_PROP_ARG(n) ((cgrp_prop_type_t)(CGRP_PROP_ARG0 + (n)))
@@ -377,6 +384,10 @@ void config_print(cgrp_context_t *, FILE *);
 /* cgrp-lexer.l */
 int  lexer_init(FILE *);
 void lexer_exit(void);
+
+/* cgrp-utils.h */
+uid_t cgrp_getuid(const char *);
+gid_t cgrp_getgid(const char *);
 
 
 #endif /* __OHM_PLUGIN_DBUS_H__ */
