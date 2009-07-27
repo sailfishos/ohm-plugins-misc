@@ -2,6 +2,7 @@ ohm-plugins-misc (0.6.51) unstable; urgency=low
 
   * kludge in playback plugin to set 'flash' bit for ringtone players
     in order that they can preempt the flash player if needed
+  * 'delay' plugin: support for delayed execution of policy rules
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Fri, 24 Jul 2009 16:50:00 +0300
 

@@ -1,9 +1,11 @@
 #ifndef __OHM_FSIF_H__
 #define __OHM_FSIF_H__
 
+#include <sys/time.h>
+
 /*
  * FIXME:
- * The 'delay' and the 'timer' plugin share the same fsif.[hc]
+ * The 'playback' and the 'delay' plugin share the same fsif.[hc]
  * However, do to the rush, they are currently duplicated (ie. the same
  * code is duplicated in both directory.
  * Before we fix this pls. pay attention to kepp them identical (ie. make
@@ -11,7 +13,6 @@
  *
  */
 
-#include <sys/time.h>
 
 typedef enum {
     fact_watch_unknown = 0,
@@ -56,11 +57,12 @@ typedef void (*fsif_fact_watch_cb_t)(fsif_entry_t *, char *, fsif_fact_watch_e,
 static void fsif_init(OhmPlugin *);
 static int  fsif_add_factstore_entry(char *, fsif_field_t *);
 static int  fsif_delete_factstore_entry(char *, fsif_field_t *);
+static int  fsif_destroy_factstore_entry(fsif_entry_t *);
 static int  fsif_update_factstore_entry(char *, fsif_field_t *,fsif_field_t *);
-static void fsif_get_field_by_entry(fsif_entry_t *, fsif_fldtype_t, char *,
-                                    void *);
-static int fsif_get_field_by_name(const char *name, fsif_fldtype_t type,
-                                  char *field, void *vptr);
+static fsif_entry_t *fsif_get_entry(char *, fsif_field_t *);
+static void fsif_get_field_by_entry(fsif_entry_t *,fsif_fldtype_t,char*,void*);
+static void fsif_set_field_by_entry(fsif_entry_t *,fsif_fldtype_t,char*,void*);
+static int  fsif_get_field_by_name(const char *, fsif_fldtype_t,char *,void *);
 static int  fsif_add_fact_watch(char *, fsif_fact_watch_e,
                                 fsif_fact_watch_cb_t, void *);
 static int  fsif_add_field_watch(char *, fsif_field_t *, char *,
