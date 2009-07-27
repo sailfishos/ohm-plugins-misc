@@ -16,6 +16,6 @@ libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-config.y    \
 			    cgrp-lexer.l
 
-libohm_cgroups_la_LIBADD = @OHM_PLUGIN_LIBS@ @GLIB_LIBS@ @LEXLIB@
+libohm_cgroups_la_LIBADD = @OHM_PLUGIN_LIBS@ @LEXLIB@
 libohm_cgroups_la_LDFLAGS = -module -avoid-version
-libohm_cgroups_la_CFLAGS = @OHM_PLUGIN_CFLAGS@ @GLIB_CFLAGS@
+libohm_cgroups_la_CFLAGS = @OHM_PLUGIN_CFLAGS@

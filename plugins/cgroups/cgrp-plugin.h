@@ -267,6 +267,8 @@ gid_t        process_get_egid   (cgrp_proc_attr_t *);
 int process_set_group(cgrp_context_t *, cgrp_process_t *, cgrp_group_t *);
 int process_clear_group(cgrp_process_t *);
 int process_ignore(cgrp_context_t *, cgrp_process_t *);
+int process_scan_proc(cgrp_context_t *);
+
 
 
 /* cgrp-partition.c */

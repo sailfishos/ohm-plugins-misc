@@ -66,6 +66,8 @@ plugin_init(OhmPlugin *plugin)
 
     config_print(ctx, stdout);
 
+    process_scan_proc(ctx);
+
     OHM_INFO("cgrp: plugin ready...");
 }
 

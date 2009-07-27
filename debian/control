@@ -31,6 +31,14 @@ XB-GIT-ID: ${Git-Id}
 Description: OHM plugin for sp-timestamp.
  This package contains a trivial plugin that simply wraps sp-timestamp.
 
+Package: ohm-plugin-cgroups
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0
+XB-GIT-ID: ${Git-Id}
+Description: OHM plugin for process classification and control.
+ This package contains a process classification and control plugin that uses
+ the control groups mechanism provided by recent (>= 2.6.27) linux kernels.
+
 Package: ohm-plugins-misc-dbg
 Priority: extra
 Section: utils

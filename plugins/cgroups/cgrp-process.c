@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -371,6 +372,39 @@ netlink_close(void)
         close(sock);
         sock = -1;
     }
+}
+
+
+/********************
+ * process_scan_proc
+ ********************/
+int
+process_scan_proc(cgrp_context_t *ctx)
+{
+    struct dirent *de;
+    DIR           *dp;
+    pid_t          pid;
+
+    if ((dp = opendir("/proc")) == NULL) {
+        OHM_ERROR("cgrp: failed to open /proc directory");
+        return FALSE;
+    }
+
+    while ((de = readdir(dp)) != NULL) {
+        if (de->d_name[0] < '1'  || de->d_name[0] > '9' || de->d_type != DT_DIR)
+            continue;
+
+        OHM_DEBUG(DBG_CLASSIFY, "discovering process <%s>", de->d_name);
+
+        printf("discovering process <%s>...\n", de->d_name);
+        
+        pid = (pid_t)strtoul(de->d_name, NULL, 10);
+        classify_process(ctx, pid);
+    }
+
+    closedir(dp);
+
+    return TRUE;
 }
 
 

@@ -14,8 +14,24 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildRequires: ohm-devel, libdres-devel
 Requires: ohm, ohm-plugin-core, libdres
 
+%package -n libep
+Summary: A policy enforcement point convenience library.
+Group: Development/Libraries
+
+%package -n libep-dev
+Summary: Headers et al for libep.
+Group: Development/Libraries
+
 %description
 A miscallaneous set of OHM plugins by Nokia.
+
+%description -n libep
+libep is a convenience library intended to make it easier to develop
+policy enforcement points.
+
+%description -n libep-dev
+This package containt headers, etc. necessary for compiling and linking
+software using libep.
 
 %prep
 %setup -q -n ##__TARDIR__##
@@ -29,13 +45,22 @@ make
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 %makeinstall
 
-
 %clean
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_*.so
+%{_bindir}/ohm-session-agent
+%{_sysconfdir}/ohm/plugins.d/*.ini
+
+%files -n libep
+%{_libdir}/libep.so*
+
+%files -n libep-dev
+%defattr(-,root,root,-)
+%{_includedir}/libep
+%{_libdir}/pkgconfig/libep.pc
 
 %changelog
 * Wed Jul 9 2008 Krisztian Litkey <kli@localhost.localdomain> - 

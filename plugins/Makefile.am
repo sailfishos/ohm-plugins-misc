@@ -7,7 +7,8 @@ SUBDIRS = 	     \
 	console      \
 	gconf        \
 	dvfs         \
-	sensors
+	sensors      \
+	cgroups
 #	dbus
 
 if HAVE_LIBPROFILE
