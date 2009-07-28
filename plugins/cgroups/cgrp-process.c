@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -411,8 +412,8 @@ process_scan_proc(cgrp_context_t *ctx)
 /********************
  * process_get_binary
  ********************/
-const char *
-process_get_binary(cgrp_process_t *process)
+char *
+process_get_binary(cgrp_process_t *process, cgrp_proc_attr_t *attr)
 {
     char    exe[PATH_MAX];
     ssize_t len;
@@ -422,12 +423,14 @@ process_get_binary(cgrp_process_t *process)
     
     sprintf(exe, "/proc/%u/exe", process->pid);
     
-    if ((len = readlink(exe, exe, sizeof(exe) - 1)) < 0)
-        return NULL;
+    if ((len = readlink(exe, exe, sizeof(exe) - 1)) < 0) {
+        process_get_type(attr);
+        return process->binary;
+    }
     exe[len] = '\0';
 
     /*
-     * Notes: if the buffer is not NULL, we use it assuming it points to a
+     * Notes: if the buffer is not NULL, we expect it to point to a valid
      *        buffer of at least PATH_MAX bytes. This is used during process
      *        discovery to avoid having to allocate a dynamic buffer for
      *        processes that are ignored.
@@ -445,7 +448,7 @@ process_get_binary(cgrp_process_t *process)
 /********************
  * process_get_cmdline
  ********************/
-const char *
+char *
 process_get_cmdline(cgrp_proc_attr_t *attr)
 {
     if (attr->mask & CGRP_PROC_CMDLINE)
@@ -548,6 +551,89 @@ process_get_egid(cgrp_proc_attr_t *attr)
         return attr->egid;
     else
         return (gid_t)-1;
+}
+
+
+/********************
+ * process_get_type
+ ********************/
+cgrp_proc_type_t
+process_get_type(cgrp_proc_attr_t *attr)
+{
+#define FIELD_NAME    1
+#define FIELD_PPID    3
+#define FIELD_VMSIZE 22
+#define FIND_FIELD(n) do {                               \
+        for ( ; nfield < (n) && size > 0; p++, size--) { \
+            if (*p == ' ')                               \
+                nfield++;                                \
+        }                                                \
+        if (nfield != (n))                               \
+            return CGRP_PROC_UNKNOWN;                    \
+    } while (0)
+    
+    char  path[64], stat[1024], *p, *e;
+    char *bin, *ppid, *vmsz;
+    int   fd, size, nfield;
+
+    if (attr->mask & (1ULL << CGRP_PROC_TYPE))
+        return attr->type;
+    
+    sprintf(path, "/proc/%u/stat", attr->pid);
+    if ((fd = open(path, O_RDONLY)) < 0)
+        return CGRP_PROC_UNKNOWN;
+    
+    size = read(fd, stat, sizeof(stat) - 1);
+    close(fd);
+    
+    if (size <= 0)
+        return CGRP_PROC_UNKNOWN;
+
+    stat[size] = '\0';
+    p          = stat;
+    nfield     = 0;
+
+    if (attr->binary == NULL || !*attr->binary) {
+        FIND_FIELD(FIELD_NAME);
+        bin = p;
+    }
+    else
+        bin = NULL;
+
+    FIND_FIELD(FIELD_PPID);
+    ppid = p;
+    
+    FIND_FIELD(FIELD_VMSIZE);
+    vmsz = p;
+
+    attr->ppid  = (pid_t)strtoul(ppid, NULL, 10);
+    attr->type  = (*vmsz == '0') ? CGRP_PROC_KERNEL : CGRP_PROC_USER;
+    attr->mask |= (1ULL << CGRP_PROC_PPID) | (1ULL << CGRP_PROC_TYPE);
+    
+    if (bin != NULL && *bin == '(') {
+        bin++;
+        for (e = bin; *e != ')' && *e != ' ' && *e; e++)
+            ;
+        if (*e == ')')
+            e--;
+
+        /*
+         * Notes: if the buffer is not NULL, we expect it to point to a valid
+         *     buffer of at least PATH_MAX bytes. This is used during process
+         *     discovery to avoid having to allocate a dynamic buffer for
+         *     processes that are ignored.
+         */
+        
+        if (attr->binary == NULL) {
+            if ((attr->binary = ALLOC_ARR(char, e - bin + 1)) == NULL)
+                return attr->type;
+        }
+
+        sprintf(attr->binary, "%.*s]", e - bin + 1, bin);
+        attr->mask |= (1 << CGRP_PROC_BINARY);
+    }
+    
+    return attr->type;
 }
 
 

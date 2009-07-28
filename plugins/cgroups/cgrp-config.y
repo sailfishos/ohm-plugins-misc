@@ -62,9 +62,8 @@ void yyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_BINARY
 %token TOKEN_KW_CMDLINE
 %token TOKEN_KW_GROUP
-%token TOKEN_KW_TYPE
-%token TOKEN_KW_KERNEL
 %token TOKEN_KW_USER
+%token TOKEN_KW_TYPE
 %token TOKEN_KW_IGNORE
 
 %token TOKEN_ASTERISK "*"
@@ -212,7 +211,6 @@ procdef_statement: expr "=>" command {
     }
     ;
 
-
 expr: bool_expr    { $$ = $1; }
     | prop_expr    { $$ = $1; }
     | "(" expr ")" { $$ = $2; }
@@ -237,11 +235,11 @@ prop: TOKEN_ARG        { $$ = CGRP_PROP_ARG($1.value); }
 
 value: TOKEN_STRING {
         $$.type = CGRP_VALUE_TYPE_STRING;
-	$$.str  = $1.value;
+	$$.str  = STRDUP($1.value);
     }
     | TOKEN_IDENT {
         $$.type = CGRP_VALUE_TYPE_STRING;
-	$$.str  = $1.value;
+	$$.str  = STRDUP($1.value);
     }
     ;
 

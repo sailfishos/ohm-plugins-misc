@@ -69,15 +69,14 @@ classify_process(cgrp_context_t *ctx, pid_t pid)
     process.binary = bin;
     bin[0]         = '\0';
 
+    procattr.binary  = process.binary;
+    procattr.pid     = process.pid;
     procattr.argv    = argv;
     argv[0]          = args;
     procattr.cmdline = cmdl;
-
-    if (!process_get_binary(&process))
+    
+    if (!process_get_binary(&process, &procattr))
         return -ENOENT;                       /* we assume it's gone already */
-
-    procattr.binary = process.binary;
-    procattr.pid    = process.pid;
 
     /* we ignore processes with no matching rule */
     if ((rule = rule_hash_lookup(ctx, process.binary)) == NULL &&
@@ -127,12 +126,15 @@ command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd)
 
         OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid,
                   process->binary, cmd->group.group->name);
+        printf("*** <%u, %s>: group %s\n", process->pid,
+               process->binary, cmd->group.group->name);
         process_set_group(ctx, proc, cmd->group.group);
         break;
 
     case CGRP_CMD_IGNORE:
         OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: ignored",
                   process->pid, process->binary);
+        printf("<%u, %s>: ignored\n", process->pid, process->binary);
         if ((proc = proc_hash_lookup(ctx, process->pid)) != NULL)
             process_ignore(ctx, proc);
         break;

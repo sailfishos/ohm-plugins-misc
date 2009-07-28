@@ -1,7 +1,9 @@
 #include "cgrp-plugin.h"
 
 
-static int prop_type_check(cgrp_prop_expr_t *);
+static int  prop_type_check(cgrp_prop_expr_t *);
+static void free_expr(cgrp_expr_t *);
+
 
 /********************
  * bool_expr
@@ -22,6 +24,17 @@ bool_expr(cgrp_bool_op_t op, cgrp_expr_t *arg1, cgrp_expr_t *arg2)
     expr->arg2 = arg2;
 
     return (cgrp_expr_t *)expr;
+}
+
+
+/********************
+ * bool_free
+ ********************/
+static void
+bool_free(cgrp_bool_expr_t *expr)
+{
+    free_expr(expr->arg1);
+    free_expr(expr->arg2);
 }
 
 
@@ -50,56 +63,92 @@ prop_expr(cgrp_prop_type_t prop, cgrp_prop_op_t op, cgrp_value_t *value)
 
 
 /********************
+ * prop_free
+ ********************/
+static void
+prop_free(cgrp_prop_expr_t *expr)
+{
+    if (expr->value.type == CGRP_VALUE_TYPE_STRING)
+        FREE(expr->value.str);
+}
+
+
+/********************
  * prop_type_check
  ********************/
-int
+static int
 prop_type_check(cgrp_prop_expr_t *expr)
 {
     char  *user;
     uid_t  uid;
     char  *group;
     gid_t  gid;
+    char  *type;
     
     switch (expr->prop) {
+    case CGRP_PROP_TYPE:
+        if (expr->value.type != CGRP_VALUE_TYPE_STRING) {
+            OHM_ERROR("cgrp: invalid process type expression");
+            return FALSE;
+        }
+        
+        type = expr->value.str;
+        if (!strcmp(type, "kernel")) {
+            expr->value.type = CGRP_VALUE_TYPE_UINT32;
+            expr->value.u32  = CGRP_PROC_KERNEL;
+            FREE(type);
+            return TRUE;
+        }
+
+        if (!strcmp(type, "user")) {
+            expr->value.type = CGRP_VALUE_TYPE_UINT32;
+            expr->value.u32  = CGRP_PROC_USER;
+            FREE(type);
+            return TRUE;
+        }
+        
+        OHM_ERROR("cgrp: invalid process type '%s'", type);
+        return FALSE;
+        
     case CGRP_PROP_EUID:
         if (expr->value.type == CGRP_VALUE_TYPE_UINT32)
             return TRUE;
 
-        if (expr->value.type == CGRP_VALUE_TYPE_STRING) {
-            user = expr->value.str;
-            if ((uid = cgrp_getuid(user)) == (uid_t)-1) {
-                OHM_ERROR("cgrp: invalid user id '%s'", user);
-                return FALSE;
-            }
-            FREE(user);
-            expr->value.type = CGRP_VALUE_TYPE_UINT32;
-            expr->value.u32  = uid;
-
-            return TRUE;
+        if (expr->value.type != CGRP_VALUE_TYPE_STRING) {
+            OHM_ERROR("cgrp: invalid user id expression");
+            return FALSE;
         }
-
-        OHM_ERROR("cgrp: invalid user id expression");
-        return FALSE;
+        
+        user = expr->value.str;
+        if ((uid = cgrp_getuid(user)) == (uid_t)-1) {
+            OHM_ERROR("cgrp: invalid user id '%s'", user);
+            return FALSE;
+        }
+        
+        FREE(user);
+        expr->value.type = CGRP_VALUE_TYPE_UINT32;
+        expr->value.u32  = uid;
+        return TRUE;
         
     case CGRP_PROP_EGID:
         if (expr->value.type == CGRP_VALUE_TYPE_UINT32)
             return TRUE;
 
-        if (expr->value.type == CGRP_VALUE_TYPE_STRING) {
-            group = expr->value.str;
-            if ((gid = cgrp_getgid(group)) == (gid_t)-1) {
-                OHM_ERROR("cgrp: invalid group id '%s'", group);
-                return FALSE;
-            }
-            FREE(group);
-            expr->value.type = CGRP_VALUE_TYPE_UINT32;
-            expr->value.u32  = gid;
-
-            return TRUE;
+        if (expr->value.type != CGRP_VALUE_TYPE_STRING) {
+            OHM_ERROR("cgrp: invalid user id expression");
+            return FALSE;
         }
 
-        OHM_ERROR("cgrp: invalid user id expression");
-        return FALSE;
+        group = expr->value.str;
+        if ((gid = cgrp_getgid(group)) == (gid_t)-1) {
+            OHM_ERROR("cgrp: invalid group id '%s'", group);
+            return FALSE;
+        }
+        
+        FREE(group);
+        expr->value.type = CGRP_VALUE_TYPE_UINT32;
+        expr->value.u32  = gid;
+        return TRUE;
         
     default:
         return TRUE;
@@ -110,23 +159,19 @@ prop_type_check(cgrp_prop_expr_t *expr)
 /********************
  * free_expr
  ********************/
-void
+static void
 free_expr(cgrp_expr_t *expr)
 {
-    if (expr != NULL) {
-        switch (expr->type) {
-        case CGRP_EXPR_BOOL:
-            free_expr(expr->bool.arg1);
-            free_expr(expr->bool.arg2);
-            break;
-        case CGRP_EXPR_PROP:
-            break;
-        default:
-            break;
-        }
-
-        FREE(expr);
+    if (expr == NULL)
+        return;
+    
+    switch (expr->type) {
+    case CGRP_EXPR_BOOL: bool_free(&expr->bool); break;
+    case CGRP_EXPR_PROP: prop_free(&expr->prop); break;
+    default:                                     break;
     }
+    
+    FREE(expr);
 }
 
 
@@ -236,10 +281,27 @@ bool_print(cgrp_context_t *ctx, cgrp_bool_expr_t *expr, FILE *fp)
 void
 prop_print(cgrp_context_t *ctx, cgrp_prop_expr_t *expr, FILE *fp)
 {
+    const char *propname[] = {
+        [CGRP_PROP_BINARY]  = "binary",
+        [CGRP_PROP_CMDLINE] = "commandline",
+        [CGRP_PROP_TYPE]    = "type",
+        [CGRP_PROP_EUID]    = "user",
+        [CGRP_PROP_EGID]    = "group",
+    };
+    
     switch (expr->prop) {
+    case CGRP_PROP_BINARY:
+    case CGRP_PROP_CMDLINE:
+    case CGRP_PROP_TYPE:
+    case CGRP_PROP_EUID:
+    case CGRP_PROP_EGID:
+        fprintf(fp, "%s", propname[expr->prop]);
+        break;
+        
     case CGRP_PROP_ARG0 ... CGRP_PROP_ARG_MAX:
         fprintf(fp, "arg%u", (unsigned int)(expr->prop - CGRP_PROP_ARG0));
         break;
+
     default:
         fprintf(fp, "<invalid property>");
         break;
@@ -319,19 +381,46 @@ bool_eval(cgrp_bool_expr_t *expr, cgrp_proc_attr_t *procattr)
  * prop_eval
  ********************/
 int
-prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *procattr)
+prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
 {
     cgrp_value_t v1, *v2;
-    int          match;
+    int          match, argn;
     
     switch (expr->prop) {
-    case CGRP_PROP_ARG0 ... CGRP_PROP_ARG_MAX:
+    case CGRP_PROP_BINARY:
         v1.type = CGRP_VALUE_TYPE_STRING;
-        process_get_argv(procattr);
-        if (procattr->mask & (1 << expr->prop))
-            v1.str = procattr->argv[expr->prop - CGRP_PROP_ARG0];
-        else
-            v1.str = "";
+        v1.str  = attr->binary;
+        break;
+        
+    case CGRP_PROP_ARG0 ... CGRP_PROP_ARG_MAX:
+        process_get_argv(attr);
+        argn    = expr->prop - CGRP_PROP_ARG0;
+        v1.type = CGRP_VALUE_TYPE_STRING;
+        v1.str  = argn < attr->argc ? attr->argv[argn] : "";
+        break;
+
+    case CGRP_PROP_CMDLINE:
+        process_get_cmdline(attr);
+        v1.type = CGRP_VALUE_TYPE_STRING;
+        v1.str  = attr->mask & (1ULL << CGRP_PROC_CMDLINE) ? attr->cmdline : "";
+        break;
+        
+    case CGRP_PROP_TYPE:
+        process_get_type(attr);
+        v1.type = CGRP_VALUE_TYPE_UINT32;
+        v1.u32  = attr->type;
+        break;
+
+    case CGRP_PROP_EUID:
+        process_get_euid(attr);
+        v1.type = CGRP_VALUE_TYPE_UINT32;
+        v1.u32  = attr->euid;
+        break;
+
+    case CGRP_PROP_EGID:
+        process_get_egid(attr);
+        v1.type = CGRP_VALUE_TYPE_UINT32;
+        v1.u32  = attr->egid;
         break;
 
     default:

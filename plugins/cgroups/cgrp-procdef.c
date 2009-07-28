@@ -119,7 +119,7 @@ procdef_print(cgrp_context_t *ctx, cgrp_procdef_t *procdef, FILE *fp)
 {
     (void)ctx;
 
-    fprintf(fp, "[process '%s']\n", procdef->binary);
+    fprintf(fp, "[rule '%s']\n", procdef->binary);
     statements_print(ctx, procdef->statements, fp);
 }
 

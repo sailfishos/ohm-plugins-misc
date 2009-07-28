@@ -143,13 +143,13 @@ typedef enum {
 #define CGRP_MAX_CMDLINE (CGRP_MAX_ARGS * CGRP_AVG_ARG)
 
 typedef enum {
-    CGRP_PROP_UNKNOWN = 0,
+    CGRP_PROP_BINARY,
     CGRP_PROP_ARG0,
     /* CGRP_PROP_ARG(1) ... CGRP_PROP_ARG(CGRP_MAX_ARGS - 1) */
     CGRP_PROP_ARG_MAX = CGRP_PROP_ARG0 + CGRP_MAX_ARGS - 1,
-    CGRP_PROP_BINARY,
     CGRP_PROP_CMDLINE,
     CGRP_PROP_TYPE,
+    CGRP_PROP_PARENT,
     CGRP_PROP_EUID,
     CGRP_PROP_EGID,
 } cgrp_prop_type_t;
@@ -211,22 +211,32 @@ typedef enum {
     /* CGRP_PROC_ARG(1) ... CGRP_PROC_ARG(CGRP_MAX_ARGS - 1) */
     CPGR_PROC_ARG_MAX = CGRP_PROC_ARG0 + CGRP_MAX_ARGS - 1,
     CGRP_PROC_CMDLINE,                      /* process command line */
-    CGRP_PROC_PARENT,                       /* process parent binary */
+    CGRP_PROC_TYPE,                         /* process type */
+    CGRP_PROC_PPID,                         /* process parent binary */
     CGRP_PROC_EUID,                         /* effective user ID */
     CGRP_PROC_EGID,                         /* effective group ID */
 } cgrp_proc_attr_type_t;
 
 #define CGRP_PROC_ARG(n) ((cgrp_proc_attr_type_t)(CGRP_PROC_ARG0 + (n)))
 
+typedef enum {
+    CGRP_PROC_UNKNOWN = 0,
+    CGRP_PROC_USER,
+    CGRP_PROC_KERNEL,
+} cgrp_proc_type_t;
+
+
 typedef struct {
-    u64_t         mask;                     /* attribute mask */
-    pid_t         pid;                      /* process id */
-    const char   *binary;                   /* path to binary */
-    char         *cmdline;                  /* command line */
-    char        **argv;                     /* command line arguments */
-    int           argc;                     /* number of arguments */
-    uid_t         euid;                     /* effective user id */
-    gid_t         egid;                     /* effective group id */
+    u64_t              mask;                /* attribute mask */
+    pid_t              pid;                 /* process id */
+    pid_t              ppid;                /* parent process id */
+    char              *binary;              /* path to binary */
+    cgrp_proc_type_t   type;                /* user or kernel process */
+    char              *cmdline;             /* command line */
+    char             **argv;                /* command line arguments */
+    int                argc;                /* number of arguments */
+    uid_t              euid;                /* effective user id */
+    gid_t              egid;                /* effective group id */
 } cgrp_proc_attr_t;
 
 
@@ -265,11 +275,12 @@ extern int DBG_EVENTS, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
 int  proc_init(cgrp_context_t *);
 void proc_exit(cgrp_context_t *);
 
-const char  *process_get_binary (cgrp_process_t *);
-const char  *process_get_cmdline(cgrp_proc_attr_t *);
-char       **process_get_argv   (cgrp_proc_attr_t *);
-uid_t        process_get_euid   (cgrp_proc_attr_t *);
-gid_t        process_get_egid   (cgrp_proc_attr_t *);
+char   *process_get_binary (cgrp_process_t *, cgrp_proc_attr_t *);
+char   *process_get_cmdline(cgrp_proc_attr_t *);
+char  **process_get_argv   (cgrp_proc_attr_t *);
+uid_t   process_get_euid   (cgrp_proc_attr_t *);
+gid_t   process_get_egid   (cgrp_proc_attr_t *);
+cgrp_proc_type_t process_get_type(cgrp_proc_attr_t *);
 
 int process_set_group(cgrp_context_t *, cgrp_process_t *, cgrp_group_t *);
 int process_clear_group(cgrp_process_t *);

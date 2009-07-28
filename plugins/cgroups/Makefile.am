@@ -13,6 +13,7 @@ libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-process.c   \
 			    cgrp-classify.c  \
 			    cgrp-ep.c        \
+			    cgrp-utils.c     \
 			    cgrp-config.y    \
 			    cgrp-lexer.l
 

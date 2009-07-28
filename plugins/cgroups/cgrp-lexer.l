@@ -221,7 +221,6 @@ KW_BINARY       binary
 KW_CMDLINE      commandline
 KW_GROUP        group
 KW_TYPE         type
-KW_KERNEL       kernel
 KW_USER         user
 KW_IGNORE       ignore
 
@@ -257,11 +256,11 @@ SINT            [+|-]?[0-9]+
 {KW_DESCRIPTION}   { TOKEN(KW_DESCRIPTION); }
 {KW_PATH}          { TOKEN(KW_PATH);        }
 {KW_RULE}          { TOKEN(KW_RULE);        }
+{KW_GROUP}         { TOKEN(KW_GROUP);       }
+{KW_USER}          { TOKEN(KW_USER);        }
 {KW_BINARY}        { TOKEN(KW_BINARY);      }
 {KW_CMDLINE}       { TOKEN(KW_CMDLINE);     }
 {KW_TYPE}          { TOKEN(KW_TYPE);        }
-{KW_KERNEL}        { TOKEN(KW_KERNEL);      }
-{KW_USER}          { TOKEN(KW_USER);        }
 {KW_IGNORE}        { TOKEN(KW_IGNORE);      }
 
 {HEADER_OPEN}      { TOKEN(HEADER_OPEN);    }

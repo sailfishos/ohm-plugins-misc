@@ -49,6 +49,7 @@ partition_exit(cgrp_context_t *ctx)
     part_hash_exit(ctx);
 
     partition_close(ctx->root);
+    FREE(ctx->root);
     ctx->root = NULL;
     
     for (i = 0; i < ctx->npartition; i++)
