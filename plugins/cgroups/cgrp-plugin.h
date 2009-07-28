@@ -275,11 +275,13 @@ extern int DBG_EVENTS, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
 int  proc_init(cgrp_context_t *);
 void proc_exit(cgrp_context_t *);
 
-char   *process_get_binary (cgrp_process_t *, cgrp_proc_attr_t *);
+char   *process_get_binary (cgrp_proc_attr_t *);
 char   *process_get_cmdline(cgrp_proc_attr_t *);
 char  **process_get_argv   (cgrp_proc_attr_t *);
 uid_t   process_get_euid   (cgrp_proc_attr_t *);
 gid_t   process_get_egid   (cgrp_proc_attr_t *);
+pid_t   process_get_ppid   (cgrp_proc_attr_t *);
+
 cgrp_proc_type_t process_get_type(cgrp_proc_attr_t *);
 
 int process_set_group(cgrp_context_t *, cgrp_process_t *, cgrp_group_t *);

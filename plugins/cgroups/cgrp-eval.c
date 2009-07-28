@@ -383,8 +383,13 @@ bool_eval(cgrp_bool_expr_t *expr, cgrp_proc_attr_t *procattr)
 int
 prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
 {
-    cgrp_value_t v1, *v2;
-    int          match, argn;
+    cgrp_value_t      v1, *v2;
+    int               match, argn;
+    cgrp_proc_attr_t  pattr;
+    char             *argv[CGRP_MAX_ARGS];
+    char              args[CGRP_MAX_CMDLINE];
+    char              cmdl[CGRP_MAX_CMDLINE];
+    char              bin[PATH_MAX];
     
     switch (expr->prop) {
     case CGRP_PROP_BINARY:
@@ -423,6 +428,27 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
         v1.u32  = attr->egid;
         break;
 
+    case CGRP_PROP_PARENT:
+        process_get_ppid(attr);
+        if (expr->value.type == CGRP_VALUE_TYPE_STRING) {
+            v1.type = CGRP_VALUE_TYPE_STRING;
+            memset(&pattr, 0, sizeof(pattr));
+            pattr.pid     = attr->ppid;
+            pattr.binary  = bin;
+            bin[0]        = '\0';
+            pattr.argv    = argv;
+            argv[0]       = args;
+            pattr.cmdline = cmdl;
+
+            if ((v1.str = process_get_binary(&pattr)) == NULL)
+                v1.str = "";
+        }
+        else {
+            v1.type = CGRP_VALUE_TYPE_UINT32;
+            v1.u32  = attr->ppid;
+        }
+        break;
+                
     default:
         OHM_ERROR("cgrp: invalid prop type 0x%x", expr->prop);
         return FALSE;
@@ -435,9 +461,14 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
     }
 
     switch (v1.type) {
-    case CGRP_VALUE_TYPE_STRING: match = !strcmp(v1.str, v2->str); break;
-    case CGRP_VALUE_TYPE_UINT32: match = v1.u32 == v2->u32;        break;
-    default:                     return FALSE;
+    case CGRP_VALUE_TYPE_STRING:
+        match = (v1.str && !strcmp(v1.str, v2->str));
+        break;
+    case CGRP_VALUE_TYPE_UINT32:
+        match = (v1.u32 == v2->u32);
+        break;
+    default:
+        return FALSE;
     }
 
     return expr->op == CGRP_OP_EQUAL ? match : !match;

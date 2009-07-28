@@ -75,7 +75,7 @@ classify_process(cgrp_context_t *ctx, pid_t pid)
     argv[0]          = args;
     procattr.cmdline = cmdl;
     
-    if (!process_get_binary(&process, &procattr))
+    if (!process_get_binary(&procattr))
         return -ENOENT;                       /* we assume it's gone already */
 
     /* we ignore processes with no matching rule */

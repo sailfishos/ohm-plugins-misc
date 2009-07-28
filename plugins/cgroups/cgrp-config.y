@@ -15,6 +15,7 @@ void yyerror(cgrp_context_t *, const char *);
     token_string_t    any;
     token_string_t    string;
     token_uint32_t    uint32;
+    token_sint32_t    sint32;
     cgrp_partition_t  part;
     cgrp_partition_t *parts;
     cgrp_group_t      group;
@@ -63,6 +64,7 @@ void yyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_CMDLINE
 %token TOKEN_KW_GROUP
 %token TOKEN_KW_USER
+%token TOKEN_KW_PARENT
 %token TOKEN_KW_TYPE
 %token TOKEN_KW_IGNORE
 
@@ -86,7 +88,6 @@ void yyerror(cgrp_context_t *, const char *);
 %token <string> TOKEN_STRING
 %token <uint32> TOKEN_UINT
 %token <sint32> TOKEN_SINT
-
 
 %%
 
@@ -231,6 +232,7 @@ prop: TOKEN_ARG        { $$ = CGRP_PROP_ARG($1.value); }
     | TOKEN_KW_TYPE    { $$ = CGRP_PROP_TYPE;          }
     | TOKEN_KW_USER    { $$ = CGRP_PROP_EUID;          }
     | TOKEN_KW_GROUP   { $$ = CGRP_PROP_EGID;          }
+    | TOKEN_KW_PARENT  { $$ = CGRP_PROP_PARENT;        }
     ;
 
 value: TOKEN_STRING {
@@ -240,6 +242,18 @@ value: TOKEN_STRING {
     | TOKEN_IDENT {
         $$.type = CGRP_VALUE_TYPE_STRING;
 	$$.str  = STRDUP($1.value);
+    }
+    | TOKEN_PATH {
+        $$.type = CGRP_VALUE_TYPE_STRING;
+	$$.str  = STRDUP($1.value);
+    }
+    | TOKEN_UINT {
+        $$.type = CGRP_VALUE_TYPE_UINT32;
+        $$.u32  = $1.value;
+    }
+    | TOKEN_SINT {
+        $$.type = CGRP_VALUE_TYPE_SINT32;
+        $$.s32  = $1.value;
     }
     ;
 

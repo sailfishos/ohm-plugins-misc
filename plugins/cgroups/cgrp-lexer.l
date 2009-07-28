@@ -222,6 +222,7 @@ KW_CMDLINE      commandline
 KW_GROUP        group
 KW_TYPE         type
 KW_USER         user
+KW_PARENT       parent
 KW_IGNORE       ignore
 
 HEADER_OPEN     \[
@@ -258,6 +259,7 @@ SINT            [+|-]?[0-9]+
 {KW_RULE}          { TOKEN(KW_RULE);        }
 {KW_GROUP}         { TOKEN(KW_GROUP);       }
 {KW_USER}          { TOKEN(KW_USER);        }
+{KW_PARENT}        { TOKEN(KW_PARENT);      }
 {KW_BINARY}        { TOKEN(KW_BINARY);      }
 {KW_CMDLINE}       { TOKEN(KW_CMDLINE);     }
 {KW_TYPE}          { TOKEN(KW_TYPE);        }

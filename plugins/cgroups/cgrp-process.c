@@ -413,19 +413,19 @@ process_scan_proc(cgrp_context_t *ctx)
  * process_get_binary
  ********************/
 char *
-process_get_binary(cgrp_process_t *process, cgrp_proc_attr_t *attr)
+process_get_binary(cgrp_proc_attr_t *attr)
 {
     char    exe[PATH_MAX];
     ssize_t len;
 
-    if (process->binary && process->binary[0])
-        return process->binary;
+    if (attr->binary && attr->binary[0])
+        return attr->binary;
     
-    sprintf(exe, "/proc/%u/exe", process->pid);
+    sprintf(exe, "/proc/%u/exe", attr->pid);
     
     if ((len = readlink(exe, exe, sizeof(exe) - 1)) < 0) {
         process_get_type(attr);
-        return process->binary;
+        return attr->binary;
     }
     exe[len] = '\0';
 
@@ -435,13 +435,13 @@ process_get_binary(cgrp_process_t *process, cgrp_proc_attr_t *attr)
      *        discovery to avoid having to allocate a dynamic buffer for
      *        processes that are ignored.
      */
-    if (process->binary != NULL)
-        strcpy(process->binary, exe);
+    if (attr->binary != NULL)
+        strcpy(attr->binary, exe);
     else
-        if ((process->binary = STRDUP(exe)) == NULL)
+        if ((attr->binary = STRDUP(exe)) == NULL)
             return NULL;
     
-    return process->binary;
+    return attr->binary;
 }
 
 
@@ -634,6 +634,22 @@ process_get_type(cgrp_proc_attr_t *attr)
     }
     
     return attr->type;
+}
+
+
+/********************
+ * process_get_ppid
+ ********************/
+pid_t
+process_get_ppid(cgrp_proc_attr_t *attr)
+{
+    if (attr->mask & (1ULL << CGRP_PROC_PPID))
+        return attr->ppid;
+    
+    if (process_get_type(attr) != CGRP_PROC_UNKNOWN)
+        return attr->ppid;
+    else
+        return (pid_t)-1;
 }
 
 
