@@ -12,4 +12,4 @@ usr/lib/ohm/libohm_videoep.so
 usr/lib/ohm/libohm_delay.so
 etc/ohm/plugins.d/*
 usr/bin/ohm-session-agent
-etc/X11/Xsession.post/10ohm-session-agent
+etc/X11/Xsession.post/55ohm-session-agent
