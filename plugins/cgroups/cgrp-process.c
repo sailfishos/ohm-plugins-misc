@@ -121,7 +121,11 @@ proc_unsubscribe(void)
         gioc = NULL;
     }
     
+#if 0 /* Hmm... this might get stuck */
     return proc_request(PROC_CN_MCAST_IGNORE);
+#else
+    return TRUE;
+#endif
 }
 
 
