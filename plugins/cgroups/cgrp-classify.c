@@ -126,15 +126,12 @@ command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd)
 
         OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid,
                   process->binary, cmd->group.group->name);
-        printf("*** <%u, %s>: group %s\n", process->pid,
-               process->binary, cmd->group.group->name);
         process_set_group(ctx, proc, cmd->group.group);
         break;
 
     case CGRP_CMD_IGNORE:
         OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: ignored",
                   process->pid, process->binary);
-        printf("<%u, %s>: ignored\n", process->pid, process->binary);
         if ((proc = proc_hash_lookup(ctx, process->pid)) != NULL)
             process_ignore(ctx, proc);
         break;

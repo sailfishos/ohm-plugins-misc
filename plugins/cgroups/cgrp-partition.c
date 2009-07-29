@@ -223,7 +223,9 @@ partition_process(cgrp_partition_t *partition, pid_t pid)
     char tasks[PIDLEN + 1];
     int  len;
 
+#if 0
     printf("*** repartitioning process %u to '%s'\n", pid, partition->name);
+#endif
     
     len = sprintf(tasks, "%u\n", pid);
 

@@ -397,8 +397,6 @@ process_scan_proc(cgrp_context_t *ctx)
 
         OHM_DEBUG(DBG_CLASSIFY, "discovering process <%s>", de->d_name);
 
-        printf("discovering process <%s>...\n", de->d_name);
-        
         pid = (pid_t)strtoul(de->d_name, NULL, 10);
         classify_process(ctx, pid);
     }
