@@ -7,7 +7,7 @@ Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 0.1.2-0maemo22), libglib2
 
 Package: ohm-plugins-misc
 Architecture: any
-Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0, osso-mission-control, libdres0 (>= 0.0.7), libprofile0 (>= 0.0.10), policy-settings
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0, osso-mission-control, libdres0 (>= 0.0.7), libprofile0 (>= 0.0.10), policy-settings
 Conflicts: policy-settings-rx51 (<< 0.2.45), policy-settings-rx51-text (<< 0.2.45)
 XB-GIT-ID: ${Git-Id}
 Description: Nokia policy OHM plugins.
@@ -17,7 +17,7 @@ Description: Nokia policy OHM plugins.
 
 Package: ohm-plugin-console
 Architecture: any
-Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0
 XB-GIT-ID: ${Git-Id}
 Description: OHM debug console plugin.
  This package contains a very simple interactive debug console for OHM.
@@ -26,14 +26,14 @@ Description: OHM debug console plugin.
 
 Package: ohm-plugin-timestamp
 Architecture: any
-Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0, libsp-timestamp1
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0, libsp-timestamp1
 XB-GIT-ID: ${Git-Id}
 Description: OHM plugin for sp-timestamp.
  This package contains a trivial plugin that simply wraps sp-timestamp.
 
 Package: ohm-plugin-cgroups
 Architecture: any
-Depends: ${shlibs:Depends}, ohm, ohm-plugin-core0
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0
 XB-GIT-ID: ${Git-Id}
 Description: OHM plugin for process classification and control.
  This package contains a process classification and control plugin that uses
