@@ -618,7 +618,7 @@ process_get_type(cgrp_proc_attr_t *attr)
                 return attr->type;
         }
 
-        sprintf(attr->binary, "%.*s]", e - bin + 1, bin);
+        sprintf(attr->binary, "%.*s", e - bin + 1, bin);
         attr->mask |= (1 << CGRP_PROC_BINARY);
     }
     
