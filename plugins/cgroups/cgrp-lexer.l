@@ -32,6 +32,7 @@ typedef enum {
 
 
 static void lexer_error(int lineno, const char *format, ...);
+static int  yywrap(void);
 
 static int debug = TRUE;
 static int lineno;
@@ -201,6 +202,12 @@ lexer_error(int lineno, const char *format, ...)
     va_end(ap);
 
     exit(1);
+}
+
+static int
+yywrap(void)
+{
+    return 1;
 }
 
 
