@@ -269,7 +269,7 @@ typedef struct {
 
 
 /* cgrp-plugin.c */
-extern int DBG_EVENTS, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
+extern int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
 
 /* cgrp-process.c */
 int  proc_init(cgrp_context_t *);
@@ -287,6 +287,7 @@ cgrp_proc_type_t process_get_type(cgrp_proc_attr_t *);
 int process_set_group(cgrp_context_t *, cgrp_process_t *, cgrp_group_t *);
 int process_clear_group(cgrp_process_t *);
 int process_ignore(cgrp_context_t *, cgrp_process_t *);
+int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
 
 

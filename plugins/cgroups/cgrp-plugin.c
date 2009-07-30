@@ -3,10 +3,10 @@
 #include "cgrp-plugin.h"
 
 /* debug flags */
-int DBG_EVENTS, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
+int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
 
 OHM_DEBUG_PLUGIN(cgroups,
-    OHM_DEBUG_FLAG("events"  , "process events"        , &DBG_EVENTS),
+    OHM_DEBUG_FLAG("event"   , "process events"        , &DBG_EVENT),
     OHM_DEBUG_FLAG("process" , "process watch"         , &DBG_PROCESS),
     OHM_DEBUG_FLAG("classify", "process classification", &DBG_CLASSIFY),
     OHM_DEBUG_FLAG("action"  , "policy actions"        , &DBG_ACTION));

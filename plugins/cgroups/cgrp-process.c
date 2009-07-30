@@ -16,8 +16,6 @@
 
 #include "cgrp-plugin.h"
 
-#undef __USE_NON_BLOCKING__
-
 #ifndef SOL_NETLINK
 #  define SOL_NETLINK 270
 #endif
@@ -40,7 +38,7 @@ static int  netlink_create(void);
 static void netlink_close (void);
 
 
-static gboolean event_cb(GIOChannel *chnl, GIOCondition mask, gpointer data);
+static gboolean netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data);
 
 
 
@@ -91,16 +89,8 @@ proc_subscribe(cgrp_context_t *ctx)
         return FALSE;
     
     mask = G_IO_IN | G_IO_HUP;
-    gsrc = g_io_add_watch(gioc, mask, event_cb, ctx);
+    gsrc = g_io_add_watch(gioc, mask, netlink_cb, ctx);
 
-#ifdef __USE_NON_BLOCKING__
-    if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
-        OHM_ERROR("cgrp: failed to set O_NONBLOCK (%d: %s)", errno,
-                  strerror(errno));
-        exit(1);
-    }
-#endif
-    
     return gsrc != 0;
 }
 
@@ -187,7 +177,7 @@ proc_request(enum proc_cn_mcast_op req)
  * proc_recv
  ********************/
 static struct proc_event *
-proc_recv(unsigned char *buf, size_t bufsize)
+proc_recv(unsigned char *buf, size_t bufsize, int block)
 {
     struct nlmsghdr   *nlh;
     struct cn_msg     *nld;
@@ -198,10 +188,11 @@ proc_recv(unsigned char *buf, size_t bufsize)
         return NULL;
     
     memset(buf, 0, bufsize);
-    nlh  = (struct nlmsghdr *)buf;
-    size = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
+    nlh   = (struct nlmsghdr *)buf;
+    size  = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
+    block = block ? 0 : MSG_DONTWAIT;
     
-    if ((size = recv(sock, nlh, size, 0)) < 0 || !NLMSG_OK(nlh, size)) {
+    if ((size = recv(sock, nlh, size, block)) < 0 || !NLMSG_OK(nlh, size)) {
         if (errno != EAGAIN)
             OHM_ERROR("cgrp: failed to receive process event");
         return NULL;
@@ -264,58 +255,54 @@ proc_dump_event(struct proc_event *event)
 
 
 /********************
- * event_cb
+ * netlink_cb
  ********************/
 static gboolean
-event_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
+netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 {
     cgrp_context_t    *ctx = (cgrp_context_t *)data;
     unsigned char      buf[EVENT_BUF_SIZE];
     struct proc_event *event;
-#ifdef __USE_NON_BLOCKING__
-    int                more;
-#endif
 
     (void)chnl;
     (void)data;
 
     if (mask & G_IO_IN) {
-#ifdef __USE_NON_BLOCKING__
-        more = TRUE;
-        while (more) {
-#endif
-            if ((event = proc_recv(buf, sizeof(buf))) != NULL) {
-                /*proc_dump_event(event);*/
-                switch (event->what) {
-                case PROC_EVENT_FORK:
-                    classify_process(ctx, event->event_data.fork.child_pid);
-                    break;
-                case PROC_EVENT_EXEC:
-                    classify_process(ctx, event->event_data.exec.process_pid);
-                    break;
-#ifdef __USE_NON_BLOCKING__
-                case PROC_EVENT_NONE:
-                    printf("*** event NONE ***\n");
-                    more = FALSE;
-                    break;
-#endif
-                default:
-                    break;
+        while ((event = proc_recv(buf, sizeof(buf), FALSE)) != NULL) {
+            switch (event->what) {
+            case PROC_EVENT_FORK:
+                OHM_DEBUG(DBG_EVENT, "<%u has forked %u>",
+                          event->event_data.fork.parent_pid,
+                          event->event_data.fork.child_pid);
+                classify_process(ctx, event->event_data.fork.child_pid);
+                break;
+            case PROC_EVENT_EXEC:
+                OHM_DEBUG(DBG_EVENT, "<%u has exec'd a new image>",
+                          event->event_data.exec.process_pid);
+                classify_process(ctx, event->event_data.exec.process_pid);
+                break;
+            case PROC_EVENT_UID:
+                OHM_DEBUG(DBG_EVENT, "<%u has changed user id from %u to %u>",
+                          event->event_data.id.process_pid,
+                          event->event_data.id.r.ruid,
+                          event->event_data.id.e.euid);
+                break;
+            case PROC_EVENT_GID:
+                OHM_DEBUG(DBG_EVENT, "<%u has changed group id from %u to %u>",
+                          event->event_data.id.process_pid,
+                          event->event_data.id.r.rgid,
+                          event->event_data.id.e.egid);
+                break;
+            case PROC_EVENT_EXIT:
+                OHM_DEBUG(DBG_EVENT, "<%u has exited with code 0x%x>",
+                          event->event_data.exit.process_pid,
+                          event->event_data.exit.exit_code);
+                process_remove_by_pid(ctx, event->event_data.exit.process_pid);
+                break;
+            default:
+                break;
                 }
-            }
-            else {
-#ifdef __USE_NON_BLOCKING__
-                if (errno == EAGAIN) {
-                    errno = 0;
-                    more = FALSE;
-                }
-                else
-#endif
-                    OHM_WARNING("cgrp: failed to read process event");
-            }
-#ifdef __USE_NON_BLOCKING__
         }
-#endif
     }
     
     if (mask & G_IO_HUP) {
@@ -698,17 +685,44 @@ process_clear_group(cgrp_process_t *process)
 
 
 /********************
+ * process_remove
+ ********************/
+void
+process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
+{
+    process_clear_group(process);
+    proc_hash_unhash(ctx, process);
+    FREE(process->binary);
+    FREE(process);
+}
+
+
+/********************
+ * process_remove_by_pid
+ ********************/
+int
+process_remove_by_pid(cgrp_context_t *ctx, pid_t pid)
+{
+    cgrp_process_t *process;
+
+    if ((process = proc_hash_lookup(ctx, pid)) != NULL) {
+        process_remove(ctx, process);
+        return TRUE;
+    }
+    else
+        return FALSE;
+}
+
+
+/********************
  * process_ignore
  ********************/
 int
 process_ignore(cgrp_context_t *ctx, cgrp_process_t *process)
 {
-    pid_t pid  = process->pid;
+    pid_t pid = process->pid;
 
-    process_clear_group(process);
-    proc_hash_unhash(ctx, process);
-    FREE(process->binary);
-    FREE(process);
+    process_remove(ctx, process);
 
     return partition_process(ctx->root, pid);
 }
