@@ -24,6 +24,7 @@ static DBusConnection    *sys_conn;    /* connection for D-Bus system bus */
 static DBusConnection    *sess_conn;   /* connection for D-Bus session bus */
 static prop_notif_t      *notif_reg;   /* property notification registry */
 static hello_cb_t         hello_notif; /* hello notification */
+static int                timeout;     /* message timeout in msec */
 
 static DBusHandlerResult info(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult name_changed(DBusConnection *, DBusMessage *, void *);
@@ -91,8 +92,8 @@ static char *filter_signal(char *buf, size_t size,
 
 static void system_bus_init(void)
 {
-    char      filter[1024];
-    DBusError err;
+    char        filter[1024];
+    DBusError   err;
 
     dbus_error_init(&err);
 
@@ -258,6 +259,26 @@ static int session_bus_init(const char *address)
 static void dbusif_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    const char *timeout_str;
+    char       *e;
+
+    if ((timeout_str = ohm_plugin_get_param(plugin, "dbus-timeout")) == NULL)
+        timeout = -1;           /* 'a sane default timeout' will be used */
+    else {
+        timeout = strtol(timeout_str, &e, 10);
+
+        if (*e != '\0') {
+            OHM_ERROR("playback: Invalid value '%s' for 'dbus-timeout'",
+                      timeout_str);
+            timeout = -1;
+        }
+
+        if (timeout < 0)
+            timeout = -1;
+    }
+
+    OHM_INFO("playback: D-Bus message timeout is %dmsec", timeout);
 
     /*
      * Notes: We get only on the system bus here. Session bus initialization
@@ -459,7 +480,7 @@ static void dbusif_get_property(char *dbusid, char *object, char *prname,
         goto failed;
     }
     
-    success = dbus_connection_send_with_reply(sess_conn, msg, &pend, -1);
+    success = dbus_connection_send_with_reply(sess_conn, msg, &pend, timeout);
     if (!success) {
         OHM_ERROR("[%s] Failed to query properties", __FUNCTION__);
         goto failed;
@@ -544,8 +565,8 @@ static void dbusif_set_property(char *dbusid, char *object, char *prname,
                   __FUNCTION__);
         goto failed;
     }
-    
-    success = dbus_connection_send_with_reply(sess_conn, msg, &pend, 1000);
+                                /* timeout was 1sec originally */
+    success = dbus_connection_send_with_reply(sess_conn, msg, &pend, timeout);
     if (!success) {
         OHM_ERROR("[%s] Failed to set properties", __FUNCTION__);
         goto failed;
