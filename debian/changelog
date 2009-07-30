@@ -2,7 +2,6 @@ ohm-plugins-misc (0.6.52) unstable; urgency=low
 
   [Krisztian Litkey]
   * Added cgroups plugin.
-  * Delay ohm-session-agent startup from 10 to 55 (Fixes: NB#130488).
 
   [Janos Kovacs]
   * 'delay' plugin added.
