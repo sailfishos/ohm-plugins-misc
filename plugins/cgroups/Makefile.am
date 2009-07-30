@@ -2,7 +2,7 @@ plugindir = @OHM_PLUGIN_DIR@
 plugin_LTLIBRARIES = libohm_cgroups.la
 EXTRA_DIST         = $(config_DATA)
 configdir          = $(sysconfdir)/ohm/plugins.d
-config_DATA        = cgroups.ini syspart.conf
+config_DATA        = cgroups.ini # syspart.conf
 
 libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-partition.c \
