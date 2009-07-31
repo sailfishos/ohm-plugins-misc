@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.53) unstable; urgency=low
+
+  * Ouch... don't forget to add processes to the cgroup pidhash table.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 31 Jul 2009 14:50:18 +0300
+
 ohm-plugins-misc (0.6.52) unstable; urgency=low
 
   [Krisztian Litkey]
@@ -8,7 +14,7 @@ ohm-plugins-misc (0.6.52) unstable; urgency=low
   * Playback plugin kludge for ringtone,
   * Configurable D-Bus message timeout in playback
   * Fixes: NB#130717
-	
+
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 27 Jul 2009 23:33:29 +0300
 
 ohm-plugins-misc (0.6.51) unstable; urgency=low
