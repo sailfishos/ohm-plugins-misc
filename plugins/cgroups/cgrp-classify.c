@@ -127,6 +127,7 @@ command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd)
         OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid,
                   process->binary, cmd->group.group->name);
         process_set_group(ctx, proc, cmd->group.group);
+        proc_hash_insert(ctx, proc);
         break;
 
     case CGRP_CMD_IGNORE:
