@@ -14,6 +14,8 @@ OHM_DEBUG_PLUGIN(cgroups,
 
 OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri));
 OHM_IMPORTABLE(gboolean , signaling_unregister, (GObject *ep));
+OHM_IMPORTABLE(int      , resolve             , (char *goal, char **locals));
+
 
 static cgrp_context_t *ctx;
 
@@ -26,7 +28,8 @@ static void plugin_exit(OhmPlugin *plugin);
 static void
 plugin_init(OhmPlugin *plugin)
 {
-    char *config;
+    char *config, *portstr;
+    int   port;
 
     if (!OHM_DEBUG_INIT(cgroups))
         OHM_WARNING("cgrp: failed to register for debugging");
@@ -53,12 +56,21 @@ plugin_init(OhmPlugin *plugin)
 
     if ((config = (char *)ohm_plugin_get_param(plugin, "config")) == NULL)
         config = DEFAULT_CONFIG;
+
+    if ((portstr = (char *)ohm_plugin_get_param(plugin, "notify-port")) == NULL)
+        port = DEFAULT_NOTIFY;
+    else
+        port = (unsigned short)strtoul(portstr, NULL, 10);
     
     if (!config_parse(ctx, config ? config : DEFAULT_CONFIG)) {
         OHM_ERROR("cgrp: failed to parse %s", config);
         exit(1);
     }
 
+    ctx->resolve = resolve;
+    if (!notify_init(ctx, port))
+        plugin_exit(plugin);
+    
     if (!classify_config(ctx) || !group_config(ctx) || !partition_config(ctx)) {
         OHM_ERROR("cgrp: configuration failed");
         exit(1);
@@ -105,9 +117,10 @@ OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        plugin_init, plugin_exit, NULL);
 
 
-OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 2, 
+OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 3, 
    OHM_IMPORT("signaling.register_enforcement_point"  , signaling_register),
-   OHM_IMPORT("signaling.unregister_enforcement_point", signaling_unregister));
+   OHM_IMPORT("signaling.unregister_enforcement_point", signaling_unregister),
+   OHM_IMPORT("dres.resolve", resolve));
 
 
 /* 

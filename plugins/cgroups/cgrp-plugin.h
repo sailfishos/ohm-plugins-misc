@@ -19,6 +19,7 @@
 #define PLUGIN_VERSION "0.0.1"
 
 #define DEFAULT_CONFIG "/etc/ohm/plugins.d/syspart.conf"
+#define DEFAULT_NOTIFY 3001
 
 
 /*
@@ -264,8 +265,12 @@ typedef struct {
     GObject          *sigconn;              /* policy signaling interface */
     gulong            sigdcn;               /* policy decision id */
     gulong            sigkey;               /* policy keychange id */
-
     
+    int               notifsock;            /* notification fd */
+    GIOChannel       *notifchnl;
+    guint             notifsrc;
+    int             (*resolve)(char *, char **);
+
 } cgrp_context_t;
 
 
@@ -405,6 +410,9 @@ void lexer_exit(void);
 uid_t cgrp_getuid(const char *);
 gid_t cgrp_getgid(const char *);
 
+/* cgrp-notify.c */
+int  notify_init(cgrp_context_t *, int);
+void notify_exit(cgrp_context_t *);
 
 #endif /* __OHM_PLUGIN_DBUS_H__ */
 

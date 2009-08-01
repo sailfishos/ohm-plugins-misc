@@ -52,7 +52,7 @@ ep_init(cgrp_context_t *ctx, GObject *(*signaling_register)(gchar *))
                                    G_CALLBACK(policy_decision),  (gpointer)ctx);
     ctx->sigkey = g_signal_connect(ctx->sigconn, "on-key-change",
                                    G_CALLBACK(policy_keychange), (gpointer)ctx);
-    
+
     return TRUE;
 }
 
