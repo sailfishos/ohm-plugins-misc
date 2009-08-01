@@ -92,8 +92,10 @@ partition_add(cgrp_context_t *ctx, cgrp_partition_t *p)
     }
 
     partition = ctx->partitions + ctx->npartition++;
-    partition->tasks  = -1;
-    partition->freeze = -1;
+    partition->tasks      = -1;
+    partition->freeze     = -1;
+    partition->cpu_shares = -1;
+
     
     if (!partition_open(partition, p->name, p->path)) {
         OHM_ERROR("cgrp: failed to open partition \"%s\"", p->name);
@@ -132,6 +134,11 @@ partition_open(cgrp_partition_t *p, const char *name, const char *path)
         }
     }
 
+    sprintf(pathbuf, "%s/cpu.shares", path);
+    if ((p->cpu_shares = open(pathbuf, O_WRONLY)) < 0)
+        OHM_WARNING("cgrp: failed to open CPU control for partition '%s'",
+                    name);
+
     return TRUE;
 
  fail:
@@ -148,8 +155,10 @@ partition_close(cgrp_partition_t *p)
 {
     close(p->tasks);
     close(p->freeze);
+    close(p->cpu_shares);
     p->tasks = -1;
     p->freeze = -1;
+    p->cpu_shares = -1;
     
     FREE(p->name);
     FREE(p->path);
@@ -239,60 +248,24 @@ partition_process(cgrp_partition_t *partition, pid_t pid)
 int
 partition_group(cgrp_partition_t *partition, cgrp_group_t *group)
 {
-#define BATCH  1024
-#define SIZE   (BATCH * PIDLEN)
-
-    char tasks[SIZE + 1], *ptr, *t;
-    int  ntask, len, l;
-    int  success;
-
-#define ADD_TASK(pid) do {                                              \
-        l = sprintf(ptr, "%s%u", t, (pid));                             \
-        len += l, ptr += l, ntask++;                                    \
-    } while(0);
-        
-#define WRITE_BATCH() do {                                              \
-        *ptr = '\n'; len++;                                             \
-        success &= (write(partition->tasks, tasks, len) == len);        \
-    } while (0)
-
-#define RESET_BATCH() do {                                              \
-        ntask = len = 0;                                                \
-        ptr   = tasks; t = "";                                          \
-    } while(0)
-
     cgrp_process_t *process;
     list_hook_t    *p, *n;
-
+    char            pid[64];
+    int             len, success;
+    
     if (group->partition == partition)
         return TRUE;
 
-    RESET_BATCH();
-
     success = TRUE;
     list_foreach(&group->processes, p, n) {
-        process = list_entry(p, cgrp_process_t, group_hook);
-
-        ADD_TASK(process->pid);
-        
-        if (ntask >= BATCH) {
-            WRITE_BATCH();
-            RESET_BATCH();
-        }
+        process  = list_entry(p, cgrp_process_t, group_hook);
+        len      = sprintf(pid, "%u", process->pid);
+        success &= write(partition->tasks, pid, len);
     }
 
-    if (ntask)
-        WRITE_BATCH();
-    
     group->partition = partition;
     
     return success;
-
-#undef BATCH
-#undef SIZE
-#undef ADD_TASK
-#undef WRITE_BATCH
-#undef RESET_BATCH
 }
 
 
@@ -315,6 +288,25 @@ partition_freeze(cgrp_partition_t *partition, int freeze)
     }
 
     return write(partition->freeze, cmd, len) == len;
+}
+
+
+/********************
+ * partition_set_cpu_share
+ ********************/
+int
+partition_set_cpu_share(cgrp_partition_t *partition, unsigned int share)
+{
+    char buf[64];
+    int  len;
+    
+    if (partition->cpu_shares >= 0) {
+        len = snprintf(buf, sizeof(buf), "%u", share);
+        write(partition->cpu_shares, buf, len);
+        return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 

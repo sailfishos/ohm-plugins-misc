@@ -36,6 +36,7 @@ typedef struct {
     int   flags;                            /* partition flags */
     int   tasks;                            /* task control */
     int   freeze;                           /* freeze control */
+    int   cpu_shares;                       /* CPU share/weight control */
 } cgrp_partition_t;
 
 
@@ -308,6 +309,7 @@ void partition_print(cgrp_context_t *, cgrp_partition_t *, FILE *);
 int partition_process(cgrp_partition_t *, pid_t);
 int partition_group(cgrp_partition_t *, cgrp_group_t *);
 int partition_freeze(cgrp_partition_t *, int);
+int partition_set_cpu_share(cgrp_partition_t *, unsigned int);
 
 /* cgrp-group.c */
 int  group_init(cgrp_context_t *);

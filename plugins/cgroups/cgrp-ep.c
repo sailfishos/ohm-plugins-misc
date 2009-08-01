@@ -15,6 +15,11 @@ typedef struct {                        /* freeze/unfreeze a partition */
     char *state;
 } freeze_t;
 
+typedef struct {                        /* assign CPU share to a partition */
+    char *partition;
+    int   share;
+} schedule_t;
+
 typedef void (*ep_cb_t) (GObject *, GObject *, gboolean);
 
 static void     policy_decision (GObject *, GObject *, ep_cb_t, gpointer);
@@ -156,6 +161,31 @@ freeze_action(cgrp_context_t *ctx, void *data)
 }
 
 
+/********************
+ * schedule_action
+ ********************/
+static int
+schedule_action(cgrp_context_t *ctx, void *data)
+{
+    schedule_t       *action = (schedule_t *)data;
+    cgrp_partition_t *partition;
+    int               success;
+
+    if ((partition = partition_lookup(ctx, action->partition)) == NULL) {
+        OHM_WARNING("cgrp: ignoring scheduling of unknown partition '%s'",
+                    action->partition);
+        return TRUE;
+    }
+    
+    success = partition_set_cpu_share(partition, action->share);
+    
+    OHM_DEBUG(DBG_ACTION, "setting CPU share %d of partition %s: %s",
+              action->share, action->partition, success ? "OK" : "FAILED");
+    
+    return success;
+}
+
+
 /*****************************************************************************
  *                  *** action parsing routines from videoep ***             *
  *****************************************************************************/
@@ -163,6 +193,7 @@ freeze_action(cgrp_context_t *ctx, void *data)
 #define PREFIX   "com.nokia.policy."
 #define REPARENT PREFIX"cgroup_partition"
 #define FREEZE   PREFIX"partition_freeze"
+#define SCHEDULE PREFIX"partition_schedule"
 #define STRUCT_OFFSET(s,m) ((char *)&(((s *)0)->m) - (char *)0)
 
 typedef int (*action_t)(cgrp_context_t *, void *);
@@ -187,21 +218,28 @@ typedef struct {		/* action descriptor */
     int         datalen;
 } actdsc_t;
 
-static argdsc_t reparent_args [] = {
+static argdsc_t reparent_args[] = {
     { argtype_string , "group"    , STRUCT_OFFSET(reparent_t, group)     },
     { argtype_string , "partition", STRUCT_OFFSET(reparent_t, partition) },
     { argtype_invalid,  NULL      , 0                                     }
 };
 
-static argdsc_t freeze_args [] = {
+static argdsc_t freeze_args[] = {
     { argtype_string , "partition", STRUCT_OFFSET(freeze_t, partition) },
     { argtype_string , "state"    , STRUCT_OFFSET(freeze_t, state)     },
     { argtype_invalid,  NULL      , 0                                  }
 };
 
+static argdsc_t schedule_args[] = {
+    { argtype_string , "partition", STRUCT_OFFSET(schedule_t, partition) },
+    { argtype_integer, "share"    , STRUCT_OFFSET(schedule_t, share)     },
+    { argtype_invalid,  NULL      , 0                                    }
+};
+
 static actdsc_t actions[] = {
     { REPARENT, reparent_action, reparent_args, sizeof(reparent_t) },
     { FREEZE  , freeze_action  , freeze_args  , sizeof(freeze_t)   },
+    { SCHEDULE, schedule_action, schedule_args, sizeof(schedule_t) },
     { NULL    , NULL           , NULL         , 0                  }
 };
 
