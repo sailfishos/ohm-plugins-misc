@@ -21,6 +21,9 @@
 #define DEFAULT_CONFIG "/etc/ohm/plugins.d/syspart.conf"
 #define DEFAULT_NOTIFY 3001
 
+#define APP_ACTIVE   "active"
+#define APP_INACTIVE "standby"
+
 
 /*
  * a system partition
@@ -260,6 +263,9 @@ typedef struct {
     GHashTable       *grouptbl;             /* lookup table of groups */
     GHashTable       *parttbl;              /* lookup table of partitions */
     list_hook_t      *proctbl;              /* lookup table of processes */
+
+    cgrp_process_t   *active_process;       /* currently active process */
+    cgrp_group_t     *active_group;         /* currently active group */
     
     OhmFactStore     *store;                /* ohm factstore */
     GObject          *sigconn;              /* policy signaling interface */
@@ -295,6 +301,7 @@ int process_clear_group(cgrp_process_t *);
 int process_ignore(cgrp_context_t *, cgrp_process_t *);
 int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
+int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
 
 
 
@@ -413,6 +420,7 @@ gid_t cgrp_getgid(const char *);
 /* cgrp-notify.c */
 int  notify_init(cgrp_context_t *, int);
 void notify_exit(cgrp_context_t *);
+int  notify_group_change(cgrp_context_t *ctx, cgrp_group_t *, cgrp_group_t *);
 
 #endif /* __OHM_PLUGIN_DBUS_H__ */
 

@@ -728,6 +728,31 @@ process_ignore(cgrp_context_t *ctx, cgrp_process_t *process)
 }
 
 
+/********************
+ * process_update_state
+ ********************/
+int
+process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
+{
+    if (!strcmp(state, APP_ACTIVE)) {
+        ctx->active_process = process;
+        ctx->active_group   = process ? process->group : NULL;
+    }
+    else if (!strcmp(state, APP_INACTIVE) && process == ctx->active_process) {
+        ctx->active_process = NULL;
+        ctx->active_group   = NULL;
+    }
+    else {
+        OHM_ERROR("cgrp: invalid process state '%s'", state);
+        return FALSE;
+    }
+    
+    return TRUE;
+}
+
+
+
+
 /* 
  * Local Variables:
  * c-basic-offset: 4

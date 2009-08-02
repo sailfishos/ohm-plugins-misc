@@ -6,9 +6,7 @@
 
 #include "cgrp-plugin.h"
 
-
-static gboolean notify_cb         (GIOChannel *, GIOCondition, gpointer);
-static int      notify_group_state(cgrp_context_t *, pid_t, char *);
+static gboolean notify_cb(GIOChannel *, GIOCondition, gpointer);
 
 
 /********************
@@ -73,7 +71,10 @@ static gboolean
 notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)data;
-    char            buf[256], *state, *end;
+    cgrp_group_t   *prev_active, *curr_active;
+    cgrp_process_t *process;
+    
+    char            buf[256], *pidp, *state;
     pid_t           pid;
     int             size;
     
@@ -84,49 +85,68 @@ notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
         return TRUE;
     
     size = sizeof(buf) - 1;
-    if ((size = recv(ctx->notifsock, buf, size, MSG_DONTWAIT)) < 0)
+    if ((size = recv(ctx->notifsock, buf, size, MSG_DONTWAIT)) < 0) {
         OHM_ERROR("cgrp: failed to receive application notification");
-    else {
-        buf[size] = '\0';
-        OHM_DEBUG(DBG_EVENT, "got application notification: '%s'", buf);
-        
-        pid = (unsigned short)strtoul(buf, &state, 10);
-        if (*state == ' ') {
-            state++;
-            if ((end = strpbrk(state, "\r\n")) != NULL)
-                *end = '\0';
-            notify_group_state(ctx, pid, state);
-        }
-        else
-            OHM_ERROR("cgrp: received malformed notification '%s'", buf);
+        goto out;
     }
     
+    buf[size] = '\0';
+    OHM_DEBUG(DBG_EVENT, "got active/standby notification: '%s'", buf);
+    
+    prev_active = ctx->active_group;
+    pidp = buf;
+    while (pidp && *pidp) {
+        pid = (unsigned short)strtoul(pidp, &state, 10);
+            
+        if (*state == ' ')
+            state++;
+        else {
+            OHM_ERROR("cgrp: received malformed notification '%s'", buf);
+            goto out;
+        }
+
+        if ((pidp = strpbrk(state, "\r\n ")) != NULL)
+            *pidp = '\0';
+
+        process = proc_hash_lookup(ctx, pid);
+        
+        OHM_DEBUG(DBG_EVENT, "process <%u,%s> is now in state <%s>",
+                  pid, process ? process->binary : "unknown", state);
+        
+        process_update_state(ctx, process, state);
+    }
+
+    curr_active = ctx->active_group;
+    notify_group_change(ctx, prev_active, curr_active);
+    
+ out:
     return TRUE;
 }
 
 
 /********************
- * notify_group_state
+ * notify_group_change
  ********************/
-static int
-notify_group_state(cgrp_context_t *ctx, pid_t pid, char *state)
+int
+notify_group_change(cgrp_context_t *ctx, cgrp_group_t *prev, cgrp_group_t *curr)
 {
-    cgrp_process_t *process;
-    char           *group;
-    char           *vars[2*2 + 1];
+    char *group;
+    char *vars[2*2 + 1];
 
-    if ((process = proc_hash_lookup(ctx, pid)) == NULL ||
-        (process->group                        == NULL))
-        group = "<none>";
+    if (prev == curr)
+        return TRUE;
+
+    if (curr != NULL)
+        group = curr->name;
     else
-        group = process->group->name;
-
+        group = "<none>";
+    
     vars[0] = "cgroup_group";
     vars[1] = group;
     vars[2] = "cgroup_state";
-    vars[3] = state;
+    vars[3] = APP_ACTIVE;
     vars[4] = NULL;
-
+    
     return ctx->resolve("cgroup_notify", vars) == 0;
 }
 
