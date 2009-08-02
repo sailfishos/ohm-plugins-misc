@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -72,7 +73,7 @@ static gboolean
 notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)data;
-    char            buf[256], *state;
+    char            buf[256], *state, *end;
     pid_t           pid;
     int             size;
     
@@ -92,6 +93,8 @@ notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
         pid = (unsigned short)strtoul(buf, &state, 10);
         if (*state == ' ') {
             state++;
+            if ((end = strpbrk(state, "\r\n")) != NULL)
+                *end = '\0';
             notify_group_state(ctx, pid, state);
         }
         else
