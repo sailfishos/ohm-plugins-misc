@@ -114,7 +114,7 @@ notify_group_state(cgrp_context_t *ctx, pid_t pid, char *state)
 
     if ((process = proc_hash_lookup(ctx, pid)) == NULL ||
         (process->group                        == NULL))
-        group = "none";
+        group = "<none>";
     else
         group = process->group->name;
 
