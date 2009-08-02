@@ -690,6 +690,13 @@ process_clear_group(cgrp_process_t *process)
 void
 process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
 {
+    if (process == ctx->active_process) {
+        ctx->active_process = NULL;
+        ctx->active_group   = NULL;
+
+        notify_group_change(ctx, process->group, NULL);
+    }
+        
     process_clear_group(process);
     proc_hash_unhash(ctx, process);
     FREE(process->binary);
