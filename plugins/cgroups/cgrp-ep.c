@@ -304,10 +304,13 @@ static int action_parser(actdsc_t *action, cgrp_context_t *ctx)
 
         memset(data, 0, action->datalen);
 
-        if (!get_args(fact, action->argdsc, data))
-            success &= FALSE;
-        else
+        if (get_args(fact, action->argdsc, data))
             success &= action->handler(ctx, data);
+        else {
+            OHM_DEBUG(DBG_ACTION, "argument parsing error for action '%s'",
+                      action->name);
+            success &= FALSE;
+        }
     }
 
     free(data);

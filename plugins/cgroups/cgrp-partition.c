@@ -260,7 +260,7 @@ partition_group(cgrp_partition_t *partition, cgrp_group_t *group)
     list_foreach(&group->processes, p, n) {
         process  = list_entry(p, cgrp_process_t, group_hook);
         len      = sprintf(pid, "%u", process->pid);
-        success &= write(partition->tasks, pid, len);
+        success &= write(partition->tasks, pid, len) == len ? TRUE : FALSE;
     }
 
     group->partition = partition;

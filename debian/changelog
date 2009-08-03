@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.54) unstable; urgency=low
+
+  * support for app-detect
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 03 Aug 2009 22:15:00 +0300
+
 ohm-plugins-misc (0.6.53) unstable; urgency=low
 
   * Ouch... don't forget to add processes to the cgroup pidhash table.
