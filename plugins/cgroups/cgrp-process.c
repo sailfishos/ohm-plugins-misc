@@ -458,7 +458,7 @@ process_get_argv(cgrp_proc_attr_t *attr)
 {
     char   buf[CGRP_MAX_CMDLINE], *s, *ap, *cp;
     char **argvp, *argp, *cmdp;
-    int    narg, fd, size;
+    int    narg, fd, size, term;
 
     if (attr->mask & CGRP_PROC_CMDLINE)
         return attr->argv;
@@ -484,17 +484,22 @@ process_get_argv(cgrp_proc_attr_t *attr)
     
     attr->mask |= (1ULL << CGRP_PROC_CMDLINE);
 
+    term = FALSE;
     for (s = buf, ap = argp, cp = cmdp; size > 0; s++, size--) {
-        if (*s)
+        if (*s) {
+            if (term)
+                *cp++ = ' ';
             *ap++ = *cp++ = *s;
+            term = FALSE;
+        }
         else {
             *ap++ = '\0';
-            *cp++ = ' ';
             if (narg < CGRP_MAX_ARGS - 1) {
                 attr->mask |= (1ULL << CGRP_PROC_ARG(narg));
                 argvp[narg++] = argp;
                 argp          = ap;
             }
+            term = TRUE;
         }
     }
     
@@ -658,7 +663,7 @@ process_set_group(cgrp_context_t *ctx,
         list_delete(&process->group_hook);
     
     process->group = group;
-    list_append(&process->group_hook, &group->processes);
+    list_append(&group->processes, &process->group_hook);
     
     if (group->partition)
         return partition_process(group->partition, process->pid);
