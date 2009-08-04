@@ -138,7 +138,7 @@ command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd)
         break;
 
     default:
-        fprintf(stdout, "<invalid command>\n");
+        OHM_ERROR("<invalid command>\n");
     }
     
     return TRUE;
