@@ -106,7 +106,7 @@ notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
         }
 
         if ((pidp = strpbrk(state, "\r\n ")) != NULL)
-            *pidp = '\0';
+            *pidp++ = '\0';
 
         process = proc_hash_lookup(ctx, pid);
         
