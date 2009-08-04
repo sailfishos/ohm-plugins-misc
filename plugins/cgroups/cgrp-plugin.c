@@ -76,7 +76,9 @@ plugin_init(OhmPlugin *plugin)
         exit(1);
     }
 
+#if 0
     config_print(ctx, stdout);
+#endif
 
     process_scan_proc(ctx);
 
