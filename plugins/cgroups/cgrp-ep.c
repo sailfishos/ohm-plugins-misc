@@ -20,6 +20,11 @@ typedef struct {                        /* assign CPU share to a partition */
     int   share;
 } schedule_t;
 
+typedef struct {                        /* set memory limit for a partition */
+    char *partition;
+    int   limit;
+} limit_t;
+
 typedef void (*ep_cb_t) (GObject *, GObject *, gboolean);
 
 static void     policy_decision (GObject *, GObject *, ep_cb_t, gpointer);
@@ -186,6 +191,32 @@ schedule_action(cgrp_context_t *ctx, void *data)
 }
 
 
+/********************
+ * limit_action
+ ********************/
+static int
+limit_action(cgrp_context_t *ctx, void *data)
+{
+    limit_t          *action = (limit_t *)data;
+    cgrp_partition_t *partition;
+    int               success;
+
+    if ((partition = partition_lookup(ctx, action->partition)) == NULL) {
+        OHM_WARNING("cgrp: ignoring memory limit for unknown partition '%s'",
+                    action->partition);
+        return TRUE;
+    }
+    
+    success = partition_set_mem_limit(partition, action->limit);
+    
+    OHM_DEBUG(DBG_ACTION, "setting memory limit %.2f k for partition %s: %s",
+              (1.0 * action->limit) / 1024.0, action->partition,
+              success ? "OK" : "FAILED");
+    
+    return success;
+}
+
+
 /*****************************************************************************
  *                  *** action parsing routines from videoep ***             *
  *****************************************************************************/
@@ -194,6 +225,7 @@ schedule_action(cgrp_context_t *ctx, void *data)
 #define REPARENT PREFIX"cgroup_partition"
 #define FREEZE   PREFIX"partition_freeze"
 #define SCHEDULE PREFIX"partition_schedule"
+#define LIMIT    PREFIX"partition_limit"
 #define STRUCT_OFFSET(s,m) ((char *)&(((s *)0)->m) - (char *)0)
 
 typedef int (*action_t)(cgrp_context_t *, void *);
@@ -236,10 +268,17 @@ static argdsc_t schedule_args[] = {
     { argtype_invalid,  NULL      , 0                                    }
 };
 
+static argdsc_t limit_args[] = {
+    { argtype_string , "partition", STRUCT_OFFSET(limit_t, partition) },
+    { argtype_integer, "limit"    , STRUCT_OFFSET(limit_t, limit)     },
+    { argtype_invalid,  NULL      , 0                                 }
+};
+
 static actdsc_t actions[] = {
     { REPARENT, reparent_action, reparent_args, sizeof(reparent_t) },
     { FREEZE  , freeze_action  , freeze_args  , sizeof(freeze_t)   },
     { SCHEDULE, schedule_action, schedule_args, sizeof(schedule_t) },
+    { LIMIT   , limit_action   , limit_args   , sizeof(limit_t)    },
     { NULL    , NULL           , NULL         , 0                  }
 };
 

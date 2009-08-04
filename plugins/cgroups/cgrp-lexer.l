@@ -34,7 +34,7 @@ typedef enum {
 static void lexer_error(int lineno, const char *format, ...);
 static int  yywrap(void);
 
-static int debug = FALSE;
+static int debug = TRUE;
 static int lineno;
 static YY_BUFFER_STATE yybuf;
 
@@ -223,6 +223,8 @@ KW_GLOBAL       global
 KW_PARTITION    partition
 KW_DESCRIPTION  description
 KW_PATH         path
+KW_CPU_SHARES   cpu-shares
+KW_MEM_LIMIT    memory-limit
 KW_RULE         rule
 KW_BINARY       binary
 KW_CMDLINE      commandline
@@ -245,7 +247,7 @@ NOT             \!
 IMPLIES         =>
 
 ASTERISK        \*
-IDENT           [a-zA-Z_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])+
+IDENT           [a-zA-Z_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])*
 PATH            (\/{IDENT})+
 STRING          (('[^\n']*')|(\"[^\n\"]*\"))
 UINT            [0-9]+
@@ -263,6 +265,8 @@ SINT            [+|-]?[0-9]+
 {KW_PARTITION}     { TOKEN(KW_PARTITION);   }
 {KW_DESCRIPTION}   { TOKEN(KW_DESCRIPTION); }
 {KW_PATH}          { TOKEN(KW_PATH);        }
+{KW_CPU_SHARES}    { TOKEN(KW_CPU_SHARES);  }
+{KW_MEM_LIMIT}     { TOKEN(KW_MEM_LIMIT);   }
 {KW_RULE}          { TOKEN(KW_RULE);        }
 {KW_GROUP}         { TOKEN(KW_GROUP);       }
 {KW_USER}          { TOKEN(KW_USER);        }

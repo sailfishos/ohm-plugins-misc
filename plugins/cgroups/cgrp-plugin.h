@@ -41,6 +41,9 @@ typedef struct {
     int   tasks;                            /* task control */
     int   freeze;                           /* freeze control */
     int   cpu_shares;                       /* CPU share/weight control */
+    int   mem_limit;                        /* memory limit control */
+    unsigned int cpu;                       /* cpu limit */
+    unsigned int mem;                       /* memory limit */
 } cgrp_partition_t;
 
 
@@ -322,6 +325,8 @@ int partition_process(cgrp_partition_t *, pid_t);
 int partition_group(cgrp_partition_t *, cgrp_group_t *);
 int partition_freeze(cgrp_partition_t *, int);
 int partition_set_cpu_share(cgrp_partition_t *, unsigned int);
+int partition_set_mem_limit(cgrp_partition_t *, unsigned int);
+
 
 /* cgrp-group.c */
 int  group_init(cgrp_context_t *);

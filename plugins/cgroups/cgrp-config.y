@@ -37,6 +37,9 @@ void yyerror(cgrp_context_t *, const char *);
 %type <part>     partition_properties
 %type <string>   partition_path
 %type <string>   path
+%type <uint32>   partition_cpu_share
+%type <uint32>   partition_mem_limit
+%type <uint32>   optional_unit
 %type <group>    group
 %type <group>    group_properties
 %type <group>    group_description
@@ -59,6 +62,8 @@ void yyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_PARTITION
 %token TOKEN_KW_DESCRIPTION
 %token TOKEN_KW_PATH
+%token TOKEN_KW_CPU_SHARES
+%token TOKEN_KW_MEM_LIMIT
 %token TOKEN_KW_RULE
 %token TOKEN_KW_BINARY
 %token TOKEN_KW_CMDLINE
@@ -105,7 +110,21 @@ partition: "[" TOKEN_KW_PARTITION TOKEN_IDENT "]"
     }
     ;
 
-partition_properties: partition_path { $$.path = $1.value; }
+partition_properties: partition_path      { $$.path = $1.value; }
+    |                 partition_cpu_share { $$.cpu  = $1.value; }
+    |                 partition_mem_limit { $$.mem  = $1.value; }
+    | partition_properties partition_path {
+          $$      = $1;
+          $$.path = $2.value;
+    }
+    | partition_properties partition_cpu_share {
+          $$     = $1;
+          $$.cpu = $2.value;
+    }
+    | partition_properties partition_mem_limit {
+          $$     = $1;
+          $$.mem = $2.value;
+    }
     ;
 
 partition_path: TOKEN_KW_PATH path { $$ = $2; }
@@ -113,6 +132,31 @@ partition_path: TOKEN_KW_PATH path { $$ = $2; }
 
 path: TOKEN_PATH   { $$ = $1; }
     | TOKEN_STRING { $$ = $1; }
+    ;
+
+partition_cpu_share: TOKEN_KW_CPU_SHARES TOKEN_UINT { $$ = $2; }
+    ;
+
+partition_mem_limit: TOKEN_KW_MEM_LIMIT TOKEN_UINT optional_unit {
+          $$        = $2;
+	  $$.value *= $3.value;
+    }
+    ;
+
+optional_unit: /* empty */ { $$.value = 1; }
+    | TOKEN_IDENT         {
+          if ($1.value[1] != '\0')
+              goto invalid;
+
+          switch ($1.value[0]) {
+              case 'k': case 'K': $$.value = 1024;        break;
+              case 'm': case 'M': $$.value = 1024 * 1024; break;
+              default:
+              invalid:
+	          OHM_ERROR("cgrp: invalid memory limit unit '%s'", $1.value);
+	          exit(1);
+          }
+    }
     ;
 
 groups: group

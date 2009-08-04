@@ -95,12 +95,15 @@ partition_add(cgrp_context_t *ctx, cgrp_partition_t *p)
     partition->tasks      = -1;
     partition->freeze     = -1;
     partition->cpu_shares = -1;
+    partition->mem_limit  = -1;
 
-    
     if (!partition_open(partition, p->name, p->path)) {
         OHM_ERROR("cgrp: failed to open partition \"%s\"", p->name);
         return NULL;
     }
+    
+    partition_set_cpu_share(partition, p->cpu);
+    partition_set_mem_limit(partition, p->mem);
     
     return partition;
 }
@@ -139,6 +142,11 @@ partition_open(cgrp_partition_t *p, const char *name, const char *path)
         OHM_WARNING("cgrp: failed to open CPU control for partition '%s'",
                     name);
 
+    sprintf(pathbuf, "%s/memory.limit_in_bytes", path);
+    if ((p->mem_limit = open(pathbuf, O_WRONLY)) < 0)
+        OHM_WARNING("cgrp: failed to open memory control for partition '%s'",
+                    name);
+    
     return TRUE;
 
  fail:
@@ -156,9 +164,11 @@ partition_close(cgrp_partition_t *p)
     close(p->tasks);
     close(p->freeze);
     close(p->cpu_shares);
+    close(p->mem_limit);
     p->tasks = -1;
     p->freeze = -1;
     p->cpu_shares = -1;
+    p->mem_limit = -1;
     
     FREE(p->name);
     FREE(p->path);
@@ -216,10 +226,34 @@ partition_dump(cgrp_context_t *ctx, FILE *fp)
 void
 partition_print(cgrp_context_t *ctx, cgrp_partition_t *partition, FILE *fp)
 {
+#define M (1024 * 1024)
+#define K (1024)
+
+    int   unitdiv;
+    char *unitsuf;
+    
+
     (void)ctx;
 
     fprintf(fp, "[partition %s]\n", partition->name);
     fprintf(fp, "path '%s'\n", partition->path);
+    if (partition->cpu)
+        fprintf(fp, "cpu-shares %u\n", partition->cpu);
+    if (partition->mem) {
+        if ((partition->mem / M) && !(partition->mem % M)) {
+            unitdiv = 1024 * 1024;
+            unitsuf = "M";
+        }
+        else if ((partition->mem / K) && !(partition->mem % K)) {
+            unitdiv = 1024;
+            unitsuf = "K";
+        }
+        else {
+            unitdiv = 1;
+            unitsuf = "";
+        }
+        fprintf(fp, "memory-limit %u%s\n", partition->mem / unitdiv, unitsuf);
+    }
 }
 
 
@@ -298,12 +332,35 @@ int
 partition_set_cpu_share(cgrp_partition_t *partition, unsigned int share)
 {
     char buf[64];
-    int  len;
+    int  len, chk;
     
-    if (partition->cpu_shares >= 0) {
+    partition->cpu = share;
+    
+    if (partition->cpu_shares >= 0 && share != 0) {
         len = snprintf(buf, sizeof(buf), "%u", share);
-        write(partition->cpu_shares, buf, len);
-        return TRUE;
+        chk = write(partition->cpu_shares, buf, len);
+        return (len == chk);
+    }
+    else
+        return FALSE;
+}
+
+
+/********************
+ * partition_set_mem_limit
+ ********************/
+int
+partition_set_mem_limit(cgrp_partition_t *partition, unsigned int limit)
+{
+    char buf[64];
+    int  len, chk;
+    
+    partition->mem = limit;
+
+    if (partition->mem_limit >= 0 && limit != 0) {
+        len = snprintf(buf, sizeof(buf), "%u", limit);
+        chk = write(partition->mem_limit, buf, len);
+        return (len == chk);
     }
     else
         return FALSE;
