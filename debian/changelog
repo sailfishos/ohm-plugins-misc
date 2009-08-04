@@ -1,6 +1,7 @@
 ohm-plugins-misc (0.6.54) unstable; urgency=low
 
-  * support for app-detect
+  * Don't 'waste 3 dev's and 1 tester's time' any more by printing out the
+    configuration (Fixes: NB#131127).
 
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 03 Aug 2009 22:15:00 +0300
 
