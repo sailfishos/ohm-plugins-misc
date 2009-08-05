@@ -144,7 +144,7 @@ partition_mem_limit: TOKEN_KW_MEM_LIMIT TOKEN_UINT optional_unit {
     ;
 
 optional_unit: /* empty */ { $$.value = 1; }
-    | TOKEN_IDENT         {
+    | TOKEN_IDENT          {
           if ($1.value[1] != '\0')
               goto invalid;
 
