@@ -128,7 +128,7 @@ partition_open(cgrp_partition_t *p, const char *name, const char *path)
         goto fail;
     }
     
-    if (strcmp(name, "root")) {
+    if (strcmp(name, "root") && strcmp(path, "/syspart")) {
         sprintf(pathbuf, "%s/freezer.state", path);
         if ((p->freeze = open(pathbuf, O_WRONLY)) < 0) {
             OHM_ERROR("cgrp: failed to open freeze control of partition '%s'",
@@ -312,6 +312,9 @@ partition_freeze(cgrp_partition_t *partition, int freeze)
     char *cmd;
     int   len;
     
+    if (partition->freeze < 0)
+        return TRUE;
+
     if (freeze) {
         cmd = FROZEN;
         len = sizeof(FROZEN) - 1;
