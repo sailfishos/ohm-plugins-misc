@@ -73,6 +73,7 @@ typedef enum {
     CGRP_CMD_UNKNOWN = 0,
     CGRP_CMD_GROUP,                         /* group classification */
     CGRP_CMD_IGNORE,                        /* ignore */
+    CGRP_CMD_RECLASSIFY,                    /* reclassify after a timeout */
 } cgrp_cmd_type_t;
 
 #define CGRP_CMD_COMMON \
@@ -87,10 +88,16 @@ typedef struct {
     cgrp_group_t *group;                    /* classification group */
 } cgrp_cmd_group_t;
 
+typedef struct {
+    CGRP_CMD_COMMON;                        /* type, common fields */
+    unsigned int delay;                     /* after this many msecs */
+} cgrp_cmd_reclassify_t;
+
 typedef union {
-    cgrp_cmd_any_t    any;                  /* any command */
-    cgrp_cmd_group_t  group;                /* group classification command */
-    cgrp_cmd_any_t    ignore;               /* ignore command */
+    cgrp_cmd_any_t        any;              /* any command */
+    cgrp_cmd_group_t      group;            /* group classification command */
+    cgrp_cmd_any_t        ignore;           /* ignore command */
+    cgrp_cmd_reclassify_t reclassify;       /* ignore command */
 } cgrp_cmd_t;
 
 
@@ -283,6 +290,12 @@ typedef struct {
 } cgrp_context_t;
 
 
+typedef struct {
+    cgrp_context_t *ctx;
+    pid_t           pid;
+} cgrp_reclassify_t;
+
+
 /* cgrp-plugin.c */
 extern int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
 
@@ -357,7 +370,7 @@ cgrp_cmd_t *rule_eval(cgrp_procdef_t *, cgrp_proc_attr_t *);
 int  classify_init  (cgrp_context_t *);
 void classify_exit  (cgrp_context_t *);
 int  classify_config(cgrp_context_t *);
-int  classify_process(cgrp_context_t *, pid_t);
+int  classify_process(cgrp_context_t *, pid_t, int);
 
 
 /* cgrp-ep.c */
@@ -406,7 +419,7 @@ void bool_print(cgrp_context_t *, cgrp_bool_expr_t *, FILE *);
 void prop_print(cgrp_context_t *, cgrp_prop_expr_t *, FILE *);
 void value_print(cgrp_context_t *, cgrp_value_t *, FILE *);
 void command_print(cgrp_context_t *, cgrp_cmd_t *, FILE *);
-int  command_execute(cgrp_context_t *, cgrp_process_t *, cgrp_cmd_t *);
+int  command_execute(cgrp_context_t *, cgrp_process_t *, cgrp_cmd_t *, int);
 int  expr_eval(cgrp_expr_t *expr, cgrp_proc_attr_t *);
 
 

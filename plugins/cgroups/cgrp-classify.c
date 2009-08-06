@@ -51,7 +51,7 @@ classify_config(cgrp_context_t *ctx)
  * classify_process
  ********************/
 int
-classify_process(cgrp_context_t *ctx, pid_t pid)
+classify_process(cgrp_context_t *ctx, pid_t pid, int reclassification)
 {
     cgrp_process_t    process;
     cgrp_proc_attr_t  procattr;
@@ -85,14 +85,51 @@ classify_process(cgrp_context_t *ctx, pid_t pid)
 
     /* try binary-specific rules */
     if ((cmd = rule_eval(rule, &procattr)) != NULL)
-        return command_execute(ctx, &process, cmd);
+        return command_execute(ctx, &process, cmd, reclassification);
     
     /* then fallback rule if any */
     if (rule != ctx->fallback && ctx->fallback != NULL)
         if ((cmd = rule_eval(ctx->fallback, &procattr)) != NULL)
-            return command_execute(ctx, &process, cmd);
+            return command_execute(ctx, &process, cmd, reclassification);
     
     return 0;
+}
+
+
+/********************
+ * reclassify_process
+ ********************/
+static gboolean
+reclassify_process(gpointer data)
+{
+    cgrp_reclassify_t *reclassify = (cgrp_reclassify_t *)data;
+
+    classify_process(reclassify->ctx, reclassify->pid, TRUE);
+    return FALSE;
+}
+
+
+static void
+free_reclassify(gpointer data)
+{
+    FREE(data);
+}
+
+
+static void
+schedule_reclassify(cgrp_context_t *ctx, pid_t pid, unsigned int delay)
+{
+    cgrp_reclassify_t *reclassify;
+
+    if (ALLOC_OBJ(reclassify) != NULL) {
+        reclassify->ctx = ctx;
+        reclassify->pid = pid;
+        
+        g_timeout_add_full(G_PRIORITY_DEFAULT, delay,
+                           reclassify_process, reclassify, free_reclassify);
+    }
+    else
+        OHM_ERROR("cgrp: failed to allocate reclassification data");
 }
 
 
@@ -100,7 +137,8 @@ classify_process(cgrp_context_t *ctx, pid_t pid)
  * command_execute
  ********************/
 int
-command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd)
+command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd,
+                int reclassification)
 {
     cgrp_process_t *proc;
     
@@ -137,6 +175,22 @@ command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd)
             process_ignore(ctx, proc);
         break;
 
+    case CGRP_CMD_RECLASSIFY:
+        if (!reclassification) {
+            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: reclassify after %u msecs",
+                      process->pid, process->binary, cmd->reclassify.delay);
+            
+            schedule_reclassify(ctx, process->pid, cmd->reclassify.delay);
+        }
+        else {
+            /* XXX TODO: temporary hack, needs a proper strategy */
+            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: reclassification failed",
+                      process->pid, process->binary);
+            if ((proc = proc_hash_lookup(ctx, process->pid)) != NULL)
+                process_ignore(ctx, proc);
+        }
+        break;
+        
     default:
         OHM_ERROR("<invalid command>\n");
     }

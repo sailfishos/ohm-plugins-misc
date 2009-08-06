@@ -274,12 +274,12 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
                 OHM_DEBUG(DBG_EVENT, "<%u has forked %u>",
                           event->event_data.fork.parent_pid,
                           event->event_data.fork.child_pid);
-                classify_process(ctx, event->event_data.fork.child_pid);
+                classify_process(ctx, event->event_data.fork.child_pid, FALSE);
                 break;
             case PROC_EVENT_EXEC:
                 OHM_DEBUG(DBG_EVENT, "<%u has exec'd a new image>",
                           event->event_data.exec.process_pid);
-                classify_process(ctx, event->event_data.exec.process_pid);
+                classify_process(ctx, event->event_data.exec.process_pid,FALSE);
                 break;
             case PROC_EVENT_UID:
                 OHM_DEBUG(DBG_EVENT, "<%u has changed user id from %u to %u>",
@@ -389,7 +389,7 @@ process_scan_proc(cgrp_context_t *ctx)
         OHM_DEBUG(DBG_CLASSIFY, "discovering process <%s>", de->d_name);
 
         pid = (pid_t)strtoul(de->d_name, NULL, 10);
-        classify_process(ctx, pid);
+        classify_process(ctx, pid, FALSE);
     }
 
     closedir(dp);
@@ -654,21 +654,29 @@ int
 process_set_group(cgrp_context_t *ctx,
                   cgrp_process_t *process, cgrp_group_t *group)
 {
-    cgrp_group_t *current = process->group;
+    cgrp_group_t *old = process->group;
+    int           success;
 
-    if (current == group)
+    if (group == old)
         return TRUE;
     
-    if (current != NULL)
+    if (old != NULL)
         list_delete(&process->group_hook);
     
     process->group = group;
     list_append(&group->processes, &process->group_hook);
     
     if (group->partition)
-        return partition_process(group->partition, process->pid);
-    else if (current && current->partition)
-        return partition_process(ctx->root, process->pid);
+        success = partition_process(group->partition, process->pid);
+    else if (old && old->partition)
+        success = partition_process(ctx->root, process->pid);
+    else
+        success = TRUE;
+
+    if (ctx->active_process == process) {
+        ctx->active_group = group;
+        notify_group_change(ctx, old, group);
+    }
     
     return TRUE;
 }

@@ -56,6 +56,7 @@ void yyerror(cgrp_context_t *, const char *);
 %type <cmd>      command
 %type <cmd>      command_group
 %type <cmd>      command_ignore
+%type <cmd>      command_reclassify
 %type <string>   group_name
 
 %token TOKEN_KW_GLOBAL
@@ -72,6 +73,7 @@ void yyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_PARENT
 %token TOKEN_KW_TYPE
 %token TOKEN_KW_IGNORE
+%token TOKEN_KW_RECLASSIFY
 
 %token TOKEN_ASTERISK "*"
 %token TOKEN_HEADER_OPEN "["
@@ -301,8 +303,9 @@ value: TOKEN_STRING {
     }
     ;
 
-command: command_group { $$ = $1; }
-    | command_ignore   { $$ = $1; }
+command: command_group   { $$ = $1; }
+    | command_ignore     { $$ = $1; }
+    | command_reclassify { $$ = $1; }
     ;
 
 command_group: TOKEN_KW_GROUP group_name {
@@ -321,6 +324,13 @@ group_name: TOKEN_STRING { $$ = $1; }
     ;
 
 command_ignore: TOKEN_KW_IGNORE { $$.ignore.type = CGRP_CMD_IGNORE; }
+    ;
+
+command_reclassify: TOKEN_KW_RECLASSIFY TOKEN_UINT {
+      $$.reclassify.type  = CGRP_CMD_RECLASSIFY;
+      $$.reclassify.delay = $2.value;
+
+    }
     ;
 
 %%

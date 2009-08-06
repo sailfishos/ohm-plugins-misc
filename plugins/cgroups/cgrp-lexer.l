@@ -233,6 +233,7 @@ KW_TYPE         type
 KW_USER         user
 KW_PARENT       parent
 KW_IGNORE       ignore
+KW_RECLASSIFY    reclassify-after
 
 HEADER_OPEN     \[
 HEADER_CLOSE    \]
@@ -275,6 +276,7 @@ SINT            [+|-]?[0-9]+
 {KW_CMDLINE}       { TOKEN(KW_CMDLINE);     }
 {KW_TYPE}          { TOKEN(KW_TYPE);        }
 {KW_IGNORE}        { TOKEN(KW_IGNORE);      }
+{KW_RECLASSIFY}    { TOKEN(KW_RECLASSIFY);  }
 
 {HEADER_OPEN}      { TOKEN(HEADER_OPEN);    }
 {HEADER_CLOSE}     { TOKEN(HEADER_CLOSE);   }
