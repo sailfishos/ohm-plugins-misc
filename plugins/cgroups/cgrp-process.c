@@ -8,6 +8,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #include <linux/socket.h>
 #include <linux/netlink.h>
@@ -677,8 +679,11 @@ process_set_group(cgrp_context_t *ctx,
         ctx->active_group = group;
         notify_group_change(ctx, old, group);
     }
+
+    if (group->priority != CGRP_DEFAULT_PRIORITY)
+        success &= process_set_priority(process, group->priority);
     
-    return TRUE;
+    return success;
 }
 
 
@@ -768,6 +773,16 @@ process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
     }
     
     return TRUE;
+}
+
+
+/********************
+ * process_set_priority
+ ********************/
+int
+process_set_priority(cgrp_process_t *process, int priority)
+{
+    return setpriority(PRIO_PROCESS, process->pid, priority) == 0;
 }
 
 

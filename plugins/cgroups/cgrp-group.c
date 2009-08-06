@@ -74,6 +74,8 @@ group_add(cgrp_context_t *ctx, cgrp_group_t *g)
     group->name        = STRDUP(g->name);
     group->description = STRDUP(g->description);
     group->partition   = g->partition;
+    group->priority    = CGRP_DEFAULT_PRIORITY;
+
     list_init(&group->processes);
 
     if (group->name == NULL || group->description == NULL) {
@@ -159,6 +161,35 @@ group_print(cgrp_context_t *ctx, cgrp_group_t *group, FILE *fp)
 }
 
 
+/********************
+ * group_set_priority
+ ********************/
+int
+group_set_priority(cgrp_group_t *group, int priority)
+{
+    cgrp_process_t *process;
+    list_hook_t    *p, *n;
+    int             result, success;
+    
+    if (group->priority == priority)
+        return TRUE;
+
+    group->priority = priority;
+
+    success = TRUE;
+    list_foreach(&group->processes, p, n) {
+        process = list_entry(p, cgrp_process_t, group_hook);
+        result  = process_set_priority(process, priority);
+
+        OHM_DEBUG(DBG_ACTION, "setting priority of process %u (%s) to %u: %s",
+                  process->pid, process->binary, priority,
+                  result == 0 ? "OK" : "FAILED");
+
+        success &= (result == 0 ? TRUE : FALSE);
+    }
+    
+    return success;
+}
 
 
 

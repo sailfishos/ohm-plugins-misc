@@ -25,6 +25,11 @@ typedef struct {                        /* set memory limit for a partition */
     int   limit;
 } limit_t;
 
+typedef struct {                        /* renice all processes in a group */
+    char *group;
+    int   priority;                       
+} renice_t;
+
 typedef void (*ep_cb_t) (GObject *, GObject *, gboolean);
 
 static void     policy_decision (GObject *, GObject *, ep_cb_t, gpointer);
@@ -217,6 +222,31 @@ limit_action(cgrp_context_t *ctx, void *data)
 }
 
 
+/********************
+ * renice_action
+ ********************/
+static int
+renice_action(cgrp_context_t *ctx, void *data)
+{
+    renice_t     *action = (renice_t *)data;
+    cgrp_group_t *group;
+    int               success;
+
+    if ((group = group_lookup(ctx, action->group)) == NULL) {
+        OHM_WARNING("cgrp: ignoring renicing of unknown group '%s'",
+                    action->group);
+        return TRUE;
+    }
+    
+    success = group_set_priority(group, action->priority);
+    
+    OHM_DEBUG(DBG_ACTION, "setting group priority (renice) of %s to %d: %s",
+              action->group, action->priority, success ? "OK" : "FAILED");
+    
+    return success;
+}
+
+
 /*****************************************************************************
  *                  *** action parsing routines from videoep ***             *
  *****************************************************************************/
@@ -226,6 +256,7 @@ limit_action(cgrp_context_t *ctx, void *data)
 #define FREEZE   PREFIX"partition_freeze"
 #define SCHEDULE PREFIX"partition_schedule"
 #define LIMIT    PREFIX"partition_limit"
+#define RENICE   PREFIX"cgroup_renice"
 #define STRUCT_OFFSET(s,m) ((char *)&(((s *)0)->m) - (char *)0)
 
 typedef int (*action_t)(cgrp_context_t *, void *);
@@ -274,11 +305,18 @@ static argdsc_t limit_args[] = {
     { argtype_invalid,  NULL      , 0                                 }
 };
 
+static argdsc_t renice_args[] = {
+    { argtype_string , "group"   , STRUCT_OFFSET(renice_t, group)    },
+    { argtype_integer, "priority", STRUCT_OFFSET(renice_t, priority) },
+    { argtype_invalid,  NULL     , 0                                 }
+};
+
 static actdsc_t actions[] = {
     { REPARENT, reparent_action, reparent_args, sizeof(reparent_t) },
     { FREEZE  , freeze_action  , freeze_args  , sizeof(freeze_t)   },
     { SCHEDULE, schedule_action, schedule_args, sizeof(schedule_t) },
     { LIMIT   , limit_action   , limit_args   , sizeof(limit_t)    },
+    { RENICE  , renice_action  , renice_args  , sizeof(renice_t)   },
     { NULL    , NULL           , NULL         , 0                  }
 };
 

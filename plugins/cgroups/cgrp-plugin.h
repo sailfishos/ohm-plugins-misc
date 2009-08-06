@@ -56,12 +56,15 @@ typedef enum {
     CGRP_GROUPFLAG_STATIC = 0x1,            /* statically partitioned group */
 } cgrp_group_flag_t;
 
+#define CGRP_DEFAULT_PRIORITY 0xffff
+
 typedef struct {
     char             *name;                 /* group name */
     char             *description;          /* group description */
     int               flags;                /* group flags */
     list_hook_t       processes;            /* processes in this group */
     cgrp_partition_t *partition;            /* current partititon */
+    unsigned int      priority;             /* priority if given */
 } cgrp_group_t;
 
 
@@ -318,6 +321,7 @@ int process_ignore(cgrp_context_t *, cgrp_process_t *);
 int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
 int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
+int process_set_priority(cgrp_process_t *, int);
 
 
 
@@ -353,6 +357,7 @@ cgrp_group_t *group_lookup(cgrp_context_t *, const char *);
 
 void group_dump(cgrp_context_t *, FILE *);
 void group_print(cgrp_context_t *, cgrp_group_t *, FILE *);
+int  group_set_priority(cgrp_group_t *, int);
 
 /* cgrp_procdef.c */
 int  procdef_init(cgrp_context_t *);
