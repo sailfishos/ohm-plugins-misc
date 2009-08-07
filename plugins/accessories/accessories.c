@@ -168,9 +168,39 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-gboolean run_policy_hook(const char *hook)
+#define DRES_VARTYPE(t)  (char *)(t)
+#define DRES_VARVALUE(s) (char *)(s)
+
+gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[])
 {
-    int status = resolve((char *) hook, NULL);
+    char *vars[32];
+    unsigned int i = 0, j = 0;
+
+    while (i < nargs && j < 30) {
+        dres_arg_t arg = args[i];
+        int sig = arg.sig;
+        
+        vars[j++] = arg.key;
+        vars[j++] = DRES_VARTYPE(sig);
+        switch (sig) {
+            case 's':
+                vars[j++] = DRES_VARVALUE(arg.value.c_value);
+                break;
+            case 'i':
+                vars[j++] = DRES_VARVALUE(arg.value.i_value);
+                break;
+            case 'd':
+                vars[j++] = DRES_VARVALUE(arg.value.f_value);
+                break;
+            default:
+                OHM_ERROR("Unknown value signature '%c'!", sig);
+                return FALSE;
+        }
+    }
+
+    vars[j] = NULL;
+
+    int status = resolve((char *) hook, vars);
 
     if (status < 0)
         OHM_ERROR("resolve() failed for hook %s: (%d) %s", hook, status,
@@ -185,9 +215,6 @@ gboolean run_policy_hook(const char *hook)
 
 int dres_accessory_request(const char *name, int driver, int connected)
 {
-#define DRES_VARTYPE(t)  (char *)(t)
-#define DRES_VARVALUE(s) (char *)(s)
-
     static char *goal = "accessory_request";
 
     char *vars[48];
@@ -218,17 +245,11 @@ int dres_accessory_request(const char *name, int driver, int connected)
                   __FILE__, __FUNCTION__, goal);
 
     return status <= 0 ? FALSE : TRUE;
-
-#undef DRES_VARVALUE
-#undef DRES_VARTYPE
 }
 
 
 int dres_all(void)
 {
-#define DRES_VARTYPE(t)  (char *)(t)
-#define DRES_VARVALUE(s) (char *)(s)
-
     static char *goal = "all";
 
     char *vars[48];
@@ -258,10 +279,9 @@ int dres_all(void)
 
     return status <= 0 ? FALSE : TRUE;
 
+}
 #undef DRES_VARVALUE
 #undef DRES_VARTYPE
-}
-
 
 
 OHM_PLUGIN_DESCRIPTION("accessories",

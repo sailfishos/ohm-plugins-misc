@@ -114,6 +114,38 @@ static gboolean hfp_status_defined(OhmFact *fact)
     return TRUE;
 }
 
+static gboolean hsp_status_defined(OhmFact *fact)
+{
+    GValue *gval;
+
+    if (!fact)
+        return FALSE;
+
+    gval = ohm_fact_get(fact, "hsp");
+
+    if (gval == NULL)
+        return FALSE;
+
+    return TRUE;
+}
+
+static gboolean get_status(OhmFact *fact, const gchar *hfp_or_hsp)
+{
+    GValue *gval;
+
+    if (!fact)
+        return FALSE;
+
+    gval = ohm_fact_get(fact, hfp_or_hsp);
+
+    if (gval &&
+            G_VALUE_TYPE(gval) == G_TYPE_INT &&
+            g_value_get_int(gval) == 1)
+        return TRUE;
+
+    return FALSE;
+}
+
 static void define_hfp_status(OhmFact *fact, gboolean hfp)
 {
     GValue *gval;
@@ -124,6 +156,18 @@ static void define_hfp_status(OhmFact *fact, gboolean hfp)
     gval = ohm_value_from_int(hfp ? 1 : 0);
 
     ohm_fact_set(fact, "hfp", gval);
+}
+
+static void define_hsp_status(OhmFact *fact, gboolean hsp)
+{
+    GValue *gval;
+
+    if (!fact)
+        return;
+
+    gval = ohm_value_from_int(hsp ? 1 : 0);
+
+    ohm_fact_set(fact, "hsp", gval);
 }
 
 /* return TRUE if really disconnected, FALSE otherwise */
@@ -148,7 +192,7 @@ static gboolean disconnect_device(OhmFact *fact, const gchar *type)
         if (strcmp(type, BT_TYPE_HSP) == 0) {
             /* HSP device goes to disconnected state. We need to forget the
              * bluetooth override state. */
-            run_policy_hook("bthsp_disconnect");
+            run_policy_hook("bthsp_disconnect", 0, NULL);
         }
         return TRUE;
     }
@@ -268,13 +312,15 @@ static gboolean bt_state_changed(const gchar *type,
     ohm_fact_set(bt_connected, type, gval_state);
 
     if (strcmp(type, BT_TYPE_HSP) == 0) {
-        /* check if we already have the information about the hfp status */
-        if (!hfp_status_defined(bt_connected)) {
+        /* check if we already have the information about the accurate
+         * mono profile status */
+        if (!hfp_status_defined(bt_connected) ||
+                !hsp_status_defined(bt_connected)) {
 
-            /* We don't know the HFP status yet. Process the dres
+            /* We don't know the HFP or HSP status yet. Process the dres
              * only after we know the status. */
 
-            OHM_DEBUG(DBG_BT, "querying HFP state for device %s", path);
+            OHM_DEBUG(DBG_BT, "querying HFP/HSP state for device %s", path);
 
             if (prev_state) {
                 GValue *gval_prev_state = ohm_value_from_string(prev_state);
@@ -464,7 +510,7 @@ static gboolean bt_any_to_connected(const gchar *type,
          * BTHSP goes from "playing" to "connected", since there is a
          * separate function for that. Because of this we can safely set
          * the BT override to "default" state here. */
-        run_policy_hook("bthsp_connect");
+        run_policy_hook("bthsp_connect", 0, NULL);
     }
 
     return TRUE;
@@ -481,7 +527,7 @@ static gboolean bt_playing_to_connected(const gchar *type,
 
     if (strcmp(type, BT_TYPE_HSP) == 0) {
         OHM_DEBUG(DBG_BT, "%s goes from playing to connected!", type);
-        return run_policy_hook("bthsp_stop_audio");
+        return run_policy_hook("bthsp_stop_audio", 0, NULL);
     }
 
     /* run dres afterwards */
@@ -495,11 +541,21 @@ static gboolean bt_connected_to_playing(const gchar *type,
 {
     (void) prev_state;
     (void) new_state;
-    (void) path;
 
     if (strcmp(type, BT_TYPE_HSP) == 0) {
+        dres_arg_t arg;
+        char value[20];
+
+        snprintf(value, 20, "hsp=%s,hfp=%s",
+                get_status(bt_get_connected(path), "hsp") ? "yes" : "no",
+                get_status(bt_get_connected(path), "hfp") ? "yes" : "no");
+
+        arg.sig = 's';
+        arg.key = "hwid";
+        arg.value.s_value = (char *) value;
+        
         OHM_DEBUG(DBG_BT, "%s goes from connected to playing!", type);
-        return run_policy_hook("bthsp_start_audio");
+        return run_policy_hook("bthsp_start_audio", 1, &arg);
     }
 
     /* no need to run dres afterwards */
@@ -570,7 +626,7 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
     gchar **dbus_data = user_data;
     gchar *path = dbus_data[0];
     gchar *interface = dbus_data[1];
-    gboolean is_hfp = FALSE;
+    gboolean is_hfp = FALSE, is_hsp = FALSE;
     OhmFact *bt_connected = NULL;
 
     g_free(dbus_data);
@@ -635,7 +691,9 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
 
                     else if (strcmp(uuid, HFP_UUID) == 0) {
                         is_hfp = TRUE;
-                        break;
+                    }
+                    else if (strcmp(uuid, HSP_UUID) == 0) {
+                        is_hsp = TRUE;
                     }
                     dbus_message_iter_next(&uuid_iter);
                 }
@@ -652,6 +710,9 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
     OHM_DEBUG(DBG_BT, "Device %s %s HFP support",
             path, is_hfp ? "has" : "has not");
 
+    OHM_DEBUG(DBG_BT, "Device %s %s HSP support",
+            path, is_hsp ? "has" : "has not");
+
     if ((bt_connected = bt_get_connected(path)) != NULL) {
 
         GValue *gval_state = ohm_fact_get(bt_connected, BT_TYPE_HSP);
@@ -660,6 +721,7 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
         gboolean run_dres;
 
         define_hfp_status(bt_connected, is_hfp);
+        define_hsp_status(bt_connected, is_hsp);
 
         if (gval_state != NULL &&
                 G_VALUE_TYPE(gval_state) == G_TYPE_STRING) {
@@ -671,7 +733,7 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
             prev_state = g_value_get_string(gval_prev_state);
         }
 
-        OHM_DEBUG(DBG_BT, "running state transition from %s to %s from HFP status cb",
+        OHM_DEBUG(DBG_BT, "running state transition from %s to %s from HFP/HSP status cb",
                 prev_state ? prev_state : "NULL", state ? state : "NULL");
 
         run_dres = bt_state_transition(BT_TYPE_HSP, path, 
