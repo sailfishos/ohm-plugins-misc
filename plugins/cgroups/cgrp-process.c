@@ -442,7 +442,7 @@ process_get_binary(cgrp_proc_attr_t *attr)
 char *
 process_get_cmdline(cgrp_proc_attr_t *attr)
 {
-    if (attr->mask & CGRP_PROC_CMDLINE)
+    if (attr->mask & (1ULL << CGRP_PROC_CMDLINE))
         return attr->cmdline;
 
     if (process_get_argv(attr) != NULL)
@@ -462,7 +462,7 @@ process_get_argv(cgrp_proc_attr_t *attr)
     char **argvp, *argp, *cmdp;
     int    narg, fd, size, term;
 
-    if (attr->mask & CGRP_PROC_CMDLINE)
+    if (attr->mask & (1ULL << CGRP_PROC_CMDLINE))
         return attr->argv;
 
     if ((cmdp = attr->cmdline) == NULL || (argvp = attr->argv) == NULL)
