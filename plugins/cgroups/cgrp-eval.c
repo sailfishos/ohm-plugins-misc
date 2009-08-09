@@ -407,7 +407,8 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
     case CGRP_PROP_CMDLINE:
         process_get_cmdline(attr);
         v1.type = CGRP_VALUE_TYPE_STRING;
-        v1.str  = attr->mask & (1ULL << CGRP_PROC_CMDLINE) ? attr->cmdline : "";
+        v1.str  = CGRP_TST_MASK(attr->mask, CGRP_PROC_CMDLINE) ?
+            attr->cmdline : "";
         break;
         
     case CGRP_PROP_TYPE:

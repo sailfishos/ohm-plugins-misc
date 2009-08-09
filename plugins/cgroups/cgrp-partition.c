@@ -9,6 +9,16 @@
 #define FROZEN "FROZEN\n"
 #define THAWED "THAWED\n"
 
+/* cgroup control entries */
+#define TASKS   "tasks"
+#define FREEZER "freezer.state"
+#define CPU     "cpu.shares"
+#define MEMORY  "memory.limit_in_bytes"
+
+
+static int  open_control (cgrp_partition_t *, char *);
+static void foreach_print(gpointer, gpointer, gpointer);
+static void foreach_del  (gpointer, gpointer, gpointer);
 
 
 /********************
@@ -17,24 +27,20 @@
 int
 partition_init(cgrp_context_t *ctx)
 {
-    cgrp_partition_t *root;    
+    cgrp_partition_t root;
 
-    ctx->partitions = NULL;
-    ctx->npartition = 0;
+    part_hash_init(ctx);
+ 
+    memset(&root, 0, sizeof(root));
+    root.name      = "root";
+    root.path      = "/syspart";
+    root.limit.cpu = CGRP_NO_LIMIT;
+    root.limit.mem = CGRP_NO_LIMIT;
 
-    if (!ALLOC_OBJ(root)) {
-        OHM_ERROR("cgrp: failed to allocate root partition");
+    if ((ctx->root = partition_add(ctx, &root)) == NULL)
         return FALSE;
-    }
-
-    if (!partition_open(root, "root", "/syspart")) {
-        FREE(root);
-        return FALSE;
-    }
-
-    ctx->root = root;
-
-    return part_hash_init(ctx);
+    else
+        return TRUE;
 }
 
 
@@ -44,37 +50,11 @@ partition_init(cgrp_context_t *ctx)
 void
 partition_exit(cgrp_context_t *ctx)
 {
-    int i;
-
-    part_hash_exit(ctx);
-
-    partition_close(ctx->root);
-    FREE(ctx->root);
+    partition_del(ctx, ctx->root);
     ctx->root = NULL;
-    
-    for (i = 0; i < ctx->npartition; i++)
-        partition_close(ctx->partitions + i);
-    FREE(ctx->partitions);
 
-    ctx->partitions = NULL;
-    ctx->npartition = 0;
-}
-
-
-/********************
- * partition_config
- ********************/
-int
-partition_config(cgrp_context_t *ctx)
-{
-    cgrp_partition_t *part;
-    int               i;
-
-    for (i = 0, part = ctx->partitions; i < ctx->npartition; i++, part++)
-        if (!part_hash_insert(ctx, part))
-            return FALSE;
-    
-    return TRUE;
+    part_hash_foreach(ctx, foreach_del, ctx);
+    part_hash_exit(ctx);
 }
 
 
@@ -86,111 +66,76 @@ partition_add(cgrp_context_t *ctx, cgrp_partition_t *p)
 {
     cgrp_partition_t *partition;
 
-    if (!REALLOC_ARR(ctx->partitions, ctx->npartition, ctx->npartition + 1)) {
-        OHM_ERROR("cgrp: failed to allocate partition");
+    if (part_hash_lookup(ctx, p->name) != NULL)
         return NULL;
-    }
 
-    partition = ctx->partitions + ctx->npartition++;
-    partition->tasks      = -1;
-    partition->freeze     = -1;
-    partition->cpu_shares = -1;
-    partition->mem_limit  = -1;
-
-    if (!partition_open(partition, p->name, p->path)) {
-        OHM_ERROR("cgrp: failed to open partition \"%s\"", p->name);
-        return NULL;
+    if (ALLOC_OBJ(partition)                == NULL ||
+        (partition->name = STRDUP(p->name)) == NULL ||
+        (partition->path = STRDUP(p->path)) == NULL) {
+        OHM_ERROR("cgrp: failed to allocate partition '%s'", p->name);
+        goto fail;
     }
     
-    partition_set_cpu_share(partition, p->cpu);
-    partition_set_mem_limit(partition, p->mem);
+    partition->control.tasks  = open_control(partition, TASKS);
+    partition->control.freeze = open_control(partition, FREEZER);
+    partition->control.cpu    = open_control(partition, CPU);
+    partition->control.mem    = open_control(partition, MEMORY);
+
+    if (partition->control.tasks < 0) {
+        OHM_ERROR("cgrp: no task control for partition '%s'", partition->name);
+        goto fail;
+    }
+
+    if (partition->control.freeze < 0 && strcmp(partition->name, "root") &&
+        strcmp(partition->path, "/syspart")) {  /* XXX ugly root alias hack */
+        OHM_ERROR("cgrp: no freezer control for partition '%s'",
+                  partition->name);
+        goto fail;
+    }
+
+    if (partition->control.cpu < 0)
+        OHM_WARNING("cgrp: no CPU shares control for partition '%s'",
+                    partition->name);
+    
+    if (partition->control.mem < 0)
+        OHM_WARNING("cgrp: no memory limit control for partition '%s'",
+                    partition->name);
+    
+    partition_limit_cpu(partition, p->limit.cpu);
+    partition_limit_mem(partition, p->limit.mem);
+
+    if (!part_hash_insert(ctx, partition)) {
+        OHM_ERROR("cgrp: failed to add partition '%s'", partition->name);
+        goto fail;
+    }
     
     return partition;
-}
-
-
-/********************
- * partition_open
- ********************/
-int
-partition_open(cgrp_partition_t *p, const char *name, const char *path)
-{
-    char pathbuf[PATH_MAX];
     
-    if ((p->name = STRDUP(name)) == NULL || (p->path = STRDUP(path)) == NULL) {
-        OHM_ERROR("cgrp: failed to allocate partition \"%s\"", name);
-        goto fail;
-    }
-
-    sprintf(pathbuf, "%s/tasks", path);
-    if ((p->tasks = open(pathbuf, O_WRONLY)) < 0) {
-        OHM_ERROR("cgrp: failed to open task control for partition '%s'", name);
-        goto fail;
-    }
-    
-    if (strcmp(name, "root") && strcmp(path, "/syspart")) {
-        sprintf(pathbuf, "%s/freezer.state", path);
-        if ((p->freeze = open(pathbuf, O_WRONLY)) < 0) {
-            OHM_ERROR("cgrp: failed to open freeze control of partition '%s'",
-                      name);
-            goto fail;
-        }
-    }
-
-    sprintf(pathbuf, "%s/cpu.shares", path);
-    if ((p->cpu_shares = open(pathbuf, O_WRONLY)) < 0)
-        OHM_WARNING("cgrp: failed to open CPU control for partition '%s'",
-                    name);
-
-    sprintf(pathbuf, "%s/memory.limit_in_bytes", path);
-    if ((p->mem_limit = open(pathbuf, O_WRONLY)) < 0)
-        OHM_WARNING("cgrp: failed to open memory control for partition '%s'",
-                    name);
-    
-    return TRUE;
-
  fail:
-    partition_close(p);
-    return FALSE;
+    partition_del(ctx, partition);
+    return NULL;
 }
 
 
 /********************
- * partition_close
+ * partition_del
  ********************/
 void
-partition_close(cgrp_partition_t *p)
+partition_del(cgrp_context_t *ctx, cgrp_partition_t *partition)
 {
-    close(p->tasks);
-    close(p->freeze);
-    close(p->cpu_shares);
-    close(p->mem_limit);
-    p->tasks = -1;
-    p->freeze = -1;
-    p->cpu_shares = -1;
-    p->mem_limit = -1;
+    if (partition == NULL)
+        return;
     
-    FREE(p->name);
-    FREE(p->path);
-    p->name = NULL;
-    p->path = NULL;
-}
-
-
-/********************
- * partition_find
- ********************/
-cgrp_partition_t *
-partition_find(cgrp_context_t *ctx, const char *name)
-{
-    cgrp_partition_t *p;
-    int               i;
-
-    for (i = 0, p = ctx->partitions; i < ctx->npartition; i++, p++)
-        if (!strcmp(p->name, name))
-            return p;
+    part_hash_delete(ctx, partition->name);
     
-    return NULL;
+    close(partition->control.tasks);
+    close(partition->control.freeze);
+    close(partition->control.cpu);
+    close(partition->control.mem);
+
+    FREE(partition->name);
+    FREE(partition->path);
+    FREE(partition);
 }
 
 
@@ -210,13 +155,8 @@ partition_lookup(cgrp_context_t *ctx, const char *name)
 void
 partition_dump(cgrp_context_t *ctx, FILE *fp)
 {
-    int i;
-    
     fprintf(fp, "# partitions\n");
-    for (i = 0; i < ctx->npartition; i++) {
-        partition_print(ctx, ctx->partitions + i, fp);
-        fprintf(fp, "\n");
-    }
+    part_hash_foreach(ctx, foreach_print, fp);
 }
 
 
@@ -224,27 +164,26 @@ partition_dump(cgrp_context_t *ctx, FILE *fp)
  * partition_print
  ********************/
 void
-partition_print(cgrp_context_t *ctx, cgrp_partition_t *partition, FILE *fp)
+partition_print(cgrp_partition_t *partition, FILE *fp)
 {
 #define M (1024 * 1024)
 #define K (1024)
 
-    int   unitdiv;
-    char *unitsuf;
+    u64_t  mem;
+    int    unitdiv;
+    char  *unitsuf;
     
-
-    (void)ctx;
-
     fprintf(fp, "[partition %s]\n", partition->name);
     fprintf(fp, "path '%s'\n", partition->path);
-    if (partition->cpu)
-        fprintf(fp, "cpu-shares %u\n", partition->cpu);
-    if (partition->mem) {
-        if ((partition->mem / M) && !(partition->mem % M)) {
+
+    if (partition->limit.cpu)
+        fprintf(fp, "cpu-shares %u\n", partition->limit.cpu);
+    if ((mem = partition->limit.mem) != 0) {
+        if ((mem / M) && !(mem % M)) {
             unitdiv = 1024 * 1024;
             unitsuf = "M";
         }
-        else if ((partition->mem / K) && !(partition->mem % K)) {
+        else if ((mem / K) && !(mem % K)) {
             unitdiv = 1024;
             unitsuf = "K";
         }
@@ -252,49 +191,53 @@ partition_print(cgrp_context_t *ctx, cgrp_partition_t *partition, FILE *fp)
             unitdiv = 1;
             unitsuf = "";
         }
-        fprintf(fp, "memory-limit %u%s\n", partition->mem / unitdiv, unitsuf);
+        fprintf(fp, "memory-limit %llu%s\n", mem / unitdiv, unitsuf);
     }
 }
 
 
 /********************
- * partition_process
+ * partition_add_process
  ********************/
 int
-partition_process(cgrp_partition_t *partition, pid_t pid)
+partition_add_process(cgrp_partition_t *partition, pid_t pid)
 {
     char tasks[PIDLEN + 1];
-    int  len;
+    int  len, chk;
 
-#if 0
-    printf("*** repartitioning process %u to '%s'\n", pid, partition->name);
-#endif
-    
-    len = sprintf(tasks, "%u\n", pid);
+    len = sprintf(tasks, "%u\n", pid); 
+    chk = write(partition->control.tasks, tasks, len);
 
-    return (write(partition->tasks, tasks, len) == len);
+    return chk == len;
 }
 
 
 /********************
- * partition_group
+ * partition_add_group
  ********************/
 int
-partition_group(cgrp_partition_t *partition, cgrp_group_t *group)
+partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
     char            pid[64];
-    int             len, success;
+    int             len, chk, success;
     
     if (group->partition == partition)
         return TRUE;
 
     success = TRUE;
     list_foreach(&group->processes, p, n) {
-        process  = list_entry(p, cgrp_process_t, group_hook);
-        len      = sprintf(pid, "%u", process->pid);
-        success &= write(partition->tasks, pid, len) == len ? TRUE : FALSE;
+        process = list_entry(p, cgrp_process_t, group_hook);
+
+        len = sprintf(pid, "%u", process->pid);
+        chk = write(partition->control.tasks, pid, len);
+
+        OHM_DEBUG(DBG_ACTION, "adding process %s (%s) to partition '%s': %s",
+                  pid, process->binary, partition->name,
+                  chk == len ? "OK" : "FAILED");
+
+        success &= (chk == len ? TRUE : FALSE);
     }
 
     group->partition = partition;
@@ -311,38 +254,18 @@ partition_freeze(cgrp_partition_t *partition, int freeze)
 {
     char *cmd;
     int   len;
-    
-    if (partition->freeze < 0)
-        return TRUE;
 
-    if (freeze) {
-        cmd = FROZEN;
-        len = sizeof(FROZEN) - 1;
-    }
-    else {
-        cmd = THAWED;
-        len = sizeof(THAWED) - 1;
-    }
+    if (partition->control.freeze >= 0) {
+        if (freeze) {
+            cmd = FROZEN;
+            len = sizeof(FROZEN) - 1;
+        }
+        else {
+            cmd = THAWED;
+            len = sizeof(THAWED) - 1;
+        }
 
-    return write(partition->freeze, cmd, len) == len;
-}
-
-
-/********************
- * partition_set_cpu_share
- ********************/
-int
-partition_set_cpu_share(cgrp_partition_t *partition, unsigned int share)
-{
-    char buf[64];
-    int  len, chk;
-    
-    partition->cpu = share;
-    
-    if (partition->cpu_shares >= 0 && share != 0) {
-        len = snprintf(buf, sizeof(buf), "%u", share);
-        chk = write(partition->cpu_shares, buf, len);
-        return (len == chk);
+        return write(partition->control.freeze, cmd, len) == len;
     }
     else
         return FALSE;
@@ -350,24 +273,93 @@ partition_set_cpu_share(cgrp_partition_t *partition, unsigned int share)
 
 
 /********************
- * partition_set_mem_limit
+ * partition_limit_cpu
  ********************/
 int
-partition_set_mem_limit(cgrp_partition_t *partition, unsigned int limit)
+partition_limit_cpu(cgrp_partition_t *partition, unsigned int share)
 {
-    char buf[64];
+    char val[64];
     int  len, chk;
-    
-    partition->mem = limit;
 
-    if (partition->mem_limit >= 0 && limit != 0) {
-        len = snprintf(buf, sizeof(buf), "%u", limit);
-        chk = write(partition->mem_limit, buf, len);
-        return (len == chk);
+    partition->limit.cpu = share;
+    
+    if (partition->control.cpu >= 0 && share > 0) {
+        len = snprintf(val, sizeof(val), "%u", share);
+        chk = write(partition->control.cpu, val, len);
+        return chk == len;
     }
     else
         return FALSE;
 }
+
+
+/********************
+ * partition_limit_mem
+ ********************/
+int
+partition_limit_mem(cgrp_partition_t *partition, unsigned int limit)
+{
+    char val[128];
+    int  len, chk;
+
+    partition->limit.mem = limit;
+
+    if (partition->control.mem >= 0 && limit > 0) {
+        len = snprintf(val, sizeof(val), "%u", limit);
+        chk = write(partition->control.mem, val, len);
+        return (chk == len);
+    }
+    else
+        return FALSE;
+}
+
+
+
+/********************
+ * open_control
+ ********************/
+static int
+open_control(cgrp_partition_t *partition, char *control)
+{
+    char path[PATH_MAX];
+
+    snprintf(path, sizeof(path), "%s/%s", partition->path, control);
+    return open(path, O_WRONLY);
+}
+
+
+/********************
+ * foreach_print
+ ********************/
+static void
+foreach_print(gpointer key, gpointer value, gpointer user_data)
+{
+    cgrp_partition_t *partition = (cgrp_partition_t *)value;
+    FILE             *fp        = (FILE *)user_data;
+    
+    (void)key;
+
+    partition_print(partition, fp);
+}
+
+
+/********************
+ * foreach_del
+ ********************/
+static void
+foreach_del(gpointer key, gpointer value, gpointer user_data)
+{
+    cgrp_partition_t *partition = (cgrp_partition_t *)value;
+    cgrp_context_t   *ctx       = (cgrp_context_t   *)user_data;
+
+    (void)key;
+    
+    partition_del(ctx, partition);
+}
+
+
+
+
 
 
 /* 

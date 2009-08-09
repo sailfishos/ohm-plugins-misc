@@ -16,13 +16,27 @@
 
 #define PLUGIN_PREFIX   cgroups
 #define PLUGIN_NAME    "cgroups"
-#define PLUGIN_VERSION "0.0.1"
+#define PLUGIN_VERSION "0.0.2"
 
 #define DEFAULT_CONFIG "/etc/ohm/plugins.d/syspart.conf"
 #define DEFAULT_NOTIFY 3001
 
+#define CGRP_FACT_GROUP "com.nokia.cgroups.group"
+#define CGRP_FACT_PART  "com.nokia.cgroups.partition"
+
 #define APP_ACTIVE   "active"
 #define APP_INACTIVE "standby"
+
+
+#define CGRP_SET_FLAG(flags, bit) ((flags) |=  (1 << (bit)))
+#define CGRP_TST_FLAG(flags, bit) ((flags) &   (1 << (bit)))
+#define CGRP_CLR_FLAG(flags, bit) ((flags) &= ~(1 << (bit)))
+
+#define CGRP_SET_MASK(mask, bit) ((mask) |=  (1ULL << (bit)))
+#define CGRP_TST_MASK(mask, bit) ((mask) &   (1ULL << (bit)))
+#define CGRP_CLR_MASK(mask, bit) ((mask) &= ~(1ULL << (bit)))
+
+typedef u64_t cgrp_mask_t;
 
 
 /*
@@ -30,20 +44,34 @@
  */
 
 typedef enum {
-    CGRP_PARTFLAG_NONE     = 0x0,
-    CGRP_PARTFLAG_NOFREEZE = 0x1,           /* partition not freezable */
+    CGRP_PARTITION_NONE     = 0x0,
+    CGRP_PARTITION_NOFREEZE = 0x1,          /* partition not freezable */
+    CGRP_PARTITION_FACT     = 0x2,          /* export partition to factstore */
 } cgrp_part_flag_t;
 
+
+#define CGRP_NO_CONTROL (-1)
+#define CGRP_NO_LIMIT     0
+
 typedef struct {
-    char *name;                             /* name of this partition */
-    char *path;                             /* path to this partition */
-    int   flags;                            /* partition flags */
-    int   tasks;                            /* task control */
-    int   freeze;                           /* freeze control */
-    int   cpu_shares;                       /* CPU share/weight control */
-    int   mem_limit;                        /* memory limit control */
-    unsigned int cpu;                       /* cpu limit */
-    unsigned int mem;                       /* memory limit */
+    char             *name;                 /* name of this partition */
+    char             *path;                 /* path to this partition */
+    int               flags;                  /* partition flags */
+    struct {                                /* control file descriptors */
+        int           tasks;                  /* partition tasks */
+        int           freeze;                 /* partition freezer */
+        int           cpu;                    /* CPU share/weight */
+        int           mem;                    /* memory limit */
+    } control;
+    struct {                                /* resource limits */
+        unsigned int  cpu;                    /* CPU shares */
+        u64_t         mem;                    /* max memory in bytes */
+    } limit;
+
+#if 0    
+    list_hook_t       hash_bucket;          /* hook to hash bucket chain */
+    list_hook_t       hash_next;            /* hook to next hash entry */
+#endif
 } cgrp_partition_t;
 
 
@@ -54,6 +82,7 @@ typedef struct {
 typedef enum {
     CGRP_GROUPFLAG_NONE   = 0x0,
     CGRP_GROUPFLAG_STATIC = 0x1,            /* statically partitioned group */
+    CGRP_GROUPFLAG_FACT   = 0x2,            /* export group to factstore */
 } cgrp_group_flag_t;
 
 #define CGRP_DEFAULT_PRIORITY 0xffff
@@ -64,6 +93,7 @@ typedef struct {
     int               flags;                /* group flags */
     list_hook_t       processes;            /* processes in this group */
     cgrp_partition_t *partition;            /* current partititon */
+    OhmFact          *fact;                 /* fact for this group */
     unsigned int      priority;             /* priority if given */
 } cgrp_group_t;
 
@@ -97,10 +127,10 @@ typedef struct {
 } cgrp_cmd_reclassify_t;
 
 typedef union {
-    cgrp_cmd_any_t        any;              /* any command */
-    cgrp_cmd_group_t      group;            /* group classification command */
-    cgrp_cmd_any_t        ignore;           /* ignore command */
-    cgrp_cmd_reclassify_t reclassify;       /* ignore command */
+    cgrp_cmd_any_t         any;             /* any command */
+    cgrp_cmd_group_t       group;           /* group classification command */
+    cgrp_cmd_any_t         ignore;          /* ignore command */
+    cgrp_cmd_reclassify_t  reclassify;      /* reclassify command */
 } cgrp_cmd_t;
 
 
@@ -245,7 +275,7 @@ typedef enum {
 
 
 typedef struct {
-    u64_t              mask;                /* attribute mask */
+    cgrp_mask_t        mask;                /* attribute mask */
     pid_t              pid;                 /* process id */
     pid_t              ppid;                /* parent process id */
     char              *binary;              /* path to binary */
@@ -258,19 +288,47 @@ typedef struct {
 } cgrp_proc_attr_t;
 
 
+
+#if 0
+
+/*
+ * a hash table
+ */
+
+typedef struct {
+    list_hook_t *buckets;                   /* hash buckets */
+    int          nbucket;                   /* number of buckets */
+    list_hook_t  entries;                   /* hash table entries */
+} cgrp_hash_table_t;
+
+#endif
+
+
 /*
  * system partitioning context
  */
 
+enum {
+    CGRP_FLAG_NONE        = 0x0,
+    CGRP_FLAG_GROUP_FACTS = 0x1,
+    CGRP_FLAG_PART_FACTS  = 0x2,
+};
+
+
 typedef struct {
-    cgrp_partition_t *partitions;           /* system partitions */
-    int               npartition;           /* number of partitions */
+    int flags;
+} cgrp_options_t;
+
+
+typedef struct {
     cgrp_partition_t *root;                 /* root partition */
     cgrp_group_t     *groups;               /* classification groups */
     int               ngroup;               /* number of groups */
     cgrp_procdef_t   *procdefs;             /* process definitions */
     int               nprocdef;             /* number of process definitions */
     cgrp_procdef_t   *fallback;             /* fallback process definition */
+
+    cgrp_options_t    options;              /* global options */
 
     GHashTable       *ruletbl;              /* lookup table of procdefs */
     GHashTable       *grouptbl;             /* lookup table of groups */
@@ -299,8 +357,9 @@ typedef struct {
 } cgrp_reclassify_t;
 
 
+
 /* cgrp-plugin.c */
-extern int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
+extern int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
 
 /* cgrp-process.c */
 int  proc_init(cgrp_context_t *);
@@ -315,13 +374,12 @@ pid_t   process_get_ppid   (cgrp_proc_attr_t *);
 
 cgrp_proc_type_t process_get_type(cgrp_proc_attr_t *);
 
-int process_set_group(cgrp_context_t *, cgrp_process_t *, cgrp_group_t *);
-int process_clear_group(cgrp_process_t *);
 int process_ignore(cgrp_context_t *, cgrp_process_t *);
 int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
 int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
 int process_set_priority(cgrp_process_t *, int);
+void procattr_dump(cgrp_proc_attr_t *);
 
 
 
@@ -331,18 +389,16 @@ void partition_exit(cgrp_context_t *);
 int  partition_config(cgrp_context_t *);
 
 cgrp_partition_t *partition_add(cgrp_context_t *, cgrp_partition_t *);
-int               partition_open(cgrp_partition_t *, const char *,const char *);
-void              partition_close(cgrp_partition_t *);
-cgrp_partition_t *partition_find(cgrp_context_t *, const char *);
+void              partition_del(cgrp_context_t *, cgrp_partition_t *);
 cgrp_partition_t *partition_lookup(cgrp_context_t *, const char *);
 
 void partition_dump(cgrp_context_t *, FILE *);
-void partition_print(cgrp_context_t *, cgrp_partition_t *, FILE *);
-int partition_process(cgrp_partition_t *, pid_t);
-int partition_group(cgrp_partition_t *, cgrp_group_t *);
+void partition_print(cgrp_partition_t *, FILE *);
+int partition_add_process(cgrp_partition_t *, pid_t);
+int partition_add_group(cgrp_partition_t *, cgrp_group_t *);
 int partition_freeze(cgrp_partition_t *, int);
-int partition_set_cpu_share(cgrp_partition_t *, unsigned int);
-int partition_set_mem_limit(cgrp_partition_t *, unsigned int);
+int partition_limit_cpu(cgrp_partition_t *, unsigned int);
+int partition_limit_mem(cgrp_partition_t *, unsigned int);
 
 
 /* cgrp-group.c */
@@ -351,13 +407,17 @@ void group_exit(cgrp_context_t *);
 int  group_config(cgrp_context_t *);
 
 cgrp_group_t *group_add(cgrp_context_t *, cgrp_group_t *);
-void          group_purge(cgrp_group_t *);
+void          group_purge(cgrp_context_t *, cgrp_group_t *);
 cgrp_group_t *group_find(cgrp_context_t *, const char *);
 cgrp_group_t *group_lookup(cgrp_context_t *, const char *);
 
 void group_dump(cgrp_context_t *, FILE *);
 void group_print(cgrp_context_t *, cgrp_group_t *, FILE *);
+
+int  group_add_process(cgrp_context_t *, cgrp_group_t *, cgrp_process_t *);
+int  group_del_process(cgrp_process_t *);
 int  group_set_priority(cgrp_group_t *, int);
+
 
 /* cgrp_procdef.c */
 int  procdef_init(cgrp_context_t *);
@@ -409,6 +469,7 @@ void part_hash_exit  (cgrp_context_t *);
 int  part_hash_insert(cgrp_context_t *, cgrp_partition_t *);
 int  part_hash_delete(cgrp_context_t *, const char *);
 cgrp_partition_t *part_hash_lookup(cgrp_context_t *, const char *);
+void part_hash_foreach(cgrp_context_t *, GHFunc , void *);
 
 
 
@@ -436,9 +497,19 @@ void config_print(cgrp_context_t *, FILE *);
 int  lexer_init(FILE *);
 void lexer_exit(void);
 
-/* cgrp-utils.h */
+/* cgrp-utils.c */
 uid_t cgrp_getuid(const char *);
 gid_t cgrp_getgid(const char *);
+
+/* cgrp-facts.c */
+int  fact_init(cgrp_context_t *);
+void fact_exit(cgrp_context_t *);
+
+OhmFact *fact_create(cgrp_context_t *, const char *, const char *);
+void     fact_delete(cgrp_context_t *, OhmFact *);
+
+void fact_add_process(OhmFact *, cgrp_process_t *);
+void fact_del_process(OhmFact *, cgrp_process_t *);
 
 /* cgrp-notify.c */
 int  notify_init(cgrp_context_t *, int);

@@ -31,8 +31,8 @@ typedef enum {
 } lexer_type_t;
 
 
-static void lexer_error(int lineno, const char *format, ...);
-static int  yywrap(void);
+static void       lexer_error(int lineno, const char *format, ...);
+static inline int cgrpyywrap(void);
 
 static int debug = FALSE;
 static int lineno;
@@ -54,8 +54,8 @@ static int  ringoffs = 0;
        ringoffs += __size;                              \
                                                         \
        strcpy(__token, v);                              \
-       yylval.any.token  = __token;                     \
-       yylval.any.lineno = lineno;                      \
+       cgrpyylval.any.token  = __token;                 \
+       cgrpyylval.any.lineno = lineno;                  \
        DEBUG("SAVE(\"%s\")", __token);                  \
        __token; })
 
@@ -75,8 +75,8 @@ static int  ringoffs = 0;
                                                            \
        strncpy(__token, v, n);                             \
        __token[(n)] = '\0';                                \
-       yylval.any.token  = __token;                        \
-       yylval.any.lineno = lineno;                         \
+       cgrpyylval.any.token  = __token;                    \
+       cgrpyylval.any.lineno = lineno;                     \
        DEBUG("SAVE(\"%s\")", __token);                     \
        __token;                                            \
    })
@@ -85,7 +85,7 @@ static int  ringoffs = 0;
 #define TOKEN(type) do {                                             \
         DEBUG("TOKEN_%s", #type);                                    \
                                                                      \
-        SAVE(yytext);                                                \
+        SAVE(cgrpyytext);                                            \
                                                                      \
         return TOKEN_##type;                                         \
     } while (0)
@@ -96,19 +96,19 @@ static int  ringoffs = 0;
                                                                      \
         DEBUG("TOKEN_%s", #type);                                    \
                                                                      \
-        __token = SAVE(yytext);                                      \
+        __token = SAVE(cgrpyytext);                                  \
         __value = strchr(__token, ':');                              \
         __value = __value ? __value + 1 : __token;                   \
                                                                      \
         switch(type) {                                               \
         case ARG:                                                    \
-	    yylval.uint32.value = PARSE_INT(u32_t, __value+3);       \
+	    cgrpyylval.uint32.value = PARSE_INT(u32_t, __value+3);   \
 	    break;                                                   \
         case UINT:                                                   \
-	    yylval.uint32.value = PARSE_INT(u32_t, __value);         \
+	    cgrpyylval.uint32.value = PARSE_INT(u32_t, __value);     \
 	    break;                                                   \
         case SINT:                                                   \
-	    yylval.uint32.value = PARSE_INT(s32_t, __value);         \
+	    cgrpyylval.uint32.value = PARSE_INT(s32_t, __value);     \
 	    break;                                                   \
 	default:                                                     \
             lexer_error(lineno, "invalid numeric type %s", #type);   \
@@ -124,22 +124,22 @@ static int  ringoffs = 0;
                                                                      \
         DEBUG("TOKEN_%s", #type);                                    \
                                                                      \
-        __len    = yyleng;                                           \
-        __value  = strchr(yytext, ':');                              \
-        __value  = __value && __value != yytext ?                    \
-	           __value + 1 : yytext;                             \
-        __len   -= (__value - yytext);                               \
+        __len    = cgrpyyleng;                                       \
+        __value  = strchr(cgrpyytext, ':');                          \
+        __value  = __value && __value != cgrpyytext ?                \
+	           __value + 1 : cgrpyytext;                         \
+        __len   -= (__value - cgrpyytext);                           \
         switch (type) {                                              \
         case STRING:                                                 \
             if (__value[0] == '\'' || __value[0] == '\"')            \
                 __token = SAVEN(__value + 1, __len - 2);             \
             else                                                     \
                 __token = SAVE(__value);                             \
-            yylval.string.value = __token;                           \
+            cgrpyylval.string.value = __token;                       \
             break;                                                   \
         case IDENT:                                                  \
         case PATH:                                                   \
-            yylval.string.value = SAVE(__value);                     \
+            cgrpyylval.string.value = SAVE(__value);                 \
             break;                                                   \
 	default:                                                     \
             lexer_error(lineno, "invalid string type %s", #type);    \
@@ -167,8 +167,8 @@ static int  ringoffs = 0;
 int
 lexer_init(FILE *fp)
 {
-    yybuf = yy_create_buffer(fp, YY_BUF_SIZE);
-    yy_switch_to_buffer(yybuf);
+    yybuf = cgrpyy_create_buffer(fp, YY_BUF_SIZE);
+    cgrpyy_switch_to_buffer(yybuf);
     lineno = 1;
 
     return TRUE;
@@ -177,7 +177,7 @@ lexer_init(FILE *fp)
 void
 lexer_exit(void)
 {
-    yy_delete_buffer(yybuf);
+    cgrpyy_delete_buffer(yybuf);
 }
 
 void
@@ -204,8 +204,8 @@ lexer_error(int lineno, const char *format, ...)
     exit(1);
 }
 
-static int
-yywrap(void)
+static inline int
+cgrpyywrap(void)
 {
     return 1;
 }
@@ -219,21 +219,24 @@ WHITESPACE      [ \t]+
 COMMENT_FULL    ^[ \t]*#.*$
 COMMENT_TRAIL   [ \t]*#.*$
 
-KW_GLOBAL       global
-KW_PARTITION    partition
-KW_DESCRIPTION  description
-KW_PATH         path
-KW_CPU_SHARES   cpu-shares
-KW_MEM_LIMIT    memory-limit
-KW_RULE         rule
-KW_BINARY       binary
-KW_CMDLINE      commandline
-KW_GROUP        group
-KW_TYPE         type
-KW_USER         user
-KW_PARENT       parent
-KW_IGNORE       ignore
+KW_GLOBAL        \[global\]
+KW_PARTITION     partition
+KW_DESCRIPTION   description
+KW_PATH          path
+KW_CPU_SHARES    cpu-shares
+KW_MEM_LIMIT     memory-limit
+KW_RULE          rule
+KW_BINARY        binary
+KW_CMDLINE       commandline
+KW_GROUP         group
+KW_TYPE          type
+KW_USER          user
+KW_PARENT        parent
+KW_IGNORE        ignore
 KW_RECLASSIFY    reclassify-after
+KW_EXPORT_GROUPS export-group-facts
+KW_EXPORT_PARTS  export-partition-facts
+KW_EXPORT_FACT   export-fact
 
 HEADER_OPEN     \[
 HEADER_CLOSE    \]
@@ -262,21 +265,24 @@ SINT            [+|-]?[0-9]+
 
 {EOL}              { IGNORE(EOL); lineno++;              }
 
-{KW_GLOBAL}        { TOKEN(KW_GLOBAL);      }
-{KW_PARTITION}     { TOKEN(KW_PARTITION);   }
-{KW_DESCRIPTION}   { TOKEN(KW_DESCRIPTION); }
-{KW_PATH}          { TOKEN(KW_PATH);        }
-{KW_CPU_SHARES}    { TOKEN(KW_CPU_SHARES);  }
-{KW_MEM_LIMIT}     { TOKEN(KW_MEM_LIMIT);   }
-{KW_RULE}          { TOKEN(KW_RULE);        }
-{KW_GROUP}         { TOKEN(KW_GROUP);       }
-{KW_USER}          { TOKEN(KW_USER);        }
-{KW_PARENT}        { TOKEN(KW_PARENT);      }
-{KW_BINARY}        { TOKEN(KW_BINARY);      }
-{KW_CMDLINE}       { TOKEN(KW_CMDLINE);     }
-{KW_TYPE}          { TOKEN(KW_TYPE);        }
-{KW_IGNORE}        { TOKEN(KW_IGNORE);      }
-{KW_RECLASSIFY}    { TOKEN(KW_RECLASSIFY);  }
+{KW_GLOBAL}        { TOKEN(KW_GLOBAL);        }
+{KW_PARTITION}     { TOKEN(KW_PARTITION);     }
+{KW_DESCRIPTION}   { TOKEN(KW_DESCRIPTION);   }
+{KW_CPU_SHARES}    { TOKEN(KW_CPU_SHARES);    }
+{KW_MEM_LIMIT}     { TOKEN(KW_MEM_LIMIT);     }
+{KW_PATH}          { TOKEN(KW_PATH);          }
+{KW_RULE}          { TOKEN(KW_RULE);          }
+{KW_GROUP}         { TOKEN(KW_GROUP);         }
+{KW_USER}          { TOKEN(KW_USER);          }
+{KW_PARENT}        { TOKEN(KW_PARENT);        }
+{KW_BINARY}        { TOKEN(KW_BINARY);        }
+{KW_CMDLINE}       { TOKEN(KW_CMDLINE);       }
+{KW_TYPE}          { TOKEN(KW_TYPE);          }
+{KW_IGNORE}        { TOKEN(KW_IGNORE);        }
+{KW_RECLASSIFY}    { TOKEN(KW_RECLASSIFY);    }
+{KW_EXPORT_GROUPS} { TOKEN(KW_EXPORT_GROUPS); }
+{KW_EXPORT_PARTS}  { TOKEN(KW_EXPORT_PARTS);  }
+{KW_EXPORT_FACT}   { TOKEN(KW_EXPORT_FACT);   }
 
 {HEADER_OPEN}      { TOKEN(HEADER_OPEN);    }
 {HEADER_CLOSE}     { TOKEN(HEADER_CLOSE);   }

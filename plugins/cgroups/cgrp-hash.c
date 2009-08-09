@@ -164,10 +164,13 @@ proc_hash_lookup(cgrp_context_t *ctx, pid_t pid)
     
     list_foreach(ctx->proctbl + idx, p, n) {
         proc = list_entry(p, cgrp_process_t, proc_hook);
-        if (proc->pid == pid)
+        if (proc->pid == pid) {
+            OHM_DEBUG(DBG_ACTION, "pid %u -> %s", pid, proc->binary);
             return proc;
+        }
     }
 
+    OHM_DEBUG(DBG_ACTION, "pid %u: NOT FOUND", pid);
     return NULL;
 }
 
@@ -289,7 +292,14 @@ part_hash_lookup(cgrp_context_t *ctx, const char *name)
 }
 
 
-
+/********************
+ * part_hash_foreach
+ ********************/
+void
+part_hash_foreach(cgrp_context_t *ctx, GHFunc func, void *data)
+{
+    g_hash_table_foreach(ctx->parttbl, func, data);
+}
 
 /* 
  * Local Variables:

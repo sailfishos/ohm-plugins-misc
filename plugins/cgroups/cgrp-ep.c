@@ -136,7 +136,7 @@ reparent_action(cgrp_context_t *ctx, void *data)
         return FALSE;
     }
     
-    success = partition_group(partition, group);
+    success = partition_add_group(partition, group);
 
     OHM_DEBUG(DBG_ACTION, "reparenting group '%s' to partition '%s' %s",
               action->group, action->partition, success ? "OK" : "FAILED");
@@ -187,7 +187,7 @@ schedule_action(cgrp_context_t *ctx, void *data)
         return TRUE;
     }
     
-    success = partition_set_cpu_share(partition, action->share);
+    success = partition_limit_cpu(partition, action->share);
     
     OHM_DEBUG(DBG_ACTION, "setting CPU share %d of partition %s: %s",
               action->share, action->partition, success ? "OK" : "FAILED");
@@ -212,7 +212,7 @@ limit_action(cgrp_context_t *ctx, void *data)
         return TRUE;
     }
     
-    success = partition_set_mem_limit(partition, action->limit);
+    success = partition_limit_mem(partition, action->limit);
     
     OHM_DEBUG(DBG_ACTION, "setting memory limit %.2f k for partition %s: %s",
               (1.0 * action->limit) / 1024.0, action->partition,

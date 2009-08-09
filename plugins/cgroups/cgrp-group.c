@@ -26,7 +26,7 @@ group_exit(cgrp_context_t *ctx)
     group_hash_exit(ctx);
    
     for (i = 0, group = ctx->groups; i < ctx->ngroup; i++, group++)
-        group_purge(group);
+        group_purge(ctx, group);
     
     FREE(ctx->groups);
     
@@ -74,14 +74,20 @@ group_add(cgrp_context_t *ctx, cgrp_group_t *g)
     group->name        = STRDUP(g->name);
     group->description = STRDUP(g->description);
     group->partition   = g->partition;
+    group->flags       = g->flags;
     group->priority    = CGRP_DEFAULT_PRIORITY;
-
     list_init(&group->processes);
+
+    if (ctx->options.flags & CGRP_FLAG_GROUP_FACTS)
+        group->flags |= CGRP_GROUPFLAG_FACT;
 
     if (group->name == NULL || group->description == NULL) {
         OHM_ERROR("cgrp: failed to add group");
         return NULL;
     }
+
+    if (group->flags & CGRP_GROUPFLAG_FACT)
+        group->fact = fact_create(ctx, CGRP_FACT_GROUP, group->name);
     
     return group;
 }
@@ -91,7 +97,7 @@ group_add(cgrp_context_t *ctx, cgrp_group_t *g)
  * group_purge
  ********************/
 void
-group_purge(cgrp_group_t *group)
+group_purge(cgrp_context_t *ctx, cgrp_group_t *group)
 {
     if (group) {
         FREE(group->name);
@@ -100,6 +106,9 @@ group_purge(cgrp_group_t *group)
         group->name        = NULL;
         group->description = NULL;
         list_init(&group->processes);
+
+        if (group->fact != NULL)
+            fact_delete(ctx, group->fact);
     }
 }
 
@@ -162,6 +171,72 @@ group_print(cgrp_context_t *ctx, cgrp_group_t *group, FILE *fp)
 
 
 /********************
+ * group_add_process
+ ********************/
+int
+group_add_process(cgrp_context_t *ctx,
+                  cgrp_group_t *group, cgrp_process_t *process)
+{
+    cgrp_group_t *old = process->group;
+    int           success;
+
+    if (group == old)
+        return TRUE;
+    
+    if (old != NULL) {
+        list_delete(&process->group_hook);
+        if (old->fact)
+            fact_del_process(old->fact, process);
+    }
+    
+    process->group = group;
+    list_append(&group->processes, &process->group_hook);
+    
+    if (group->fact)
+        fact_add_process(group->fact, process);
+
+    if (group->partition)
+        success = partition_add_process(group->partition, process->pid);
+    else if (old && old->partition)
+        success = partition_add_process(ctx->root, process->pid);
+    else
+        success = TRUE;
+
+    if (ctx->active_process == process) {
+        ctx->active_group = group;
+        notify_group_change(ctx, old, group);
+    }
+
+    if (group->priority != CGRP_DEFAULT_PRIORITY)
+        success &= process_set_priority(process, group->priority);
+    
+    return success;
+}
+
+
+/********************
+ * group_del_process
+ ********************/
+int
+group_del_process(cgrp_process_t *process)
+{
+    cgrp_group_t *group = process->group;
+
+    if (group != NULL) {
+        if (group->fact != NULL)
+            fact_del_process(group->fact, process);
+        
+        process->group = NULL;
+    }
+    
+    if (!list_empty(&process->group_hook))
+        list_delete(&process->group_hook);
+    
+    return TRUE;
+}
+
+
+/********************
  * group_set_priority
  ********************/
 int
@@ -190,7 +265,6 @@ group_set_priority(cgrp_group_t *group, int priority)
     
     return success;
 }
-
 
 
 /* 

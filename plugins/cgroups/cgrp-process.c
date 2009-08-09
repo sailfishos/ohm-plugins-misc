@@ -31,10 +31,10 @@ static pid_t mypid = 0;
 static GIOChannel *gioc = NULL;
 static guint       gsrc = 0;
 
-static int  proc_subscribe  (cgrp_context_t *ctx);
-static int  proc_unsubscribe(void);
-static void proc_dump_event (struct proc_event *event);
-static int  proc_request    (enum proc_cn_mcast_op req);
+static int         proc_subscribe  (cgrp_context_t *ctx);
+static int         proc_unsubscribe(void);
+static inline void proc_dump_event (struct proc_event *event);
+static int         proc_request    (enum proc_cn_mcast_op req);
 
 static int  netlink_create(void);
 static void netlink_close (void);
@@ -210,48 +210,64 @@ proc_recv(unsigned char *buf, size_t bufsize, int block)
 /********************
  * proc_dump_event
  ********************/
-static void
+static inline void
 proc_dump_event(struct proc_event *event)
 {
-    switch (event->what) {
-    case PROC_EVENT_NONE:
-        OHM_INFO("cgrp: process event <none> (ACK)");
-        break;
+    struct fork_proc_event *fork;
+    struct exec_proc_event *exec;
+    struct id_proc_event   *id;
+    struct exit_proc_event *exit;
+    const char             *action;
+    
 
+    switch (event->what) {
     case PROC_EVENT_FORK:
-        OHM_INFO("cgrp: <pid %u> has forked <pid %u/%u>",
-                 event->event_data.fork.parent_pid,
-                 event->event_data.fork.child_pid,
-                 event->event_data.fork.child_tgid);
+        fork = &event->event_data.fork;
+        if (fork->child_tgid == fork->parent_tgid)
+            action = "new thread";
+        else
+            action = "forked";
+        OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has %s <pid %u/%u>", 
+                  fork->parent_pid, fork->parent_tgid,
+                  action, fork->child_pid, fork->child_tgid);
         break;
         
     case PROC_EVENT_EXEC:
-        OHM_INFO("cgrp: <pid %u> has exec'd a new binary",
-                 event->event_data.exec.process_pid);
+        exec = &event->event_data.exec;
+        OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has exec'd a new binary",
+                  exec->process_pid, exec->process_tgid);
         break;
 
     case PROC_EVENT_UID:
-        OHM_INFO("cgrp: <pid %u> has now new UID <task: %u/%u, e: %u/%u>",
-                 event->event_data.id.process_pid,
-                 event->event_data.id.r.ruid, event->event_data.id.r.rgid,
-                 event->event_data.id.e.euid, event->event_data.id.e.egid);
+        id = &event->event_data.id;
+        OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has now new UID <ruid: %u, euid: %u>",
+                  id->process_pid, id->process_tgid,
+                  id->r.ruid, id->e.euid);
         break;
 
     case PROC_EVENT_GID:
-        OHM_INFO("cgrp: <pid %u> has now new GID <task: %u/%u, e: %u/%u>",
-                 event->event_data.id.process_pid,
-                 event->event_data.id.r.ruid, event->event_data.id.r.rgid,
-                 event->event_data.id.e.euid, event->event_data.id.e.egid);
+        id = &event->event_data.id;
+        OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has now new GID <rgid: %u, egid: %u>",
+                  id->process_pid, id->process_tgid,
+                  id->r.rgid, id->e.egid);
         break;
         
     case PROC_EVENT_EXIT:
-        OHM_INFO("cgrp: <pid %u> has exited (exit code %u)",
-                 event->event_data.exit.process_pid,
-                 event->event_data.exit.exit_code);
+        exit = &event->event_data.exit;
+        if (exit->process_pid == exit->process_tgid)
+            OHM_DEBUG(DBG_EVENT, "<pid %u> has exited (ec: %u)",
+                      exit->process_pid, exit->exit_code);
+        else
+            OHM_DEBUG(DBG_EVENT, "<pid %u> has lost thread <%u> (ec: %u)",
+                      exit->process_tgid, exit->process_pid, exit->exit_code);
         break;
-                 
+
+    case PROC_EVENT_NONE:
+        OHM_DEBUG(DBG_EVENT, "process event <none> (ACK)");
+        break;
+        
     default:
-        OHM_INFO("cgrp: unknown process event 0x%x", event->what);
+        OHM_DEBUG(DBG_EVENT, "unknown process event 0x%x", event->what);
     }
 }
 
@@ -271,39 +287,24 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 
     if (mask & G_IO_IN) {
         while ((event = proc_recv(buf, sizeof(buf), FALSE)) != NULL) {
+            proc_dump_event(event);
             switch (event->what) {
             case PROC_EVENT_FORK:
-                OHM_DEBUG(DBG_EVENT, "<%u has forked %u>",
-                          event->event_data.fork.parent_pid,
-                          event->event_data.fork.child_pid);
                 classify_process(ctx, event->event_data.fork.child_pid, FALSE);
                 break;
             case PROC_EVENT_EXEC:
-                OHM_DEBUG(DBG_EVENT, "<%u has exec'd a new image>",
-                          event->event_data.exec.process_pid);
-                classify_process(ctx, event->event_data.exec.process_pid,FALSE);
+                classify_process(ctx,event->event_data.exec.process_pid, FALSE);
                 break;
             case PROC_EVENT_UID:
-                OHM_DEBUG(DBG_EVENT, "<%u has changed user id from %u to %u>",
-                          event->event_data.id.process_pid,
-                          event->event_data.id.r.ruid,
-                          event->event_data.id.e.euid);
                 break;
             case PROC_EVENT_GID:
-                OHM_DEBUG(DBG_EVENT, "<%u has changed group id from %u to %u>",
-                          event->event_data.id.process_pid,
-                          event->event_data.id.r.rgid,
-                          event->event_data.id.e.egid);
                 break;
             case PROC_EVENT_EXIT:
-                OHM_DEBUG(DBG_EVENT, "<%u has exited with code 0x%x>",
-                          event->event_data.exit.process_pid,
-                          event->event_data.exit.exit_code);
                 process_remove_by_pid(ctx, event->event_data.exit.process_pid);
                 break;
             default:
                 break;
-                }
+            }
         }
     }
     
@@ -442,9 +443,9 @@ process_get_binary(cgrp_proc_attr_t *attr)
 char *
 process_get_cmdline(cgrp_proc_attr_t *attr)
 {
-    if (attr->mask & (1ULL << CGRP_PROC_CMDLINE))
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_CMDLINE))
         return attr->cmdline;
-
+    
     if (process_get_argv(attr) != NULL)
         return attr->cmdline;
     else
@@ -462,7 +463,7 @@ process_get_argv(cgrp_proc_attr_t *attr)
     char **argvp, *argp, *cmdp;
     int    narg, fd, size, term;
 
-    if (attr->mask & (1ULL << CGRP_PROC_CMDLINE))
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_CMDLINE))
         return attr->argv;
 
     if ((cmdp = attr->cmdline) == NULL || (argvp = attr->argv) == NULL)
@@ -484,7 +485,7 @@ process_get_argv(cgrp_proc_attr_t *attr)
     argp = argvp[0];
     narg = 0;
     
-    attr->mask |= (1ULL << CGRP_PROC_CMDLINE);
+    CGRP_SET_MASK(attr->mask, CGRP_PROC_CMDLINE);
 
     term = FALSE;
     for (s = buf, ap = argp, cp = cmdp; size > 0; s++, size--) {
@@ -497,13 +498,14 @@ process_get_argv(cgrp_proc_attr_t *attr)
         else {
             *ap++ = '\0';
             if (narg < CGRP_MAX_ARGS - 1) {
-                attr->mask |= (1ULL << CGRP_PROC_ARG(narg));
+                CGRP_SET_MASK(attr->mask, CGRP_PROC_ARG(narg));
                 argvp[narg++] = argp;
                 argp          = ap;
             }
             term = TRUE;
         }
     }
+    *cp = '\0';
     
     attr->argc = narg;
     return attr->argv;
@@ -519,7 +521,7 @@ process_get_euid(cgrp_proc_attr_t *attr)
     struct stat st;
     char        dir[PATH_MAX];
     
-    if (attr->mask & (1ULL << CGRP_PROC_EUID))
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_EUID))
         return attr->euid;
     
     snprintf(dir, sizeof(dir), "/proc/%u", attr->pid);
@@ -529,7 +531,8 @@ process_get_euid(cgrp_proc_attr_t *attr)
     attr->euid = st.st_uid;
     attr->egid = st.st_gid;
 
-    attr->mask |= (1ULL << CGRP_PROC_EUID) | (1ULL << CGRP_PROC_EGID);
+    CGRP_SET_MASK(attr->mask, CGRP_PROC_EUID);
+    CGRP_SET_MASK(attr->mask, CGRP_PROC_EGID);
     return attr->euid;
 }
 
@@ -540,7 +543,7 @@ process_get_euid(cgrp_proc_attr_t *attr)
 gid_t
 process_get_egid(cgrp_proc_attr_t *attr)
 {
-    if (attr->mask & (1ULL << CGRP_PROC_EGID))
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_EGID))
         return attr->egid;
 
     if (process_get_euid(attr) != (uid_t)-1)
@@ -572,7 +575,7 @@ process_get_type(cgrp_proc_attr_t *attr)
     char *bin, *ppid, *vmsz;
     int   fd, size, nfield;
 
-    if (attr->mask & (1ULL << CGRP_PROC_TYPE))
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_TYPE))
         return attr->type;
     
     sprintf(path, "/proc/%u/stat", attr->pid);
@@ -604,7 +607,8 @@ process_get_type(cgrp_proc_attr_t *attr)
 
     attr->ppid  = (pid_t)strtoul(ppid, NULL, 10);
     attr->type  = (*vmsz == '0') ? CGRP_PROC_KERNEL : CGRP_PROC_USER;
-    attr->mask |= (1ULL << CGRP_PROC_PPID) | (1ULL << CGRP_PROC_TYPE);
+    CGRP_SET_MASK(attr->mask, CGRP_PROC_PPID);
+    CGRP_SET_MASK(attr->mask, CGRP_PROC_TYPE);
     
     if (bin != NULL && *bin == '(') {
         bin++;
@@ -626,7 +630,7 @@ process_get_type(cgrp_proc_attr_t *attr)
         }
 
         sprintf(attr->binary, "%.*s", e - bin + 1, bin);
-        attr->mask |= (1 << CGRP_PROC_BINARY);
+        CGRP_SET_MASK(attr->mask, CGRP_PROC_BINARY);
     }
     
     return attr->type;
@@ -639,66 +643,13 @@ process_get_type(cgrp_proc_attr_t *attr)
 pid_t
 process_get_ppid(cgrp_proc_attr_t *attr)
 {
-    if (attr->mask & (1ULL << CGRP_PROC_PPID))
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_PPID))
         return attr->ppid;
     
     if (process_get_type(attr) != CGRP_PROC_UNKNOWN)
         return attr->ppid;
     else
         return (pid_t)-1;
-}
-
-
-/********************
- * process_set_group
- ********************/
-int
-process_set_group(cgrp_context_t *ctx,
-                  cgrp_process_t *process, cgrp_group_t *group)
-{
-    cgrp_group_t *old = process->group;
-    int           success;
-
-    if (group == old)
-        return TRUE;
-    
-    if (old != NULL)
-        list_delete(&process->group_hook);
-    
-    process->group = group;
-    list_append(&group->processes, &process->group_hook);
-    
-    if (group->partition)
-        success = partition_process(group->partition, process->pid);
-    else if (old && old->partition)
-        success = partition_process(ctx->root, process->pid);
-    else
-        success = TRUE;
-
-    if (ctx->active_process == process) {
-        ctx->active_group = group;
-        notify_group_change(ctx, old, group);
-    }
-
-    if (group->priority != CGRP_DEFAULT_PRIORITY)
-        success &= process_set_priority(process, group->priority);
-    
-    return success;
-}
-
-
-/********************
- * process_clear_group
- ********************/
-int
-process_clear_group(cgrp_process_t *process)
-{
-    if (process->group != NULL) {
-        list_delete(&process->group_hook);
-        process->group = NULL;
-    }
-
-    return TRUE;
 }
 
 
@@ -714,8 +665,8 @@ process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
 
         notify_group_change(ctx, process->group, NULL);
     }
-        
-    process_clear_group(process);
+    
+    group_del_process(process);
     proc_hash_unhash(ctx, process);
     FREE(process->binary);
     FREE(process);
@@ -749,7 +700,7 @@ process_ignore(cgrp_context_t *ctx, cgrp_process_t *process)
 
     process_remove(ctx, process);
 
-    return partition_process(ctx->root, pid);
+    return partition_add_process(ctx->root, pid);
 }
 
 
@@ -762,15 +713,24 @@ process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
     if (!strcmp(state, APP_ACTIVE)) {
         ctx->active_process = process;
         ctx->active_group   = process ? process->group : NULL;
+
+        OHM_DEBUG(DBG_ACTION, "active process: %u (%s), active group: %s",
+                  ctx->active_process->pid, ctx->active_process->binary,
+                  ctx->active_group ? ctx->active_group->name : "<none>");
     }
-    else if (!strcmp(state, APP_INACTIVE) && process == ctx->active_process) {
-        ctx->active_process = NULL;
-        ctx->active_group   = NULL;
+    else if (!strcmp(state, APP_INACTIVE)) {
+        if (process == ctx->active_process) {
+            ctx->active_process = NULL;
+            ctx->active_group   = NULL;
+
+            OHM_DEBUG(DBG_ACTION, "active process & group: <none>");
+        }
     }
     else {
         OHM_ERROR("cgrp: invalid process state '%s'", state);
         return FALSE;
     }
+
     
     return TRUE;
 }
@@ -785,6 +745,20 @@ process_set_priority(cgrp_process_t *process, int priority)
     return setpriority(PRIO_PROCESS, process->pid, priority) == 0;
 }
 
+
+/********************
+ * procattr_dump
+ ********************/
+void
+procattr_dump(cgrp_proc_attr_t *attr)
+{
+    if (!OHM_DEBUG_ENABLED(DBG_CLASSIFY))
+        return;
+
+    OHM_DEBUG(DBG_CLASSIFY, "pid %u: %s", attr->pid, attr->binary);
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_CMDLINE))
+        OHM_DEBUG(DBG_CLASSIFY, "  cmdline: %s", attr->cmdline);
+}
 
 
 

@@ -4,6 +4,11 @@ EXTRA_DIST         = $(config_DATA)
 configdir          = $(sysconfdir)/ohm/plugins.d
 config_DATA        = cgroups.ini # syspart.conf
 
+PARSER_PREFIX      = cgrpyy
+AM_YFLAGS          = -p $(PARSER_PREFIX)
+AM_LFLAGS          = -P $(PARSER_PREFIX)
+LEX_OUTPUT_ROOT    = ./lex.$(PARSER_PREFIX)
+
 libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-partition.c \
 			    cgrp-group.c     \
@@ -15,9 +20,15 @@ libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-ep.c        \
 			    cgrp-notify.c    \
 			    cgrp-utils.c     \
+			    cgrp-fact.c      \
 			    cgrp-config.y    \
 			    cgrp-lexer.l
 
 libohm_cgroups_la_LIBADD = @OHM_PLUGIN_LIBS@
 libohm_cgroups_la_LDFLAGS = -module -avoid-version
 libohm_cgroups_la_CFLAGS = @OHM_PLUGIN_CFLAGS@
+
+
+cgrp-lexer.c: cgrp-lexer.l
+	$(LEXCOMPILE) $<
+	mv lex.$(PARSER_PREFIX).c $@

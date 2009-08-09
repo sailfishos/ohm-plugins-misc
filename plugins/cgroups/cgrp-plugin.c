@@ -3,12 +3,13 @@
 #include "cgrp-plugin.h"
 
 /* debug flags */
-int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_ACTION;
+int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
 
 OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("event"   , "process events"        , &DBG_EVENT),
     OHM_DEBUG_FLAG("process" , "process watch"         , &DBG_PROCESS),
     OHM_DEBUG_FLAG("classify", "process classification", &DBG_CLASSIFY),
+    OHM_DEBUG_FLAG("notify"  , "UI notifications"      , &DBG_NOTIFY),
     OHM_DEBUG_FLAG("action"  , "policy actions"        , &DBG_ACTION));
 
 
@@ -48,8 +49,8 @@ plugin_init(OhmPlugin *plugin)
     if (!ep_init(ctx, signaling_register))
         plugin_exit(plugin);
 
-    if (!partition_init(ctx) || !group_init(ctx) || !procdef_init(ctx) ||
-        !classify_init(ctx) || !proc_init(ctx)) {
+    if (!fact_init(ctx) || !partition_init(ctx) || !group_init(ctx) || 
+        !procdef_init(ctx) || !classify_init(ctx) || !proc_init(ctx)) {
         plugin_exit(plugin);
         exit(1);
     }
@@ -71,7 +72,7 @@ plugin_init(OhmPlugin *plugin)
     if (!notify_init(ctx, port))
         plugin_exit(plugin);
     
-    if (!classify_config(ctx) || !group_config(ctx) || !partition_config(ctx)) {
+    if (!classify_config(ctx) || !group_config(ctx)) {
         OHM_ERROR("cgrp: configuration failed");
         exit(1);
     }
@@ -100,6 +101,7 @@ plugin_exit(OhmPlugin *plugin)
     procdef_exit(ctx);
     group_exit(ctx);
     partition_exit(ctx);
+    fact_exit(ctx);
 }
 
 

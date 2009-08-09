@@ -6,8 +6,8 @@
 #include "cgrp-parser-types.h"
 #include "mm.h"  
 
-int  yylex  (void);
-void yyerror(cgrp_context_t *, const char *);
+int  cgrpyylex  (void);
+void cgrpyyerror(cgrp_context_t *, const char *);
 
 %}
 
@@ -74,6 +74,9 @@ void yyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_TYPE
 %token TOKEN_KW_IGNORE
 %token TOKEN_KW_RECLASSIFY
+%token TOKEN_KW_EXPORT_GROUPS
+%token TOKEN_KW_EXPORT_PARTS
+%token TOKEN_KW_EXPORT_FACT
 
 %token TOKEN_ASTERISK "*"
 %token TOKEN_HEADER_OPEN "["
@@ -98,7 +101,24 @@ void yyerror(cgrp_context_t *, const char *);
 
 %%
 
-configuration: partitions groups procdefs
+configuration: global partitions groups procdefs
+
+global: /* empty */
+    | TOKEN_KW_GLOBAL global_options
+    ;
+
+global_options: /* empty */
+    | global_option
+    | global_options global_option
+    ;
+
+global_option: TOKEN_KW_EXPORT_GROUPS {
+          ctx->options.flags |= CGRP_FLAG_GROUP_FACTS;
+    }
+    | TOKEN_KW_EXPORT_PARTS {
+          ctx->options.flags |= CGRP_FLAG_PART_FACTS;
+    }
+    ;
 
 partitions: partition
     | partitions partition
@@ -107,25 +127,34 @@ partitions: partition
 partition: "[" TOKEN_KW_PARTITION TOKEN_IDENT "]"
            partition_properties {
 	$5.name = $3.value;
-        if (!partition_add(ctx, &$5))
+        if (partition_lookup(ctx, $5.name) != NULL) {
+	    OHM_ERROR("cgrp: partition '%s' multiply defined", $5.name);
+	    YYABORT;
+	}
+        if (partition_add(ctx, &$5) == NULL)
 	    YYABORT;
     }
     ;
 
-partition_properties: partition_path      { $$.path = $1.value; }
-    |                 partition_cpu_share { $$.cpu  = $1.value; }
-    |                 partition_mem_limit { $$.mem  = $1.value; }
+partition_properties: partition_path      { $$.path  = $1.value; }
+    |                 partition_fact      { $$.flags = CGRP_PARTITION_FACT; }
+    |                 partition_cpu_share { $$.limit.cpu = $1.value; }
+    |                 partition_mem_limit { $$.limit.mem = $1.value; }
     | partition_properties partition_path {
-          $$      = $1;
+          $$ = $1;
           $$.path = $2.value;
     }
+    | partition_properties partition_fact {
+          $$ = $1;
+          $$.flags |= CGRP_PARTITION_FACT;
+    }
     | partition_properties partition_cpu_share {
-          $$     = $1;
-          $$.cpu = $2.value;
+          $$           = $1;
+          $$.limit.cpu = $2.value;
     }
     | partition_properties partition_mem_limit {
-          $$     = $1;
-          $$.mem = $2.value;
+          $$           = $1;
+          $$.limit.mem = $2.value;
     }
     ;
 
@@ -134,6 +163,9 @@ partition_path: TOKEN_KW_PATH path { $$ = $2; }
 
 path: TOKEN_PATH   { $$ = $1; }
     | TOKEN_STRING { $$ = $1; }
+    ;
+
+partition_fact: TOKEN_KW_EXPORT_FACT
     ;
 
 partition_cpu_share: TOKEN_KW_CPU_SHARES TOKEN_UINT { $$ = $2; }
@@ -146,7 +178,7 @@ partition_mem_limit: TOKEN_KW_MEM_LIMIT TOKEN_UINT optional_unit {
     ;
 
 optional_unit: /* empty */ { $$.value = 1; }
-    | TOKEN_IDENT          {
+    | TOKEN_IDENT         {
           if ($1.value[1] != '\0')
               goto invalid;
 
@@ -160,6 +192,7 @@ optional_unit: /* empty */ { $$.value = 1; }
           }
     }
     ;
+
 
 groups: group
     | groups group
@@ -175,6 +208,7 @@ group: "[" TOKEN_KW_GROUP TOKEN_IDENT "]"
 
 group_properties: group_description { $$ = $1; }
     |             group_partition   { $$ = $1; }
+    |             group_fact        { $$.flags = CGRP_GROUPFLAG_FACT; }
     | group_properties group_description {
         $$             = $1;
         $$.description = $2.description;
@@ -183,6 +217,10 @@ group_properties: group_description { $$ = $1; }
         $$            = $1;
         $$.partition  = $2.partition;
 	$$.flags     |= CGRP_GROUPFLAG_STATIC;
+    }
+    | group_properties group_fact {
+        $$        = $1;
+        $$.flags |= CGRP_GROUPFLAG_FACT;
     }
     ;
 
@@ -194,11 +232,14 @@ group_description: TOKEN_KW_DESCRIPTION TOKEN_STRING {
 
 group_partition: TOKEN_KW_PARTITION TOKEN_IDENT {
         memset(&$$, 0, sizeof($$));
-	if (($$.partition = partition_find(ctx, $2.value)) == NULL) {
+	if (($$.partition = partition_lookup(ctx, $2.value)) == NULL) {
 	    OHM_ERROR("cgrp: nonexisting partition '%s' in a group", $2.value);
 	    exit(1);
 	}
     }
+    ;
+
+group_fact: TOKEN_KW_EXPORT_FACT
     ;
 
 procdefs: procdef
@@ -327,9 +368,8 @@ command_ignore: TOKEN_KW_IGNORE { $$.ignore.type = CGRP_CMD_IGNORE; }
     ;
 
 command_reclassify: TOKEN_KW_RECLASSIFY TOKEN_UINT {
-      $$.reclassify.type  = CGRP_CMD_RECLASSIFY;
-      $$.reclassify.delay = $2.value;
-
+          $$.reclassify.type  = CGRP_CMD_RECLASSIFY;
+	  $$.reclassify.delay = $2.value;
     }
     ;
 
@@ -350,7 +390,7 @@ config_parse(cgrp_context_t *ctx, const char *path)
     }
 
     lexer_init(fp);
-    status = yyparse(ctx);
+    status = cgrpyyparse(ctx);
     lexer_exit();
     fclose(fp);
 
@@ -371,7 +411,7 @@ config_print(cgrp_context_t *ctx, FILE *fp)
 
 
 void
-yyerror(cgrp_context_t *ctx, const char *msg)
+cgrpyyerror(cgrp_context_t *ctx, const char *msg)
 {
     (void)ctx;
 

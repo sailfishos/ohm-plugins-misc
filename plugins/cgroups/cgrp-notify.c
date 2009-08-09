@@ -91,7 +91,7 @@ notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
     }
     
     buf[size] = '\0';
-    OHM_DEBUG(DBG_EVENT, "got active/standby notification: '%s'", buf);
+    OHM_DEBUG(DBG_NOTIFY, "got active/standby notification: '%s'", buf);
     
     prev_active = ctx->active_group;
     pidp = buf;
@@ -110,7 +110,7 @@ notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 
         process = proc_hash_lookup(ctx, pid);
         
-        OHM_DEBUG(DBG_EVENT, "process <%u,%s> is now in state <%s>",
+        OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
                   pid, process ? process->binary : "unknown", state);
         
         process_update_state(ctx, process, state);
@@ -135,6 +135,9 @@ notify_group_change(cgrp_context_t *ctx, cgrp_group_t *prev, cgrp_group_t *curr)
 
     if (prev == curr)
         return TRUE;
+
+    OHM_DEBUG(DBG_NOTIFY, "active group has changed from '%s' to '%s'",
+              prev ? prev->name : "<none>", curr ? curr->name : "<none>");
 
     if (curr != NULL)
         group = curr->name;

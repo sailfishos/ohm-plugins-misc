@@ -84,13 +84,17 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassification)
         return 0;
 
     /* try binary-specific rules */
-    if ((cmd = rule_eval(rule, &procattr)) != NULL)
+    if ((cmd = rule_eval(rule, &procattr)) != NULL) {
+        procattr_dump(&procattr);
         return command_execute(ctx, &process, cmd, reclassification);
+    }
     
     /* then fallback rule if any */
     if (rule != ctx->fallback && ctx->fallback != NULL)
-        if ((cmd = rule_eval(ctx->fallback, &procattr)) != NULL)
+        if ((cmd = rule_eval(ctx->fallback, &procattr)) != NULL) {
+            procattr_dump(&procattr);
             return command_execute(ctx, &process, cmd, reclassification);
+        }
     
     return 0;
 }
@@ -164,7 +168,7 @@ command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd,
 
         OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid,
                   process->binary, cmd->group.group->name);
-        process_set_group(ctx, proc, cmd->group.group);
+        group_add_process(ctx, cmd->group.group, proc);
         proc_hash_insert(ctx, proc);
         break;
 
@@ -192,7 +196,7 @@ command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd,
         break;
         
     default:
-        OHM_ERROR("<invalid command>\n");
+        fprintf(stdout, "<invalid command>\n");
     }
     
     return TRUE;
