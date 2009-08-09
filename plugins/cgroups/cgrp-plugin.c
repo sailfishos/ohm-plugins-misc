@@ -68,6 +68,8 @@ plugin_init(OhmPlugin *plugin)
         exit(1);
     }
 
+    partition_add_root(ctx);
+
     ctx->resolve = resolve;
     if (!notify_init(ctx, port))
         plugin_exit(plugin);

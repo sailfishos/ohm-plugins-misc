@@ -1,13 +1,22 @@
 #include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
 
 #include "cgrp-plugin.h"
 
 #define PIDLEN 8                                 /* length of a pid as string */
 #define FROZEN "FROZEN\n"
 #define THAWED "THAWED\n"
+
+#define CGROUP_FSTYPE  "cgroup"
+#define CGROUP_FREEZER "freezer"
+#define CGROUP_CPU     "cpu"
+#define CGROUP_MEMORY  "memory"
+#define CGROUP_CPUSET  "cpuset"
 
 /* cgroup control entries */
 #define TASKS   "tasks"
@@ -16,9 +25,31 @@
 #define MEMORY  "memory.limit_in_bytes"
 
 
+static int add_root(cgrp_context_t *);
+static int discover_cgroupfs(cgrp_context_t *);
+static int mount_cgroupfs   (cgrp_context_t *);
+
 static int  open_control (cgrp_partition_t *, char *);
 static void foreach_print(gpointer, gpointer, gpointer);
 static void foreach_del  (gpointer, gpointer, gpointer);
+
+static char *remap_path(cgrp_context_t *, char *, char *);
+static char *implicit_root(cgrp_context_t *, char *);
+
+
+typedef struct {
+    const char *name;
+    int         flag;
+} mount_option_t;
+
+static mount_option_t mntopts[] = {
+    { CGROUP_FREEZER, CGRP_FLAG_MOUNT_FREEZER },
+    { CGROUP_CPU    , CGRP_FLAG_MOUNT_CPU     },
+    { CGROUP_MEMORY , CGRP_FLAG_MOUNT_MEMORY  },
+    { CGROUP_CPUSET , CGRP_FLAG_MOUNT_CPUSET  },
+    { NULL          , 0                         }
+};
+
 
 
 /********************
@@ -27,20 +58,11 @@ static void foreach_del  (gpointer, gpointer, gpointer);
 int
 partition_init(cgrp_context_t *ctx)
 {
-    cgrp_partition_t root;
-
     part_hash_init(ctx);
- 
-    memset(&root, 0, sizeof(root));
-    root.name      = "root";
-    root.path      = "/syspart";
-    root.limit.cpu = CGRP_NO_LIMIT;
-    root.limit.mem = CGRP_NO_LIMIT;
 
-    if ((ctx->root = partition_add(ctx, &root)) == NULL)
-        return FALSE;
-    else
-        return TRUE;
+    discover_cgroupfs(ctx);
+
+    return TRUE;
 }
 
 
@@ -55,6 +77,30 @@ partition_exit(cgrp_context_t *ctx)
 
     part_hash_foreach(ctx, foreach_del, ctx);
     part_hash_exit(ctx);
+
+    FREE(ctx->desired_mount);
+    FREE(ctx->actual_mount);
+}
+
+
+/********************
+ * partition_add_root
+ ********************/
+int
+partition_add_root(cgrp_context_t *ctx)
+{
+    cgrp_partition_t root;
+
+    memset(&root, 0, sizeof(root));
+    root.name      = "root";
+    root.path      = ctx->actual_mount ? ctx->actual_mount : ctx->desired_mount;
+    root.limit.cpu = CGRP_NO_LIMIT;
+    root.limit.mem = CGRP_NO_LIMIT;
+
+    if ((ctx->root = partition_add(ctx, &root)) == NULL)
+        return FALSE;
+    else
+        return TRUE;
 }
 
 
@@ -65,34 +111,45 @@ cgrp_partition_t *
 partition_add(cgrp_context_t *ctx, cgrp_partition_t *p)
 {
     cgrp_partition_t *partition;
+    char             *path, pathbuf[PATH_MAX];
 
     if (part_hash_lookup(ctx, p->name) != NULL)
         return NULL;
 
+    if (ctx->desired_mount == NULL)
+        implicit_root(ctx, p->path);
+
+    if (ctx->actual_mount == NULL)
+        if (!mount_cgroupfs(ctx))
+            OHM_WARNING("cgrp: failed to mount cgroup filesystem");
+    
+    path = remap_path(ctx, p->path, pathbuf);
+    
     if (ALLOC_OBJ(partition)                == NULL ||
         (partition->name = STRDUP(p->name)) == NULL ||
-        (partition->path = STRDUP(p->path)) == NULL) {
+        (partition->path = STRDUP(path))    == NULL) {
         OHM_ERROR("cgrp: failed to allocate partition '%s'", p->name);
         goto fail;
     }
+
+    if (ctx->actual_mount != NULL &&
+        mkdir(partition->path, 0755) < 0 && errno != EEXIST)
+        OHM_ERROR("cgrp: failed to create partition '%s' (%s)",
+                  partition->name, partition->path);
     
     partition->control.tasks  = open_control(partition, TASKS);
     partition->control.freeze = open_control(partition, FREEZER);
     partition->control.cpu    = open_control(partition, CPU);
     partition->control.mem    = open_control(partition, MEMORY);
 
-    if (partition->control.tasks < 0) {
+    if (partition->control.tasks < 0)
         OHM_ERROR("cgrp: no task control for partition '%s'", partition->name);
-        goto fail;
-    }
 
-    if (partition->control.freeze < 0 && strcmp(partition->name, "root") &&
-        strcmp(partition->path, "/syspart")) {  /* XXX ugly root alias hack */
-        OHM_ERROR("cgrp: no freezer control for partition '%s'",
-                  partition->name);
-        goto fail;
-    }
-
+    if (partition->control.freeze < 0 &&
+        strcmp(partition->path, ctx->actual_mount))
+        OHM_WARNING("cgrp: no freezer control for partition '%s' (%s)",
+                    partition->name, partition->path);
+    
     if (partition->control.cpu < 0)
         OHM_WARNING("cgrp: no CPU shares control for partition '%s'",
                     partition->name);
@@ -359,7 +416,170 @@ foreach_del(gpointer key, gpointer value, gpointer user_data)
 
 
 
+/********************
+ * discover_cgroupfs
+ ********************/
+static int
+discover_cgroupfs(cgrp_context_t *ctx)
+{
+    mount_option_t *option;
+    FILE           *mounts;
+    char            entry[1024], *path, *type, *opts, *rest, *next;
+    int             success, available;
+    
 
+    if ((mounts = fopen("/proc/mounts", "r")) == NULL) {
+        OHM_ERROR("cgrp: failed to open /proc/mounts");
+        return FALSE;
+    }
+
+    success   = FALSE;
+    available = 0;
+    while (fgets(entry, sizeof(entry), mounts) != NULL) {
+        if ((path = strchr(entry, ' ')) == NULL)
+            continue;
+        if ((type = strchr(path + 1, ' ')) == NULL)
+            continue;
+        if ((opts = strchr(type + 1, ' ')) == NULL)
+            continue;
+        if ((rest = strchr(opts + 1, ' ')) != NULL)
+            *rest = '\0';
+
+        *path++ = '\0';
+        *type++ = '\0';
+        *opts++ = '\0';
+    
+        if (strcmp(type, CGROUP_FSTYPE))
+            continue;
+
+        ctx->actual_mount = STRDUP(path);
+        
+        OHM_INFO("cgrp: cgroup fs is already mounted at %s", path);
+
+        while (opts != NULL) {
+            if ((next = strchr(opts, ',')) != NULL)
+                *next++ = '\0';
+      
+            for (option = mntopts; option->name; option++) {
+                if (!strcmp(option->name, opts)) {
+                    CGRP_SET_FLAG(available, option->flag);
+                    OHM_INFO("cgrp: cgroup fs option '%s' available",
+                             option->name);
+                    break;
+                }
+            }
+            
+            opts = next;
+        }     
+        
+        success = TRUE;
+        break;
+    }
+    
+    fclose(mounts);
+
+    for (option = mntopts; option->name; option++)
+        if (!CGRP_TST_FLAG(available, option->flag))
+            CGRP_CLR_FLAG(ctx->options.flags, option->flag);
+    
+    return success;
+}
+
+
+/********************
+ * mount_cgroupfs
+ ********************/
+static int
+mount_cgroupfs(cgrp_context_t *ctx)
+{
+    mount_option_t *option;
+    char           *source, *target, *type;
+    char            options[1024], *p, *t;
+
+    source = CGROUP_FSTYPE;
+    type   = CGROUP_FSTYPE;
+    target = ctx->desired_mount;
+    
+    p  = options;
+    *p = '\0';
+    for (option = mntopts; option->name; option++) {
+        if (CGRP_TST_FLAG(ctx->options.flags, option->flag)) {
+            p += sprintf(p, "%s%s", t, option->name);
+            t  = ",";
+        }
+    }
+
+    if (mkdir(target, 0755) < 0 && errno != EEXIST) {
+        OHM_ERROR("cgrp: failed to create cgroup mount point '%s'", target);
+        return FALSE;
+    }
+
+    if (options[0] == '\0')
+        strcpy(options, "all");
+    
+    if (mount(source, target, type, 0, options) != 0) {
+        OHM_ERROR("cgrp: failed to mount cgroup fs on %s with options '%s'",
+                  target, options);
+        return FALSE;
+    }
+    else {
+        OHM_INFO("cgrp: cgroup fs mounted on %s with options '%s'",
+                 target, options);
+        ctx->actual_mount = STRDUP(ctx->desired_mount);
+        return TRUE;
+    }
+}
+
+
+/********************
+ * remap_path
+ ********************/
+static char *
+remap_path(cgrp_context_t *ctx, char *from, char *to)
+{
+    char *s, *actual;
+    int   len;
+
+    actual = ctx->actual_mount ? ctx->actual_mount : ctx->desired_mount;
+    
+    len = strlen(ctx->desired_mount);
+    if (!strncmp(from, actual, len) && (from[len] == '/' || from[len] == '\0'))
+        return from;
+    
+    if ((s = strchr(from + 1, '/')) == NULL) {
+        OHM_INFO("cgrp: partition path '%s' remapped to '%s'", from, actual);
+        return actual;
+    }
+    else {
+        sprintf(to, "%s%s", actual, s);
+        OHM_INFO("cgrp: partition path '%s' remapped to '%s'", from, to);
+        return to;
+    }
+}
+
+
+/********************
+ * implicit_root
+ ********************/
+static char *
+implicit_root(cgrp_context_t *ctx, char *path)
+{
+    char implicit[PATH_MAX], *s, *d;
+    
+    s = path;
+    d = implicit;
+    *d++ = '/';
+    s++;
+
+    while (*s != '/' && *s)
+        *d++ = *s++;
+
+    *d = '\0';
+
+    ctx->desired_mount = STRDUP(implicit);
+
+    return ctx->desired_mount;
+}
 
 
 /* 

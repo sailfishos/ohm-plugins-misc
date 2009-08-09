@@ -78,15 +78,13 @@ group_add(cgrp_context_t *ctx, cgrp_group_t *g)
     group->priority    = CGRP_DEFAULT_PRIORITY;
     list_init(&group->processes);
 
-    if (ctx->options.flags & CGRP_FLAG_GROUP_FACTS)
-        group->flags |= CGRP_GROUPFLAG_FACT;
-
     if (group->name == NULL || group->description == NULL) {
         OHM_ERROR("cgrp: failed to add group");
         return NULL;
     }
 
-    if (group->flags & CGRP_GROUPFLAG_FACT)
+    if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_GROUP_FACTS) ||
+        CGRP_TST_FLAG(g->flags, CGRP_GROUPFLAG_FACT))
         group->fact = fact_create(ctx, CGRP_FACT_GROUP, group->name);
     
     return group;

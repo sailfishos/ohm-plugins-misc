@@ -113,10 +113,10 @@ global_options: /* empty */
     ;
 
 global_option: TOKEN_KW_EXPORT_GROUPS {
-          ctx->options.flags |= CGRP_FLAG_GROUP_FACTS;
+	  CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_GROUP_FACTS);
     }
     | TOKEN_KW_EXPORT_PARTS {
-          ctx->options.flags |= CGRP_FLAG_PART_FACTS;
+          CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
     }
     ;
 
@@ -131,13 +131,19 @@ partition: "[" TOKEN_KW_PARTITION TOKEN_IDENT "]"
 	    OHM_ERROR("cgrp: partition '%s' multiply defined", $5.name);
 	    YYABORT;
 	}
+        if (!strcmp($5.name, "root")) {
+            OHM_ERROR("cgrp: invalid partition with reserved name 'root'");
+            YYABORT;
+        }
         if (partition_add(ctx, &$5) == NULL)
 	    YYABORT;
     }
     ;
 
 partition_properties: partition_path      { $$.path  = $1.value; }
-    |                 partition_fact      { $$.flags = CGRP_PARTITION_FACT; }
+    |                 partition_fact      {
+                          CGRP_SET_FLAG($$.flags, CGRP_PARTITION_FACT);
+                      }
     |                 partition_cpu_share { $$.limit.cpu = $1.value; }
     |                 partition_mem_limit { $$.limit.mem = $1.value; }
     | partition_properties partition_path {
@@ -146,7 +152,7 @@ partition_properties: partition_path      { $$.path  = $1.value; }
     }
     | partition_properties partition_fact {
           $$ = $1;
-          $$.flags |= CGRP_PARTITION_FACT;
+          CGRP_SET_FLAG($$.flags, CGRP_PARTITION_FACT);
     }
     | partition_properties partition_cpu_share {
           $$           = $1;
@@ -161,8 +167,20 @@ partition_properties: partition_path      { $$.path  = $1.value; }
 partition_path: TOKEN_KW_PATH path { $$ = $2; }
     ;
 
-path: TOKEN_PATH   { $$ = $1; }
-    | TOKEN_STRING { $$ = $1; }
+path: TOKEN_PATH   {
+          if ($1.value[0] != '/') {
+              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
+              exit(1);
+          }
+          $$ = $1;
+    }
+    | TOKEN_STRING {
+          if ($1.value[0] != '/') {
+              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
+              exit(1);
+          }
+          $$ = $1;
+    }
     ;
 
 partition_fact: TOKEN_KW_EXPORT_FACT
@@ -208,7 +226,9 @@ group: "[" TOKEN_KW_GROUP TOKEN_IDENT "]"
 
 group_properties: group_description { $$ = $1; }
     |             group_partition   { $$ = $1; }
-    |             group_fact        { $$.flags = CGRP_GROUPFLAG_FACT; }
+    |             group_fact        {
+                      CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_FACT);
+                  }
     | group_properties group_description {
         $$             = $1;
         $$.description = $2.description;
@@ -216,11 +236,11 @@ group_properties: group_description { $$ = $1; }
     | group_properties group_partition {
         $$            = $1;
         $$.partition  = $2.partition;
-	$$.flags     |= CGRP_GROUPFLAG_STATIC;
+	CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_STATIC);
     }
     | group_properties group_fact {
         $$        = $1;
-        $$.flags |= CGRP_GROUPFLAG_FACT;
+        CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_FACT);
     }
     ;
 
@@ -257,7 +277,7 @@ procdef: "[" TOKEN_KW_RULE procdef_name "]"
     }
     ;
 
-procdef_name: TOKEN_IDENT { $$ = $1; }
+procdef_name:
     | TOKEN_PATH          { $$ = $1; }
     | TOKEN_ASTERISK      { $$.value = "*"; }
     ;

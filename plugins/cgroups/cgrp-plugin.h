@@ -27,6 +27,7 @@
 #define APP_ACTIVE   "active"
 #define APP_INACTIVE "standby"
 
+#define DEFAULT_ROOT "/syspart"
 
 #define CGRP_SET_FLAG(flags, bit) ((flags) |=  (1 << (bit)))
 #define CGRP_TST_FLAG(flags, bit) ((flags) &   (1 << (bit)))
@@ -80,9 +81,8 @@ typedef struct {
  */
 
 typedef enum {
-    CGRP_GROUPFLAG_NONE   = 0x0,
-    CGRP_GROUPFLAG_STATIC = 0x1,            /* statically partitioned group */
-    CGRP_GROUPFLAG_FACT   = 0x2,            /* export group to factstore */
+    CGRP_GROUPFLAG_STATIC,                  /* statically partitioned group */
+    CGRP_GROUPFLAG_FACT,                    /* export to factstore */
 } cgrp_group_flag_t;
 
 #define CGRP_DEFAULT_PRIORITY 0xffff
@@ -309,9 +309,12 @@ typedef struct {
  */
 
 enum {
-    CGRP_FLAG_NONE        = 0x0,
-    CGRP_FLAG_GROUP_FACTS = 0x1,
-    CGRP_FLAG_PART_FACTS  = 0x2,
+    CGRP_FLAG_GROUP_FACTS = 0,
+    CGRP_FLAG_PART_FACTS,
+    CGRP_FLAG_MOUNT_FREEZER,
+    CGRP_FLAG_MOUNT_CPU,
+    CGRP_FLAG_MOUNT_MEMORY,
+    CGRP_FLAG_MOUNT_CPUSET,
 };
 
 
@@ -320,7 +323,12 @@ typedef struct {
 } cgrp_options_t;
 
 
+
 typedef struct {
+    char             *desired_mount;        /* desired mount point */
+    char             *actual_mount;         /* actual mount point */
+    unsigned int      cgroup_options;       /* cgroup mount options */
+
     cgrp_partition_t *root;                 /* root partition */
     cgrp_group_t     *groups;               /* classification groups */
     int               ngroup;               /* number of groups */
@@ -391,6 +399,8 @@ int  partition_config(cgrp_context_t *);
 cgrp_partition_t *partition_add(cgrp_context_t *, cgrp_partition_t *);
 void              partition_del(cgrp_context_t *, cgrp_partition_t *);
 cgrp_partition_t *partition_lookup(cgrp_context_t *, const char *);
+int               partition_add_root(cgrp_context_t *);
+
 
 void partition_dump(cgrp_context_t *, FILE *);
 void partition_print(cgrp_partition_t *, FILE *);
