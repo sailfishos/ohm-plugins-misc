@@ -94,7 +94,7 @@ typedef struct {
     list_hook_t       processes;            /* processes in this group */
     cgrp_partition_t *partition;            /* current partititon */
     OhmFact          *fact;                 /* fact for this group */
-    unsigned int      priority;             /* priority if given */
+    int               priority;             /* priority if given */
 } cgrp_group_t;
 
 
