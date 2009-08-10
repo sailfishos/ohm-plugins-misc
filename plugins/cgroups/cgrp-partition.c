@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -208,7 +209,7 @@ partition_add_process(cgrp_partition_t *partition, pid_t pid)
     len = sprintf(tasks, "%u\n", pid); 
     chk = write(partition->control.tasks, tasks, len);
 
-    return chk == len;
+    return (chk == len || (chk < 0 && errno == ESRCH));
 }
 
 
@@ -237,7 +238,7 @@ partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
                   pid, process->binary, partition->name,
                   chk == len ? "OK" : "FAILED");
 
-        success &= (chk == len ? TRUE : FALSE);
+        success &= (chk == len || (chk < 0 && errno == ESRCH)) ? TRUE : FALSE;
     }
 
     group->partition = partition;
@@ -307,7 +308,7 @@ partition_limit_mem(cgrp_partition_t *partition, unsigned int limit)
     if (partition->control.mem >= 0 && limit > 0) {
         len = snprintf(val, sizeof(val), "%u", limit);
         chk = write(partition->control.mem, val, len);
-        return (chk == len);
+        return chk == len;
     }
     else
         return TRUE;

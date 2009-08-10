@@ -742,8 +742,11 @@ process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
 int
 process_set_priority(cgrp_process_t *process, int priority)
 {
-    return (setpriority(PRIO_PROCESS, process->pid, priority) == 0 ||
-            errno == ESRCH);
+    int status;
+    
+    status = setpriority(PRIO_PROCESS, process->pid, priority);
+    
+    return status == 0 || errno == ESRCH;
 }
 
 
