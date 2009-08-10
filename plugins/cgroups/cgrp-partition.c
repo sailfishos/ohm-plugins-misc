@@ -268,7 +268,7 @@ partition_freeze(cgrp_partition_t *partition, int freeze)
         return write(partition->control.freeze, cmd, len) == len;
     }
     else
-        return FALSE;
+        return TRUE;
 }
 
 
@@ -289,7 +289,7 @@ partition_limit_cpu(cgrp_partition_t *partition, unsigned int share)
         return chk == len;
     }
     else
-        return FALSE;
+        return TRUE;
 }
 
 
@@ -310,7 +310,7 @@ partition_limit_mem(cgrp_partition_t *partition, unsigned int limit)
         return (chk == len);
     }
     else
-        return FALSE;
+        return TRUE;
 }
 
 
