@@ -184,7 +184,7 @@ gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[]
         vars[j++] = DRES_VARTYPE(sig);
         switch (sig) {
             case 's':
-                vars[j++] = DRES_VARVALUE(arg.value.c_value);
+                vars[j++] = DRES_VARVALUE(arg.value.s_value);
                 break;
             case 'i':
                 vars[j++] = DRES_VARVALUE(arg.value.i_value);
