@@ -544,11 +544,21 @@ static gboolean bt_connected_to_playing(const gchar *type,
 
     if (strcmp(type, BT_TYPE_HSP) == 0) {
         dres_arg_t arg;
-        char value[20];
+        char value[5];
 
+#if 0
         snprintf(value, 20, "hsp=%s,hfp=%s",
                 get_status(bt_get_connected(path), "hsp") ? "yes" : "no",
                 get_status(bt_get_connected(path), "hfp") ? "yes" : "no");
+#endif
+
+        /* TODO: The policy decision is now done here. Refactor to the
+         * rule files. The rule is that if "hsp" profile is available,
+         * use it, otherwise use "hfp".
+         * */
+
+        snprintf(value, sizeof(value), "%s",
+                get_status(bt_get_connected(path), "hsp") ? "-hsp" : "-hfp");
 
         arg.sig = 's';
         arg.key = "hwid";
