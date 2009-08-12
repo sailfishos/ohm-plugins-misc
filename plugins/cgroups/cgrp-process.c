@@ -715,8 +715,9 @@ process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
         ctx->active_group   = process ? process->group : NULL;
 
         OHM_DEBUG(DBG_ACTION, "active process: %u (%s), active group: %s",
-                  ctx->active_process->pid, ctx->active_process->binary,
-                  ctx->active_group ? ctx->active_group->name : "<none>");
+                  ctx->active_process ? ctx->active_process->pid    : 0,
+                  ctx->active_process ? ctx->active_process->binary : "<none>",
+                  ctx->active_group   ? ctx->active_group->name     : "<none>");
     }
     else if (!strcmp(state, APP_INACTIVE)) {
         if (process == ctx->active_process) {
