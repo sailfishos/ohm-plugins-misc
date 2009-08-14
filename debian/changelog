@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.55) unstable; urgency=low
+
+  * TEMPORARILY clear the s-bit from mission-control to prevent it from mlocking itself. THIS IS NEVER SUPPOSED TO BE RELEASED OR COMMITTED TO ANY BRANCH THAT IS TO BE RELEASED.
+  * Added cgroupfs discovery and automount support.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 14 Aug 2009 16:01:06 +0300
+
 ohm-plugins-misc (0.6.54) unstable; urgency=low
 
   * Don't 'waste 3 dev's and 1 tester's time' any more by printing out the
