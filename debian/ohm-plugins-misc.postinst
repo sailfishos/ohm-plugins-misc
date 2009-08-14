@@ -1,1 +1,3 @@
+#!/bin/sh
+
 /bin/chmod a-s /usr/bin/mission-control
