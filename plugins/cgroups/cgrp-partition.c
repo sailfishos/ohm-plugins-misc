@@ -145,7 +145,7 @@ partition_add(cgrp_context_t *ctx, cgrp_partition_t *p)
     if (partition->control.tasks < 0)
         OHM_ERROR("cgrp: no task control for partition '%s'", partition->name);
 
-    if (partition->control.freeze < 0 &&
+    if (partition->control.freeze < 0 && ctx->actual_mount != NULL &&
         strcmp(partition->path, ctx->actual_mount))
         OHM_WARNING("cgrp: no freezer control for partition '%s' (%s)",
                     partition->name, partition->path);
