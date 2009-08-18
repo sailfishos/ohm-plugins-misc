@@ -85,6 +85,8 @@ plugin_init(OhmPlugin *plugin)
 
     process_scan_proc(ctx);
 
+    console_init(ctx);
+
     OHM_INFO("cgrp: plugin ready...");
 }
 
@@ -96,6 +98,8 @@ static void
 plugin_exit(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    console_exit();
 
     ep_exit(ctx, signaling_unregister);
     proc_exit(ctx);

@@ -526,6 +526,10 @@ int  notify_init(cgrp_context_t *, int);
 void notify_exit(cgrp_context_t *);
 int  notify_group_change(cgrp_context_t *ctx, cgrp_group_t *, cgrp_group_t *);
 
+/* cgrp-console. */
+int  console_init(cgrp_context_t *);
+void console_exit(void);
+
 #endif /* __OHM_PLUGIN_DBUS_H__ */
 
 

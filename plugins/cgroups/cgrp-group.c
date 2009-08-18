@@ -159,12 +159,24 @@ group_dump(cgrp_context_t *ctx, FILE *fp)
 void
 group_print(cgrp_context_t *ctx, cgrp_group_t *group, FILE *fp)
 {
+    cgrp_process_t *process;
+    list_hook_t    *p, *n;
+
     (void)ctx;
 
     fprintf(fp, "[group '%s']\n", group->name);
     fprintf(fp, "description '%s'\n", group->description);
+
     if (group->partition != NULL)
         fprintf(fp, "partition '%s'\n", group->partition->name);
+
+    if (!list_empty(&group->processes)) {
+        list_foreach(&group->processes, p, n) {
+            process = list_entry(p, cgrp_process_t, group_hook);
+            
+            fprintf(fp, "  process %u (%s)\n", process->pid, process->binary);
+        }
+    }
 }
 
 
