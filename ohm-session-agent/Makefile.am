@@ -3,7 +3,7 @@ EXTRA_DIST    = $(xsession_DATA) $(dbus_DATA)
 xsessiondir   = $(sysconfdir)/X11/Xsession.d
 xsession_DATA = 55ohm-session-agent
 dbusdir       = $(datadir)/dbus-1/services
-dbus_DATA     = org.Maemo.Playback.Manager.service
+dbus_DATA     = org.maemo.Playback.Manager.service
 
 ohm_session_agent_SOURCES = ohm-session-agent.c
 ohm_session_agent_LDADD   = $(GLIB_LIBS) $(DBUS_LIBS)
