@@ -1,6 +1,6 @@
 bin_PROGRAMS  = ohm-session-agent
 EXTRA_DIST    = $(xsession_DATA) $(dbus_DATA)
-xsessiondir   = $(sysconfdir)/X11/Xsession.post
+xsessiondir   = $(sysconfdir)/X11/Xsession.d
 xsession_DATA = 55ohm-session-agent
 dbusdir       = $(datadir)/dbus-1/services
 dbus_DATA     = org.maemo.Playback.Manager.service

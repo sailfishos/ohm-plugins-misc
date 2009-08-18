@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
@@ -238,6 +239,9 @@ main(int argc, char *argv[])
         LOG_ERROR("Failed to initialize main loop.");
         exit(1);
     }
+
+    /* argh... kludge to try and avoid too early ohmd notification */
+    sleep(5);
 
     bus_connect();
     ohm_notify_if_running();
