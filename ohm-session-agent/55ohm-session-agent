@@ -1,5 +1,7 @@
 #!/bin/sh
 
-dbus-send --dest=org.freedesktop.DBus /org/freedesktop/DBus \
-                 org.freedesktop.DBus.StartServiceByName \
-                 string:org.maemo.Playback.Manager uint32:0 > /dev/null
+#dbus-send --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+#                 org.freedesktop.DBus.StartServiceByName \
+#                 string:org.maemo.Playback.Manager uint32:0 > /dev/null
+
+/usr/sbin/dsmetool -T 10 -f /usr/bin/ohm-session-agent
