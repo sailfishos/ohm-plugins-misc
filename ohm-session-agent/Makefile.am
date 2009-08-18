@@ -1,6 +1,6 @@
 bin_PROGRAMS  = ohm-session-agent
 EXTRA_DIST    = $(xsession_DATA) $(dbus_DATA)
-xsessiondir   = $(sysconfdir)/X11/Xsession.post
+xsessiondir   = $(sysconfdir)/X11/Xsession.d
 xsession_DATA = 55ohm-session-agent
 
 ohm_session_agent_SOURCES = ohm-session-agent.c
