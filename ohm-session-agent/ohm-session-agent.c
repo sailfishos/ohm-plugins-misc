@@ -170,6 +170,8 @@ session_check(gpointer dummy)
         LOG_INFO("OHM did not appear on the session bus.");
         dbus_error_free(&error);
         ohm_notify_failure();
+        sleep(10);
+        exit(1);
     }
 
     chkid = 0;
