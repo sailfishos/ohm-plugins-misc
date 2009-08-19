@@ -318,8 +318,7 @@ dbusif_new_session(DBusConnection *c, DBusMessage *msg, void *data)
     
     if (!strcmp(address, "<failure>")) {
         OHM_INFO("Received session bus failure notification, exiting.");
-        sleep(5);
-        exit(1);
+        ohm_restart(10);
     }
 
     if (sess_conn != NULL) {
