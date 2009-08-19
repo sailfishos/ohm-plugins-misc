@@ -19,6 +19,7 @@
 #define OUR_NAME          "org.freedesktop.ohm_session_agent"
 
 #define OHM_SESSION_NAME  "org.maemo.Playback.Manager"
+#define SESSION_TIMEOUT   (30 * 1000)
 
 #define DBUS_ADMIN_INTERFACE "org.freedesktop.DBus"
 #define DBUS_ADMIN_PATH      "/org/freedesktop/DBus"
@@ -192,7 +193,7 @@ session_check_cancel(void)
 void
 session_check_schedule(void)
 {
-    chkid = g_timeout_add_full(G_PRIORITY_DEFAULT, 10 * 1000,
+    chkid = g_timeout_add_full(G_PRIORITY_DEFAULT, SESSION_TIMEOUT,
                                session_check, NULL, NULL);
 }
 
@@ -259,9 +260,6 @@ ohm_notify_failure(void)
     
     dbus_message_unref(msg);
     LOG_INFO("Session DBUS failure notification sent to OHM.");
-
-    session_check_cancel();
-    session_check_schedule();
 
     return TRUE;
     

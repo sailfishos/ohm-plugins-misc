@@ -4,4 +4,4 @@
 #                 org.freedesktop.DBus.StartServiceByName \
 #                 string:org.maemo.Playback.Manager uint32:0 > /dev/null
 
-/usr/sbin/dsmetool -T 10 -f /usr/bin/ohm-session-agent
+exec /usr/share/ohm-session-agent/start-session-agent.sh
