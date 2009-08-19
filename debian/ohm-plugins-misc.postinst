@@ -1,0 +1,7 @@
+#!/bin/sh
+
+chmod a+x /usr/share/ohm-session-agent/*
+
+#DEBHELPER#
+
+exit 0
