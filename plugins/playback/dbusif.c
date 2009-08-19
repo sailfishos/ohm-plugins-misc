@@ -320,8 +320,14 @@ dbusif_new_session(DBusConnection *c, DBusMessage *msg, void *data)
         
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
-                               
+                         
     
+    if (!strcmp(address, "<failure>")) {
+        OHM_INFO("Received session bus failure notification, exiting.");
+        sleep(5);
+        exit(1);
+    }
+
     OHM_INFO("Received session bus notification with address \"%s\".", address);
     
     if (!session_bus_init(address))

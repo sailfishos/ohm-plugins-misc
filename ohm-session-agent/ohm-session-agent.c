@@ -18,6 +18,8 @@
 #define OHM_DBUS_POLICYIF "com.nokia.policy"
 #define OUR_NAME          "org.freedesktop.ohm_session_agent"
 
+#define OHM_SESSION_NAME  "org.maemo.Playback.Manager"
+
 #define DBUS_ADMIN_INTERFACE "org.freedesktop.DBus"
 #define DBUS_ADMIN_PATH      "/org/freedesktop/DBus"
 
@@ -34,10 +36,12 @@ static const char     *ohm_name   = OHM_DBUS_NAME;
 static const char     *ohm_path   = OHM_DBUS_PATH;
 static const char     *ohm_signal = OHM_DBUS_SIGNAME;
 static const char     *bus_address;
-
+static guint           chkid;
 
 static DBusHandlerResult name_owner_changed(DBusConnection *, DBusMessage *,
                                             void *);
+
+static int ohm_notify_failure(void);
 
 
 void
@@ -151,6 +155,46 @@ bus_connect(void)
 }
 
 
+gboolean
+session_check(gpointer dummy)
+{
+    DBusError error;
+    
+    (void)dummy;
+    
+    dbus_error_init(&error);
+    
+    if (dbus_bus_name_has_owner(sess_bus, OHM_SESSION_NAME, &error))
+        LOG_INFO("OHM appeared on the session bus.");
+    else {
+        LOG_INFO("OHM did not appear on the session bus.");
+        dbus_error_free(&error);
+        ohm_notify_failure();
+    }
+
+    chkid = 0;
+    return FALSE;
+}
+
+
+void
+session_check_cancel(void)
+{
+    if (chkid != 0) {
+        g_source_remove(chkid);
+        chkid = 0;
+    }
+}
+
+
+void
+session_check_schedule(void)
+{
+    chkid = g_timeout_add_full(G_PRIORITY_DEFAULT, 10 * 1000,
+                               session_check, NULL, NULL);
+}
+
+
 int
 ohm_notify(void)
 {
@@ -175,10 +219,52 @@ ohm_notify(void)
     dbus_message_unref(msg);
     LOG_INFO("Session DBUS notification sent to OHM.");
 
+    session_check_cancel();
+    session_check_schedule();
+
     return TRUE;
     
  fail:
     LOG_ERROR("Failed to send session DBUS notification.");
+    if (msg != NULL)
+        dbus_message_unref(msg);
+    
+    return FALSE;
+}
+
+
+static int
+ohm_notify_failure(void)
+{
+    DBusMessage *msg;
+    const char  *path      = OHM_DBUS_PATH;
+    const char  *interface = OHM_DBUS_POLICYIF;
+    const char  *signame   = OHM_DBUS_SIGNAME;
+    const char  *failure   = "<failure>";
+
+    if ((msg = dbus_message_new_signal(path, interface, signame)) == NULL)
+        goto fail;
+    
+    if (!dbus_message_set_destination(msg, OHM_DBUS_NAME))
+        goto fail;
+    
+    if (!dbus_message_append_args(msg, DBUS_TYPE_STRING, &failure,
+                                  DBUS_TYPE_INVALID))
+        goto fail;
+    
+    if (!dbus_connection_send(sys_bus, msg, NULL))
+        goto fail;
+    
+    dbus_message_unref(msg);
+    LOG_INFO("Session DBUS failure notification sent to OHM.");
+
+    session_check_cancel();
+    session_check_schedule();
+
+    return TRUE;
+    
+ fail:
+    LOG_ERROR("Failed to send session DBUS failure notification.");
     if (msg != NULL)
         dbus_message_unref(msg);
     
@@ -239,9 +325,6 @@ main(int argc, char *argv[])
         LOG_ERROR("Failed to initialize main loop.");
         exit(1);
     }
-
-    /* argh... kludge to try and avoid too early ohmd notification */
-    sleep(5);
 
     bus_connect();
     ohm_notify_if_running();
