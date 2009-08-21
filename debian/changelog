@@ -6,7 +6,7 @@ ohm-plugins-misc (0.6.57) unstable; urgency=low
 
 ohm-plugins-misc (0.6.56) unstable; urgency=low
 
-  * Moved ohm-session-agent startup to Xsession.d (Fixes: NB#130488).
+  * Moved ohm-session-agent startup to Xsession.d.
   * Crude console command for dumping groups.
   * Fix crash in case cgroup mount fails.
 
