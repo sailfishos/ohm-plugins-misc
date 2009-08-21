@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.57) unstable; urgency=low
+
+  * Put ohm-session-agent back to .post/55 as requested.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 21 Aug 2009 21:51:53 +0300
+
 ohm-plugins-misc (0.6.56) unstable; urgency=low
 
   * Moved ohm-session-agent startup to Xsession.d (Fixes: NB#130488).
