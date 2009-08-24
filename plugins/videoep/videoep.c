@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h> 
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <malloc.h>
 #include <stdio.h>
@@ -26,24 +27,28 @@
 #include "videoep.h"
 #include "txparser.h"
 #include "xrt.h"
+#include "notify.h"
 
 typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
 
 videoep_t  *videoep = NULL;
 
-static int DBG_ACTION, DBG_XV;
+static int DBG_ACTION, DBG_XV, DBG_INFO;
 
 OHM_DEBUG_PLUGIN(video,
     OHM_DEBUG_FLAG("action", "Video policy actions", &DBG_ACTION),
-    OHM_DEBUG_FLAG("xvideo", "X Video"             , &DBG_XV    )
+    OHM_DEBUG_FLAG("xvideo", "X Video"             , &DBG_XV    ),
+    OHM_DEBUG_FLAG("info"  , "Info messages"       , &DBG_INFO  )
 );
 
 OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri));
 OHM_IMPORTABLE(gboolean , unregister_ep, (GObject *ep));
+OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
-OHM_PLUGIN_REQUIRES_METHODS(videoep, 2, 
+OHM_PLUGIN_REQUIRES_METHODS(videoep, 3, 
    OHM_IMPORT("signaling.register_enforcement_point"  , register_ep  ),
-   OHM_IMPORT("signaling.unregister_enforcement_point", unregister_ep)
+   OHM_IMPORT("signaling.unregister_enforcement_point", unregister_ep),
+   OHM_IMPORT("dres.resolve", resolve)
 );
 
 static void decision_signal_cb(GObject *enforcement_point, GObject *transaction, internal_ep_cb_t cb, gpointer data)
@@ -67,15 +72,29 @@ static void plugin_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
-    GObject *conn = NULL;
-    gulong   decision_cb;
-    gulong   keychange_cb;
+    GObject       *conn = NULL;
+    gulong         decision_cb;
+    gulong         keychange_cb;
+    const char    *port_str;
+    char          *e;
+    unsigned short port;
 
     OHM_DEBUG_INIT(video);
 
     OHM_INFO("Video EP: init ...");
 
     do {
+        if (!(port_str = ohm_plugin_get_param(plugin, "notification-port")))
+            port = VIDEOEP_NOTIFICATION_PORT;
+        else {
+            port = strtoul(port_str, &e, 10);
+
+            if (*e != '\0') {
+                OHM_ERROR("videoep: invalid notification port '%s'", port_str);
+                port = VIDEOEP_NOTIFICATION_PORT;
+            }
+        }
+
         if (register_ep == NULL) {
             OHM_ERROR("videoep: 'signaling.register_enforcement_point()' "
                       "not found");
@@ -106,6 +125,7 @@ static void plugin_init(OhmPlugin *plugin)
         videoep->decision_cb  = decision_cb;
         videoep->keychange_cb = keychange_cb; 
         videoep->xr = xrt_init(":0");
+        videoep->notif = notify_init(port);
 
         xrt_connect_to_xserver(videoep->xr);
 
@@ -132,6 +152,7 @@ static void plugin_exit(OhmPlugin *plugin)
         unregister_ep(videoep->conn);
 
         xrt_exit(videoep->xr);
+        notify_exit(videoep->notif);
 
         free(videoep);
     }
@@ -139,6 +160,7 @@ static void plugin_exit(OhmPlugin *plugin)
 
 #include "txparser.c"
 #include "xrt.c"
+#include "notify.c"
 
 
 OHM_PLUGIN_DESCRIPTION("videoep",
