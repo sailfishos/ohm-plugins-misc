@@ -90,7 +90,7 @@ proc_subscribe(cgrp_context_t *ctx)
     if ((gioc = g_io_channel_unix_new(sock)) == NULL)
         return FALSE;
     
-    mask = G_IO_IN | G_IO_HUP;
+    mask = G_IO_IN | G_IO_HUP | G_IO_ERR;
     gsrc = g_io_add_watch(gioc, mask, netlink_cb, ctx);
 
     return gsrc != 0;
@@ -312,6 +312,16 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
         OHM_ERROR("cgrp: netlink socket closed unexpectedly");
     }
 
+    if (mask & G_IO_ERR) {
+        OHM_ERROR("cgrp: netlink socket error (%d: %s)",
+                  errno, strerror(errno));
+        proc_unsubscribe();
+        netlink_close();
+        netlink_create();
+        proc_subscribe(ctx);
+        return FALSE;
+    }
+    
     return TRUE;
 }
 
