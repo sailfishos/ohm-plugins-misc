@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.58) unstable; urgency=low
+
+  * Close and reopen netlink socket if we get G_IO_ERR (ie. glib fails to poll).
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Mon, 24 Aug 2009 20:15:52 +0300
+
 ohm-plugins-misc (0.6.57) unstable; urgency=low
 
   * Put ohm-session-agent back to .post/55 as requested.

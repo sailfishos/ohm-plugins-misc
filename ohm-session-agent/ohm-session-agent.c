@@ -24,6 +24,9 @@
 #define DBUS_ADMIN_INTERFACE "org.freedesktop.DBus"
 #define DBUS_ADMIN_PATH      "/org/freedesktop/DBus"
 
+#define EXIT_DELAY 3                    /* restart rate damping in seconds */
+
+
 #define LOG_ERROR(fmt, args...) \
     fprintf(stderr, "ohm-session-agent: error: "fmt"\n" , ## args)
 #define LOG_INFO(fmt, args...) \
@@ -43,6 +46,14 @@ static DBusHandlerResult name_owner_changed(DBusConnection *, DBusMessage *,
                                             void *);
 
 static int ohm_notify_failure(void);
+
+
+void
+damped_exit(int exit_code, int delay)
+{
+    sleep(delay);
+    exit(exit_code);
+}
 
 
 void
@@ -108,7 +119,7 @@ bus_connect(void)
         else
             LOG_ERROR("Failed to get DBUS connection.");
         
-        exit(1);
+        damped_exit(1, EXIT_DELAY);
     }
 
     dbus_connection_setup_with_g_main(sys_bus, NULL);
@@ -120,7 +131,7 @@ bus_connect(void)
 
     if (status == DBUS_REQUEST_NAME_REPLY_EXISTS) {
         LOG_ERROR("Name already taken, another instance already running.");
-        exit(0);
+        damped_exit(0, EXIT_DELAY);
     }
 
     if (status != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
@@ -131,13 +142,13 @@ bus_connect(void)
         else
             LOG_ERROR("Failed to acquire name %s.", name);
         
-        exit(1);
+        damped_exit(1, EXIT_DELAY);
     }
 
 
     if (!dbus_connection_add_filter(sys_bus, name_owner_changed, NULL, NULL)) {
         LOG_ERROR("Failed to install DBUS filter.");
-        exit(1);
+        damped_exit(1, EXIT_DELAY);
     }
 
     snprintf(filter, sizeof(filter),
@@ -148,7 +159,7 @@ bus_connect(void)
     
     if (dbus_error_is_set(&error)) {
         LOG_ERROR("Failed add match \"%s\" (%s).", filter, error.message);
-        exit(1);
+        damped_exit(1, EXIT_DELAY);
     }
 
 
@@ -171,8 +182,7 @@ session_check(gpointer dummy)
         LOG_INFO("OHM did not appear on the session bus.");
         dbus_error_free(&error);
         ohm_notify_failure();
-        sleep(10);
-        exit(1);
+        damped_exit(1, 10);
     }
 
     chkid = 0;
@@ -323,7 +333,7 @@ main(int argc, char *argv[])
     
     if ((main_loop = g_main_loop_new(NULL, FALSE)) == NULL) {
         LOG_ERROR("Failed to initialize main loop.");
-        exit(1);
+        damped_exit(1, EXIT_DELAY);
     }
 
     bus_connect();
