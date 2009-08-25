@@ -313,12 +313,20 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
     }
 
     if (mask & G_IO_ERR) {
-        OHM_ERROR("cgrp: netlink socket error (%d: %s)",
-                  errno, strerror(errno));
+        int       sckerr;
+        socklen_t errlen;
+        
+        errlen = sizeof(sckerr);
+        getsockopt(sock, SOL_SOCKET, SO_ERROR, &sckerr, &errlen);
+        OHM_ERROR("cgrp: netlink error %d (%s)", sckerr, strerror(sckerr));
+
         proc_unsubscribe();
         netlink_close();
+        errno = 0;
+
         netlink_create();
         proc_subscribe(ctx);
+        process_scan_proc(ctx);
         return FALSE;
     }
     

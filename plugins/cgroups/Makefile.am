@@ -22,6 +22,7 @@ libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-utils.c     \
 			    cgrp-fact.c      \
 			    cgrp-console.c   \
+			    cgrp-sysmon.c    \
 			    cgrp-config.y    \
 			    cgrp-lexer.l
 

@@ -77,6 +77,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_EXPORT_GROUPS
 %token TOKEN_KW_EXPORT_PARTS
 %token TOKEN_KW_EXPORT_FACT
+%token TOKEN_KW_IOWAIT_NOTIFY
 
 %token TOKEN_ASTERISK "*"
 %token TOKEN_HEADER_OPEN "["
@@ -117,6 +118,45 @@ global_option: TOKEN_KW_EXPORT_GROUPS {
     }
     | TOKEN_KW_EXPORT_PARTS {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
+    }
+    | iowait_notify
+    ;
+
+iowait_notify: TOKEN_KW_IOWAIT_NOTIFY iowait_notify_options
+    ;
+
+iowait_notify_options: iowait_notify_option
+    | iowait_notify_options iowait_notify_option
+    ;
+
+iowait_notify_option: TOKEN_IDENT TOKEN_UINT {
+          if      (!strcmp($1.value, "low" )) ctx->iow_low      = $2.value;
+          else if (!strcmp($1.value, "high")) ctx->iow_high     = $2.value;
+          else if (!strcmp($1.value, "freq")) ctx->iow_interval = $2.value;
+          else if (!strcmp($1.value, "window")) ctx->iow_window = $2.value;
+          else {
+	      OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
+              YYABORT;
+          }
+	  printf("I/O wait option %s: %u\n", $1.value, $2.value);
+    }
+    | TOKEN_IDENT TOKEN_IDENT {
+          if (!strcmp($1.value, "hook"))
+              ctx->iow_hook = STRDUP($2.value);
+          else {
+              OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
+              YYABORT;
+          }
+	  printf("I/O wait option %s: %s\n", $1.value, $2.value);
+    }
+    | TOKEN_IDENT TOKEN_STRING {
+          if (!strcmp($1.value, "hook"))
+              ctx->iow_hook = STRDUP($2.value);
+          else {
+              OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
+              YYABORT;
+          }
+	  printf("I/O wait option %s: %s\n", $1.value, $2.value);
     }
     ;
 

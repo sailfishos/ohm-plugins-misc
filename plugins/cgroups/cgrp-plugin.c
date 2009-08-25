@@ -4,13 +4,15 @@
 
 /* debug flags */
 int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
+int DBG_SYSMON;
 
 OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("event"   , "process events"        , &DBG_EVENT),
     OHM_DEBUG_FLAG("process" , "process watch"         , &DBG_PROCESS),
     OHM_DEBUG_FLAG("classify", "process classification", &DBG_CLASSIFY),
     OHM_DEBUG_FLAG("notify"  , "UI notifications"      , &DBG_NOTIFY),
-    OHM_DEBUG_FLAG("action"  , "policy actions"        , &DBG_ACTION));
+    OHM_DEBUG_FLAG("action"  , "policy actions"        , &DBG_ACTION),
+    OHM_DEBUG_FLAG("sysmon"  , "system monitoring"     , &DBG_SYSMON));
 
 
 OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri));
@@ -74,7 +76,7 @@ plugin_init(OhmPlugin *plugin)
     if (!notify_init(ctx, port))
         plugin_exit(plugin);
     
-    if (!classify_config(ctx) || !group_config(ctx)) {
+    if (!classify_config(ctx) || !group_config(ctx) || !sysmon_init(ctx)) {
         OHM_ERROR("cgrp: configuration failed");
         exit(1);
     }
@@ -102,6 +104,7 @@ plugin_exit(OhmPlugin *plugin)
     console_exit();
 
     ep_exit(ctx, signaling_unregister);
+    sysmon_exit(ctx);
     proc_exit(ctx);
     classify_exit(ctx);
     procdef_exit(ctx);

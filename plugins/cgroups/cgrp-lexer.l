@@ -237,6 +237,7 @@ KW_RECLASSIFY    reclassify-after
 KW_EXPORT_GROUPS export-group-facts
 KW_EXPORT_PARTS  export-partition-facts
 KW_EXPORT_FACT   export-fact
+KW_IOWAIT_NOTIFY iowait-notify
 
 HEADER_OPEN     \[
 HEADER_CLOSE    \]
@@ -283,6 +284,7 @@ SINT            [+|-]?[0-9]+
 {KW_EXPORT_GROUPS} { TOKEN(KW_EXPORT_GROUPS); }
 {KW_EXPORT_PARTS}  { TOKEN(KW_EXPORT_PARTS);  }
 {KW_EXPORT_FACT}   { TOKEN(KW_EXPORT_FACT);   }
+{KW_IOWAIT_NOTIFY} { TOKEN(KW_IOWAIT_NOTIFY); }
 
 {HEADER_OPEN}      { TOKEN(HEADER_OPEN);    }
 {HEADER_CLOSE}     { TOKEN(HEADER_CLOSE);   }

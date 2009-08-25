@@ -325,6 +325,15 @@ typedef struct {
 
 
 typedef struct {
+    unsigned long total;                    /* total */
+    int           size;                     /* window size */
+    int           ready;                    /* has enough items ? */
+    int           idx;                      /* current index */
+    unsigned long items[0];                 /* actual items */
+} sldwin_t;
+
+
+typedef struct {
     char             *desired_mount;        /* desired mount point */
     char             *actual_mount;         /* actual mount point */
     unsigned int      cgroup_options;       /* cgroup mount options */
@@ -356,6 +365,21 @@ typedef struct {
     guint             notifsrc;
     int             (*resolve)(char *, char **);
 
+    /* I/O wait monitoring */
+    int               proc_stat;            /* /proc/stat fd */
+    int               iow_low;              /* low threshold */
+    int               iow_high;             /* high threshold */
+    int               iow_interval;         /* sampling interval */
+    char             *iow_hook;             /* notification hook */
+    int               iow_window;           /* window size */
+
+    int               iow_delay;            /* current sampling interval */
+    unsigned long     iow_sample;           /* previous sample */
+    struct timespec   iow_stamp;            /* timestamp thereof */
+    sldwin_t         *iow_win;              /* sample window */
+    guint             iow_timer;            /* sampling timer */
+    int               iow_alert;            /* TRUE if th*/
+
 } cgrp_context_t;
 
 
@@ -368,6 +392,7 @@ typedef struct {
 
 /* cgrp-plugin.c */
 extern int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
+extern int DBG_SYSMON;
 
 /* cgrp-process.c */
 int  proc_init(cgrp_context_t *);
@@ -526,9 +551,15 @@ int  notify_init(cgrp_context_t *, int);
 void notify_exit(cgrp_context_t *);
 int  notify_group_change(cgrp_context_t *ctx, cgrp_group_t *, cgrp_group_t *);
 
-/* cgrp-console. */
+/* cgrp-console.c */
 int  console_init(cgrp_context_t *);
 void console_exit(void);
+
+/* cgrp-sysmon.c */
+int  sysmon_init(cgrp_context_t *);
+void sysmon_exit(cgrp_context_t *);
+
+
 
 #endif /* __OHM_PLUGIN_DBUS_H__ */
 
