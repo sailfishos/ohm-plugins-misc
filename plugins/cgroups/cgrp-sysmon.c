@@ -8,22 +8,29 @@
 
 #include "cgrp-plugin.h"
 
-#define IOW_DEFAULT_LOW    10
-#define IOW_DEFAULT_HIGH   50
-#define IOW_MIN_WINDOW      3
-#define IOW_MAX_WINDOW      8
-#define IOW_WINSIZE         5
-#define IOW_MIN_INTERVAL    5                    /* minimum sampling delay */
-#define INITIAL_DELAY     120                    /* before we start sampling */
-#define IOW_DEFAULT_HOOK  "iowait_notify"        /* default hook name */
+#define INITIAL_DELAY 120                     /* before we start sampling */
 
 static int clkhz;
-
-static gboolean iow_timer(gpointer ptr);
 
 static sldwin_t      *sldwin_alloc (int);
 static void           sldwin_free  (sldwin_t *);
 static unsigned long  sldwin_update(sldwin_t *, unsigned long);
+
+
+typedef struct {
+    int  (*init)(cgrp_context_t *);
+    void (*exit)(cgrp_context_t *);
+} sysmon_t;
+
+
+static int  iow_init(cgrp_context_t *ctx);
+static void iow_exit(cgrp_context_t *ctx);
+
+
+sysmon_t monitors[] = {
+    { iow_init, iow_exit },
+    { NULL    , NULL     }
+};
 
 
 /********************
@@ -32,56 +39,19 @@ static unsigned long  sldwin_update(sldwin_t *, unsigned long);
 int
 sysmon_init(cgrp_context_t *ctx)
 {
-    clkhz = sysconf(_SC_CLK_TCK);
+    sysmon_t *mon;
     
-    if (ctx->iow_interval <= 0)
-        return TRUE;
+    clkhz          = sysconf(_SC_CLK_TCK);
+    ctx->proc_stat = open("/proc/stat", O_RDONLY);
 
-    if (ctx->iow_interval <= IOW_MIN_INTERVAL)
-        ctx->iow_interval = IOW_MIN_INTERVAL;
-
-    ctx->iow_delay = ctx->iow_interval;
-    
-    if (ctx->iow_low < 0 || ctx->iow_low > 100)
-        ctx->iow_low = 0;
-    if (ctx->iow_high < 0 || ctx->iow_high > 100)
-        ctx->iow_high = 0;
-
-    if (!ctx->iow_low)
-        ctx->iow_low = IOW_DEFAULT_LOW;
-
-    if (!ctx->iow_high)
-        ctx->iow_high = IOW_DEFAULT_HIGH;
-
-    if (ctx->iow_hook == NULL)
-        ctx->iow_hook = STRDUP(IOW_DEFAULT_HOOK);
-    
-    if (ctx->iow_low >= ctx->iow_high) {
-        OHM_ERROR("cgrp: invalid I/O wait thresholds, using defaults");
-        ctx->iow_low  = IOW_DEFAULT_LOW;
-        ctx->iow_high = IOW_DEFAULT_HIGH;
-    }
-
-    if (ctx->iow_window <= 0)
-        ctx->iow_window = 30 / ctx->iow_interval;
-
-    if (ctx->iow_window < IOW_MIN_WINDOW)
-        ctx->iow_window = IOW_MIN_WINDOW;
-    else if (ctx->iow_window > IOW_MAX_WINDOW)
-        ctx->iow_window = IOW_MAX_WINDOW;
-    
-    if ((ctx->iow_win = sldwin_alloc(IOW_WINSIZE)) == NULL)
-        return FALSE;
-
-    if ((ctx->proc_stat = open("/proc/stat", O_RDONLY)) < 0) {
+    if (ctx->proc_stat < 0) {
         OHM_ERROR("cgrp: failed to open /proc/stat");
         return FALSE;
     }
     
-    ctx->iow_timer = g_timeout_add_full(G_PRIORITY_DEFAULT,
-                                        INITIAL_DELAY * 1000,
-                                        iow_timer, ctx, NULL);
-
+    for (mon = monitors; mon->init != NULL; mon++)
+        mon->init(ctx);
+    
     return TRUE;
 }
 
@@ -92,18 +62,24 @@ sysmon_init(cgrp_context_t *ctx)
 void
 sysmon_exit(cgrp_context_t *ctx)
 {
+    sysmon_t *mon;
+
+    for (mon = monitors; mon->init != NULL; mon++)
+        if (mon->exit != NULL)
+            mon->exit(ctx);
+    
     if (ctx->proc_stat >= 0) {
         close(ctx->proc_stat);
         ctx->proc_stat = -1;
     }
 
-    sldwin_free(ctx->iow_win);
-
-    if (ctx->iow_timer){
-        g_source_remove(ctx->iow_timer);
-        ctx->iow_timer = 0;
-    }
 }
+
+
+
+/*****************************************************************************
+ *                       *** I/O-wait state monitoring ***                   *
+ *****************************************************************************/
 
 
 /********************
@@ -115,7 +91,7 @@ iow_notify(cgrp_context_t *ctx)
     char *vars[2 + 1];
     char *state;
 
-    state = ctx->iow_alert ? "high" : "low";
+    state = ctx->iow.alert ? "high" : "low";
 
     vars[0] = "iowait";
     vars[1] = state;
@@ -123,7 +99,7 @@ iow_notify(cgrp_context_t *ctx)
     
     OHM_DEBUG(DBG_SYSMON, "I/O wait %s notification", state);
 
-    return ctx->resolve(ctx->iow_hook, vars) == 0;
+    return ctx->resolve(ctx->iow.hook, vars) == 0;
 }
 
 
@@ -165,30 +141,22 @@ iow_get_sample(int fd)
 }
 
 
+/********************
+ * msec_diff
+ ********************/
 static inline unsigned long
 msec_diff(struct timespec *now, struct timespec *prv)
 {
-    unsigned long msec;
+    unsigned long diff;
 
-    msec = (now->tv_sec - prv->tv_sec) * 1000;
+    diff = (now->tv_sec - prv->tv_sec) * 1000;
     
     if (now->tv_nsec >= prv->tv_nsec)
-        msec += (now->tv_nsec - prv->tv_nsec) / (1000 * 1000);
+        diff += (now->tv_nsec - prv->tv_nsec) / (1000 * 1000);
     else
-        msec -= (prv->tv_nsec - now->tv_nsec) / (1000 * 1000);
+        diff -= (prv->tv_nsec - now->tv_nsec) / (1000 * 1000);
 
-#if 0    
-    printf("{%lu.%lu - %lu.%lu} = %lu %s %lu: %lu msecs}\n",
-           now->tv_sec, now->tv_nsec, prv->tv_sec, prv->tv_nsec,
-           now->tv_sec - prv->tv_sec * 1000,
-           now->tv_nsec > prv->tv_nsec ? "+" : "-",
-           (now->tv_nsec > prv->tv_nsec ?
-            now->tv_nsec - prv->tv_nsec : prv->tv_nsec - now->tv_nsec) /
-           (1000 * 1000),
-           msec);
-#endif
-
-    return msec;
+    return diff;
 }
 
 
@@ -205,36 +173,131 @@ iow_timer(gpointer ptr)
     sample = iow_get_sample(ctx->proc_stat);
     clock_gettime(CLOCK_MONOTONIC, &now);
     
-    if (ctx->iow_stamp.tv_sec) {
-        dt   = msec_diff(&now, &ctx->iow_stamp);            /* sample period */
-        ds   = (sample - ctx->iow_sample) * 1000 / clkhz;   /* sample diff   */
+    if (ctx->iow.stamp.tv_sec) {
+        dt   = msec_diff(&now, &ctx->iow.stamp);            /* sample period */
+        ds   = (sample - ctx->iow.sample) * 1000 / clkhz;   /* sample diff   */
         rate = ds * 1000 / dt;                  /* normalize to 1 sec period */
 
-        avg = sldwin_update(ctx->iow_win, rate);
+        avg = sldwin_update(ctx->iow.win, rate);
 
         OHM_DEBUG(DBG_SYSMON, "I/O wait current = %.2f %%, average %.2f %%",
                   (100.0 * rate) / 1000, (100.0 * avg)  / 1000);
         
         avg = (100 * avg) / 1000;
 
-        if (ctx->iow_alert) {
-            if (avg < (unsigned long)ctx->iow_low) {
-                ctx->iow_alert = FALSE;
+        if (ctx->iow.alert) {
+            if (avg < (unsigned long)ctx->iow.low) {
+                ctx->iow.alert = FALSE;
                 iow_notify(ctx);
             }
         }
         else {
-            if (avg >= (unsigned long)ctx->iow_high) {
-                ctx->iow_alert = TRUE;
+            if (avg >= (unsigned long)ctx->iow.high) {
+                ctx->iow.alert = TRUE;
                 iow_notify(ctx);
             }
         }
     }
 
-    ctx->iow_sample = sample;
-    ctx->iow_stamp  = now;
+    ctx->iow.sample = sample;
+    ctx->iow.stamp  = now;
     
     return TRUE;
+}
+
+
+/********************
+ * iow_poll_start
+ ********************/
+gboolean
+iow_poll_start(gpointer ptr)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)ptr;
+    
+    
+    ctx->iow.timer = g_timeout_add(1000 * ctx->iow.interval, iow_timer, ctx);
+    return FALSE;
+}
+
+
+
+
+
+#define IOW_DEFAULT_LOW      15
+#define IOW_DEFAULT_HIGH     50
+#define IOW_DEFAULT_INTERVAL 20
+#define IOW_MIN_INTERVAL      5
+#define IOW_DEFAULT_WINDOW    3
+#define IOW_MIN_WINDOW        2
+#define IOW_DEFAULT_HOOK     "iowait_notify"
+
+
+/********************
+ * iow_init
+ ********************/
+static int
+iow_init(cgrp_context_t *ctx)
+{
+    if (ctx->iow.interval <= 0) {
+        OHM_INFO("cgrp: I/O-wait state monitoring disabled");
+        return TRUE;
+    }
+
+    if (ctx->iow.high < ctx->iow.low) {
+        OHM_WARNING("cgrp: invalid I/O-wait threshold, using default");
+        ctx->iow.low = ctx->iow.high = 0;
+    }
+
+    if (!ctx->iow.low) {
+        ctx->iow.low  = IOW_DEFAULT_LOW;
+        ctx->iow.high = IOW_DEFAULT_HIGH;
+    }
+
+    if (!ctx->iow.interval)
+        ctx->iow.interval = IOW_DEFAULT_INTERVAL;
+
+    if (ctx->iow.interval < IOW_MIN_INTERVAL)
+        ctx->iow.interval = IOW_MIN_INTERVAL;
+
+    if (!ctx->iow.window)
+        ctx->iow.window = 60 / ctx->iow.interval;
+    
+    if (ctx->iow.window < IOW_MIN_WINDOW)
+        ctx->iow.window = IOW_MIN_WINDOW;
+    
+    if (ctx->iow.hook == NULL)
+        ctx->iow.hook = STRDUP(IOW_DEFAULT_HOOK);
+
+    OHM_INFO("cgrp: I/O wait notification enabled");
+    OHM_INFO("cgrp: threshold %u %u, poll %u, window %u, hook %s",
+             ctx->iow.low, ctx->iow.high,
+             ctx->iow.interval, ctx->iow.window,
+             ctx->iow.hook);
+
+    if ((ctx->iow.win = sldwin_alloc(ctx->iow.window)) == NULL) {
+        OHM_ERROR("cgrp: failed to initialize I/O wait window");
+        return FALSE;
+    }
+    
+    ctx->iow.timer = g_timeout_add(1000 * INITIAL_DELAY, iow_poll_start, ctx);
+    
+    return TRUE;
+}
+
+
+/********************
+ * iow_exit
+ ********************/
+static void
+iow_exit(cgrp_context_t *ctx)
+{
+    if (ctx->iow.timer != 0) {
+        g_source_remove(ctx->iow.timer);
+        ctx->iow.timer = 0;
+    }
+
+    sldwin_free(ctx->iow.win);
+    ctx->iow.win = NULL;
 }
 
 

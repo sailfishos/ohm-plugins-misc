@@ -58,6 +58,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %type <cmd>      command_ignore
 %type <cmd>      command_reclassify
 %type <string>   group_name
+%type <string>   string
 
 %token TOKEN_KW_GLOBAL
 %token TOKEN_KW_PARTITION
@@ -129,35 +130,36 @@ iowait_notify_options: iowait_notify_option
     | iowait_notify_options iowait_notify_option
     ;
 
-iowait_notify_option: TOKEN_IDENT TOKEN_UINT {
-          if      (!strcmp($1.value, "low" )) ctx->iow_low      = $2.value;
-          else if (!strcmp($1.value, "high")) ctx->iow_high     = $2.value;
-          else if (!strcmp($1.value, "freq")) ctx->iow_interval = $2.value;
-          else if (!strcmp($1.value, "window")) ctx->iow_window = $2.value;
-          else {
-	      OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
-              YYABORT;
+iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
+          if (strcmp($1.value, "threshold")) {
+              OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
+	      YYABORT;
           }
-	  printf("I/O wait option %s: %u\n", $1.value, $2.value);
+          ctx->iow.low  = $2.value;
+          ctx->iow.high = $3.value;
     }
-    | TOKEN_IDENT TOKEN_IDENT {
-          if (!strcmp($1.value, "hook"))
-              ctx->iow_hook = STRDUP($2.value);
+    | TOKEN_IDENT TOKEN_UINT {
+          if (!strcmp($1.value, "poll"))
+              ctx->iow.interval = $2.value;
+          else if (!strcmp($1.value, "window"))
+              ctx->iow.window = $2.value;
           else {
               OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
-              YYABORT;
+	      YYABORT;
           }
-	  printf("I/O wait option %s: %s\n", $1.value, $2.value);
     }
-    | TOKEN_IDENT TOKEN_STRING {
+    | TOKEN_IDENT string {
           if (!strcmp($1.value, "hook"))
-              ctx->iow_hook = STRDUP($2.value);
+              ctx->iow.hook = STRDUP($2.value);
           else {
               OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
-              YYABORT;
+	      YYABORT;
           }
-	  printf("I/O wait option %s: %s\n", $1.value, $2.value);
     }
+    ;
+
+string: TOKEN_IDENT  { $$ = $1; }
+    |   TOKEN_STRING { $$ = $1; }
     ;
 
 partitions: partition
