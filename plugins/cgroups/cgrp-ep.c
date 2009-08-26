@@ -27,7 +27,7 @@ typedef struct {                        /* set memory limit for a partition */
 
 typedef struct {                        /* renice all processes in a group */
     char *group;
-    int   priority;                       
+    int  priority;                       
 } renice_t;
 
 typedef void (*ep_cb_t) (GObject *, GObject *, gboolean);
@@ -418,13 +418,13 @@ static int get_args(OhmFact *fact, argdsc_t *argdsc, void *args)
             break;
 
         case argtype_integer:
-            if (G_VALUE_TYPE(gv) == G_TYPE_LONG)
-                *(long *)vptr = g_value_get_long(gv);
+            if (G_VALUE_TYPE(gv) == G_TYPE_INT)
+                *(int *)vptr = g_value_get_int(gv);
             break;
 
         case argtype_unsigned:
-            if (G_VALUE_TYPE(gv) == G_TYPE_ULONG)
-                *(unsigned long *)vptr = g_value_get_ulong(gv);
+            if (G_VALUE_TYPE(gv) == G_TYPE_UINT)
+                *(unsigned int *)vptr = g_value_get_uint(gv);
             break;
 
         default:
