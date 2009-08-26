@@ -237,6 +237,7 @@ struct cgrp_stmt_s {
 
 typedef struct {
     char          *binary;                  /* path to binary */
+    int            renice;                  /* XXX temporary renicing kludge */
     cgrp_stmt_t   *statements;              /* classification statements */
 } cgrp_procdef_t;
 

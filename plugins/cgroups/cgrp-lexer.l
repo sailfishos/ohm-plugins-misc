@@ -229,6 +229,7 @@ KW_RULE          rule
 KW_BINARY        binary
 KW_CMDLINE       commandline
 KW_GROUP         group
+KW_RENICE        renice
 KW_TYPE          type
 KW_USER          user
 KW_PARENT        parent
@@ -274,6 +275,7 @@ SINT            [+|-]?[0-9]+
 {KW_PATH}          { TOKEN(KW_PATH);          }
 {KW_RULE}          { TOKEN(KW_RULE);          }
 {KW_GROUP}         { TOKEN(KW_GROUP);         }
+{KW_RENICE}        { TOKEN(KW_RENICE);        }
 {KW_USER}          { TOKEN(KW_USER);          }
 {KW_PARENT}        { TOKEN(KW_PARENT);        }
 {KW_BINARY}        { TOKEN(KW_BINARY);        }

@@ -63,6 +63,7 @@ procdef_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
     }
 
     procdef->binary     = STRDUP(pd->binary);
+    procdef->renice     = pd->renice;
     procdef->statements = pd->statements;
 
     if (procdef->binary == NULL) {
@@ -120,6 +121,7 @@ procdef_print(cgrp_context_t *ctx, cgrp_procdef_t *procdef, FILE *fp)
     (void)ctx;
 
     fprintf(fp, "[rule '%s']\n", procdef->binary);
+    fprintf(fp, "renice %d\n", procdef->renice);
     statements_print(ctx, procdef->statements, fp);
 }
 

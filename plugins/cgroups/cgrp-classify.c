@@ -85,6 +85,8 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassification)
 
     /* try binary-specific rules */
     if ((cmd = rule_eval(rule, &procattr)) != NULL) {
+        if (rule->renice)
+            process_set_priority(&process, rule->renice);
         procattr_dump(&procattr);
         return command_execute(ctx, &process, cmd, reclassification);
     }

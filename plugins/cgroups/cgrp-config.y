@@ -28,6 +28,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
     cgrp_prop_type_t  prop;
     cgrp_value_t      value;
     cgrp_context_t    ctx;
+    int               renice;
 }
 
 %defines
@@ -59,6 +60,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %type <cmd>      command_reclassify
 %type <string>   group_name
 %type <string>   string
+%type <renice>   optional_renice
 
 %token TOKEN_KW_GLOBAL
 %token TOKEN_KW_PARTITION
@@ -70,6 +72,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_BINARY
 %token TOKEN_KW_CMDLINE
 %token TOKEN_KW_GROUP
+%token TOKEN_KW_RENICE
 %token TOKEN_KW_USER
 %token TOKEN_KW_PARENT
 %token TOKEN_KW_TYPE
@@ -308,15 +311,20 @@ procdefs: procdef
     | procdefs procdef
     ;
 
-procdef: "[" TOKEN_KW_RULE procdef_name "]"
+procdef: "[" TOKEN_KW_RULE procdef_name "]" optional_renice
          procdef_statements {
          cgrp_procdef_t procdef;
 
          procdef.binary     = $3.value;
-         procdef.statements = $5;
+	 procdef.renice     = $5;
+         procdef.statements = $6;
          if (!procdef_add(ctx, &procdef))
 	     YYABORT;
     }
+    ;
+
+optional_renice: /* empty */     { $$ = 0;  }
+    | TOKEN_KW_RENICE TOKEN_SINT { $$ = $2.value; }
     ;
 
 procdef_name:
