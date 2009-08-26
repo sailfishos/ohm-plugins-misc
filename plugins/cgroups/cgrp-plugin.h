@@ -334,6 +334,21 @@ typedef struct {
 
 
 typedef struct {
+    unsigned int     low;                   /* low threshold */
+    unsigned int     high;                  /* high threshold */
+    unsigned int     interval;              /* polling interval */
+    unsigned int     window;                /* sliding window size */
+    char            *hook;                  /* notification hook */
+    
+    unsigned long    sample;                /* last sample */
+    struct timespec  stamp;                 /* sample timestamp */
+    sldwin_t        *win;                   /* sample window */
+    guint            timer;                 /* sampling timer */
+    int              alert;                 /* TRUE if above high threshold */
+} cgrp_iowait_t;
+
+
+typedef struct {
     char             *desired_mount;        /* desired mount point */
     char             *actual_mount;         /* actual mount point */
     unsigned int      cgroup_options;       /* cgroup mount options */
@@ -367,19 +382,7 @@ typedef struct {
 
     /* I/O wait monitoring */
     int               proc_stat;            /* /proc/stat fd */
-    int               iow_low;              /* low threshold */
-    int               iow_high;             /* high threshold */
-    int               iow_interval;         /* sampling interval */
-    char             *iow_hook;             /* notification hook */
-    int               iow_window;           /* window size */
-
-    int               iow_delay;            /* current sampling interval */
-    unsigned long     iow_sample;           /* previous sample */
-    struct timespec   iow_stamp;            /* timestamp thereof */
-    sldwin_t         *iow_win;              /* sample window */
-    guint             iow_timer;            /* sampling timer */
-    int               iow_alert;            /* TRUE if th*/
-
+    cgrp_iowait_t     iow;                  /* I/O-wait state monitoring */
 } cgrp_context_t;
 
 
