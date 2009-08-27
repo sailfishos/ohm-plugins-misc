@@ -213,37 +213,38 @@ cgrpyywrap(void)
 
 %}
 
-EOL             \n
-WHITESPACE      [ \t]+
+EOL               \n
+WHITESPACE        [ \t]+
 
-COMMENT_FULL    ^[ \t]*#.*$
-COMMENT_TRAIL   [ \t]*#.*$
+COMMENT_FULL      ^[ \t]*#.*$
+COMMENT_TRAIL     [ \t]*#.*$
 
-KW_GLOBAL        \[global\]
-KW_PARTITION     partition
-KW_DESCRIPTION   description
-KW_PATH          path
-KW_CPU_SHARES    cpu-shares
-KW_MEM_LIMIT     memory-limit
-KW_RULE          rule
-KW_BINARY        binary
-KW_CMDLINE       commandline
-KW_GROUP         group
-KW_RENICE        renice
-KW_TYPE          type
-KW_USER          user
-KW_PARENT        parent
-KW_IGNORE        ignore
-KW_RECLASSIFY    reclassify-after
-KW_EXPORT_GROUPS export-group-facts
-KW_EXPORT_PARTS  export-partition-facts
-KW_EXPORT_FACT   export-fact
-KW_IOWAIT_NOTIFY iowait-notify
+KW_GLOBAL         \[global\]
+KW_PARTITION      partition
+KW_DESCRIPTION    description
+KW_PATH           path
+KW_CPU_SHARES     cpu-shares
+KW_MEM_LIMIT      memory-limit
+KW_RULE           rule
+KW_BINARY         binary
+KW_CMDLINE        commandline
+KW_GROUP          group
+KW_RENICE         renice
+KW_TYPE           type
+KW_USER           user
+KW_PARENT         parent
+KW_IGNORE         ignore
+KW_RECLASSIFY     reclassify-after
+KW_EXPORT_GROUPS  export-group-facts
+KW_EXPORT_PARTS   export-partition-facts
+KW_EXPORT_FACT    export-fact
+KW_CGROUP_OPTIONS cgroupfs-options
+KW_IOWAIT_NOTIFY  iowait-notify
 
-HEADER_OPEN     \[
-HEADER_CLOSE    \]
+HEADER_OPEN       \[
+HEADER_CLOSE      \]
 
-ARG             arg[0-9]+
+ARG               arg[0-9]+
 
 EQUAL           ==
 NOTEQ           !=
@@ -261,50 +262,51 @@ SINT            [+|-]?[0-9]+
 
 %%
 
-{WHITESPACE}       { IGNORE(WHITESPACE);                 }
-{COMMENT_FULL}     { IGNORE(COMMENT_FULL);  unput('\n'); }
-{COMMENT_TRAIL}    { IGNORE(COMMENT_TRAIL); unput('\n'); }
+{WHITESPACE}        { IGNORE(WHITESPACE);                 }
+{COMMENT_FULL}      { IGNORE(COMMENT_FULL);  unput('\n'); }
+{COMMENT_TRAIL}     { IGNORE(COMMENT_TRAIL); unput('\n'); }
 
-{EOL}              { IGNORE(EOL); lineno++;              }
+{EOL}               { IGNORE(EOL); lineno++;              }
 
-{KW_GLOBAL}        { TOKEN(KW_GLOBAL);        }
-{KW_PARTITION}     { TOKEN(KW_PARTITION);     }
-{KW_DESCRIPTION}   { TOKEN(KW_DESCRIPTION);   }
-{KW_CPU_SHARES}    { TOKEN(KW_CPU_SHARES);    }
-{KW_MEM_LIMIT}     { TOKEN(KW_MEM_LIMIT);     }
-{KW_PATH}          { TOKEN(KW_PATH);          }
-{KW_RULE}          { TOKEN(KW_RULE);          }
-{KW_GROUP}         { TOKEN(KW_GROUP);         }
-{KW_RENICE}        { TOKEN(KW_RENICE);        }
-{KW_USER}          { TOKEN(KW_USER);          }
-{KW_PARENT}        { TOKEN(KW_PARENT);        }
-{KW_BINARY}        { TOKEN(KW_BINARY);        }
-{KW_CMDLINE}       { TOKEN(KW_CMDLINE);       }
-{KW_TYPE}          { TOKEN(KW_TYPE);          }
-{KW_IGNORE}        { TOKEN(KW_IGNORE);        }
-{KW_RECLASSIFY}    { TOKEN(KW_RECLASSIFY);    }
-{KW_EXPORT_GROUPS} { TOKEN(KW_EXPORT_GROUPS); }
-{KW_EXPORT_PARTS}  { TOKEN(KW_EXPORT_PARTS);  }
-{KW_EXPORT_FACT}   { TOKEN(KW_EXPORT_FACT);   }
-{KW_IOWAIT_NOTIFY} { TOKEN(KW_IOWAIT_NOTIFY); }
+{KW_GLOBAL}         { TOKEN(KW_GLOBAL);        }
+{KW_PARTITION}      { TOKEN(KW_PARTITION);     }
+{KW_DESCRIPTION}    { TOKEN(KW_DESCRIPTION);   }
+{KW_CPU_SHARES}     { TOKEN(KW_CPU_SHARES);    }
+{KW_MEM_LIMIT}      { TOKEN(KW_MEM_LIMIT);     }
+{KW_PATH}           { TOKEN(KW_PATH);          }
+{KW_RULE}           { TOKEN(KW_RULE);          }
+{KW_GROUP}          { TOKEN(KW_GROUP);         }
+{KW_RENICE}         { TOKEN(KW_RENICE);        }
+{KW_USER}           { TOKEN(KW_USER);          }
+{KW_PARENT}         { TOKEN(KW_PARENT);        }
+{KW_BINARY}         { TOKEN(KW_BINARY);        }
+{KW_CMDLINE}        { TOKEN(KW_CMDLINE);       }
+{KW_TYPE}           { TOKEN(KW_TYPE);          }
+{KW_IGNORE}         { TOKEN(KW_IGNORE);        }
+{KW_RECLASSIFY}     { TOKEN(KW_RECLASSIFY);    }
+{KW_EXPORT_GROUPS}  { TOKEN(KW_EXPORT_GROUPS); }
+{KW_EXPORT_PARTS}   { TOKEN(KW_EXPORT_PARTS);  }
+{KW_EXPORT_FACT}    { TOKEN(KW_EXPORT_FACT);   }
+{KW_CGROUP_OPTIONS} { TOKEN(KW_CGROUP_OPTIONS);}
+{KW_IOWAIT_NOTIFY}  { TOKEN(KW_IOWAIT_NOTIFY); }
 
-{HEADER_OPEN}      { TOKEN(HEADER_OPEN);    }
-{HEADER_CLOSE}     { TOKEN(HEADER_CLOSE);   }
+{HEADER_OPEN}       { TOKEN(HEADER_OPEN);    }
+{HEADER_CLOSE}      { TOKEN(HEADER_CLOSE);   }
 
-{ARG}              { TOKEN_NUM(ARG);        }
+{ARG}               { TOKEN_NUM(ARG);        }
 
-{EQUAL}            { TOKEN(EQUAL);          }
-{NOTEQ}            { TOKEN(NOTEQ);          }
-{AND}              { TOKEN(AND);            }
-{OR}               { TOKEN(OR);             }
-{NOT}              { TOKEN(NOT);            }
-{IMPLIES}          { TOKEN(IMPLIES);        }
+{EQUAL}             { TOKEN(EQUAL);          }
+{NOTEQ}             { TOKEN(NOTEQ);          }
+{AND}               { TOKEN(AND);            }
+{OR}                { TOKEN(OR);             }
+{NOT}               { TOKEN(NOT);            }
+{IMPLIES}           { TOKEN(IMPLIES);        }
 
-{ASTERISK}         { TOKEN(ASTERISK);       }
-{IDENT}            { TOKEN_STR(IDENT);      }
-{PATH}             { TOKEN_STR(PATH);       }
-{STRING}           { TOKEN_STR(STRING);     }
-{UINT}             { TOKEN_NUM(UINT);       }
-{SINT}             { TOKEN_NUM(SINT);       }
+{ASTERISK}          { TOKEN(ASTERISK);       }
+{IDENT}             { TOKEN_STR(IDENT);      }
+{PATH}              { TOKEN_STR(PATH);       }
+{STRING}            { TOKEN_STR(STRING);     }
+{UINT}              { TOKEN_NUM(UINT);       }
+{SINT}              { TOKEN_NUM(SINT);       }
 
-<<EOF>>            { yyterminate();         }
+<<EOF>>             { yyterminate();         }

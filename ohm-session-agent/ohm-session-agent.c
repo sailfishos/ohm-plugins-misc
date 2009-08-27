@@ -24,8 +24,7 @@
 #define DBUS_ADMIN_INTERFACE "org.freedesktop.DBus"
 #define DBUS_ADMIN_PATH      "/org/freedesktop/DBus"
 
-#define EXIT_DELAY 3                    /* restart rate damping in seconds */
-
+#define MAX_ARGS 32
 
 #define LOG_ERROR(fmt, args...) \
     fprintf(stderr, "ohm-session-agent: error: "fmt"\n" , ## args)
@@ -41,19 +40,14 @@ static const char     *ohm_path   = OHM_DBUS_PATH;
 static const char     *ohm_signal = OHM_DBUS_SIGNAME;
 static const char     *bus_address;
 static guint           chkid;
+static char           *saved_argv[MAX_ARGS + 1];
+
 
 static DBusHandlerResult name_owner_changed(DBusConnection *, DBusMessage *,
                                             void *);
 
-static int ohm_notify_failure(void);
-
-
-void
-damped_exit(int exit_code, int delay)
-{
-    sleep(delay);
-    exit(exit_code);
-}
+static int  ohm_notify_failure(void);
+static void restart_after(int);
 
 
 void
@@ -110,16 +104,26 @@ bus_connect(void)
         
     dbus_error_init(&error);
 
-    if ((sys_bus  = dbus_bus_get(DBUS_BUS_SYSTEM , &error)) == NULL ||
-        (sess_bus = dbus_bus_get(DBUS_BUS_SESSION, &error)) == NULL) {
+    if ((sys_bus  = dbus_bus_get(DBUS_BUS_SYSTEM , &error)) == NULL) {
         if (dbus_error_is_set(&error)) {
-            LOG_ERROR("Failed to get DBUS connection (%s).", error.message);
+            LOG_ERROR("Failed to connect to system DBUS (%s).", error.message);
             dbus_error_free(&error);
         }
         else
-            LOG_ERROR("Failed to get DBUS connection.");
+            LOG_ERROR("Failed to connect to system DBUS.");
         
-        damped_exit(1, EXIT_DELAY);
+        restart_after(3);
+    }
+
+    if ((sess_bus = dbus_bus_get(DBUS_BUS_SESSION, &error)) == NULL) {
+        if (dbus_error_is_set(&error)) {
+            LOG_ERROR("Failed to connect to session DBUS (%s).", error.message);
+            dbus_error_free(&error);
+        }
+        else
+            LOG_ERROR("Failed to connect to session DBUS.");
+    
+        restart_after(3);
     }
 
     dbus_connection_setup_with_g_main(sys_bus, NULL);
@@ -131,7 +135,7 @@ bus_connect(void)
 
     if (status == DBUS_REQUEST_NAME_REPLY_EXISTS) {
         LOG_ERROR("Name already taken, another instance already running.");
-        damped_exit(0, EXIT_DELAY);
+        exit(0);
     }
 
     if (status != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
@@ -142,13 +146,13 @@ bus_connect(void)
         else
             LOG_ERROR("Failed to acquire name %s.", name);
         
-        damped_exit(1, EXIT_DELAY);
+        exit(1);
     }
 
 
     if (!dbus_connection_add_filter(sys_bus, name_owner_changed, NULL, NULL)) {
         LOG_ERROR("Failed to install DBUS filter.");
-        damped_exit(1, EXIT_DELAY);
+        exit(1);
     }
 
     snprintf(filter, sizeof(filter),
@@ -159,7 +163,7 @@ bus_connect(void)
     
     if (dbus_error_is_set(&error)) {
         LOG_ERROR("Failed add match \"%s\" (%s).", filter, error.message);
-        damped_exit(1, EXIT_DELAY);
+        exit(1);
     }
 
 
@@ -182,7 +186,7 @@ session_check(gpointer dummy)
         LOG_INFO("OHM did not appear on the session bus.");
         dbus_error_free(&error);
         ohm_notify_failure();
-        damped_exit(1, 10);
+        restart_after(3);
     }
 
     chkid = 0;
@@ -326,14 +330,81 @@ name_owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
 }
 
 
+static void
+save_args(int argc, char **argv)
+{
+    char exe[64];
+    int  i;
+
+    if (argc > MAX_ARGS)
+        argc = MAX_ARGS;
+
+    sprintf(exe, "/proc/%u/exe", getpid());
+    saved_argv[0] = strdup(argv[0]);
+
+    for (i = 1; i < argc; i++)
+        saved_argv[i] = strdup(argv[i]);
+    saved_argv[i] = NULL;
+}
+
+
+static void
+check_session_address(char *path)
+{
+#define VAR "DBUS_SESSION_BUS_ADDRESS="
+
+    FILE *fp;
+    char  var[1024], *nl, *addr;
+    int   len;
+
+    if ((fp = fopen(path, "r")) == NULL)
+        return;
+    
+    while (fgets(var, sizeof(var), fp) != NULL) {
+        if ((nl = strchr(var, '\n')) != NULL)
+            *nl = '\0';
+        
+        len = sizeof(VAR) - 1;
+        if (!strncmp(var, VAR, len)) {
+            addr = var + len;
+            var[len-1] = '\0';
+            LOG_INFO("Using DBUS session address \"%s\".", addr);
+            setenv(var, addr, TRUE);
+            break;
+        }
+    }
+
+    fclose(fp);
+}
+
+
+static void
+restart_after(int delay)
+{
+    int fd;
+    
+    check_session_address("/tmp/dbus-info");
+    
+    LOG_INFO("restarting after %d seconds", delay);
+    sleep(delay);
+    
+    for (fd = 3; fd < 4096; fd++)
+        close(fd);
+    
+    sleep(1);
+    execv(saved_argv[0], saved_argv);
+}
+
+
 int
 main(int argc, char *argv[])
 {
+    save_args(argc, argv);
     parse_command_line(argc, argv);
     
     if ((main_loop = g_main_loop_new(NULL, FALSE)) == NULL) {
         LOG_ERROR("Failed to initialize main loop.");
-        damped_exit(1, EXIT_DELAY);
+        exit(1);
     }
 
     bus_connect();

@@ -81,6 +81,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_EXPORT_GROUPS
 %token TOKEN_KW_EXPORT_PARTS
 %token TOKEN_KW_EXPORT_FACT
+%token TOKEN_KW_CGROUP_OPTIONS
 %token TOKEN_KW_IOWAIT_NOTIFY
 
 %token TOKEN_ASTERISK "*"
@@ -159,6 +160,14 @@ iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
 	      YYABORT;
           }
     }
+    | cgroup_options
+    ;
+
+cgroup_options: TOKEN_KW_CGROUP_OPTIONS mount_options
+    ;
+
+mount_options: TOKEN_IDENT      { cgroup_set_option(ctx, $1.value); }
+    | mount_options TOKEN_IDENT { cgroup_set_option(ctx, $2.value); }
     ;
 
 string: TOKEN_IDENT  { $$ = $1; }
@@ -327,9 +336,8 @@ optional_renice: /* empty */     { $$ = 0;  }
     | TOKEN_KW_RENICE TOKEN_SINT { $$ = $2.value; }
     ;
 
-procdef_name:
-    | TOKEN_PATH          { $$ = $1; }
-    | TOKEN_ASTERISK      { $$.value = "*"; }
+procdef_name: TOKEN_PATH          { $$ = $1; }
+    |         TOKEN_ASTERISK      { $$.value = "*"; }
     ;
 
 procdef_statements: procdef_statement {

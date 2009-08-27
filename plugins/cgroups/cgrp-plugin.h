@@ -509,6 +509,7 @@ int  part_hash_insert(cgrp_context_t *, cgrp_partition_t *);
 int  part_hash_delete(cgrp_context_t *, const char *);
 cgrp_partition_t *part_hash_lookup(cgrp_context_t *, const char *);
 void part_hash_foreach(cgrp_context_t *, GHFunc , void *);
+int  cgroup_set_option(cgrp_context_t *, char *);
 
 
 

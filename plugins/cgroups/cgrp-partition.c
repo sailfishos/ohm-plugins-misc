@@ -25,7 +25,6 @@
 #define MEMORY  "memory.limit_in_bytes"
 
 
-static int add_root(cgrp_context_t *);
 static int discover_cgroupfs(cgrp_context_t *);
 static int mount_cgroupfs   (cgrp_context_t *);
 
@@ -502,6 +501,7 @@ mount_cgroupfs(cgrp_context_t *ctx)
     
     p  = options;
     *p = '\0';
+    t = "";
     for (option = mntopts; option->name; option++) {
         if (CGRP_TST_FLAG(ctx->options.flags, option->flag)) {
             p += sprintf(p, "%s%s", t, option->name);
@@ -580,6 +580,29 @@ implicit_root(cgrp_context_t *ctx, char *path)
 
     return ctx->desired_mount;
 }
+
+
+/********************
+ * cgroup_set_option
+ ********************/
+int
+cgroup_set_option(cgrp_context_t *ctx, char *option)
+{
+    mount_option_t *o;
+
+    for (o = mntopts; o->name; o++) {
+        if (!strcmp(o->name, option)) {
+            CGRP_SET_FLAG(ctx->options.flags, o->flag);
+            return TRUE;
+        }
+    }
+
+    OHM_ERROR("cgrp: ignoring unknown mount option \"%s\"", option);
+    return FALSE;
+}
+
+
+
 
 
 /* 
