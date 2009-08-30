@@ -193,6 +193,9 @@ group_add_process(cgrp_context_t *ctx,
     if (group == old)
         return TRUE;
     
+    OHM_DEBUG(DBG_ACTION, "adding process %u (%s) to group '%s'",
+              process->pid, process->binary, group->name);
+    
     if (old != NULL) {
         list_delete(&process->group_hook);
         if (old->fact)
@@ -266,11 +269,11 @@ group_set_priority(cgrp_group_t *group, int priority)
         process = list_entry(p, cgrp_process_t, group_hook);
         result  = process_set_priority(process, priority);
 
-        OHM_DEBUG(DBG_ACTION, "setting priority of process %u (%s) to %u: %s",
+        OHM_DEBUG(DBG_ACTION, "setting priority of process %u (%s) to %d: %s",
                   process->pid, process->binary, priority,
-                  result == 0 ? "OK" : "FAILED");
+                  result ? "OK" : "FAILED");
 
-        success &= (result == 0 ? TRUE : FALSE);
+        success &= result;
     }
     
     return success;

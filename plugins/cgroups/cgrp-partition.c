@@ -261,6 +261,9 @@ partition_add_process(cgrp_partition_t *partition, pid_t pid)
     char tasks[PIDLEN + 1];
     int  len, chk;
 
+    OHM_DEBUG(DBG_ACTION, "adding process %u to partition '%s'", pid,
+              partition->name);
+    
     len = sprintf(tasks, "%u\n", pid); 
     chk = write(partition->control.tasks, tasks, len);
 
@@ -282,6 +285,9 @@ partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
     if (group->partition == partition)
         return TRUE;
 
+    OHM_DEBUG(DBG_ACTION, "adding group '%s' to partition '%s'",
+              group->name, partition->name);
+    
     success = TRUE;
     list_foreach(&group->processes, p, n) {
         process = list_entry(p, cgrp_process_t, group_hook);

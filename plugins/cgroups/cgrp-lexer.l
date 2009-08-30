@@ -34,7 +34,7 @@ typedef enum {
 static void       lexer_error(int lineno, const char *format, ...);
 static inline int cgrpyywrap(void);
 
-static int debug = FALSE;
+static int debug = TRUE;
 static int lineno;
 static YY_BUFFER_STATE yybuf;
 
@@ -234,7 +234,8 @@ KW_TYPE           type
 KW_USER           user
 KW_PARENT         parent
 KW_IGNORE         ignore
-KW_RECLASSIFY     reclassify-after
+KW_RECLASS_AFTER  reclassify-after
+KW_RECLASSIFY     reclassify-count
 KW_EXPORT_GROUPS  export-group-facts
 KW_EXPORT_PARTS   export-partition-facts
 KW_EXPORT_FACT    export-fact
@@ -248,6 +249,7 @@ ARG               arg[0-9]+
 
 EQUAL           ==
 NOTEQ           !=
+LESS            <
 AND             &&
 OR              \|\|
 NOT             \!
@@ -283,6 +285,7 @@ SINT            [+|-]?[0-9]+
 {KW_CMDLINE}        { TOKEN(KW_CMDLINE);       }
 {KW_TYPE}           { TOKEN(KW_TYPE);          }
 {KW_IGNORE}         { TOKEN(KW_IGNORE);        }
+{KW_RECLASS_AFTER}  { TOKEN(KW_RECLASS_AFTER); }
 {KW_RECLASSIFY}     { TOKEN(KW_RECLASSIFY);    }
 {KW_EXPORT_GROUPS}  { TOKEN(KW_EXPORT_GROUPS); }
 {KW_EXPORT_PARTS}   { TOKEN(KW_EXPORT_PARTS);  }
@@ -297,6 +300,7 @@ SINT            [+|-]?[0-9]+
 
 {EQUAL}             { TOKEN(EQUAL);          }
 {NOTEQ}             { TOKEN(NOTEQ);          }
+{LESS}              { TOKEN(LESS);           }
 {AND}               { TOKEN(AND);            }
 {OR}                { TOKEN(OR);             }
 {NOT}               { TOKEN(NOT);            }

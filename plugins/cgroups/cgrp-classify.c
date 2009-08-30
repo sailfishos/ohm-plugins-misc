@@ -51,7 +51,7 @@ classify_config(cgrp_context_t *ctx)
  * classify_process
  ********************/
 int
-classify_process(cgrp_context_t *ctx, pid_t pid, int reclassification)
+classify_process(cgrp_context_t *ctx, pid_t pid, int reclassify)
 {
     cgrp_process_t    process;
     cgrp_proc_attr_t  procattr;
@@ -61,6 +61,9 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassification)
     char              args[CGRP_MAX_CMDLINE];
     char              cmdl[CGRP_MAX_CMDLINE];
     char              bin[PATH_MAX];
+    
+    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u>",
+              reclassify ? "re" : "", pid);
     
     memset(&process,  0, sizeof(process));
     memset(&procattr, 0, sizeof(procattr));
@@ -74,7 +77,9 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassification)
     procattr.argv    = argv;
     argv[0]          = args;
     procattr.cmdline = cmdl;
-    
+
+    procattr.reclassify = reclassify;
+
     if (!process_get_binary(&procattr))
         return -ENOENT;                       /* we assume it's gone already */
 
@@ -88,14 +93,14 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassification)
         if (rule->renice)
             process_set_priority(&process, rule->renice);
         procattr_dump(&procattr);
-        return command_execute(ctx, &process, cmd, reclassification);
+        return command_execute(ctx, &procattr, cmd);
     }
     
     /* then fallback rule if any */
     if (rule != ctx->fallback && ctx->fallback != NULL)
         if ((cmd = rule_eval(ctx->fallback, &procattr)) != NULL) {
             procattr_dump(&procattr);
-            return command_execute(ctx, &process, cmd, reclassification);
+            return command_execute(ctx, &procattr, cmd);
         }
     
     return 0;
@@ -110,7 +115,8 @@ reclassify_process(gpointer data)
 {
     cgrp_reclassify_t *reclassify = (cgrp_reclassify_t *)data;
 
-    classify_process(reclassify->ctx, reclassify->pid, TRUE);
+    OHM_DEBUG(DBG_CLASSIFY, "reclassifying process <%u>", reclassify->pid);
+    classify_process(reclassify->ctx, reclassify->pid, reclassify->count);
     return FALSE;
 }
 
@@ -123,14 +129,16 @@ free_reclassify(gpointer data)
 
 
 static void
-schedule_reclassify(cgrp_context_t *ctx, pid_t pid, unsigned int delay)
+schedule_reclassify(cgrp_context_t *ctx, pid_t pid, unsigned int delay,
+                    int count)
 {
     cgrp_reclassify_t *reclassify;
 
     if (ALLOC_OBJ(reclassify) != NULL) {
-        reclassify->ctx = ctx;
-        reclassify->pid = pid;
-        
+        reclassify->ctx   = ctx;
+        reclassify->pid   = pid;
+        reclassify->count = count;
+
         g_timeout_add_full(G_PRIORITY_DEFAULT, delay,
                            reclassify_process, reclassify, free_reclassify);
     }
@@ -143,8 +151,7 @@ schedule_reclassify(cgrp_context_t *ctx, pid_t pid, unsigned int delay)
  * command_execute
  ********************/
 int
-command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd,
-                int reclassification)
+command_execute(cgrp_context_t *ctx, cgrp_proc_attr_t *process, cgrp_cmd_t *cmd)
 {
     cgrp_process_t *proc;
     
@@ -182,15 +189,15 @@ command_execute(cgrp_context_t *ctx, cgrp_process_t *process, cgrp_cmd_t *cmd,
         break;
 
     case CGRP_CMD_RECLASSIFY:
-        if (!reclassification) {
-            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: reclassify after %u msecs",
-                      process->pid, process->binary, cmd->reclassify.delay);
-            
-            schedule_reclassify(ctx, process->pid, cmd->reclassify.delay);
+        if (process->reclassify < CGRP_RECLASSIFY_MAX) {
+            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: reclassify #%d after %u msecs",
+                      process->pid, process->binary, process->reclassify + 1,
+                      cmd->reclassify.delay);        
+            schedule_reclassify(ctx, process->pid, cmd->reclassify.delay,
+                                process->reclassify + 1);
         }
         else {
-            /* XXX TODO: temporary hack, needs a proper strategy */
-            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: reclassification failed",
+            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: too many reclassifications",
                       process->pid, process->binary);
             if ((proc = proc_hash_lookup(ctx, process->pid)) != NULL)
                 process_ignore(ctx, proc);

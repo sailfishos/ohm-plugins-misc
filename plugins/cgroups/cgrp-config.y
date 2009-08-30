@@ -78,6 +78,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_TYPE
 %token TOKEN_KW_IGNORE
 %token TOKEN_KW_RECLASSIFY
+%token TOKEN_KW_RECLASS_AFTER
 %token TOKEN_KW_EXPORT_GROUPS
 %token TOKEN_KW_EXPORT_PARTS
 %token TOKEN_KW_EXPORT_FACT
@@ -93,6 +94,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %token TOKEN_NOT   "!"
 %token TOKEN_EQUAL "=="
 %token TOKEN_NOTEQ "!="
+%token TOKEN_LESS  "<"
 %token TOKEN_IMPLIES "=>"
 
 %token TOKEN_EOL
@@ -389,15 +391,17 @@ bool_expr: expr "||" expr { $$ = bool_expr(CGRP_BOOL_OR , $1, $3);   }
 
 prop_expr: prop "==" value { $$ = prop_expr($1, CGRP_OP_EQUAL, &$3); }
     |      prop "!=" value { $$ = prop_expr($1, CGRP_OP_NOTEQ, &$3); }
+    |      prop "<"  value { $$ = prop_expr($1, CGRP_OP_LESS, &$3); }
     ;
 
-prop: TOKEN_ARG        { $$ = CGRP_PROP_ARG($1.value); }
-    | TOKEN_KW_BINARY  { $$ = CGRP_PROP_BINARY;        }
-    | TOKEN_KW_CMDLINE { $$ = CGRP_PROP_CMDLINE;       }
-    | TOKEN_KW_TYPE    { $$ = CGRP_PROP_TYPE;          }
-    | TOKEN_KW_USER    { $$ = CGRP_PROP_EUID;          }
-    | TOKEN_KW_GROUP   { $$ = CGRP_PROP_EGID;          }
-    | TOKEN_KW_PARENT  { $$ = CGRP_PROP_PARENT;        }
+prop: TOKEN_ARG           { $$ = CGRP_PROP_ARG($1.value); }
+    | TOKEN_KW_BINARY     { $$ = CGRP_PROP_BINARY;        }
+    | TOKEN_KW_CMDLINE    { $$ = CGRP_PROP_CMDLINE;       }
+    | TOKEN_KW_TYPE       { $$ = CGRP_PROP_TYPE;          }
+    | TOKEN_KW_USER       { $$ = CGRP_PROP_EUID;          }
+    | TOKEN_KW_GROUP      { $$ = CGRP_PROP_EGID;          }
+    | TOKEN_KW_PARENT     { $$ = CGRP_PROP_PARENT;        }
+    | TOKEN_KW_RECLASSIFY { $$ = CGRP_PROP_RECLASSIFY;    }
     ;
 
 value: TOKEN_STRING {
@@ -445,7 +449,7 @@ group_name: TOKEN_STRING { $$ = $1; }
 command_ignore: TOKEN_KW_IGNORE { $$.ignore.type = CGRP_CMD_IGNORE; }
     ;
 
-command_reclassify: TOKEN_KW_RECLASSIFY TOKEN_UINT {
+command_reclassify: TOKEN_KW_RECLASS_AFTER TOKEN_UINT {
           $$.reclassify.type  = CGRP_CMD_RECLASSIFY;
 	  $$.reclassify.delay = $2.value;
     }

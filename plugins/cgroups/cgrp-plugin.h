@@ -183,7 +183,8 @@ typedef struct {
 typedef enum {
     CGRP_OP_UNKNOWN = 0,
     CGRP_OP_EQUAL,
-    CGRP_OP_NOTEQ
+    CGRP_OP_NOTEQ,
+    CGRP_OP_LESS,
 } cgrp_prop_op_t;
 
 #define CGRP_MAX_ARGS     32                /* max command line argument */
@@ -200,6 +201,7 @@ typedef enum {
     CGRP_PROP_PARENT,
     CGRP_PROP_EUID,
     CGRP_PROP_EGID,
+    CGRP_PROP_RECLASSIFY
 } cgrp_prop_type_t;
 
 #define CGRP_PROP_ARG(n) ((cgrp_prop_type_t)(CGRP_PROP_ARG0 + (n)))
@@ -264,6 +266,7 @@ typedef enum {
     CGRP_PROC_PPID,                         /* process parent binary */
     CGRP_PROC_EUID,                         /* effective user ID */
     CGRP_PROC_EGID,                         /* effective group ID */
+    CGRP_PROC_RECLASSIFY,                   /* being reclassified ? */
 } cgrp_proc_attr_type_t;
 
 #define CGRP_PROC_ARG(n) ((cgrp_proc_attr_type_t)(CGRP_PROC_ARG0 + (n)))
@@ -286,6 +289,7 @@ typedef struct {
     int                argc;                /* number of arguments */
     uid_t              euid;                /* effective user id */
     gid_t              egid;                /* effective group id */
+    int                reclassify;          /* reclassification count */
 } cgrp_proc_attr_t;
 
 
@@ -387,9 +391,12 @@ typedef struct {
 } cgrp_context_t;
 
 
+#define CGRP_RECLASSIFY_MAX 16
+
 typedef struct {
     cgrp_context_t *ctx;
     pid_t           pid;
+    unsigned int    count;
 } cgrp_reclassify_t;
 
 
@@ -525,7 +532,7 @@ void bool_print(cgrp_context_t *, cgrp_bool_expr_t *, FILE *);
 void prop_print(cgrp_context_t *, cgrp_prop_expr_t *, FILE *);
 void value_print(cgrp_context_t *, cgrp_value_t *, FILE *);
 void command_print(cgrp_context_t *, cgrp_cmd_t *, FILE *);
-int  command_execute(cgrp_context_t *, cgrp_process_t *, cgrp_cmd_t *, int);
+int  command_execute(cgrp_context_t *, cgrp_proc_attr_t *, cgrp_cmd_t *);
 int  expr_eval(cgrp_expr_t *expr, cgrp_proc_attr_t *);
 
 
@@ -566,7 +573,7 @@ void sysmon_exit(cgrp_context_t *);
 
 
 
-#endif /* __OHM_PLUGIN_DBUS_H__ */
+#endif /* __OHM_PLUGIN_CGRP_H__ */
 
 
 

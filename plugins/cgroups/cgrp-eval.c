@@ -310,6 +310,7 @@ prop_print(cgrp_context_t *ctx, cgrp_prop_expr_t *expr, FILE *fp)
     switch (expr->op) {
     case CGRP_OP_EQUAL: fprintf(fp, " == ");               break;
     case CGRP_OP_NOTEQ: fprintf(fp, " != ");               break;
+    case CGRP_OP_LESS:  fprintf(fp, " < ");                break;
     default:            fprintf(fp, "<invalid operator>"); break;
     }
 
@@ -417,6 +418,11 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
         v1.u32  = attr->type;
         break;
 
+    case CGRP_PROP_RECLASSIFY:
+        v1.type = CGRP_VALUE_TYPE_UINT32;
+        v1.u32  = attr->reclassify;
+        break;
+
     case CGRP_PROP_EUID:
         process_get_euid(attr);
         v1.type = CGRP_VALUE_TYPE_UINT32;
@@ -461,18 +467,41 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
         return FALSE;
     }
 
-    switch (v1.type) {
-    case CGRP_VALUE_TYPE_STRING:
-        match = (v1.str && !strcmp(v1.str, v2->str));
+    switch (expr->op) {
+    case CGRP_OP_EQUAL:
+    case CGRP_OP_NOTEQ:
+        switch (v1.type) {
+        case CGRP_VALUE_TYPE_STRING:
+            match = v1.str && !strcmp(v1.str, v2->str);
+            break;
+        case CGRP_VALUE_TYPE_UINT32:
+            match = (v1.u32 == v2->u32);
+            break;
+        default:
+            return FALSE;
+        }
+        if (expr->op == CGRP_OP_NOTEQ)
+            match = !match;
         break;
-    case CGRP_VALUE_TYPE_UINT32:
-        match = (v1.u32 == v2->u32);
+
+    case CGRP_OP_LESS:
+        switch (v1.type) {
+        case CGRP_VALUE_TYPE_STRING:
+            match = (v1.str && strcmp(v1.str, v2->str) < 0);
+            break;
+        case CGRP_VALUE_TYPE_UINT32:
+            match = (v1.u32 < v2->u32);
+            break;
+        default:
+            return FALSE;
+        }
         break;
+
     default:
         return FALSE;
     }
 
-    return expr->op == CGRP_OP_EQUAL ? match : !match;
+    return match;
 }
 
 
