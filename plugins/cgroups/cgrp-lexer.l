@@ -34,7 +34,7 @@ typedef enum {
 static void       lexer_error(int lineno, const char *format, ...);
 static inline int cgrpyywrap(void);
 
-static int debug = TRUE;
+static int debug = FALSE;
 static int lineno;
 static YY_BUFFER_STATE yybuf;
 
