@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.59) unstable; urgency=low
+
+  * reclassify-count for cgroup configuration
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sun, 30 Aug 2009 23:10:00 +0300
+
 ohm-plugins-misc (0.6.58) unstable; urgency=low
 
   * Close and reopen netlink socket if it fails to poll (Fixes: NB#135103).
