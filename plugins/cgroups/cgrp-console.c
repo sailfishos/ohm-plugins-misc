@@ -67,6 +67,16 @@ show_groups(void)
 
 
 /********************
+ * show_config
+ ********************/
+static void
+show_config(void)
+{
+    config_print(ctx, stdout);
+}
+
+
+/********************
  * console_command
  ********************/
 static void
@@ -74,6 +84,7 @@ console_command(char *command)
 {
     if      (!strcmp(command, "help"))        help();
     else if (!strcmp(command, "show groups")) show_groups();
+    else if (!strcmp(command, "show config")) show_config();
     else printf("unknown cgroup command \"%s\"\n", command);
 }
 
