@@ -62,6 +62,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %type <string>   string
 %type <renice>   optional_renice
 
+%token TOKEN_EOL "\n"
 %token TOKEN_KW_GLOBAL
 %token TOKEN_KW_PARTITION
 %token TOKEN_KW_DESCRIPTION
@@ -113,12 +114,12 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 configuration: global partitions groups procdefs
 
 global: /* empty */
-    | TOKEN_KW_GLOBAL global_options
+    | TOKEN_KW_GLOBAL "\n" global_options
     ;
 
 global_options: /* empty */
-    | global_option
-    | global_options global_option
+    | global_option "\n"
+    | global_options "\n" global_option
     ;
 
 global_option: TOKEN_KW_EXPORT_GROUPS {
@@ -215,41 +216,41 @@ partitions: partition
     | partitions partition
     ;
 
-partition: "[" TOKEN_KW_PARTITION TOKEN_IDENT "]"
+partition: "[" TOKEN_KW_PARTITION TOKEN_IDENT "]" "\n"
            partition_properties {
-	$5.name = $3.value;
-        if (partition_lookup(ctx, $5.name) != NULL) {
-	    OHM_ERROR("cgrp: partition '%s' multiply defined", $5.name);
+	$6.name = $3.value;
+        if (partition_lookup(ctx, $6.name) != NULL) {
+	    OHM_ERROR("cgrp: partition '%s' multiply defined", $6.name);
 	    YYABORT;
 	}
-        if (!strcmp($5.name, "root")) {
+        if (!strcmp($6.name, "root")) {
             OHM_ERROR("cgrp: invalid partition with reserved name 'root'");
             YYABORT;
         }
-        if (partition_add(ctx, &$5) == NULL)
+        if (partition_add(ctx, &$6) == NULL)
 	    YYABORT;
     }
     ;
 
-partition_properties: partition_path      { $$.path  = $1.value; }
-    |                 partition_fact      {
+partition_properties: partition_path "\n"     { $$.path  = $1.value; }
+    |                 partition_fact "\n"     {
                           CGRP_SET_FLAG($$.flags, CGRP_PARTITION_FACT);
                       }
-    |                 partition_cpu_share { $$.limit.cpu = $1.value; }
-    |                 partition_mem_limit { $$.limit.mem = $1.value; }
-    | partition_properties partition_path {
+    |                 partition_cpu_share "\n" { $$.limit.cpu = $1.value; }
+    |                 partition_mem_limit "\n" { $$.limit.mem = $1.value; }
+    | partition_properties partition_path "\n" {
           $$ = $1;
           $$.path = $2.value;
     }
-    | partition_properties partition_fact {
+    | partition_properties partition_fact "\n" {
           $$ = $1;
           CGRP_SET_FLAG($$.flags, CGRP_PARTITION_FACT);
     }
-    | partition_properties partition_cpu_share {
+    | partition_properties  partition_cpu_share "\n" {
           $$           = $1;
           $$.limit.cpu = $2.value;
     }
-    | partition_properties partition_mem_limit {
+    | partition_properties partition_mem_limit "\n" {
           $$           = $1;
           $$.limit.mem = $2.value;
     }
@@ -307,29 +308,29 @@ groups: group
     | groups group
     ;
 
-group: "[" TOKEN_KW_GROUP TOKEN_IDENT "]"
+group: "[" TOKEN_KW_GROUP TOKEN_IDENT "]" "\n"
        group_properties {
-        $5.name = $3.value;
-        if (!group_add(ctx, &$5))
+        $6.name = $3.value;
+        if (!group_add(ctx, &$6))
 	    YYABORT;
     }
     ;
 
-group_properties: group_description { $$ = $1; }
-    |             group_partition   { $$ = $1; }
-    |             group_fact        {
+group_properties: group_description "\n" { $$ = $1; }
+    |             group_partition   "\n" { $$ = $1; }
+    |             group_fact        "\n" {
                       CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_FACT);
                   }
-    | group_properties group_description {
+    | group_properties group_description "\n" {
         $$             = $1;
         $$.description = $2.description;
     }
-    | group_properties group_partition {
+    | group_properties group_partition "\n" {
         $$            = $1;
         $$.partition  = $2.partition;
 	CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_STATIC);
     }
-    | group_properties group_fact {
+    | group_properties group_fact "\n" {
         $$        = $1;
         CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_FACT);
     }
@@ -357,13 +358,13 @@ procdefs: procdef
     | procdefs procdef
     ;
 
-procdef: "[" TOKEN_KW_RULE procdef_name "]" optional_renice
+procdef: "[" TOKEN_KW_RULE procdef_name "]" "\n" optional_renice
          procdef_statements {
          cgrp_procdef_t procdef;
 
          procdef.binary     = $3.value;
-	 procdef.renice     = $5;
-         procdef.statements = $6;
+	 procdef.renice     = $6;
+         procdef.statements = $7;
          if (!procdef_add(ctx, &procdef))
 	     YYABORT;
     }
@@ -378,10 +379,10 @@ procdef_name: TOKEN_PATH          { $$ = $1; }
     |         TOKEN_ASTERISK      { $$.value = "*"; }
     ;
 
-procdef_statements: procdef_statement {
+procdef_statements: procdef_statement "\n" {
         $$ = $1;
     }
-    | procdef_statements procdef_statement {
+    | procdef_statements procdef_statement "\n" {
         cgrp_stmt_t *stmt;
 
         for (stmt = $1; stmt->next != NULL; stmt = stmt->next)
@@ -533,7 +534,7 @@ cgrpyyerror(cgrp_context_t *ctx, const char *msg)
 {
     (void)ctx;
 
-    OHM_ERROR("parse error: %s\n", msg);
+    OHM_ERROR("parse error: %s near line %d\n", msg, lexer_lineno());
     exit(1);                              /* XXX would be better not to */
 }
 

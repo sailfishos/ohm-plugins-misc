@@ -570,6 +570,7 @@ void config_print(cgrp_context_t *, FILE *);
 /* cgrp-lexer.l */
 int  lexer_init(FILE *);
 void lexer_exit(void);
+int  lexer_lineno(void);
 
 /* cgrp-utils.c */
 uid_t cgrp_getuid(const char *);

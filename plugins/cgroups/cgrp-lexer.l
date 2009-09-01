@@ -9,14 +9,14 @@
 #include "cgrp-parser-types.h"
 #include "cgrp-config.h"
 
-#define DEBUG(format, args...) do {            \
-        if (debug)                             \
-            printf("D: "format"\n" , ## args); \
+#define DEBUG(format, args...) do {                               \
+        if (debug)                                                \
+            printf("D: "format" on line %d\n" , ## args, lineno); \
     } while (0)
 
 
-#define IGNORE(type) do {                        \
-        DEBUG("ignored %s", #type);              \
+#define IGNORE(type) do {                              \
+        DEBUG("ignored %s", #type); \
     } while (0)
 
 
@@ -36,6 +36,7 @@ static inline int cgrpyywrap(void);
 
 static int debug = FALSE;
 static int lineno;
+static int eol = TRUE;
 static YY_BUFFER_STATE yybuf;
 
 
@@ -44,19 +45,19 @@ static YY_BUFFER_STATE yybuf;
 static char ringbuff[RINGBUFF_SIZE];
 static int  ringoffs = 0;
 
-#define SAVE(v) ({                                      \
-       int   __size = strlen(v) + 1;                    \
-       char *__token;                                   \
-                                                        \
-       if (ringoffs + __size + 1 >= RINGBUFF_SIZE)      \
-           ringoffs = 0;                                \
-       __token = ringbuff + ringoffs;                   \
-       ringoffs += __size;                              \
-                                                        \
-       strcpy(__token, v);                              \
-       cgrpyylval.any.token  = __token;                 \
-       cgrpyylval.any.lineno = lineno;                  \
-       DEBUG("SAVE(\"%s\")", __token);                  \
+#define SAVE(v) ({                                        \
+       int   __size = strlen(v) + 1;                      \
+       char *__token;                                     \
+                                                          \
+       if (ringoffs + __size + 1 >= RINGBUFF_SIZE)        \
+           ringoffs = 0;                                  \
+       __token = ringbuff + ringoffs;                     \
+       ringoffs += __size;                                \
+                                                          \
+       strcpy(__token, v);                                \
+       cgrpyylval.any.token  = __token;                   \
+       cgrpyylval.any.lineno = lineno;                    \
+       DEBUG("SAVE(\"%s\")", __token);                    \
        __token; })
 
 
@@ -83,11 +84,24 @@ static int  ringoffs = 0;
 
 
 #define TOKEN(type) do {                                             \
-        DEBUG("TOKEN_%s", #type);                                    \
+        if (!strcmp(#type, "EOL")) {                                 \
+            if (eol)                                                 \
+	        IGNORE(type);                                        \
+            else {                                                   \
+                eol = TRUE;                                          \
+                DEBUG("TOKEN_EOL");                                  \
+                SAVE("\\n");                                         \
+                return TOKEN_EOL;                                    \
+            }                                                        \
+        }                                                            \
+        else {                                                       \
+            DEBUG("TOKEN_%s", #type);                                \
                                                                      \
-        SAVE(cgrpyytext);                                            \
+            SAVE(cgrpyytext);                                        \
+            eol = FALSE;                                             \
                                                                      \
-        return TOKEN_##type;                                         \
+            return TOKEN_##type;                                     \
+        }                                                            \
     } while (0)
 
 
@@ -186,6 +200,11 @@ lexer_debug(int state)
     debug = state;
 }
 
+int
+lexer_lineno(void)
+{
+    return lineno;
+}
 
 static void
 lexer_error(int lineno, const char *format, ...)
@@ -265,11 +284,11 @@ SINT            [+|-]?[0-9]+
 
 %%
 
-{WHITESPACE}        { IGNORE(WHITESPACE);                 }
-{COMMENT_FULL}      { IGNORE(COMMENT_FULL);  unput('\n'); }
-{COMMENT_TRAIL}     { IGNORE(COMMENT_TRAIL); unput('\n'); }
+{WHITESPACE}        { IGNORE(WHITESPACE);                           }
+{COMMENT_FULL}      { IGNORE(COMMENT_FULL);  lineno--; unput('\n'); }
+{COMMENT_TRAIL}     { IGNORE(COMMENT_TRAIL); lineno--; unput('\n'); }
 
-{EOL}               { IGNORE(EOL); lineno++;              }
+{EOL}               { lineno++; TOKEN(EOL);    }
 
 {KW_GLOBAL}         { TOKEN(KW_GLOBAL);        }
 {KW_PARTITION}      { TOKEN(KW_PARTITION);     }
