@@ -568,9 +568,10 @@ int  config_parse(cgrp_context_t *, const char *);
 void config_print(cgrp_context_t *, FILE *);
 
 /* cgrp-lexer.l */
-int  lexer_init(FILE *);
-void lexer_exit(void);
-int  lexer_lineno(void);
+int         lexer_open (FILE *, const char *);
+void        lexer_close(void);
+int         lexer_line (void);
+const char *lexer_file (void);
 
 /* cgrp-utils.c */
 uid_t cgrp_getuid(const char *);

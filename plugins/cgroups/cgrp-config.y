@@ -20,8 +20,8 @@ void cgrpyyerror(cgrp_context_t *, const char *);
     cgrp_partition_t *parts;
     cgrp_group_t      group;
     cgrp_group_t     *groups;
-    cgrp_procdef_t    procdef;
-    cgrp_procdef_t   *procdefs;
+    cgrp_procdef_t    rule;
+    cgrp_procdef_t   *rules;
     cgrp_stmt_t      *stmt;
     cgrp_expr_t      *expr;
     cgrp_cmd_t        cmd;
@@ -45,10 +45,10 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %type <group>    group_properties
 %type <group>    group_description
 %type <group>    group_partition
-%type <procdef>  procdef
-%type <string>   procdef_name
-%type <stmt>     procdef_statements
-%type <stmt>     procdef_statement
+%type <rule>     rule
+%type <string>   rule_path
+%type <stmt>     rule_statements
+%type <stmt>     rule_statement
 %type <expr>     expr
 %type <expr>     bool_expr
 %type <expr>     prop_expr
@@ -62,31 +62,31 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %type <string>   string
 %type <renice>   optional_renice
 
-%token TOKEN_EOL "\n"
-%token TOKEN_KW_GLOBAL
-%token TOKEN_KW_PARTITION
-%token TOKEN_KW_DESCRIPTION
-%token TOKEN_KW_PATH
-%token TOKEN_KW_CPU_SHARES
-%token TOKEN_KW_MEM_LIMIT
-%token TOKEN_KW_RULE
-%token TOKEN_KW_BINARY
-%token TOKEN_KW_CMDLINE
-%token TOKEN_KW_GROUP
-%token TOKEN_KW_RENICE
-%token TOKEN_KW_USER
-%token TOKEN_KW_PARENT
-%token TOKEN_KW_TYPE
-%token TOKEN_KW_IGNORE
-%token TOKEN_KW_RECLASSIFY
-%token TOKEN_KW_RECLASS_AFTER
-%token TOKEN_KW_EXPORT_GROUPS
-%token TOKEN_KW_EXPORT_PARTS
-%token TOKEN_KW_EXPORT_FACT
-%token TOKEN_KW_CGROUP_OPTIONS
-%token TOKEN_KW_IOWAIT_NOTIFY
-%token TOKEN_KW_SWAP_PRESSURE
+%token KEYWORD_GLOBAL
+%token KEYWORD_PARTITION
+%token KEYWORD_DESCRIPTION
+%token KEYWORD_PATH
+%token KEYWORD_CPU_SHARES
+%token KEYWORD_MEM_LIMIT
+%token KEYWORD_RULE
+%token KEYWORD_BINARY
+%token KEYWORD_CMDLINE
+%token KEYWORD_GROUP
+%token KEYWORD_RENICE
+%token KEYWORD_USER
+%token KEYWORD_PARENT
+%token KEYWORD_TYPE
+%token KEYWORD_IGNORE
+%token KEYWORD_RECLASSIFY
+%token KEYWORD_RECLASS_AFTER
+%token KEYWORD_EXPORT_GROUPS
+%token KEYWORD_EXPORT_PARTITIONS
+%token KEYWORD_EXPORT_FACT
+%token KEYWORD_CGROUPFS_OPTIONS
+%token KEYWORD_IOWAIT_NOTIFY
+%token KEYWORD_SWAP_PRESSURE
 
+%token TOKEN_EOL "\n"
 %token TOKEN_ASTERISK "*"
 %token TOKEN_HEADER_OPEN "["
 %token TOKEN_HEADER_CLOSE "]"
@@ -99,9 +99,6 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %token TOKEN_LESS  "<"
 %token TOKEN_IMPLIES "=>"
 
-%token TOKEN_EOL
-
-
 %token <uint32> TOKEN_ARG
 %token <string> TOKEN_IDENT
 %token <string> TOKEN_PATH
@@ -111,29 +108,34 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 
 %%
 
-configuration: global partitions groups procdefs
+configuration: global_section partition_section group_section rule_section
 
-global: /* empty */
-    | TOKEN_KW_GLOBAL "\n" global_options
+
+/*****************************************************************************
+ *                            *** global section ***                         *
+ *****************************************************************************/
+
+global_section: /* empty: whole section can be omitted */
+    | KEYWORD_GLOBAL "\n" global_options
     ;
 
-global_options: /* empty */
+global_options: /* empty: allow just the header without any actual options */
     | global_option "\n"
     | global_options "\n" global_option
     ;
 
-global_option: TOKEN_KW_EXPORT_GROUPS {
+global_option: KEYWORD_EXPORT_GROUPS {
 	  CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_GROUP_FACTS);
     }
-    | TOKEN_KW_EXPORT_PARTS {
+    | KEYWORD_EXPORT_PARTITIONS {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
     }
     | iowait_notify
     | swap_pressure
-    | cgroup_options
+    | cgroupfs_options
     ;
 
-iowait_notify: TOKEN_KW_IOWAIT_NOTIFY iowait_notify_options
+iowait_notify: KEYWORD_IOWAIT_NOTIFY iowait_notify_options
     ;
 
 iowait_notify_options: iowait_notify_option
@@ -168,6 +170,7 @@ iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
     }
     ;
 
+<<<<<<< HEAD:plugins/cgroups/cgrp-config.y
 swap_pressure: TOKEN_KW_SWAP_PRESSURE swap_pressure_options
     ;
 
@@ -201,48 +204,55 @@ swap_pressure_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
     }
     ;
 
-cgroup_options: TOKEN_KW_CGROUP_OPTIONS mount_options
+cgroupfs_options: KEYWORD_CGROUPFS_OPTIONS mount_options
     ;
 
 mount_options: TOKEN_IDENT      { cgroup_set_option(ctx, $1.value); }
     | mount_options TOKEN_IDENT { cgroup_set_option(ctx, $2.value); }
     ;
 
-string: TOKEN_IDENT  { $$ = $1; }
-    |   TOKEN_STRING { $$ = $1; }
+
+
+/*****************************************************************************
+ *                           *** partition section ***                       *
+ *****************************************************************************/
+
+partition_section: partition
+    | partition_section partition
     ;
 
-partitions: partition
-    | partitions partition
-    ;
-
-partition: "[" TOKEN_KW_PARTITION TOKEN_IDENT "]" "\n"
-           partition_properties {
-	$6.name = $3.value;
-        if (partition_lookup(ctx, $6.name) != NULL) {
-	    OHM_ERROR("cgrp: partition '%s' multiply defined", $6.name);
-	    YYABORT;
-	}
-        if (!strcmp($6.name, "root")) {
-            OHM_ERROR("cgrp: invalid partition with reserved name 'root'");
-            YYABORT;
-        }
-        if (partition_add(ctx, &$6) == NULL)
-	    YYABORT;
+partition: "[" KEYWORD_PARTITION TOKEN_IDENT "]" "\n" partition_properties {
+      $6.name = $3.value;
+      if (partition_lookup(ctx, $6.name) != NULL) {
+          OHM_ERROR("cgrp: partition '%s' multiply defined", $6.name);
+	  YYABORT;
+      }
+      if (!strcmp($6.name, "root")) {
+          OHM_ERROR("cgrp: invalid partition with reserved name 'root'");
+          YYABORT;
+      }
+      if (partition_add(ctx, &$6) == NULL)
+          YYABORT;
     }
     ;
 
-partition_properties: partition_path "\n"     { $$.path  = $1.value; }
-    |                 partition_fact "\n"     {
-                          CGRP_SET_FLAG($$.flags, CGRP_PARTITION_FACT);
-                      }
-    |                 partition_cpu_share "\n" { $$.limit.cpu = $1.value; }
-    |                 partition_mem_limit "\n" { $$.limit.mem = $1.value; }
+partition_properties: partition_path "\n" {
+          $$.path = $1.value;
+    }
+    | partition_export_fact "\n" {
+          CGRP_SET_FLAG($$.flags, CGRP_PARTITION_FACT);
+    }
+    | partition_cpu_share "\n" {
+          $$.limit.cpu = $1.value;
+    }
+    | partition_mem_limit "\n" {
+          $$.limit.mem = $1.value;
+    }
     | partition_properties partition_path "\n" {
           $$ = $1;
           $$.path = $2.value;
     }
-    | partition_properties partition_fact "\n" {
+    | partition_properties partition_export_fact "\n" {
           $$ = $1;
           CGRP_SET_FLAG($$.flags, CGRP_PARTITION_FACT);
     }
@@ -254,73 +264,49 @@ partition_properties: partition_path "\n"     { $$.path  = $1.value; }
           $$           = $1;
           $$.limit.mem = $2.value;
     }
-    ;
-
-partition_path: TOKEN_KW_PATH path { $$ = $2; }
-    ;
-
-path: TOKEN_PATH   {
-          if ($1.value[0] != '/') {
-              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
-              exit(1);
-          }
-          $$ = $1;
-    }
-    | TOKEN_STRING {
-          if ($1.value[0] != '/') {
-              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
-              exit(1);
-          }
-          $$ = $1;
+    | partition_properties error {
+        OHM_ERROR("cgrp: failed to parse partition properties near token '%s'",
+		  cgrpyylval);
+        exit(1);
     }
     ;
 
-partition_fact: TOKEN_KW_EXPORT_FACT
+partition_path: KEYWORD_PATH path { $$ = $2; }
     ;
 
-partition_cpu_share: TOKEN_KW_CPU_SHARES TOKEN_UINT { $$ = $2; }
+partition_export_fact: KEYWORD_EXPORT_FACT
     ;
 
-partition_mem_limit: TOKEN_KW_MEM_LIMIT TOKEN_UINT optional_unit {
+partition_cpu_share: KEYWORD_CPU_SHARES TOKEN_UINT { $$ = $2; }
+    ;
+
+partition_mem_limit: KEYWORD_MEM_LIMIT TOKEN_UINT optional_unit {
           $$        = $2;
 	  $$.value *= $3.value;
     }
     ;
 
-optional_unit: /* empty */ { $$.value = 1; }
-    | TOKEN_IDENT         {
-          if ($1.value[1] != '\0')
-              goto invalid;
 
-          switch ($1.value[0]) {
-              case 'k': case 'K': $$.value = 1024;        break;
-              case 'm': case 'M': $$.value = 1024 * 1024; break;
-              default:
-              invalid:
-	          OHM_ERROR("cgrp: invalid memory limit unit '%s'", $1.value);
-	          exit(1);
-          }
+/*****************************************************************************
+ *                             *** group section ***                         *
+ *****************************************************************************/
+
+group_section: group
+    | group_section group
+    ;
+
+group: "[" KEYWORD_GROUP TOKEN_IDENT "]" "\n" group_properties {
+      $6.name = $3.value;
+      if (!group_add(ctx, &$6))
+          YYABORT;
     }
     ;
 
-
-groups: group
-    | groups group
-    ;
-
-group: "[" TOKEN_KW_GROUP TOKEN_IDENT "]" "\n"
-       group_properties {
-        $6.name = $3.value;
-        if (!group_add(ctx, &$6))
-	    YYABORT;
+group_properties:      group_description "\n" { $$ = $1; }
+    |                  group_partition "\n" { $$ = $1; }
+    |                  group_fact "\n" {
+        CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_FACT);
     }
-    ;
-
-group_properties: group_description "\n" { $$ = $1; }
-    |             group_partition   "\n" { $$ = $1; }
-    |             group_fact        "\n" {
-                      CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_FACT);
-                  }
     | group_properties group_description "\n" {
         $$             = $1;
         $$.description = $2.description;
@@ -334,15 +320,20 @@ group_properties: group_description "\n" { $$ = $1; }
         $$        = $1;
         CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_FACT);
     }
+    | group_properties error {
+        OHM_ERROR("cgrp: failed to parse group properties near token '%s'",
+		  cgrpyylval);
+        exit(1);
+    }
     ;
 
-group_description: TOKEN_KW_DESCRIPTION TOKEN_STRING {
+group_description: KEYWORD_DESCRIPTION TOKEN_STRING {
         memset(&$$, 0, sizeof($$));
         $$.description = $2.value;
     }
     ;
 
-group_partition: TOKEN_KW_PARTITION TOKEN_IDENT {
+group_partition: KEYWORD_PARTITION TOKEN_IDENT {
         memset(&$$, 0, sizeof($$));
 	if (($$.partition = partition_lookup(ctx, $2.value)) == NULL) {
 	    OHM_ERROR("cgrp: nonexisting partition '%s' in a group", $2.value);
@@ -351,38 +342,42 @@ group_partition: TOKEN_KW_PARTITION TOKEN_IDENT {
     }
     ;
 
-group_fact: TOKEN_KW_EXPORT_FACT
+group_fact: KEYWORD_EXPORT_FACT
     ;
 
-procdefs: procdef
-    | procdefs procdef
+
+/*****************************************************************************
+ *                             *** rule section ***                          *
+ *****************************************************************************/
+
+rule_section: rule
+    | rule_section rule
     ;
 
-procdef: "[" TOKEN_KW_RULE procdef_name "]" "\n" optional_renice
-         procdef_statements {
-         cgrp_procdef_t procdef;
+rule: "[" KEYWORD_RULE rule_path "]" "\n" optional_renice rule_statements {
+        cgrp_procdef_t rule;
 
-         procdef.binary     = $3.value;
-	 procdef.renice     = $6;
-         procdef.statements = $7;
-         if (!procdef_add(ctx, &procdef))
-	     YYABORT;
+        rule.binary     = $3.value;
+	rule.renice     = $6;
+        rule.statements = $7;
+        if (!procdef_add(ctx, &rule))
+	    YYABORT;
     }
     ;
 
-optional_renice: /* empty */     { $$ = 0;  }
-    | TOKEN_KW_RENICE TOKEN_SINT { $$ = $2.value; }
+optional_renice: /* empty */    { $$ = 0;  }
+    | KEYWORD_RENICE TOKEN_SINT { $$ = $2.value; }
     ;
 
-procdef_name: TOKEN_PATH          { $$ = $1; }
-    |         TOKEN_STRING        { $$ = $1; }
-    |         TOKEN_ASTERISK      { $$.value = "*"; }
+rule_path: TOKEN_PATH          { $$ = $1; }
+    |      TOKEN_STRING        { $$ = $1; }
+    |      TOKEN_ASTERISK      { $$.value = "*"; }
     ;
 
-procdef_statements: procdef_statement "\n" {
+rule_statements: rule_statement "\n" {
         $$ = $1;
     }
-    | procdef_statements procdef_statement "\n" {
+    | rule_statements rule_statement "\n" {
         cgrp_stmt_t *stmt;
 
         for (stmt = $1; stmt->next != NULL; stmt = stmt->next)
@@ -392,8 +387,9 @@ procdef_statements: procdef_statement "\n" {
     }
     ;
 
-procdef_statement: expr "=>" command {
+rule_statement: expr "=>" command {
         cgrp_stmt_t *stmt;
+
         if (ALLOC_OBJ(stmt) == NULL) {
             OHM_ERROR("cgrp: failed to allocate statement");
             exit(1);
@@ -405,6 +401,7 @@ procdef_statement: expr "=>" command {
     }
     | command {
         cgrp_stmt_t *stmt;
+
         if (ALLOC_OBJ(stmt) == NULL) {
             OHM_ERROR("cgrp: failed to allocate statement");
             exit(1);
@@ -431,14 +428,14 @@ prop_expr: prop "==" value { $$ = prop_expr($1, CGRP_OP_EQUAL, &$3); }
     |      prop "<"  value { $$ = prop_expr($1, CGRP_OP_LESS, &$3); }
     ;
 
-prop: TOKEN_ARG           { $$ = CGRP_PROP_ARG($1.value); }
-    | TOKEN_KW_BINARY     { $$ = CGRP_PROP_BINARY;        }
-    | TOKEN_KW_CMDLINE    { $$ = CGRP_PROP_CMDLINE;       }
-    | TOKEN_KW_TYPE       { $$ = CGRP_PROP_TYPE;          }
-    | TOKEN_KW_USER       { $$ = CGRP_PROP_EUID;          }
-    | TOKEN_KW_GROUP      { $$ = CGRP_PROP_EGID;          }
-    | TOKEN_KW_PARENT     { $$ = CGRP_PROP_PARENT;        }
-    | TOKEN_KW_RECLASSIFY { $$ = CGRP_PROP_RECLASSIFY;    }
+prop: TOKEN_ARG          { $$ = CGRP_PROP_ARG($1.value); }
+    | KEYWORD_BINARY     { $$ = CGRP_PROP_BINARY;        }
+    | KEYWORD_CMDLINE    { $$ = CGRP_PROP_CMDLINE;       }
+    | KEYWORD_TYPE       { $$ = CGRP_PROP_TYPE;          }
+    | KEYWORD_USER       { $$ = CGRP_PROP_EUID;          }
+    | KEYWORD_GROUP      { $$ = CGRP_PROP_EGID;          }
+    | KEYWORD_PARENT     { $$ = CGRP_PROP_PARENT;        }
+    | KEYWORD_RECLASSIFY { $$ = CGRP_PROP_RECLASSIFY;    }
     ;
 
 value: TOKEN_STRING {
@@ -468,8 +465,9 @@ command: command_group   { $$ = $1; }
     | command_reclassify { $$ = $1; }
     ;
 
-command_group: TOKEN_KW_GROUP group_name {
+command_group: KEYWORD_GROUP group_name {
         cgrp_group_t *group;
+
         if ((group = group_find(ctx, $2.value)) == NULL) {
             OHM_ERROR("cgrp: reference to nonexisting group \"%s\"", $2.value);
             exit(1);
@@ -483,14 +481,61 @@ group_name: TOKEN_STRING { $$ = $1; }
     | TOKEN_IDENT        { $$ = $1; }
     ;
 
-command_ignore: TOKEN_KW_IGNORE { $$.ignore.type = CGRP_CMD_IGNORE; }
+command_ignore: KEYWORD_IGNORE { $$.ignore.type = CGRP_CMD_IGNORE; }
     ;
 
-command_reclassify: TOKEN_KW_RECLASS_AFTER TOKEN_UINT {
+command_reclassify: KEYWORD_RECLASS_AFTER TOKEN_UINT {
           $$.reclassify.type  = CGRP_CMD_RECLASSIFY;
 	  $$.reclassify.delay = $2.value;
     }
     ;
+
+
+
+/*****************************************************************************
+ *                        *** miscallaneous rules ***                        *
+ *****************************************************************************/
+
+string: TOKEN_IDENT  { $$ = $1; }
+    |   TOKEN_STRING { $$ = $1; }
+    ;
+
+
+path: TOKEN_PATH   {
+          if ($1.value[0] != '/') {
+              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
+              exit(1);
+          }
+          $$ = $1;
+    }
+    | TOKEN_STRING {
+          if ($1.value[0] != '/') {
+              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
+              exit(1);
+          }
+          $$ = $1;
+    }
+    ;
+
+
+optional_unit: /* empty */ { $$.value = 1; }
+    | TOKEN_IDENT         {
+          if ($1.value[1] != '\0')
+              goto invalid;
+
+          switch ($1.value[0]) {
+              case 'k': case 'K': $$.value = 1024;        break;
+              case 'm': case 'M': $$.value = 1024 * 1024; break;
+              default:
+              invalid:
+	          OHM_ERROR("cgrp: invalid memory limit unit '%s'", $1.value);
+	          exit(1);
+          }
+    }
+    ;
+
+
+
 
 %%
 
@@ -508,9 +553,9 @@ config_parse(cgrp_context_t *ctx, const char *path)
 	return FALSE;
     }
 
-    lexer_init(fp);
+    lexer_open(fp, path);
     status = cgrpyyparse(ctx);
-    lexer_exit();
+    lexer_close();
     fclose(fp);
 
     return status == 0;
@@ -534,8 +579,10 @@ cgrpyyerror(cgrp_context_t *ctx, const char *msg)
 {
     (void)ctx;
 
-    OHM_ERROR("parse error: %s near line %d\n", msg, lexer_lineno());
+    OHM_ERROR("parse error: %s near line %d", msg, lexer_line());
+#if 0
     exit(1);                              /* XXX would be better not to */
+#endif
 }
 
 
