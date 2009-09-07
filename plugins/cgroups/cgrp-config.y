@@ -127,6 +127,7 @@ global_option: TOKEN_KW_EXPORT_GROUPS {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
     }
     | iowait_notify
+    | cgroup_options
     ;
 
 iowait_notify: TOKEN_KW_IOWAIT_NOTIFY iowait_notify_options
@@ -162,7 +163,6 @@ iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
 	      YYABORT;
           }
     }
-    | cgroup_options
     ;
 
 cgroup_options: TOKEN_KW_CGROUP_OPTIONS mount_options
