@@ -24,6 +24,7 @@
 #define DBUS_INFO_SIGNAL                   "info"
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL     "NameOwnerChanged"
 #define DBUS_HELLO_SIGNAL                  "Hello"
+#define DBUS_GOODBYE_SIGNAL                "Goodbye"
 #define DBUS_NOTIFY_SIGNAL                 "Notify"
 #define DBUS_PRIVACY_SIGNAL                "PrivacyOverride"
 #define DBUS_BLUETOOTH_SIGNAL              "BluetoothOverride"
@@ -50,6 +51,7 @@ typedef void  (*set_property_cb_t)(char *, char *, char *, char *,
                                    int, const char *);
 typedef void  (*notify_property_cb_t)(char *, char *, char *, char *);
 typedef void  (*hello_cb_t)(char *, char *);
+typedef void  (*goodbye_cb_t)(char *, char *);
 
 static void dbusif_init(OhmPlugin *);
 static DBusHandlerResult dbusif_new_session(DBusConnection *,
@@ -66,6 +68,7 @@ static void dbusif_signal_privacy_override(int);
 static void dbusif_signal_bluetooth_override(int);
 static void dbusif_signal_mute(int);
 static void dbusif_add_hello_notification(hello_cb_t);
+static void dbusif_add_goodbye_notification(hello_cb_t);
 static void dbusif_send_stream_info_to_pep(char *, char *, char *, char *);
 
 #endif /*  __OHM_PLAYBACK_DBUSIF_H__ */

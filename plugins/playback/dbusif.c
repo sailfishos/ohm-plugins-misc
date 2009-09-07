@@ -20,15 +20,17 @@ typedef struct {
     notify_property_cb_t  callback;
 } prop_notif_t;
 
-static DBusConnection    *sys_conn;    /* connection for D-Bus system bus */
-static DBusConnection    *sess_conn;   /* connection for D-Bus session bus */
-static prop_notif_t      *notif_reg;   /* property notification registry */
-static hello_cb_t         hello_notif; /* hello notification */
-static int                timeout;     /* message timeout in msec */
+static DBusConnection    *sys_conn;      /* connection for D-Bus system bus */
+static DBusConnection    *sess_conn;     /* connection for D-Bus session bus */
+static prop_notif_t      *notif_reg;     /* property notification registry */
+static hello_cb_t         hello_notif;   /* hello notification */
+static goodbye_cb_t       goodbye_notif; /* hello notification */
+static int                timeout;       /* message timeout in msec */
 
 static DBusHandlerResult info(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult name_changed(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult hello(DBusConnection *, DBusMessage *, void *);
+static DBusHandlerResult goodbye(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult notify(DBusConnection *,DBusMessage *, void*);
 static DBusHandlerResult method(DBusConnection *, DBusMessage *, void *);
 
@@ -200,6 +202,10 @@ static int session_bus_init(const char *address)
     }
     if (!dbus_connection_add_filter(sess_conn, hello,NULL, NULL)) {
         OHM_ERROR("Can't add filter 'hello'");
+        exit(1);
+    }
+    if (!dbus_connection_add_filter(sess_conn, goodbye,NULL, NULL)) {
+        OHM_ERROR("Can't add filter 'goodbye'");
         exit(1);
     }
 
@@ -737,6 +743,11 @@ static void dbusif_add_hello_notification(hello_cb_t callback)
     hello_notif = callback;
 }
 
+static void dbusif_add_goodbye_notification(goodbye_cb_t callback)
+{
+    goodbye_notif = callback;
+}
+
 static void dbusif_send_stream_info_to_pep(char *oper, char *group,
                                            char *pidstr, char *stream)
 {
@@ -928,6 +939,38 @@ static DBusHandlerResult hello(DBusConnection *conn, DBusMessage *msg,
 
         if (hello_notif != NULL)
             hello_notif(sender, path);
+    }
+
+    return result;
+}
+
+
+static DBusHandlerResult goodbye(DBusConnection *conn, DBusMessage *msg,
+                                 void *user_data)
+{
+    (void)conn;
+    (void)user_data;
+
+    char              *path;
+    char              *sender;
+    int                success;
+    DBusHandlerResult  result;
+
+    success = dbus_message_is_signal(msg, DBUS_PLAYBACK_INTERFACE,
+                                     DBUS_GOODBYE_SIGNAL);
+
+    if (!success)
+        result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    else {
+        result = DBUS_HANDLER_RESULT_HANDLED;
+
+        path   = (char *)dbus_message_get_path(msg);
+        sender = (char *)dbus_message_get_sender(msg);
+
+        OHM_DEBUG(DBG_DBUS, "Goodbye from %s%s", sender, path);
+
+        if (goodbye_notif != NULL)
+            goodbye_notif(sender, path);
     }
 
     return result;
