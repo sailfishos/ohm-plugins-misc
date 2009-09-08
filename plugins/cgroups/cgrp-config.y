@@ -133,6 +133,11 @@ global_option: KEYWORD_EXPORT_GROUPS {
     | iowait_notify
     | swap_pressure
     | cgroupfs_options
+    | error {
+        OHM_ERROR("cgrp: failed to parse global options near token '%s'",
+                  cgrpyylval.any.token);
+        exit(1);
+    }
     ;
 
 iowait_notify: KEYWORD_IOWAIT_NOTIFY iowait_notify_options
@@ -167,6 +172,11 @@ iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
               OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
 	      YYABORT;
           }
+    }
+    | error { 
+          OHM_ERROR("cgrp: failed to parse I/O wait options near token '%s'",
+                    cgrpyylval.any.token);
+          exit(1);
     }
     ;
 
@@ -266,7 +276,7 @@ partition_properties: partition_path "\n" {
     }
     | partition_properties error {
         OHM_ERROR("cgrp: failed to parse partition properties near token '%s'",
-		  cgrpyylval);
+		  cgrpyylval.any.token);
         exit(1);
     }
     ;
@@ -322,7 +332,7 @@ group_properties:      group_description "\n" { $$ = $1; }
     }
     | group_properties error {
         OHM_ERROR("cgrp: failed to parse group properties near token '%s'",
-		  cgrpyylval);
+		  cgrpyylval.any.token);
         exit(1);
     }
     ;
@@ -352,6 +362,11 @@ group_fact: KEYWORD_EXPORT_FACT
 
 rule_section: rule
     | rule_section rule
+    | rule_section error {
+          OHM_ERROR("cgrp: failed to parse rule section near token '%s'",
+	            cgrpyylval.any.token);
+          exit(1);
+    }
     ;
 
 rule: "[" KEYWORD_RULE rule_path "]" "\n" optional_renice rule_statements {
@@ -384,6 +399,11 @@ rule_statements: rule_statement "\n" {
 	    ;
 	stmt->next = $2;
         $$         = $1;
+    }
+    | rule_statements error {
+          OHM_ERROR("cgrp: failed to parse rule statements real '%s'",
+                    cgrpyylval.any.token);
+          exit(1);
     }
     ;
 
