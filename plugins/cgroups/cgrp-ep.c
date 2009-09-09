@@ -136,7 +136,7 @@ reparent_action(cgrp_context_t *ctx, void *data)
         return FALSE;
     }
     
-    success = partition_add_group(partition, group);
+    success = partition_add_group(partition, group, FALSE);
 
     OHM_DEBUG(DBG_ACTION, "reparenting group '%s' to partition '%s' %s",
               action->group, action->partition, success ? "OK" : "FAILED");
@@ -162,7 +162,7 @@ freeze_action(cgrp_context_t *ctx, void *data)
         return TRUE;
     }
     
-    success = partition_freeze(partition, frozen);
+    success = partition_freeze(ctx, partition, frozen);
 
     OHM_DEBUG(DBG_ACTION, "%sfreeze partition '%s': %s", frozen ? "" : "un",
               action->partition, success ? "OK" : "FAILED");

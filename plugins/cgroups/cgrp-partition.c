@@ -275,14 +275,14 @@ partition_add_process(cgrp_partition_t *partition, pid_t pid)
  * partition_add_group
  ********************/
 int
-partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
+partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group, int force)
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
     char            pid[64];
     int             len, chk, success;
     
-    if (group->partition == partition)
+    if (group->partition == partition && !force)
         return TRUE;
 
     OHM_DEBUG(DBG_ACTION, "adding group '%s' to partition '%s'",
@@ -303,8 +303,34 @@ partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
     }
 
     group->partition = partition;
+
+    if (!success)
+        CGRP_SET_FLAG(group->flags, CGRP_GROUPFLAG_REASSIGN);
     
     return success;
+}
+
+
+/********************
+ * unfreeze_fixup
+ ********************/
+void
+unfreeze_fixup(cgrp_context_t *ctx, cgrp_partition_t *partition)
+{
+    cgrp_group_t *group;
+    int           i;
+
+    for (i = 0; i < ctx->ngroup; i++) {
+        group = &ctx->groups[i];
+
+        if (group->partition == partition &&
+            CGRP_TST_FLAG(group->flags, CGRP_GROUPFLAG_REASSIGN)) {
+            OHM_DEBUG(DBG_ACTION, "reassigning group '%s' to partition '%s'",
+                      group->name, partition->name);
+            partition_add_group(partition, group, TRUE);
+            CGRP_CLR_FLAG(group->flags, CGRP_GROUPFLAG_REASSIGN);
+        }
+    }
 }
 
 
@@ -312,10 +338,10 @@ partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
  * partition_freeze
  ********************/
 int
-partition_freeze(cgrp_partition_t *partition, int freeze)
+partition_freeze(cgrp_context_t *ctx, cgrp_partition_t *partition, int freeze)
 {
     char *cmd;
-    int   len;
+    int   len, success;
 
     if (partition->control.freeze >= 0) {
         if (freeze) {
@@ -327,7 +353,12 @@ partition_freeze(cgrp_partition_t *partition, int freeze)
             len = sizeof(THAWED) - 1;
         }
 
-        return write(partition->control.freeze, cmd, len) == len;
+        success = (write(partition->control.freeze, cmd, len) == len);
+
+        if (!freeze && success)
+            unfreeze_fixup(ctx, partition);
+
+        return success;
     }
     else
         return TRUE;

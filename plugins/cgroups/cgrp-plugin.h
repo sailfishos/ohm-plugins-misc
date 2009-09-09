@@ -83,6 +83,7 @@ typedef struct {
 typedef enum {
     CGRP_GROUPFLAG_STATIC,                  /* statically partitioned group */
     CGRP_GROUPFLAG_FACT,                    /* export to factstore */
+    CGRP_GROUPFLAG_REASSIGN,                /* partitioning has failed */
 } cgrp_group_flag_t;
 
 #define CGRP_DEFAULT_PRIORITY 0xffff
@@ -441,8 +442,8 @@ int               partition_add_root(cgrp_context_t *);
 void partition_dump(cgrp_context_t *, FILE *);
 void partition_print(cgrp_partition_t *, FILE *);
 int partition_add_process(cgrp_partition_t *, pid_t);
-int partition_add_group(cgrp_partition_t *, cgrp_group_t *);
-int partition_freeze(cgrp_partition_t *, int);
+int partition_add_group(cgrp_partition_t *, cgrp_group_t *, int);
+int partition_freeze(cgrp_context_t *, cgrp_partition_t *, int);
 int partition_limit_cpu(cgrp_partition_t *, unsigned int);
 int partition_limit_mem(cgrp_partition_t *, unsigned int);
 
