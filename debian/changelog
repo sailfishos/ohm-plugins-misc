@@ -1,3 +1,10 @@
+ohm-plugins-misc (0.6.60) unstable; urgency=low
+
+  * support for 'goodbye' signal in playback. Needed for playback object,
+    or client in our terminology, deletion.
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Tue, 08 Sep 2009 02:00:00 +0300
+
 ohm-plugins-misc (0.6.59) unstable; urgency=low
 
   * reclassify-count for cgroup configuration

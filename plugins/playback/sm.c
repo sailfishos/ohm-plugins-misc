@@ -246,6 +246,7 @@ static int   fire_scheduled_event(void *);
 static int   fire_setstate_changed_event(void *);
 static int   fire_playhint_changed_event(void *);
 static void  fire_hello_signal_event(char *, char *);
+static void  fire_client_gone_event(char *, char *);
 static void  fire_state_signal_event(char *, char *, char *, char *);
 static void  read_property_cb(char *, char *, char *, char *);
 static void  write_property_cb(char *,char *, char *,char *, int,const char *);
@@ -272,6 +273,7 @@ static void sm_init(OhmPlugin *plugin)
     verify_state_machine();
 
     dbusif_add_hello_notification(fire_hello_signal_event);
+    dbusif_add_goodbye_notification(fire_client_gone_event);
     dbusif_add_property_notification("State", fire_state_signal_event);
 
 #define ADD_FIELD_WATCH(f,s,n,cb) fsif_add_field_watch(f, s, n, cb,NULL)
@@ -667,6 +669,16 @@ static void fire_hello_signal_event(char *dbusid, char *object)
 
     evdata.evid = evid_hello_signal;
     sm_process_event(cl->sm, &evdata);        
+}
+
+static void fire_client_gone_event(char *dbusid, char *object)
+{
+    client_t *cl;
+
+    if ((cl = client_find_by_dbus(dbusid, object)) == NULL)
+        OHM_ERROR("Can't find client for %s%s", dbusid, object);
+    else
+        client_destroy(cl);     /* actually this fires the client_gone event */
 }
 
 static void fire_state_signal_event(char *dbusid, char *object,
