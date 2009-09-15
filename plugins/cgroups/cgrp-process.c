@@ -131,7 +131,7 @@ proc_request(enum proc_cn_mcast_op req)
     struct cn_msg     *nld;
     struct proc_event *event;
     unsigned char      msgbuf[EVENT_BUF_SIZE];
-    size_t             size;
+    int                size;
 
     if (sock < 0)
         return FALSE;
@@ -160,7 +160,8 @@ proc_request(enum proc_cn_mcast_op req)
     }
 
     size = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
-    if ((size = recv(sock, nlh, size, 0)) < 0 || !NLMSG_OK(nlh, size)) {
+    if ((size = recv(sock, nlh, size, 0)) < 0 ||
+        !NLMSG_OK(nlh, (size_t)size)) {
         OHM_ERROR("cgrp: failed to receive process event reply");
         return FALSE;
     }
@@ -184,7 +185,7 @@ proc_recv(unsigned char *buf, size_t bufsize, int block)
     struct nlmsghdr   *nlh;
     struct cn_msg     *nld;
     struct proc_event *event;
-    size_t size;
+    int                size;
 
     if (bufsize < EVENT_BUF_SIZE)
         return NULL;
@@ -194,7 +195,8 @@ proc_recv(unsigned char *buf, size_t bufsize, int block)
     size  = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
     block = block ? 0 : MSG_DONTWAIT;
     
-    if ((size = recv(sock, nlh, size, block)) < 0 || !NLMSG_OK(nlh, size)) {
+    if ((size = recv(sock, nlh, size, block)) < 0 ||
+        !NLMSG_OK(nlh, (size_t)size)) {
         if (errno != EAGAIN)
             OHM_ERROR("cgrp: failed to receive process event");
         return NULL;
