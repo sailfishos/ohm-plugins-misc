@@ -79,7 +79,7 @@ static int setup_notify_connection(notify_t *notif, unsigned short port)
     OHM_ERROR("Failed to setup server port %d to receive info messages. "
               "Reason: %s", port, strerror(errno));
 
-    if (sockfd < 0)
+    if (sockfd >= 0)
         close(sockfd);
 
     return -1;
