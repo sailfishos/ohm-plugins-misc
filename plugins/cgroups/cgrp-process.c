@@ -131,7 +131,7 @@ proc_request(enum proc_cn_mcast_op req)
     struct cn_msg     *nld;
     struct proc_event *event;
     unsigned char      msgbuf[EVENT_BUF_SIZE];
-    int                size;
+    ssize_t            size;
 
     if (sock < 0)
         return FALSE;
@@ -185,7 +185,7 @@ proc_recv(unsigned char *buf, size_t bufsize, int block)
     struct nlmsghdr   *nlh;
     struct cn_msg     *nld;
     struct proc_event *event;
-    int                size;
+    ssize_t            size;
 
     if (bufsize < EVENT_BUF_SIZE)
         return NULL;
