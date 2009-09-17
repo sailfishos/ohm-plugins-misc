@@ -5,7 +5,6 @@ usr/lib/ohm/libohm_gconf.so
 usr/lib/ohm/libohm_hal.so
 usr/lib/ohm/libohm_playback.so
 usr/lib/ohm/libohm_profile.so
-usr/lib/ohm/libohm_sensors.so
 usr/lib/ohm/libohm_signaling.so
 usr/lib/ohm/libohm_telephony.so
 usr/lib/ohm/libohm_videoep.so

@@ -7,9 +7,9 @@ SUBDIRS = 	     \
 	console      \
 	gconf        \
 	dvfs         \
-	sensors      \
 	cgroups      \
 	delay
+#	sensor
 #	dbus
 
 if HAVE_LIBPROFILE
