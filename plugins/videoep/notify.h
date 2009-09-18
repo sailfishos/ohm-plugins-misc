@@ -7,6 +7,7 @@ typedef struct notify_s {
     GIOChannel     *chan;
     guint           evsrc;
     int             transit;
+    int             popup;
 } notify_t;
 
 static notify_t *notify_init(unsigned short);
