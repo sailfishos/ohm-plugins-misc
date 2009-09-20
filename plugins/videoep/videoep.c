@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <netdb.h>
+#include <time.h>
 #include <arpa/inet.h>
 
 

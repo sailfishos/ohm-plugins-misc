@@ -1,4 +1,6 @@
 
+#define STARTUP_BLOCK_TIME  (2 * 60) /* 2 minutes */
+
 static int       setup_notify_connection(notify_t *, unsigned short);
 static void      teardown_notify_connection(notify_t *);
 static int       dres_systemui_notify(notify_t *, int);
@@ -12,6 +14,7 @@ static gboolean  notify_cb(GIOChannel *, GIOCondition, gpointer);
 static notify_t *notify_init(unsigned short port)
 {
     notify_t *notif;
+    struct timespec tp;
 
     if ((notif = malloc(sizeof(*notif))) == NULL)
         return NULL;
@@ -22,6 +25,11 @@ static notify_t *notify_init(unsigned short port)
         free(notif);
         return NULL;
     }
+
+    if (clock_gettime(CLOCK_MONOTONIC, &tp) < 0)
+        notif->start = time(NULL);
+    else
+        notif->start = tp.tv_sec;
 
     return notif;
 }
@@ -196,12 +204,14 @@ static int parse_rotation_notification(char *msg)
 
 static gboolean notify_cb(GIOChannel *ch, GIOCondition cond, gpointer data)
 {
-    notify_t  *notif = (notify_t *)data;
-    gboolean   retval;
-    char       buf[156];
-    int        len;
-    int        popup;
-    int        transit;
+    notify_t        *notif = (notify_t *)data;
+    struct timespec  tp;
+    gboolean         retval;
+    char             buf[156];
+    int              len;
+    time_t           now;
+    int              popup;
+    int              transit;
 
     if (ch != notif->chan) {
         OHM_ERROR("videoep: %s(): confused with data structures",
@@ -226,7 +236,12 @@ static gboolean notify_cb(GIOChannel *ch, GIOCondition cond, gpointer data)
                 break;
             }
 
-            if (len > 0) {
+            if (clock_gettime(CLOCK_MONOTONIC, &tp) < 0)
+                now = time(NULL);
+            else
+                now = tp.tv_sec;
+
+            if (len > 0 && (now - notif->start) > STARTUP_BLOCK_TIME) {
                 buf[len] = '\0';
 
                 while (buf[--len] == '\0') ;

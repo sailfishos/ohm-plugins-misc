@@ -6,6 +6,7 @@ typedef struct notify_s {
     int             sockfd;
     GIOChannel     *chan;
     guint           evsrc;
+    time_t          start;
     int             transit;
     int             popup;
 } notify_t;
