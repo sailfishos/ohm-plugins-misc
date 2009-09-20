@@ -8,7 +8,8 @@ SUBDIRS = 	     \
 	gconf        \
 	dvfs         \
 	cgroups      \
-	delay
+	delay        \
+	buttons
 #	sensor
 #	dbus
 

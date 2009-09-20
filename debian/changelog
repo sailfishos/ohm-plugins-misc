@@ -1,6 +1,7 @@
 ohm-plugins-misc (0.6.61) unstable; urgency=low
 
   * support for systemui popup/popdown notification in videoep
+  * buttons plugin for power key events
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Tue, 08 Sep 2009 02:00:00 +0300
 

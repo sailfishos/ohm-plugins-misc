@@ -201,6 +201,7 @@ AC_CONFIG_FILES([Makefile
 		 plugins/timestamp/Makefile
 		 plugins/cgroups/Makefile
 		 plugins/delay/Makefile
+		 plugins/buttons/Makefile
 		 ohm-session-agent/Makefile
  		 doc/Makefile])
 AC_OUTPUT
