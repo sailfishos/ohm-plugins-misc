@@ -279,6 +279,9 @@ static gboolean bt_state_changed(const gchar *type,
         /* first time: create a new fact */
         /* TODO: check that this doesn't leak memory! */
         bt_connected = ohm_fact_new(BT_DEVICE);
+
+        /* TODO: set the bthsp and bta2dp fields to "na" or "unknown"
+         * values */
         if (bt_connected == NULL) {
             OHM_DEBUG(DBG_BT, "could not create the BT fact!");
             goto error;
