@@ -58,6 +58,45 @@ plugin_exit(OhmPlugin * plugin)
     return;
 }
 
+DBusHandlerResult check_hald(DBusConnection *c, DBusMessage *msg,
+        void *user_data)
+{
+    gchar *sender = NULL, *before = NULL, *after = NULL;
+    gboolean ret;
+    hal_plugin *plugin = hal_plugin_p;
+
+    OHM_DEBUG(DBG_HAL, "> check_hald");
+
+    if (plugin == NULL) {
+        goto end;
+    }
+
+    ret = dbus_message_get_args(msg,
+            NULL,
+            DBUS_TYPE_STRING,
+            &sender,
+            DBUS_TYPE_STRING,
+            &before,
+            DBUS_TYPE_STRING,
+            &after,
+            DBUS_TYPE_INVALID);
+
+    if (ret) {
+        OHM_DEBUG(DBG_HAL, "  check_hald: sender '%s', before '%s', after '%s'",
+                sender, before, after);
+
+        if (!strcmp(before, "") && strcmp(after, "")) {
+            /* a service just started, check if it is hald */
+            if (!strcmp(sender, "org.freedesktop.Hal")) {
+                reload_hal_context(c, plugin);
+            }
+        }
+    }
+
+end:
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
 OHM_PLUGIN_DESCRIPTION("hal",
         "0.0.1",
         "ismo.h.puustinen@nokia.com",
@@ -67,6 +106,10 @@ OHM_PLUGIN_DESCRIPTION("hal",
 OHM_PLUGIN_PROVIDES_METHODS(hal, 2,
         OHM_EXPORT(unset_observer, "unset_observer"),
         OHM_EXPORT(set_observer, "set_observer"));
+
+OHM_PLUGIN_DBUS_SIGNALS(
+     { NULL, "org.freedesktop.DBus", "NameOwnerChanged", NULL, check_hald, NULL }
+);
 
 /*
  * Local Variables:

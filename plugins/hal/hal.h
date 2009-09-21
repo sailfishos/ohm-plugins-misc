@@ -36,6 +36,7 @@ typedef struct _hal_plugin {
     DBusConnection *c;
     GSList *modified_properties;
     GSList *decorators;
+    GSList *watched;
     /* GSList *all_devices; */
     GSList *hal_entries;
     OhmFactStore *fs;
@@ -47,6 +48,8 @@ void deinit_hal(hal_plugin *plugin);
 
 gboolean decorate(hal_plugin *plugin, const gchar *capability, hal_cb cb, void *user_data);
 gboolean undecorate(hal_plugin *plugin, void *user_data);
+
+gboolean reload_hal_context(DBusConnection *c, hal_plugin *plugin);
 
 #endif
 

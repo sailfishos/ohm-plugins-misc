@@ -33,6 +33,110 @@ typedef struct _decorator {
     void *user_data;
 } decorator;
 
+struct watch_data {
+    gchar *udi;
+    guint ref;
+};
+
+static gboolean g_watched_equal (gconstpointer watch_data, gconstpointer str_data)
+{
+    const struct watch_data *data = watch_data;
+    const gchar *udi = str_data;
+
+    if (strcmp(data->udi, udi) == 0) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+#if 0
+static gboolean is_watched(hal_plugin *plugin, const gchar *udi)
+{
+    GSList *f = NULL;
+
+    GSList *orig = g_slist_find_custom(plugin->watched, udi, g_watched_equal);
+    if (orig) {
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
+
+static void remove_all_watches(hal_plugin *plugin)
+{
+    GSList *e = NULL;
+
+    for (e = plugin->watched; e != NULL; e = g_slist_next(e)) {
+        struct watch_data *data = e->data;
+        libhal_device_remove_property_watch(plugin->hal_ctx, data->udi, NULL);
+        g_free(data->udi);
+        g_free(data);
+    }
+
+    g_slist_free(plugin->watched);
+    plugin->watched = NULL;
+
+    return;
+}
+
+static void remove_watch(hal_plugin *plugin, const gchar *udi)
+{
+    struct watch_data *data = NULL;
+
+    OHM_DEBUG(DBG_HAL, "Remove watch: '%s'", udi);
+
+    GSList *orig = g_slist_find_custom(plugin->watched, udi, g_watched_equal);
+    if (orig) {
+        data = orig->data;
+
+        data->ref--;
+
+        OHM_DEBUG(DBG_HAL, "  decremented ref count for watch struct (%p): '%u'",
+                data, data->ref);
+
+        if (data->ref == 0) {
+            libhal_device_remove_property_watch(plugin->hal_ctx, udi, NULL);
+
+            plugin->watched = g_slist_remove_link(plugin->watched, orig);
+
+            OHM_DEBUG(DBG_HAL, "  removed watch struct: '%p'", data);
+
+            g_free(data->udi);
+            g_free(data);
+            g_slist_free_1(orig);
+        }
+    }
+
+    return;
+}
+
+static void add_watch(hal_plugin *plugin, const gchar *udi)
+{
+    struct watch_data *data = NULL;
+
+    OHM_DEBUG(DBG_HAL, "Add watch: '%s'", udi);
+
+    GSList *orig = g_slist_find_custom(plugin->watched, udi, g_watched_equal);
+    if (orig) {
+        data = orig->data;
+        /* increment the reference count */
+        data->ref++;
+        OHM_DEBUG(DBG_HAL, "  incremented ref count for watch struct (%p): '%u'",
+                data, data->ref);
+    }
+    else {
+        /* do a new object */
+        data = g_new0(struct watch_data, 1);
+        data->ref = 1;
+        data->udi = g_strdup(udi);
+        plugin->watched = g_slist_prepend(plugin->watched, data);
+        /* really add the D-Bus filter */
+        libhal_device_add_property_watch(plugin->hal_ctx, udi, NULL);
+        OHM_DEBUG(DBG_HAL, "  added a new watch struct: '%p'", data);
+    }
+}
+
 #ifdef OPTIMIZED
 static gboolean property_has_capability(LibHalPropertySet *properties,
         gchar *capability)
@@ -185,7 +289,7 @@ static gboolean process_decoration(hal_plugin *plugin, decorator *dec,
 
         match = TRUE;
         dbus_error_init(&error);
-        
+
         if (!removed) {
             /* get the fact from the HAL */
             properties = libhal_device_get_all_properties(plugin->hal_ctx, udi, &error);
@@ -248,8 +352,9 @@ static void hal_capability_added_cb (LibHalContext *ctx,
         }
     }
 
-    if (match)
-        libhal_device_add_property_watch(ctx, udi, NULL);
+    if (match) {
+        add_watch(plugin, udi);
+    }
 
     return;
 }
@@ -290,7 +395,7 @@ static void hal_capability_lost_cb (LibHalContext *ctx,
         }
     }
 
-    libhal_device_remove_property_watch(ctx, udi, NULL);
+    remove_watch(plugin, udi);
 
 #endif
     return;
@@ -321,7 +426,9 @@ static void hal_device_added_cb (LibHalContext *ctx, const char *udi)
 #endif
 
     /* see if the device has a capability that someone is interested in */
+#if 0
     OHM_DEBUG(DBG_FACTS,"decorators: '%u'\n", g_slist_length(plugin->decorators));
+#endif
     
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
@@ -342,10 +449,6 @@ static void hal_device_added_cb (LibHalContext *ctx, const char *udi)
             dec->devices = g_slist_prepend(dec->devices, g_strdup(udi));
             process_decoration(plugin, dec, TRUE, FALSE, udi);
         }
-        else {
-            OHM_DEBUG(DBG_FACTS,"device '%s' doesn't have capability '%s'\n",
-                    udi, dec->capability);
-        }
     }
 
 #ifdef OPTIMIZED
@@ -353,7 +456,7 @@ static void hal_device_added_cb (LibHalContext *ctx, const char *udi)
 #endif
 
     if (match)
-        libhal_device_add_property_watch(ctx, udi, NULL);
+        add_watch(plugin, udi);
 
     return;
 }
@@ -382,12 +485,12 @@ static void hal_device_removed_cb (LibHalContext *ctx, const char *udi)
     }
 
     if (process_udi(plugin, FALSE, TRUE, udi))
-        libhal_device_remove_property_watch(ctx, udi, NULL);
+        remove_watch(plugin, udi);
 
     return;
 }
 
-static gboolean process_modified_properties(gpointer data) 
+static gboolean process_modified_properties(gpointer data)
 {
     hal_plugin *plugin = (hal_plugin *) data;
     GSList *e = NULL;
@@ -449,19 +552,46 @@ static void hal_property_modified_cb (LibHalContext *ctx,
     return;
 }
 
+static gboolean fill_decorator(hal_plugin *plugin, decorator *dec)
+{
+    char **devices = NULL;
+    int n_devices = 0, i;
+    DBusError error;
+
+    dbus_error_init(&error);
+
+    devices = libhal_find_device_by_capability(plugin->hal_ctx, dec->capability,
+            &n_devices, &error);
+
+    if (dbus_error_is_set(&error)) {
+        dbus_error_free(&error);
+        return FALSE;
+    }
+
+    for (i = 0; i < n_devices; i++) {
+
+        GSList *orig = g_slist_find_custom(dec->devices, devices[i], g_str_equal);
+        if (!orig) {
+            gchar *udi = g_strdup(devices[i]);
+            dec->devices = g_slist_prepend(dec->devices, udi);
+        }
+
+        if (process_decoration(plugin, dec, FALSE, FALSE, devices[i])) {
+            add_watch(plugin, devices[i]);
+        }
+    }
+
+    libhal_free_string_array(devices);
+
+    return TRUE;
+}
+
 gboolean decorate(hal_plugin *plugin, const gchar *capability, hal_cb cb, void *user_data)
 {
     decorator *dec = NULL;
-    DBusError error;
-    int n_devices = 0, i;
-    char **devices = NULL;
-    
-    dbus_error_init(&error);
 
     if (!plugin)
         goto error;
-
-    devices = libhal_find_device_by_capability(plugin->hal_ctx, capability, &n_devices, NULL);
 
     /* create the decorator object */
     if ((dec = g_new0(decorator, 1)) == NULL)
@@ -472,18 +602,8 @@ gboolean decorate(hal_plugin *plugin, const gchar *capability, hal_cb cb, void *
     dec->user_data = user_data;
     dec->capability = g_strdup(capability);
 
-    for (i = 0; i < n_devices; i++) {
-        /* FIXME: check if already decorated? */
-
-        gchar *udi = g_strdup(devices[i]);
-        /* printf("allocated udi string '%s' at '%p'\n", udi, udi); */
-        
-        dec->devices = g_slist_prepend(dec->devices, udi);
-        if (process_decoration(plugin, dec, FALSE, FALSE, devices[i]))
-            libhal_device_add_property_watch(plugin->hal_ctx, udi, NULL);
-    }
-
-    libhal_free_string_array(devices);
+    if (!fill_decorator(plugin, dec))
+        goto error;
 
     /* put the object to decorator list */
     plugin->decorators = g_slist_prepend(plugin->decorators, dec);
@@ -526,24 +646,18 @@ gboolean undecorate(hal_plugin *plugin, void *user_data) {
     return FALSE;
 }
 
-hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
+static gboolean new_hal_context(DBusConnection *c, hal_plugin *plugin)
 {
     DBusError error;
-    hal_plugin *plugin = g_new0(hal_plugin, 1);
 
-    DBG_HAL   = flag_hal;
-    DBG_FACTS = flag_facts;
-
-    OHM_DEBUG(DBG_FACTS, "Initializing the HAL plugin\n");
-    
-    if (!plugin) {
-        return NULL;
-    }
     plugin->hal_ctx = libhal_ctx_new();
     plugin->c = c;
     plugin->fs = ohm_fact_store_get_fact_store();
 
-    /* TODO: error handling everywhere */
+    if (plugin->hal_ctx == NULL) {
+        goto error;
+    }
+
     dbus_error_init(&error);
 
     if (!libhal_ctx_set_dbus_connection(plugin->hal_ctx, c))
@@ -568,15 +682,14 @@ hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
     if (!libhal_ctx_init(plugin->hal_ctx, &error))
         goto error;
 
-    return plugin;
+    OHM_DEBUG(DBG_HAL, "Successfully initialized a new HAL context");
+    return TRUE;
 
 error:
 
-    if (plugin) {
-        if (plugin->hal_ctx) {
-            libhal_ctx_free(plugin->hal_ctx);
-        }
-        g_free(plugin);
+    if (plugin->hal_ctx) {
+        libhal_ctx_free(plugin->hal_ctx);
+        plugin->hal_ctx = NULL;
     }
 
     if (dbus_error_is_set(&error)) {
@@ -588,8 +701,77 @@ error:
         OHM_DEBUG(DBG_FACTS, "Error initializing the HAL plugin\n");
     }
 
-    return NULL;
+    /* Return TRUE. This means that module loading will not fail. When
+     * hald starts, the NameOwnerChanged signal will take care of
+     * getting the context. */
+
+    return TRUE;
 }
+
+static void delete_hal_context(hal_plugin *plugin)
+{
+    GSList *e = NULL;
+
+    if (plugin->hal_ctx) {
+
+        remove_all_watches(plugin);
+
+        libhal_ctx_shutdown(plugin->hal_ctx, NULL);
+        libhal_ctx_free(plugin->hal_ctx);
+    }
+    plugin->hal_ctx = NULL;
+}
+
+static gboolean redecorate(hal_plugin *plugin)
+{
+    GSList *e = NULL;
+    OHM_DEBUG(DBG_HAL, "redecorating plugin %p", plugin);
+
+    if (plugin->hal_ctx == NULL)
+        return FALSE;
+
+    /* set up new watches */
+    for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
+        decorator *dec = e->data;
+        OHM_DEBUG(DBG_HAL, "found decorator %p", dec);
+        fill_decorator(plugin, dec);
+    }
+
+    return TRUE;
+}
+
+gboolean reload_hal_context(DBusConnection *c, hal_plugin *plugin)
+{
+    OHM_DEBUG(DBG_HAL, "> reload_hal_context");
+
+    delete_hal_context(plugin);
+    if (!new_hal_context(c, plugin) || !redecorate(plugin)) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+hal_plugin * init_hal(DBusConnection *c, int flag_hal, int flag_facts)
+{
+    hal_plugin *plugin = g_new0(hal_plugin, 1);
+
+    DBG_HAL   = flag_hal;
+    DBG_FACTS = flag_facts;
+
+    OHM_DEBUG(DBG_FACTS, "Initializing the HAL plugin\n");
+
+    if (!plugin) {
+        return NULL;
+    }
+
+    if (!new_hal_context(c, plugin)) {
+        g_free(plugin);
+        return NULL;
+    }
+
+    return plugin;
+}
+
 
 void deinit_hal(hal_plugin *plugin)
 {
@@ -602,8 +784,8 @@ void deinit_hal(hal_plugin *plugin)
 
     g_slist_free(plugin->decorators);
     plugin->decorators = NULL;
-    libhal_ctx_shutdown(plugin->hal_ctx, NULL);
-    libhal_ctx_free(plugin->hal_ctx);
+
+    delete_hal_context(plugin);
 
     g_free(plugin);
 
