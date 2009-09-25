@@ -1,0 +1,4 @@
+You can try out the two example programs (main.c and counter.c) by using
+libep and glib-2.0 when compiling and linking. Example:
+
+gcc `pkg-config --cflags --libs libep glib-2.0` counter.c -o signal-counter
