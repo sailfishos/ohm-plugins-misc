@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.62) unstable; urgency=low
+
+  * eliminate multiple playback AllowedState messages on D-Bus
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sun, 27 Sep 2009 18:50:00 +0300
+
 ohm-plugins-misc (0.6.61) unstable; urgency=low
 
   * support for systemui popup/popdown notification in videoep

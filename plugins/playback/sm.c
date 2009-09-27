@@ -259,6 +259,7 @@ static client_t *find_client_by_fact(fsif_entry_t *);
 static char *strncpylower(char *, const char *, int);
 static char *class_to_group(char *);
 static void  schedule_deferred_request(client_t *);
+static void  schedule_fake_setprop_succeeded_event(client_t *, char *, char *);
 
 
 static void sm_init(OhmPlugin *plugin)
@@ -477,24 +478,19 @@ static void sm_schedule_event(sm_t *sm, sm_evdata_t *evdata,sm_evfree_t evfree)
 
 static void sm_free_evdata(sm_evdata_t *evdata)
 {
-#define FREE(d)                 \
-    do {                        \
-        if ((d) != NULL)        \
-            free((void *)(d));  \
-    } while(0)
-
     if (evdata != NULL) {
         switch (evdata->evid) {
 
         case evid_state_signal:
         case evid_property_received:
-            FREE(evdata->property.name);
-            FREE(evdata->property.value);
+        case evid_setprop_succeeded:
+            free(evdata->property.name);
+            free(evdata->property.value);
             break;
 
         case evid_setstate_changed:
         case evid_playhint_changed:
-            FREE(evdata->watch.value);
+            free(evdata->watch.value);
             break;
 
         default:
@@ -503,8 +499,6 @@ static void sm_free_evdata(sm_evdata_t *evdata)
 
         free(evdata);
     }
-
-#undef FREE
 }
 
 static void verify_state_machine()
@@ -638,7 +632,7 @@ static int fire_playhint_changed_event(void *data)
     cl->rqplayhint.evsrc = 0;
     
     if (*rqplayhint == '\0')
-        OHM_ERROR("something went twrong: rqplayhint.value == NULL");
+        OHM_ERROR("something went wrong: rqplayhint.value == NULL");
     else if (!strcmp(playhint, rqplayhint)) {
         OHM_DEBUG(DBG_QUE, "[%s] not firing identical event", sm->name);
 
@@ -658,7 +652,6 @@ static int fire_playhint_changed_event(void *data)
 
     return FALSE;               /* run only once */
 }
-
 
 static void fire_hello_signal_event(char *dbusid, char *object)
 {
@@ -697,6 +690,7 @@ static void fire_state_signal_event(char *dbusid, char *object,
         sm_process_event(cl->sm, &evdata);
     }
 }
+
 
 static int read_property(sm_evdata_t *evdata, void *usrdata)
 {
@@ -846,6 +840,7 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
     sm_t      *sm = cl->sm;
     char      *setstate;
     char      *playhint;
+    char      *prname;
     char       prvalue[64];
 
     switch (evdata->watch.evid) {
@@ -854,20 +849,22 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
     case evid_setup_state_denied:
         setstate = evdata->watch.value;
 
+        prname = "State";
+
+        /* capitalize the property value */
+        strncpy(prvalue, setstate, sizeof(prvalue));
+        prvalue[sizeof(prvalue)-1] = '\0';
+        prvalue[0] = toupper(prvalue[0]);
+        
         if (cl->state && !strcmp(cl->state, setstate)) {
             OHM_DEBUG(DBG_TRANS, "[%s] do not write 'state' property: "
                       "client is already in '%s' state", sm->name, setstate);
+            schedule_fake_setprop_succeeded_event(cl, prname, prvalue);
         }
         else {
             client_save_state(cl, client_setstate, setstate);
 
-
-            /* capitalize the property value */
-            strncpy(prvalue, setstate, sizeof(prvalue));
-            prvalue[sizeof(prvalue)-1] = '\0';
-            prvalue[0] = toupper(prvalue[0]);
-            
-            client_set_property(cl, "State", prvalue, write_property_cb);
+            client_set_property(cl, prname, prvalue, write_property_cb);
 
             client_save_state(cl, client_rqsetst, NULL);
         }
@@ -876,17 +873,22 @@ static int write_property(sm_evdata_t *evdata, void *usrdata)
     case evid_playhint_changed:
         playhint = evdata->watch.value;
 
+        prname = "AllowedState";
+
+        /* capitalize the property value */
+        strncpy(prvalue, playhint, sizeof(prvalue));
+        prvalue[sizeof(prvalue)-1] = '\0';
+        prvalue[0] = toupper(prvalue[0]);
+
         if (cl->playhint && !strcmp(cl->playhint, playhint)) {
             OHM_DEBUG(DBG_TRANS, "[%s] do not write 'playhint' property: "
                       "client is already hinted", sm->name);
+            schedule_fake_setprop_succeeded_event(cl, prname, prvalue);
         }
         else {
-            /* capitalize the property value */
-            strncpy(prvalue, playhint, sizeof(prvalue));
-            prvalue[sizeof(prvalue)-1] = '\0';
-            prvalue[0] = toupper(prvalue[0]);
-            
-            client_set_property(cl, "AllowedState",prvalue, write_property_cb);
+            client_save_playback_hint(cl, client_playhint, playhint);
+
+            client_set_property(cl, prname, prvalue, write_property_cb);
 
             client_save_playback_hint(cl, client_rqplayhint, NULL);
         }
@@ -1593,6 +1595,31 @@ static void schedule_deferred_request(client_t *cl)
     }
 
     OHM_DEBUG(DBG_SM, "[%s] no deferred request", sm->name);
+}
+
+static void schedule_fake_setprop_succeeded_event(client_t *cl, char *prname,
+                                                 char *prvalue)
+{
+    sm_t        *sm = cl->sm;
+    sm_evdata_t *evdata;
+
+    if (prname && prvalue) {
+        if ((evdata = malloc(sizeof(*evdata))) == NULL) {
+            OHM_ERROR("[%s] failed to schedule fake setprop_succeeded event: "
+                      "Out of memory", sm->name);
+        }
+        else {
+            OHM_DEBUG(DBG_TRANS, "[%s] schedule fake setprop_succeeded event "
+                      "(property:'%s' value:'%s'", sm->name, prname, prvalue);
+
+            memset(evdata, 0, sizeof(*evdata));
+            evdata->property.evid  = evid_setprop_succeeded;
+            evdata->property.name  = strdup(prname);
+            evdata->property.value = strdup(prvalue);
+
+            sm_schedule_event(sm, evdata, sm_free_evdata);
+        }
+    }
 }
 
 /* 
