@@ -612,17 +612,19 @@ end:
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-int ep_register (DBusConnection *c, const char *name)
+int ep_register (DBusConnection *c, const char *name, const char **capabilities)
 {
     DBusMessage     *msg = NULL, *reply;
     int              success = 0;
     char             polrule[512];
     DBusError        err;
+    DBusMessageIter message_iter,
+                    array_iter;
 
     connection = c;
 
     /* first, let's do a filter */
-    
+
     snprintf(polrule, sizeof(polrule), "type='signal',interface='%s',"
              "path='%s/%s'", POLICY_DBUS_INTERFACE, POLICY_DBUS_PATH, POLICY_DECISION);
 
@@ -631,7 +633,7 @@ int ep_register (DBusConnection *c, const char *name)
     if (!dbus_connection_add_filter(connection, filter, NULL, NULL)) {
         goto failed;
     }
-    
+
     dbus_bus_add_match(connection, polrule, &err);
 
     if (dbus_error_is_set(&err)) {
@@ -650,11 +652,20 @@ int ep_register (DBusConnection *c, const char *name)
         goto failed;
     }
 
-    success = dbus_message_append_args(msg,
-                DBUS_TYPE_STRING, &name,
-                DBUS_TYPE_INVALID);
-    if (!success) {
+    dbus_message_iter_init_append(msg, &message_iter);
+
+    if (!dbus_message_iter_append_basic(&message_iter, DBUS_TYPE_STRING, &name))
         goto failed;
+
+    if (!dbus_message_iter_open_container(&message_iter, DBUS_TYPE_ARRAY,
+                "s", &array_iter))
+        goto failed;
+
+    while (capabilities != NULL) {
+        if (!dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, &(*capabilities)))
+            goto failed;
+
+        capabilities++;
     }
 
     reply = dbus_connection_send_with_reply_and_block(connection, msg, -1, NULL);

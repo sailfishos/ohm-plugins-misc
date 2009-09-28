@@ -191,6 +191,10 @@ int main(int argc, char ** argv) {
     DBusGConnection *bus;
     DBusConnection *connection;
     int counter = 0;
+    char *signals[] = {
+        "actions",
+        NULL
+    };
 
     g_type_init();
     mainloop = g_main_loop_new(NULL, FALSE);
@@ -220,7 +224,7 @@ int main(int argc, char ** argv) {
         goto error;
 
     /* register to the policy manager */
-    if (!ep_register(connection, "decision counter ep"))
+    if (!ep_register(connection, "decision counter ep", signals))
         goto error;
 
     /* wait for decisions in a D-Bus loop */
