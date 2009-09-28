@@ -160,7 +160,7 @@ static void decision_cb(const char *decision_name,
         if (tmp == NULL)
             goto error;
 
-        if (strftime(outstr, sizeof(outstr), "%k:%m:%S", tmp) == 0)
+        if (strftime(outstr, sizeof(outstr), "%H:%M:%S", tmp) == 0)
             goto error;
 
         fprintf(target, "%s -- policy decision count: %i\n", outstr, *counter);
