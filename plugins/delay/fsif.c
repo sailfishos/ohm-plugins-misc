@@ -416,10 +416,12 @@ static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
         break;
 
     case fldtype_integer:
-        if (G_VALUE_TYPE(gv) != G_TYPE_LONG)
-            goto type_mismatch;
-        else
+        if (G_VALUE_TYPE(gv) == G_TYPE_LONG)
             *(long *)vptr = g_value_get_long(gv);
+        else if(G_VALUE_TYPE(gv) == G_TYPE_INT)
+            *(long *)vptr = g_value_get_int(gv);
+        else
+            goto type_mismatch;
         break;
 
     case fldtype_unsignd:
@@ -450,7 +452,9 @@ static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
     return TRUE;
 
  type_mismatch:
+#if 0
     OHM_ERROR("[%s] Type mismatch when fetching field '%s'",__FUNCTION__,name);
+#endif
 
  return_empty_value:
     switch (type) {

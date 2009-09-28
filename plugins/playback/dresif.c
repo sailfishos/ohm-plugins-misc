@@ -44,7 +44,6 @@ static int dresif_playback_state_request(client_t *cl, char *state,int transid)
 #define DRESIF_VARTYPE(t)  (char *)(t)
 #define DRESIF_VARVALUE(v) (char *)(v)
     char *vars[48];
-    char  buf[64];
     int   i;
     int   status;
 
@@ -71,15 +70,13 @@ static int dresif_playback_state_request(client_t *cl, char *state,int transid)
     vars[++i] = DRESIF_VARVALUE(cl->flags);
 
     if (transid > 0) {
-        snprintf(buf, sizeof(buf), "%d", transid);
-
         vars[++i] = "completion_callback";
         vars[++i] = DRESIF_VARTYPE('s');
         vars[++i] = DRESIF_VARVALUE("playback.completion_cb");
 
         vars[++i] = "transaction_id";
-        vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = DRESIF_VARVALUE(buf);
+        vars[++i] = DRESIF_VARTYPE('i');
+        vars[++i] = DRESIF_VARVALUE(transid);
     }
 
     vars[++i] = NULL;
@@ -106,29 +103,12 @@ static int dresif_privacy_override_request(int privacy_override, int transid)
     char *vars[48];
     int   i;
     int   status;
-#if 0
-    char  buf[64];
-#else
+
     (void) transid;
-#endif
 
     vars[i=0] = "privacy_override_state";
     vars[++i] = DRESIF_VARTYPE('s');
     vars[++i] = privacy_override ? "public" : "default";
-
-#if 0
-    if (transid > 0) {
-        snprintf(buf, sizeof(buf), "%d", transid);
-
-        vars[++i] = "completion_callback";
-        vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = "playback.completion_cb";
-
-        vars[++i] = "transaction_id";
-        vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = buf;
-    }
-#endif
 
     vars[++i] = NULL;
 
@@ -152,11 +132,8 @@ static int dresif_bluetooth_override_request(int bluetooth_override,
     char *vars[48];
     int   i;
     int   status;
-#if 0
-    char  buf[64];
-#else
+
     (void) transid;
-#endif
 
     if (bluetooth_override) {
 
@@ -189,29 +166,12 @@ static int dresif_mute_request(int mute, int transid)
     char *vars[48];
     int   i;
     int   status;
-#if 0
-    char  buf[64];
-#else
+
     (void) transid;
-#endif
 
     vars[i=0] = "mute_state";
     vars[++i] = DRESIF_VARTYPE('i');
     vars[++i] = (char *)mute;
-
-#if 0
-    if (transid > 0) {
-        snprintf(buf, sizeof(buf), "%d", transid);
-
-        vars[++i] = "completion_callback";
-        vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = "playback.completion_cb";
-
-        vars[++i] = "transaction_id";
-        vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = buf;
-    }
-#endif
 
     vars[++i] = NULL;
 
@@ -228,28 +188,44 @@ static int dresif_mute_request(int mute, int transid)
 #undef DRESIF_VARTYPE
 }
 
-OHM_EXPORTABLE(void, completion_cb, (int trid, int success))
+OHM_EXPORTABLE(void, completion_cb, (char *id, char *argt, void **argv))
 {
     pbreq_t     *req;
     client_t    *cl;
     sm_evdata_t  evdata;
     sm_evdata_pbreply_t *rply;
+    int trid;
+    int success;
 
-    OHM_DEBUG(DBG_DRES, "playback.%s(%d, %s)\n",
-              __FUNCTION__, trid, success ? "OK" : "FAILED");
+    (void)id;
 
-    if ((req = pbreq_get_by_trid(trid)) == NULL) {
-        OHM_DEBUG(DBG_DRES, "Can't find request with transaction ID %d", trid);
-        return;
+    if (!argt || !argv || strcmp(argt, "ii")) {
+        if (argt)
+            OHM_ERROR("%s('%s', %p)", __FUNCTION__, argt, argv);
+        else
+            OHM_ERROR("%s() invalid arguments", __FUNCTION__);
     }
+    else {
+        trid    = *(long *)argv[0];
+        success = *(long *)argv[1]; 
 
-    cl = req->cl;
-    rply = &evdata.pbreply;
+        OHM_DEBUG(DBG_DRES, "playback.%s(%d, %s)\n",
+                  __FUNCTION__, trid, success ? "OK" : "FAILED");
 
-    rply->evid = success ? evid_playback_complete : evid_playback_failed;
-    rply->req  = req;
+        if ((req = pbreq_get_by_trid(trid)) == NULL) {
+            OHM_DEBUG(DBG_DRES, "Can't find request with transaction ID %d",
+                      trid);
+        }
+        else {
+            cl = req->cl;
+            rply = &evdata.pbreply;
+            
+            rply->evid = success ? evid_playback_complete:evid_playback_failed;
+            rply->req  = req;
 
-    sm_process_event(cl->sm, &evdata);
+            sm_process_event(cl->sm, &evdata);
+        }
+    }
 }
 
 

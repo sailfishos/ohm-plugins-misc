@@ -341,15 +341,15 @@ txparser(GObject *conn, GObject *transaction, gpointer data)
     g_object_get(transaction, "facts", &list, NULL);
     g_object_get(transaction, "signal", &signal, NULL);
     
-    /* TODO: signal holds the signal name that was sent */
-
     success = TRUE;
 
-    for (entry = list; entry != NULL; entry = g_slist_next(entry)) {
-        name = (char *)entry->data;
-        for (action = actions; action->name != NULL; action++) {
-            if (!strcmp(name, action->name))
-                success &= action_parser(action, ctx);
+    if (!strcmp(signal, "cgroup_actions")) {
+        for (entry = list; entry != NULL; entry = g_slist_next(entry)) {
+            name = (char *)entry->data;
+            for (action = actions; action->name != NULL; action++) {
+                if (!strcmp(name, action->name))
+                    success &= action_parser(action, ctx);
+            }
         }
     }
 

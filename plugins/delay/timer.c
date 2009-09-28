@@ -329,10 +329,10 @@ static int timer_event_cb(void *data)
                 snprintf(name, sizeof(name), TIMER_ARGV, i);
 
                 /* FIXME:
-                 * This is really uggly. should be rewritten whe we have
+                 * This is really uggly. should be rewritten when we have
                  * some time (ie. supporting function in fsif etc)
                  */
-                                /* first we try as integer */
+                                /* first we try as string */
                 fsif_get_field_by_entry(entry, fldtype_string, name, &str);
 
                 if (str != NULL) {

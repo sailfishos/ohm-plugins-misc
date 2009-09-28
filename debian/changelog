@@ -1,6 +1,8 @@
 ohm-plugins-misc (0.6.62) unstable; urgency=low
 
   * eliminate multiple playback AllowedState messages on D-Bus
+  * in playback change the competion_cb() signature
+  * in videoep & cgroup filter the actions based on the signal name
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sun, 27 Sep 2009 18:50:00 +0300
 

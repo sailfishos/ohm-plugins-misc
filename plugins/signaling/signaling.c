@@ -15,7 +15,7 @@ OHM_DEBUG_PLUGIN(signaling,
     OHM_DEBUG_FLAG("facts"    , "fact manipulation", &DBG_FACTS));
 
 /* completion cb type */
-typedef void (*completion_cb_t)(int transid, int success);
+typedef void (*completion_cb_t)(char *id, char *argt, void **argv);
 
 /* public API (inside OHM) */
 
@@ -60,6 +60,8 @@ static void complete(Transaction *t, gpointer data)
 
     guint txid;
     GSList *nacked, *not_answered, *i;
+    long success;
+    void *argv[2];
 
     /* get the data from the transaction */
 
@@ -74,12 +76,17 @@ static void complete(Transaction *t, gpointer data)
 
     if (g_slist_length(not_answered) || g_slist_length(nacked)) {
         /* failure */
-        cb(txid, 0);
+        success = 0;
     }
     else {
         /* success */
-        cb(txid, 1);
+        success = 1;
     }
+
+    argv[0] = &txid;
+    argv[1] = &success;
+
+    cb("complete", "ii", argv);
 
     /* free memory */
     

@@ -62,19 +62,20 @@ static gboolean txparser(GObject *conn, GObject *transaction, gpointer data)
     g_object_get(transaction, "txid" , &txid, NULL);
     g_object_get(transaction, "facts", &list, NULL);
     g_object_get(transaction, "signal", &signal, NULL);
-    
-    /* TODO: signal holds the signal name that was sent */
-
-    OHM_DEBUG(DBG_ACTION, "txid: %d", txid);
-    
+        
     success = TRUE;
 
-    for (entry = list;    entry != NULL;    entry = g_slist_next(entry)) {
-        name = (char *)entry->data;
+    if (!strcmp(signal, "video_actions")) {
 
-        for (action = actions;   action->name != NULL;   action++) {
-            if (!strcmp(name, action->name))
-                success &= action_parser(action, videoep);
+        OHM_DEBUG(DBG_ACTION, "txid: %d", txid);
+
+        for (entry = list;    entry != NULL;    entry = g_slist_next(entry)) {
+            name = (char *)entry->data;
+            
+            for (action = actions;   action->name != NULL;   action++) {
+                if (!strcmp(name, action->name))
+                    success &= action_parser(action, videoep);
+            }
         }
     }
 
