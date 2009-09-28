@@ -160,7 +160,7 @@ static void decision_cb(const char *decision_name,
         if (tmp == NULL)
             goto error;
 
-        if (strftime(outstr, sizeof(outstr), "%k:%m:%S", tmp) == 0)
+        if (strftime(outstr, sizeof(outstr), "%H:%M:%S", tmp) == 0)
             goto error;
 
         fprintf(target, "%s -- policy decision count: %i\n", outstr, *counter);
@@ -191,6 +191,10 @@ int main(int argc, char ** argv) {
     DBusGConnection *bus;
     DBusConnection *connection;
     int counter = 0;
+    char *signals[] = {
+        "actions",
+        NULL
+    };
 
     g_type_init();
     mainloop = g_main_loop_new(NULL, FALSE);
@@ -209,7 +213,7 @@ int main(int argc, char ** argv) {
 
     if (argc == 2) {
         /* a file name was given as the parameter */
-        output = fopen(argv[1], "w");
+        output = fopen(argv[1], "a");
     }
     else {
         output = NULL;
@@ -220,7 +224,7 @@ int main(int argc, char ** argv) {
         goto error;
 
     /* register to the policy manager */
-    if (!ep_register(connection, "decision counter ep"))
+    if (!ep_register(connection, "decision counter ep", signals))
         goto error;
 
     /* wait for decisions in a D-Bus loop */
@@ -233,6 +237,9 @@ int main(int argc, char ** argv) {
 
     fprintf(output ? output : stdout,
             "Counted total %i policy 'actions' signals\n", counter);
+
+    if (output)
+        fclose(output);
 
     return 0;
 

@@ -50,7 +50,7 @@ typedef void    (*ep_decision_cb) (const char *decision_name,
 
 /* functions for registering and unregistering to the policy engine */
 
-int ep_register     (DBusConnection *connection, const char *name);
+int ep_register     (DBusConnection *connection, const char *name, const char **capabilities);
 int ep_unregister   (DBusConnection *connection);
 
 
