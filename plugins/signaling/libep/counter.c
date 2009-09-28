@@ -213,7 +213,7 @@ int main(int argc, char ** argv) {
 
     if (argc == 2) {
         /* a file name was given as the parameter */
-        output = fopen(argv[1], "w");
+        output = fopen(argv[1], "a");
     }
     else {
         output = NULL;
@@ -237,6 +237,9 @@ int main(int argc, char ** argv) {
 
     fprintf(output ? output : stdout,
             "Counted total %i policy 'actions' signals\n", counter);
+
+    if (output)
+        fclose(output);
 
     return 0;
 
