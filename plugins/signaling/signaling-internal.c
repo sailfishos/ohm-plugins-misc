@@ -1687,17 +1687,47 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
         void *user_data)
 {
     DBusMessage *reply;
-    const gchar *uri, *name;
+    const gchar *uri, *name = NULL;
     gint ret;
     EnforcementPoint *ep = NULL;
-    
+    DBusMessageIter  msgit;
+
     (void) user_data;
 
     if (msg == NULL) {
         goto err;
     }
-    
+
     uri = dbus_message_get_sender(msg);
+
+    dbus_message_iter_init(msg, &msgit);
+
+    if (dbus_message_iter_get_arg_type(&msgit) == DBUS_TYPE_STRING) {
+        dbus_message_iter_get_basic(&msgit, (void *)&name);
+
+        if (dbus_message_iter_next(&msgit) &&
+                dbus_message_iter_get_arg_type(&msgit) == DBUS_TYPE_ARRAY) {
+
+            DBusMessageIter arrit;
+
+            dbus_message_iter_recurse(&msgit, &arrit);
+
+            do {
+                char *capability;
+
+                if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING) {
+                    break;
+                }
+
+                dbus_message_iter_get_basic(&arrit, (void *)&capability);
+
+                OHM_DEBUG(DBG_SIGNALING, "EP %s is interested in capability %s",
+                        name, capability);
+
+            } while (dbus_message_iter_next(&arrit));
+        }
+    }
+
     if (!dbus_message_get_args(msg,
             NULL,
             DBUS_TYPE_STRING,
@@ -1709,11 +1739,11 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
     }
 
     ep = register_enforcement_point(uri, name, FALSE);
-    
+
     if (ep == NULL) {
         reply = dbus_message_new_error(msg,
                 DBUS_ERROR_FAILED,
-                "Enforcement point registration failed"); 
+                "Enforcement point registration failed");
     }
     else {
         reply = dbus_message_new_method_return(msg);
@@ -1737,9 +1767,9 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
 err:
 
     /* TODO: something went wrong, handle it */
-    
+
     /* if (msg) { dbus_message_unref(msg); msg = NULL; } */
-    
+
     OHM_DEBUG(DBG_SIGNALING, "D-Bus error");
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
