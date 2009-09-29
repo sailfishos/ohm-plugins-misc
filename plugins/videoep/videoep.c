@@ -42,13 +42,13 @@ OHM_DEBUG_PLUGIN(video,
     OHM_DEBUG_FLAG("info"  , "Info messages"       , &DBG_INFO  )
 );
 
-OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri, gchar **interested));
 OHM_IMPORTABLE(gboolean , unregister_ep, (GObject *ep));
+OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri, gchar **interested));
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
 OHM_PLUGIN_REQUIRES_METHODS(videoep, 3, 
-   OHM_IMPORT("signaling.register_enforcement_point"  , register_ep  ),
    OHM_IMPORT("signaling.unregister_enforcement_point", unregister_ep),
+   OHM_IMPORT("signaling.register_enforcement_point"  , register_ep  ),
    OHM_IMPORT("dres.resolve", resolve)
 );
 
