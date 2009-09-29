@@ -661,17 +661,16 @@ int ep_register (DBusConnection *c, const char *name, const char **capabilities)
                 "s", &array_iter))
         goto failed;
 
-    while (capabilities != NULL) {
+    while (*capabilities != NULL) {
         if (!dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, &(*capabilities)))
             goto failed;
 
         capabilities++;
     }
 
+    dbus_message_iter_close_container(&message_iter, &array_iter);
+
     reply = dbus_connection_send_with_reply_and_block(connection, msg, -1, NULL);
-    if (!reply) {
-        goto failed;
-    }
 
     if (!reply || dbus_message_get_type (reply) == DBUS_MESSAGE_TYPE_ERROR) {
         goto failed;

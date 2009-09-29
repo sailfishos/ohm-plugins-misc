@@ -99,15 +99,26 @@ gboolean deinit_signaling()
 
 /* copy-paste from policy library */
 
-static void free_facts(GSList *facts) 
+static void free_facts(GSList *facts)
 {
-
     GSList *i;
 
     for (i = facts; i != NULL; i = g_slist_next(i)) {
         g_free(i->data);
     }
     g_slist_free(facts);
+
+    return;
+}
+
+static void free_string_list(GSList *list)
+{
+    GSList *i;
+
+    for (i = list; i != NULL; i = g_slist_next(i)) {
+        g_free(i->data);
+    }
+    g_slist_free(list);
 
     return;
 }
@@ -292,6 +303,10 @@ static void external_ep_strategy_set_property(GObject *object,
             g_free(ep->id);
             ep->id = g_value_dup_string(value);
             break;
+        case PROP_INTERESTED:
+            free_string_list(ep->interested);
+            ep->interested = g_value_get_pointer(value);
+            break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
             break;
@@ -308,6 +323,10 @@ static void internal_ep_strategy_set_property(GObject *object,
         case PROP_ID:
             g_free(ep->id);
             ep->id = g_value_dup_string(value);
+            break;
+        case PROP_INTERESTED:
+            free_string_list(ep->interested);
+            ep->interested = g_value_get_pointer(value);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -364,7 +383,7 @@ static void enforcement_point_base_init(gpointer g_class)
                 g_param_spec_pointer ("interested",
                     "interested",
                     "signals that the enforcement point is interested in",
-                    G_PARAM_READABLE));
+                    G_PARAM_READWRITE));
 
         initialized = TRUE;
     }
@@ -389,6 +408,9 @@ gboolean internal_ep_is_interested(EnforcementPoint *self,
         retval = TRUE;
     }
 
+    OHM_DEBUG(DBG_SIGNALING, "Internal EP %p %s interested in signal '%s'",
+            self, retval ? "is" : "is not", signal);
+
     g_free(signal);
 
     return retval;
@@ -406,6 +428,9 @@ gboolean external_ep_is_interested(EnforcementPoint *self,
     if (g_slist_find_custom(s->interested, signal, g_str_equal)) {
         retval = TRUE;
     }
+
+    OHM_DEBUG(DBG_SIGNALING, "External EP %p %s interested in signal '%s'",
+            self, retval ? "is" : "is not", signal);
 
     g_free(signal);
 
@@ -1629,10 +1654,10 @@ static gboolean unregister_fact(const gchar *uri)
          l = l->next) {
         fact = (OhmFact *)l->data;
         guri = ohm_fact_get(fact, "id");
-        
+
         if (guri == NULL || (s = g_value_get_string(guri)) == NULL)
             continue;
-        
+
         if (!strcmp(s, uri)) {
             ohm_fact_store_remove(store, fact);
             g_object_unref(fact);
@@ -1790,6 +1815,7 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
     dbus_message_iter_init(msg, &msgit);
 
     if (dbus_message_iter_get_arg_type(&msgit) == DBUS_TYPE_STRING) {
+
         dbus_message_iter_get_basic(&msgit, (void *)&name);
 
         if (dbus_message_iter_next(&msgit) &&
@@ -1802,7 +1828,7 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
             do {
                 char *capability;
 
-                if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING) {
+                if (dbus_message_iter_get_arg_type(&arrit) != DBUS_TYPE_STRING) {
                     break;
                 }
 
@@ -1850,14 +1876,11 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
         goto err;
     }
 
-    /* FIXME: why are we setting this handled? */
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
 err:
 
     /* TODO: something went wrong, handle it */
-
-    /* if (msg) { dbus_message_unref(msg); msg = NULL; } */
 
     OHM_DEBUG(DBG_SIGNALING, "D-Bus error");
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -2022,7 +2045,7 @@ Transaction * queue_decision(gchar *signal, GSList *facts,
     g_object_ref(transaction);
     return transaction;
 }
-    
+
 DBusHandlerResult dbus_ack(DBusConnection * c, DBusMessage * msg,
         void *data)
 {

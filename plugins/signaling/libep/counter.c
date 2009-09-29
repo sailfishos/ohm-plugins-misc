@@ -191,7 +191,7 @@ int main(int argc, char ** argv) {
     DBusGConnection *bus;
     DBusConnection *connection;
     int counter = 0;
-    char *signals[] = {
+    const char *signals[] = {
         "actions",
         NULL
     };

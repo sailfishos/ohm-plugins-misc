@@ -158,10 +158,10 @@ plugin_init(OhmPlugin * plugin)
     (void) plugin;
 
     /* should we ref the connection? */
-    
+
     if (!OHM_DEBUG_INIT(signaling))
         g_warning("Failed to initialize signaling plugin debugging.");
-    
+
     init_signaling(c, DBG_SIGNALING, DBG_FACTS);
     return;
 }

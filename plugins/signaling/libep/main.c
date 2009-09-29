@@ -82,7 +82,7 @@ int main() {
     DBusGConnection *bus;
     DBusConnection *connection;
     static GMainLoop *mainloop;
-    char *signals[] = {
+    const char *signals[] = {
         "actions",
         NULL
     };
