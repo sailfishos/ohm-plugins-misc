@@ -108,6 +108,7 @@ typedef struct _EnforcementPointInterface {
     gboolean        (*receive_ack) (EnforcementPoint * self, Transaction *transaction, guint status);
 	gboolean        (*stop_transaction) (EnforcementPoint * self, Transaction *transaction);
 	gboolean        (*unregister) (EnforcementPoint * self);
+	gboolean        (*is_interested) (EnforcementPoint * self, Transaction *transaction);
 	gboolean        (*send_decision) (EnforcementPoint * self, Transaction *transaction);
 } EnforcementPointInterface;
 
@@ -140,8 +141,8 @@ typedef struct _fact {
 typedef struct _ExternalEPStrategy {
     GObject         parent;
     gchar          *id;
-    /* DBusConnection *c; */
     GSList         *ongoing_transactions;
+    GSList         *interested;
 
 } ExternalEPStrategy;
 
@@ -166,6 +167,7 @@ typedef struct _InternalEPStrategy {
     GObject         parent;
     gchar          *id;
     GSList         *ongoing_transactions;
+    GSList         *interested;
 
 } InternalEPStrategy;
 
@@ -178,7 +180,7 @@ GType           internal_ep_get_type(void);
 
 /* API functions */
 
-EnforcementPoint * register_enforcement_point(const gchar * uri, const gchar *name, gboolean internal);
+EnforcementPoint * register_enforcement_point(const gchar * uri, const gchar *name, gboolean internal, GSList *capabilities);
 
 gboolean unregister_enforcement_point(const gchar *uri);
 

@@ -143,6 +143,7 @@ static guint signals [LAST_SIGNAL] = { 0, };
 enum {
     PROP_0,
     PROP_ID,
+    PROP_INTERESTED,
     PROP_TXID,
     PROP_TIMEOUT,
     PROP_SIGNAL,
@@ -218,6 +219,9 @@ external_ep_strategy_get_property(GObject *object,
         case PROP_ID:
             g_value_set_string(value, ep->id);
             break;
+        case PROP_INTERESTED:
+            g_value_set_pointer(value, ep->interested);
+            break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
             break;
@@ -233,6 +237,9 @@ static void internal_ep_strategy_get_property(GObject *object,
     switch (property_id) {
         case PROP_ID:
             g_value_set_string(value, ep->id);
+            break;
+        case PROP_INTERESTED:
+            g_value_set_pointer(value, ep->interested);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -353,8 +360,56 @@ static void enforcement_point_base_init(gpointer g_class)
                     "enforcement_point", /* default */
                     G_PARAM_READWRITE));
 
+        g_object_interface_install_property(g_class,
+                g_param_spec_pointer ("interested",
+                    "interested",
+                    "signals that the enforcement point is interested in",
+                    G_PARAM_READABLE));
+
         initialized = TRUE;
     }
+}
+
+gboolean enforcement_point_is_interested(EnforcementPoint * self,
+        Transaction *transaction)
+{
+    return EP_STRATEGY_GET_INTERFACE(self)->is_interested(self, transaction);
+}
+
+gboolean internal_ep_is_interested(EnforcementPoint *self,
+        Transaction *t)
+{
+    InternalEPStrategy *s = INTERNAL_EP_STRATEGY(self);
+    gchar *signal;
+    gboolean retval = FALSE;
+
+    g_object_get(t, "signal", &signal, NULL);
+
+    if (g_slist_find_custom(s->interested, signal, g_str_equal)) {
+        retval = TRUE;
+    }
+
+    g_free(signal);
+
+    return retval;
+}
+
+gboolean external_ep_is_interested(EnforcementPoint *self,
+        Transaction *t)
+{
+    ExternalEPStrategy *s = EXTERNAL_EP_STRATEGY(self);
+    gchar *signal;
+    gboolean retval = FALSE;
+
+    g_object_get(t, "signal", &signal, NULL);
+
+    if (g_slist_find_custom(s->interested, signal, g_str_equal)) {
+        retval = TRUE;
+    }
+
+    g_free(signal);
+
+    return retval;
 }
 
 /*
@@ -899,19 +954,35 @@ static void transaction_instance_init(GTypeInstance * instance,
 static void external_ep_dispose(GObject *object)
 {
     ExternalEPStrategy *self = EXTERNAL_EP_STRATEGY(object);
+    GSList *e = NULL;
+
     OHM_DEBUG(DBG_SIGNALING, "external_ep_dispose");
-    
+
     g_free(self->id);
     self->id = NULL;
+
+    for (e = self->interested; e != NULL; e = g_slist_next(e)) {
+        g_free(e->data);
+    }
+    g_slist_free(self->interested);
+    self->interested = NULL;
 }
-    
+
 static void internal_ep_dispose(GObject *object)
 {
     InternalEPStrategy *self = INTERNAL_EP_STRATEGY(object);
+    GSList *e = NULL;
+
     OHM_DEBUG(DBG_SIGNALING, "internal_ep_dispose");
-    
+
     g_free(self->id);
     self->id = NULL;
+
+    for (e = self->interested; e != NULL; e = g_slist_next(e)) {
+        g_free(e->data);
+    }
+    g_slist_free(self->interested);
+    self->interested = NULL;
 }
 
 static void transaction_dispose(GObject *object)
@@ -920,7 +991,7 @@ static void transaction_dispose(GObject *object)
     GSList *i = NULL;
     Transaction *self = TRANSACTION(object);
     OHM_DEBUG(DBG_SIGNALING, "transaction_dispose");
-    
+
     /* Note that the EPs might have been unregistered during the transaction,
      * therefore these may be the last references to them */
 
@@ -1089,6 +1160,9 @@ static void internal_ep_strategy_interface_init(gpointer g_iface,
     iface->stop_transaction =
         (gboolean(*)(EnforcementPoint *, Transaction *))
         internal_ep_stop_transaction;
+    iface->is_interested =
+        (gboolean(*)(EnforcementPoint *, Transaction *))
+        internal_ep_is_interested;
     iface->unregister =
         (gboolean(*)(EnforcementPoint *))
         internal_ep_unregister;
@@ -1125,6 +1199,9 @@ static void external_ep_strategy_interface_init(gpointer g_iface,
     iface->stop_transaction =
         (gboolean(*)(EnforcementPoint *, Transaction *))
         external_ep_stop_transaction;
+    iface->is_interested =
+        (gboolean(*)(EnforcementPoint *, Transaction *))
+        external_ep_is_interested;
     iface->unregister =
         (gboolean(*)(EnforcementPoint *))
         external_ep_unregister;
@@ -1142,34 +1219,36 @@ static void external_ep_strategy_instance_init(GTypeInstance * instance,
 }
 
 static void external_ep_strategy_class_init(gpointer g_class,
-        gpointer class_data) {
-
+        gpointer class_data)
+{
     GObjectClass *gobject = (GObjectClass *) g_class;
-    
+
     (void) class_data;
-    
+
     gobject->dispose = external_ep_dispose;
 
     gobject->set_property = external_ep_strategy_set_property;
     gobject->get_property = external_ep_strategy_get_property;
 
     g_object_class_override_property (gobject, PROP_ID, "id");
-} 
+    g_object_class_override_property (gobject, PROP_INTERESTED, "interested");
+}
 
 static void internal_ep_strategy_class_init(gpointer g_class,
-        gpointer class_data) {
-
+        gpointer class_data)
+{
     GObjectClass *gobject = (GObjectClass *) g_class;
 
     (void) class_data;
-    
+
     gobject->dispose = internal_ep_dispose;
 
     gobject->set_property = internal_ep_strategy_set_property;
     gobject->get_property = internal_ep_strategy_get_property;
 
     g_object_class_override_property (gobject, PROP_ID, "id");
-} 
+    g_object_class_override_property (gobject, PROP_INTERESTED, "interested");
+}
 
 GType transaction_get_type(void)
 {
@@ -1424,7 +1503,7 @@ static gboolean process_inq(gpointer data)
     }
 
     t = g_queue_pop_head(queue);
-    
+
     OHM_DEBUG(DBG_SIGNALING, "Processing transaction %p", t);
 
     g_hash_table_insert(transactions, &t->txid, t);
@@ -1432,6 +1511,11 @@ static gboolean process_inq(gpointer data)
     for (e = enforcement_points; e != NULL; e = g_slist_next(e)) {
         EnforcementPoint *ep = e->data;
         OHM_DEBUG(DBG_SIGNALING, "process: ep 0x%p", ep);
+
+        /* check whether or not anyone the enforcement point is
+         * interested in receiving the signal */
+        if (!enforcement_point_is_interested(ep, t))
+            continue;
 
         transaction_add_ep(t, ep);
         ret = enforcement_point_send_decision(ep, t);
@@ -1562,7 +1646,8 @@ static gboolean unregister_fact(const gchar *uri)
 
 EnforcementPoint * register_enforcement_point(const gchar *uri,
         const gchar *name,
-        gboolean internal)
+        gboolean internal,
+        GSList *capabilities)
 {
     /*
      * Registers an internal or external enforcement point 
@@ -1573,7 +1658,7 @@ EnforcementPoint * register_enforcement_point(const gchar *uri,
     gchar *id;
 
     for (i = enforcement_points; i != NULL; i = g_slist_next(i)) {
-    
+
         g_object_get(i->data, "id", &id, NULL);
 
         if (!strcmp(id, uri)) {
@@ -1600,13 +1685,14 @@ EnforcementPoint * register_enforcement_point(const gchar *uri,
     }
 
     g_object_set(ep, "id", uri, NULL);
+    g_object_set(ep, "interested", capabilities, NULL);
 
     OHM_DEBUG(DBG_SIGNALING, "Created ep '%s' at 0x%p", uri, ep);
 
     enforcement_points = g_slist_prepend(enforcement_points, ep);
- 
+
     register_fact(uri, name, internal);
-   
+
     return ep;
 }
 
@@ -1621,9 +1707,9 @@ gboolean unregister_enforcement_point(const gchar *uri)
     gchar *id;
 
     for (i = enforcement_points; i != NULL; i = g_slist_next(i)) {
-    
+
         g_object_get(i->data, "id", &id, NULL);
-    
+
         if (!strcmp(id, uri)) {
             ep = i->data;
             g_free(id);
@@ -1676,9 +1762,9 @@ DBusHandlerResult update_external_enforcement_points(DBusConnection * c,
             else {
                 OHM_DEBUG(DBG_SIGNALING, "Terminated service '%s' wasn't registered", sender);
             }
-        } 
+        }
     }
-    
+
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
@@ -1691,6 +1777,7 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
     gint ret;
     EnforcementPoint *ep = NULL;
     DBusMessageIter  msgit;
+    GSList *capabilities = NULL;
 
     (void) user_data;
 
@@ -1724,6 +1811,8 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
                 OHM_DEBUG(DBG_SIGNALING, "EP %s is interested in capability %s",
                         name, capability);
 
+                capabilities = g_slist_prepend(capabilities, g_strdup(capability));
+
             } while (dbus_message_iter_next(&arrit));
         }
     }
@@ -1738,7 +1827,7 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
         name = NULL;
     }
 
-    ep = register_enforcement_point(uri, name, FALSE);
+    ep = register_enforcement_point(uri, name, FALSE, capabilities);
 
     if (ep == NULL) {
         reply = dbus_message_new_error(msg,

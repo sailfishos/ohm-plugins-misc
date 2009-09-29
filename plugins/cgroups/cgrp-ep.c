@@ -41,8 +41,13 @@ static gboolean txparser        (GObject *, GObject *, gpointer);
  * ep_init
  ********************/
 int
-ep_init(cgrp_context_t *ctx, GObject *(*signaling_register)(gchar *))
+ep_init(cgrp_context_t *ctx, GObject *(*signaling_register)(gchar *, gchar **))
 {
+    char *signals[] = {
+        "cgroup_actions",
+        NULL
+    };
+
     if ((ctx->store = ohm_get_fact_store()) == NULL) {
         OHM_ERROR("cgrp: failed to initalize factstore");
         return FALSE;
@@ -53,7 +58,7 @@ ep_init(cgrp_context_t *ctx, GObject *(*signaling_register)(gchar *))
         return FALSE;
     }
 
-    if ((ctx->sigconn = signaling_register("cgroups")) == NULL) {
+    if ((ctx->sigconn = signaling_register("cgroups", signals)) == NULL) {
         OHM_ERROR("cgrp: failed to register for policy decisions");
         return FALSE;
     }

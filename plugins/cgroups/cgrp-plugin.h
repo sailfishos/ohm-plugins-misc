@@ -486,7 +486,7 @@ int  classify_process(cgrp_context_t *, pid_t, int);
 
 
 /* cgrp-ep.c */
-int  ep_init(cgrp_context_t *, GObject *(*)(gchar *));
+int  ep_init(cgrp_context_t *, GObject *(*)(gchar *, gchar **));
 void ep_exit(cgrp_context_t *, gboolean (*)(GObject *));
 
 

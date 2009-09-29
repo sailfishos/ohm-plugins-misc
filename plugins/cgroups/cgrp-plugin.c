@@ -15,7 +15,7 @@ OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("sysmon"  , "system monitoring"     , &DBG_SYSMON));
 
 
-OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri));
+OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri, gchar **interested));
 OHM_IMPORTABLE(gboolean , signaling_unregister, (GObject *ep));
 OHM_IMPORTABLE(int      , resolve             , (char *goal, char **locals));
 

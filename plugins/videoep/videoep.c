@@ -42,7 +42,7 @@ OHM_DEBUG_PLUGIN(video,
     OHM_DEBUG_FLAG("info"  , "Info messages"       , &DBG_INFO  )
 );
 
-OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri));
+OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri, gchar **interested));
 OHM_IMPORTABLE(gboolean , unregister_ep, (GObject *ep));
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
@@ -79,12 +79,17 @@ static void plugin_init(OhmPlugin *plugin)
     const char    *port_str;
     char          *e;
     unsigned short port;
+    char *signals[] = {
+        "video_actions",
+        NULL
+    };
 
     OHM_DEBUG_INIT(video);
 
     OHM_INFO("Video EP: init ...");
 
     do {
+
         if (!(port_str = ohm_plugin_get_param(plugin, "notification-port")))
             port = VIDEOEP_NOTIFICATION_PORT;
         else {
@@ -102,7 +107,7 @@ static void plugin_init(OhmPlugin *plugin)
             break;
         }
 
-        if ((conn = register_ep("videoep")) == NULL) {
+        if ((conn = register_ep("videoep", signals)) == NULL) {
             OHM_ERROR("videoep: Failed to initialize VieoEP");
             break;
         }

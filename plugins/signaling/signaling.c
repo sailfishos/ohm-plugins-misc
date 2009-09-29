@@ -19,15 +19,23 @@ typedef void (*completion_cb_t)(char *id, char *argt, void **argv);
 
 /* public API (inside OHM) */
 
-OHM_EXPORTABLE(GObject *, register_internal_enforcement_point, (gchar *uri))
+OHM_EXPORTABLE(GObject *, register_internal_enforcement_point, (gchar *uri, gchar **interested))
 {
-    EnforcementPoint *ep = register_enforcement_point(uri, NULL, TRUE);
+    EnforcementPoint *ep = NULL;
+    GSList *capabilities = NULL;
+
+    while (*interested != NULL) {
+        capabilities = g_slist_prepend(capabilities, g_strdup(*interested));
+        interested++;
+    }
+
+    ep = register_enforcement_point(uri, NULL, TRUE, capabilities);
 
     /* ref so that the ep won't be deleted before caller has unreffed it */
     g_object_ref(ep);
     return (GObject *) ep;
 }
-    
+
 OHM_EXPORTABLE(gboolean, unregister_internal_enforcement_point, (GObject *ep))
 {
     EnforcementPoint *ep_in = (EnforcementPoint *) ep;
@@ -38,7 +46,7 @@ OHM_EXPORTABLE(gboolean, unregister_internal_enforcement_point, (GObject *ep))
     g_object_get(ep_in, "id", &uri, NULL);
     ret = unregister_enforcement_point(uri);
     g_free(uri);
-    
+
     return ret;
 }
 
@@ -89,7 +97,7 @@ static void complete(Transaction *t, gpointer data)
     cb("complete", "ii", argv);
 
     /* free memory */
-    
+
     for (i = nacked; i != NULL; i = g_slist_next(i)) {
         g_free(i->data);
     }
