@@ -1587,12 +1587,15 @@ static gboolean process_inq(gpointer data)
 }
 
 
-static gboolean register_fact(const gchar *uri, const gchar *name, gboolean internal)
+static gboolean register_fact(const gchar *uri, const gchar *name, gboolean internal, GSList *capabilities)
 {
+    GSList  *i;
+    GString *gstr;
     OhmFact *fact  = NULL;
     GValue  *guri  = NULL;
     GValue  *gkind = NULL;
     GValue  *gname = NULL;
+    GValue  *gcapa = NULL;
     
     if ((fact = ohm_fact_new(ENFORCEMENT_FACT_NAME)) == NULL) {
         g_error("Failed to create fact for enforcement point %s.", uri);
@@ -1608,14 +1611,23 @@ static gboolean register_fact(const gchar *uri, const gchar *name, gboolean inte
         gname = ohm_value_from_string(name);
     else
         gname = ohm_value_from_string("");
+
+    gstr = g_string_new("");
+    for (i = capabilities;  i != NULL;   i = g_slist_next(i)) {
+        g_string_append_printf(gstr, "%s%s", gstr->len ? ",":"",
+                               (gchar *)i->data);
+    }
+    gcapa = ohm_value_from_string(gstr->str);
+    g_string_free(gstr, TRUE);
     
-    if (guri == NULL || gkind == NULL || gname == NULL)
+    if (guri == NULL || gkind == NULL || gname == NULL || gcapa == NULL)
         goto fail;
 
     ohm_fact_set(fact, "id" , guri);
     ohm_fact_set(fact, "type", gkind);
     ohm_fact_set(fact, "name", gname);
-    guri = gkind = gname = NULL;
+    ohm_fact_set(fact, "interested", gcapa);
+    guri = gkind = gname = gcapa = NULL;
     
     if (ohm_fact_store_insert(store, fact))
         return TRUE;
@@ -1716,7 +1728,7 @@ EnforcementPoint * register_enforcement_point(const gchar *uri,
 
     enforcement_points = g_slist_prepend(enforcement_points, ep);
 
-    register_fact(uri, name, internal);
+    register_fact(uri, name, internal, capabilities);
 
     return ep;
 }
