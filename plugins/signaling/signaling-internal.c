@@ -404,7 +404,7 @@ gboolean internal_ep_is_interested(EnforcementPoint *self,
 
     g_object_get(t, "signal", &signal, NULL);
 
-    if (g_slist_find_custom(s->interested, signal, g_str_equal)) {
+    if (g_slist_find_custom(s->interested, signal, strcmp)) {
         retval = TRUE;
     }
 
@@ -425,7 +425,7 @@ gboolean external_ep_is_interested(EnforcementPoint *self,
 
     g_object_get(t, "signal", &signal, NULL);
 
-    if (g_slist_find_custom(s->interested, signal, strcmp /*g_str_equal*/)) {
+    if (g_slist_find_custom(s->interested, signal, strcmp)) {
         retval = TRUE;
     }
 
