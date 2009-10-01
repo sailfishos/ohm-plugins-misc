@@ -139,12 +139,13 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
              * should be just a fire-and-forget function in that case.
              * Well, let's answer somethig to make the caller happy. */
 
+            long success = 1;
             void *argv[2];
 
             OHM_DEBUG(DBG_SIGNALING,
                     "Suspicious: caller does a '0' transaction and specifies a callback");
 
-            argv[0] = &txid;
+            argv[0] = &transid;
             argv[1] = &success;
 
             cb("complete", "ii", argv);

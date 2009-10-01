@@ -697,8 +697,6 @@ error:
 
 static void delete_hal_context(hal_plugin *plugin)
 {
-    GSList *e = NULL;
-
     if (plugin->hal_ctx) {
 
         remove_all_watches(plugin);
