@@ -148,7 +148,7 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
             argv[0] = &transid;
             argv[1] = &success;
 
-            cb("complete", "ii", argv);
+            callback("complete", "ii", argv);
         }
     }
     else {
