@@ -77,7 +77,7 @@ Description: Debug symbols for policy signaling helper library.
 Package: libep-dev
 Architecture: any
 Section: libdevel
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends} libep (= ${binary:Version})
 XB-GIT-ID: ${Git-Id}
 Description: Policy signaling helper library header files.
  Header files for libep.
