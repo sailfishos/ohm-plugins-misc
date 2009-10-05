@@ -241,6 +241,7 @@ KW_EXPORT_PARTS   export-partition-facts
 KW_EXPORT_FACT    export-fact
 KW_CGROUP_OPTIONS cgroupfs-options
 KW_IOWAIT_NOTIFY  iowait-notify
+KW_IOQLEN_NOTIFY  ioqlen-notify
 
 HEADER_OPEN       \[
 HEADER_CLOSE      \]
@@ -292,6 +293,7 @@ SINT            [+|-]?[0-9]+
 {KW_EXPORT_FACT}    { TOKEN(KW_EXPORT_FACT);   }
 {KW_CGROUP_OPTIONS} { TOKEN(KW_CGROUP_OPTIONS);}
 {KW_IOWAIT_NOTIFY}  { TOKEN(KW_IOWAIT_NOTIFY); }
+{KW_IOQLEN_NOTIFY}  { TOKEN(KW_IOQLEN_NOTIFY); }
 
 {HEADER_OPEN}       { TOKEN(HEADER_OPEN);    }
 {HEADER_CLOSE}      { TOKEN(HEADER_CLOSE);   }

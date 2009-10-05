@@ -6,7 +6,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "config.h"
 #include "cgrp-plugin.h"
+
+#ifdef HAVE_OSSO_IOQ_NOTIFY
+#include <ioq-notify.h>
+#endif
 
 #define INITIAL_DELAY 120                     /* before we start sampling */
 
@@ -25,10 +30,13 @@ typedef struct {
 
 static int  iow_init(cgrp_context_t *ctx);
 static void iow_exit(cgrp_context_t *ctx);
+static int  ioq_init(cgrp_context_t *ctx);
+static void ioq_exit(cgrp_context_t *ctx);
 
 
 sysmon_t monitors[] = {
     { iow_init, iow_exit },
+    { ioq_init, ioq_exit },
     { NULL    , NULL     }
 };
 
@@ -78,7 +86,7 @@ sysmon_exit(cgrp_context_t *ctx)
 
 
 /*****************************************************************************
- *                       *** I/O-wait state monitoring ***                   *
+ *                  *** polling I/O-wait state monitoring ***                *
  *****************************************************************************/
 
 
@@ -213,8 +221,7 @@ gboolean
 iow_poll_start(gpointer ptr)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)ptr;
-    
-    
+        
     ctx->iow.timer = g_timeout_add(1000 * ctx->iow.interval, iow_timer, ctx);
     return FALSE;
 }
@@ -299,6 +306,80 @@ iow_exit(cgrp_context_t *ctx)
     sldwin_free(ctx->iow.win);
     ctx->iow.win = NULL;
 }
+
+
+/*****************************************************************************
+ *                     *** OSSO ioq length monitoring ***                    *
+ *****************************************************************************/
+
+
+#ifdef HAVE_OSSO_IOQ_NOTIFY
+/********************
+ * ioq_notify
+ ********************/
+static void
+ioq_notify(const osso_ioq_activity_t level, void *data)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)data;
+    char           *vars[2 + 1];
+    char           *state;
+
+    state = (level == ioq_activity_high) ? "high" : "low";
+
+    vars[0] = "iowait";
+    vars[1] = state;
+    vars[2] = NULL;
+    
+    OHM_DEBUG(DBG_SYSMON, "I/O queue length %s notification", state);
+
+    ctx->resolve(ctx->ioq.hook, vars);
+}
+
+/********************
+ * ioq_init
+ ********************/
+static int
+ioq_init(cgrp_context_t *ctx)
+{
+    if (ctx->ioq.low != 0 || ctx->ioq.high != 0)
+        OHM_WARNING("cgrp: I/O queue length thresholds currently ignored!");
+    
+    if (ctx->ioq.hook != NULL)
+        return osso_ioq_notify_init(ioq_notify, ctx, 5 * 1000);
+    else
+        return 0;
+}
+
+/********************
+ * ioq_exit
+ ********************/
+static void
+ioq_exit(cgrp_context_t *ctx)
+{
+    if (ctx->ioq.hook != NULL)
+        osso_ioq_notify_deinit();
+}
+
+#else /* !HAVE_OSSO_IOQ_NOTIFY */
+
+static int
+ioq_init(cgrp_context_t *ctx)
+{
+    (void)ctx;
+    
+    if (ctx->ioq.hook != NULL)
+        OHM_WARNING("cgrp: no support for I/O queue length monitoring!");
+    
+    return 0;
+}
+
+
+static void
+ioq_exit(cgrp_context_t *ctx)
+{
+    (void)ctx;
+}
+#endif
 
 
 /*****************************************************************************

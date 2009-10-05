@@ -30,6 +30,10 @@ libohm_cgroups_la_LIBADD = @OHM_PLUGIN_LIBS@
 libohm_cgroups_la_LDFLAGS = -module -avoid-version
 libohm_cgroups_la_CFLAGS = @OHM_PLUGIN_CFLAGS@
 
+if HAVE_OSSO_IOQ_NOTIFY
+libohm_cgroups_la_CFLAGS  += @LIBOSSO_CFLAGS@
+libohm_cgroups_la_LDFLAGS += @LIBOSSO_LIBS@
+endif
 
 cgrp-lexer.c: cgrp-lexer.l
 	$(LEXCOMPILE) $<

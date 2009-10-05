@@ -355,6 +355,14 @@ typedef struct {
 
 
 typedef struct {
+    unsigned int     low;                   /* low threshold */
+    unsigned int     high;                  /* hight threshold */
+    unsigned int     interval;              /* minimum notification interval */
+    char            *hook;                  /* notification hook */
+} cgrp_ioqlen_t;
+
+
+typedef struct {
     char             *desired_mount;        /* desired mount point */
     char             *actual_mount;         /* actual mount point */
     unsigned int      cgroup_options;       /* cgroup mount options */
@@ -389,6 +397,7 @@ typedef struct {
     /* I/O wait monitoring */
     int               proc_stat;            /* /proc/stat fd */
     cgrp_iowait_t     iow;                  /* I/O-wait state monitoring */
+    cgrp_iowait_t     ioq;                  /* I/O queue length monitoring */
 } cgrp_context_t;
 
 
