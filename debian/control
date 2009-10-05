@@ -1,14 +1,14 @@
 Source: ohm-plugins-misc
 Section: utils
 Priority: optional
-Maintainer: Krisztian Litkey <krisztian.litkey@nokia.com>
+Maintainer: Martin Wolf <ext-martin.2.wolf@nokia.com>
 Standards-Version: 3.7.2
-Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 0.1.2-0maemo22), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 0.0.7), libtrace-dev, libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libsp-timestamp-dev, flex, libosso-dev
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libsp-timestamp-dev, flex, libosso-dev
 
 Package: ohm-plugins-misc
 Architecture: any
-Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0, osso-mission-control, libdres0 (>= 0.0.7), libprofile0 (>= 0.0.10), policy-settings
-Conflicts: policy-settings-rx51 (<< 0.4.6), policy-settings-rx51-text (<< 0.4.6)
+Depends: ${shlibs:Depends}, ohm (>= 1:1.0), libohm-plugin-core0 (>= 1:1.0), osso-mission-control, libdres0 (>= 1:1.0), libprofile0 (>= 0.0.10), policy-settings
+Conflicts: policy-settings-rx51, policy-settings-rx51-text (<< 0.4.6), policy-settings (<< 1:1.0)
 XB-GIT-ID: ${Git-Id}
 Description: Nokia policy OHM plugins.
  Nokia policy plugins for OHM.
@@ -26,7 +26,7 @@ Description: Debug symbols for OHM miscallaneous plugins.
 
 Package: ohm-plugin-console
 Architecture: any
-Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0
+Depends: ${shlibs:Depends}, ohm (>= 1:1.0), libohm-plugin-core0 (>= 1:1.0)
 XB-GIT-ID: ${Git-Id}
 Description: OHM debug console plugin.
  This package contains a very simple interactive debug console for OHM.
