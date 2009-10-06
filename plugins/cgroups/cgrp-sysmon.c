@@ -475,6 +475,52 @@ sldwin_update(sldwin_t *win, unsigned long item)
 }
 
 
+
+/*****************************************************************************
+ *                            *** EWMA routines ***                          *
+ *****************************************************************************/
+
+/********************
+ * ewma_alloc
+ ********************/
+static ewma_t *
+ewma_alloc(int nsample)
+{
+    ewma_t *ewma;
+    
+    if (nsample <= 0) {
+        OHM_ERROR("cgrp: invalid number of samples for EWMA");
+        return NULL;
+    }
+    
+    if (ALLOC_OBJ(ewma) != NULL)
+        ewma->alpha = 2.0 / (1.0 * nsample + 1);
+    
+    return ewma;
+}
+
+
+/********************
+ * ewma_free
+ ********************/
+static void
+ewma_free(ewma_t *ewma)
+{
+    FREE(ewma);
+}
+
+
+/********************
+ * ewma_update
+ ********************/
+static unsigned long
+ewma_update(ewma_t *ewma, unsigned long item)
+{
+    ewma->S = ewma->alpha * item + (1.0 - ewma->alpha) * ewma->S;
+    return (unsigned long)(ewma->S + 0.5);
+}
+
+
 /* 
  * Local Variables:
  * c-basic-offset: 4

@@ -340,6 +340,12 @@ typedef struct {
 
 
 typedef struct {
+    double alpha;                           /* smoothing factor, 2 / (N + 1) */
+    double S;                               /* current moving average */
+} ewma_t;
+
+
+typedef struct {
     unsigned int     low;                   /* low threshold */
     unsigned int     high;                  /* high threshold */
     unsigned int     interval;              /* polling interval */
