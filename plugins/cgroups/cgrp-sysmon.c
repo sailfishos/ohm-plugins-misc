@@ -9,7 +9,7 @@
 #include "config.h"
 #include "cgrp-plugin.h"
 
-#ifdef HAVE_OSSO_IOQ_NOTIFY
+#ifdef HAVE_OSSO_SWAP_PRESSURE
 #include <ioq-notify.h>
 #endif
 
@@ -30,13 +30,13 @@ typedef struct {
 
 static int  iow_init(cgrp_context_t *ctx);
 static void iow_exit(cgrp_context_t *ctx);
-static int  ioq_init(cgrp_context_t *ctx);
-static void ioq_exit(cgrp_context_t *ctx);
+static int  swp_init(cgrp_context_t *ctx);
+static void swp_exit(cgrp_context_t *ctx);
 
 
 sysmon_t monitors[] = {
     { iow_init, iow_exit },
-    { ioq_init, ioq_exit },
+    { swp_init, swp_exit },
     { NULL    , NULL     }
 };
 
@@ -309,16 +309,16 @@ iow_exit(cgrp_context_t *ctx)
 
 
 /*****************************************************************************
- *                     *** OSSO ioq length monitoring ***                    *
+ *                     *** OSSO swap pressure monitoring ***                 *
  *****************************************************************************/
 
 
-#ifdef HAVE_OSSO_IOQ_NOTIFY
+#ifdef HAVE_OSSO_SWAP_PRESSURE
 /********************
- * ioq_notify
+ * swp_notify
  ********************/
 static void
-ioq_notify(const osso_ioq_activity_t level, void *data)
+swp_notify(const osso_ioq_activity_t level, void *data)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)data;
     char           *vars[2 + 1];
@@ -330,52 +330,52 @@ ioq_notify(const osso_ioq_activity_t level, void *data)
     vars[1] = state;
     vars[2] = NULL;
     
-    OHM_DEBUG(DBG_SYSMON, "I/O queue length %s notification", state);
+    OHM_DEBUG(DBG_SYSMON, "swap pressure %s notification", state);
 
-    ctx->resolve(ctx->ioq.hook, vars);
+    ctx->resolve(ctx->swp.hook, vars);
 }
 
 /********************
- * ioq_init
+ * swp_init
  ********************/
 static int
-ioq_init(cgrp_context_t *ctx)
+swp_init(cgrp_context_t *ctx)
 {
-    if (ctx->ioq.low != 0 || ctx->ioq.high != 0)
-        OHM_WARNING("cgrp: I/O queue length thresholds currently ignored!");
+    if (ctx->swp.low != 0 || ctx->swp.high != 0)
+        OHM_WARNING("cgrp: swap pressure thresholds currently ignored!");
     
-    if (ctx->ioq.hook != NULL)
-        return osso_ioq_notify_init(ioq_notify, ctx, 5 * 1000);
+    if (ctx->swp.hook != NULL)
+        return osso_ioq_notify_init(swp_notify, ctx, 5 * 1000);
     else
         return 0;
 }
 
 /********************
- * ioq_exit
+ * swp_exit
  ********************/
 static void
-ioq_exit(cgrp_context_t *ctx)
+swp_exit(cgrp_context_t *ctx)
 {
-    if (ctx->ioq.hook != NULL)
+    if (ctx->swp.hook != NULL)
         osso_ioq_notify_deinit();
 }
 
-#else /* !HAVE_OSSO_IOQ_NOTIFY */
+#else /* !HAVE_OSSO_SWAP_PRESSURE */
 
 static int
-ioq_init(cgrp_context_t *ctx)
+swp_init(cgrp_context_t *ctx)
 {
     (void)ctx;
     
-    if (ctx->ioq.hook != NULL)
-        OHM_WARNING("cgrp: no support for I/O queue length monitoring!");
+    if (ctx->swp.hook != NULL)
+        OHM_WARNING("cgrp: no support for swap pressure monitoring!");
     
     return 0;
 }
 
 
 static void
-ioq_exit(cgrp_context_t *ctx)
+swp_exit(cgrp_context_t *ctx)
 {
     (void)ctx;
 }

@@ -31,8 +31,8 @@
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
 
-/* Have OSSO I/O queue length notification? */
-#undef HAVE_OSSO_IOQ_NOTIFY
+/* Have OSSO swap pressure notification? */
+#undef HAVE_OSSO_SWAP_PRESSURE
 
 /* Define to 1 if your system has a GNU libc compatible `realloc' function,
    and to 0 otherwise. */

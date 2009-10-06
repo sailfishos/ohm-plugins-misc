@@ -359,7 +359,7 @@ typedef struct {
     unsigned int     high;                  /* hight threshold */
     unsigned int     interval;              /* minimum notification interval */
     char            *hook;                  /* notification hook */
-} cgrp_ioqlen_t;
+} cgrp_swap_t;
 
 
 typedef struct {
@@ -397,7 +397,7 @@ typedef struct {
     /* I/O wait monitoring */
     int               proc_stat;            /* /proc/stat fd */
     cgrp_iowait_t     iow;                  /* I/O-wait state monitoring */
-    cgrp_iowait_t     ioq;                  /* I/O queue length monitoring */
+    cgrp_swap_t       swp;                  /* swap pressure monitoring */
 } cgrp_context_t;
 
 
