@@ -374,6 +374,7 @@ optional_renice: /* empty */     { $$ = 0;  }
     ;
 
 procdef_name: TOKEN_PATH          { $$ = $1; }
+    |         TOKEN_STRING        { $$ = $1; }
     |         TOKEN_ASTERISK      { $$.value = "*"; }
     ;
 
