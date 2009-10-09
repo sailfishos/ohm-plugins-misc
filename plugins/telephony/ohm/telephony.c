@@ -609,6 +609,14 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
             return DBUS_HANDLER_RESULT_HANDLED;                         \
         }                                                               \
     } while (0)
+
+#define CHECK_TYPES(t, t1, t2) do {                                     \
+        if ((t) != (t1) && (t) != (t2)) {                               \
+            OHM_ERROR("Type error in DBUS signal %s ('%c'!='%c','%c').", \
+                      NEW_CHANNELS, (t), (t1), (t2));                   \
+            return DBUS_HANDLER_RESULT_HANDLED;                         \
+        }                                                               \
+    } while (0)
     
 #define VARIANT_STRING(dict, ptr) do {                                  \
         int _t;                                                         \
@@ -625,7 +633,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
         DBusMessageIter _entry;                                         \
                                                                         \
         SUB_ITER((dict), &_entry);                                      \
-        CHECK_TYPE((_t = ITER_TYPE(&_entry)), DBUS_TYPE_UINT32);        \
+        CHECK_TYPES((_t = ITER_TYPE(&_entry)),                          \
+                    DBUS_TYPE_UINT32, DBUS_TYPE_INT32);                 \
         dbus_message_iter_get_basic(&_entry, &(var));                   \
     } while (0)
 
