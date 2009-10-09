@@ -180,8 +180,7 @@ iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
     }
     ;
 
-<<<<<<< HEAD:plugins/cgroups/cgrp-config.y
-swap_pressure: TOKEN_KW_SWAP_PRESSURE swap_pressure_options
+swap_pressure: KEYWORD_SWAP_PRESSURE swap_pressure_options
     ;
 
 swap_pressure_options: swap_pressure_option
