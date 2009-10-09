@@ -6,7 +6,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "config.h"
 #include "cgrp-plugin.h"
+
+#ifdef HAVE_OSSO_SWAP_PRESSURE
+#include <ioq-notify.h>
+#endif
 
 #define INITIAL_DELAY 120                     /* before we start sampling */
 
@@ -25,10 +30,13 @@ typedef struct {
 
 static int  iow_init(cgrp_context_t *ctx);
 static void iow_exit(cgrp_context_t *ctx);
+static int  swp_init(cgrp_context_t *ctx);
+static void swp_exit(cgrp_context_t *ctx);
 
 
 sysmon_t monitors[] = {
     { iow_init, iow_exit },
+    { swp_init, swp_exit },
     { NULL    , NULL     }
 };
 
@@ -78,7 +86,7 @@ sysmon_exit(cgrp_context_t *ctx)
 
 
 /*****************************************************************************
- *                       *** I/O-wait state monitoring ***                   *
+ *                  *** polling I/O-wait state monitoring ***                *
  *****************************************************************************/
 
 
@@ -213,8 +221,7 @@ gboolean
 iow_poll_start(gpointer ptr)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)ptr;
-    
-    
+        
     ctx->iow.timer = g_timeout_add(1000 * ctx->iow.interval, iow_timer, ctx);
     return FALSE;
 }
@@ -299,6 +306,80 @@ iow_exit(cgrp_context_t *ctx)
     sldwin_free(ctx->iow.win);
     ctx->iow.win = NULL;
 }
+
+
+/*****************************************************************************
+ *                     *** OSSO swap pressure monitoring ***                 *
+ *****************************************************************************/
+
+
+#ifdef HAVE_OSSO_SWAP_PRESSURE
+/********************
+ * swp_notify
+ ********************/
+static void
+swp_notify(const osso_ioq_activity_t level, void *data)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)data;
+    char           *vars[2 + 1];
+    char           *state;
+
+    state = (level == ioq_activity_high) ? "high" : "low";
+
+    vars[0] = "iowait";
+    vars[1] = state;
+    vars[2] = NULL;
+    
+    OHM_DEBUG(DBG_SYSMON, "swap pressure %s notification", state);
+
+    ctx->resolve(ctx->swp.hook, vars);
+}
+
+/********************
+ * swp_init
+ ********************/
+static int
+swp_init(cgrp_context_t *ctx)
+{
+    if (ctx->swp.low != 0 || ctx->swp.high != 0)
+        OHM_WARNING("cgrp: swap pressure thresholds currently ignored!");
+    
+    if (ctx->swp.hook != NULL)
+        return osso_ioq_notify_init(swp_notify, ctx, 5 * 1000);
+    else
+        return 0;
+}
+
+/********************
+ * swp_exit
+ ********************/
+static void
+swp_exit(cgrp_context_t *ctx)
+{
+    if (ctx->swp.hook != NULL)
+        osso_ioq_notify_deinit();
+}
+
+#else /* !HAVE_OSSO_SWAP_PRESSURE */
+
+static int
+swp_init(cgrp_context_t *ctx)
+{
+    (void)ctx;
+    
+    if (ctx->swp.hook != NULL)
+        OHM_WARNING("cgrp: no support for swap pressure monitoring!");
+    
+    return 0;
+}
+
+
+static void
+swp_exit(cgrp_context_t *ctx)
+{
+    (void)ctx;
+}
+#endif
 
 
 /*****************************************************************************
@@ -391,6 +472,52 @@ sldwin_update(sldwin_t *win, unsigned long item)
 #endif
     
     return (unsigned long)(avg + 0.5);
+}
+
+
+
+/*****************************************************************************
+ *                            *** EWMA routines ***                          *
+ *****************************************************************************/
+
+/********************
+ * ewma_alloc
+ ********************/
+static ewma_t *
+ewma_alloc(int nsample)
+{
+    ewma_t *ewma;
+    
+    if (nsample <= 0) {
+        OHM_ERROR("cgrp: invalid number of samples for EWMA");
+        return NULL;
+    }
+    
+    if (ALLOC_OBJ(ewma) != NULL)
+        ewma->alpha = 2.0 / (1.0 * nsample + 1);
+    
+    return ewma;
+}
+
+
+/********************
+ * ewma_free
+ ********************/
+static void
+ewma_free(ewma_t *ewma)
+{
+    FREE(ewma);
+}
+
+
+/********************
+ * ewma_update
+ ********************/
+static unsigned long
+ewma_update(ewma_t *ewma, unsigned long item)
+{
+    ewma->S = ewma->alpha * item + (1.0 - ewma->alpha) * ewma->S;
+    return (unsigned long)(ewma->S + 0.5);
 }
 
 

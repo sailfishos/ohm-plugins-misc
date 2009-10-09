@@ -84,6 +84,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %token TOKEN_KW_EXPORT_FACT
 %token TOKEN_KW_CGROUP_OPTIONS
 %token TOKEN_KW_IOWAIT_NOTIFY
+%token TOKEN_KW_SWAP_PRESSURE
 
 %token TOKEN_ASTERISK "*"
 %token TOKEN_HEADER_OPEN "["
@@ -127,6 +128,7 @@ global_option: TOKEN_KW_EXPORT_GROUPS {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
     }
     | iowait_notify
+    | swap_pressure
     | cgroup_options
     ;
 
@@ -160,6 +162,39 @@ iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
               ctx->iow.hook = STRDUP($2.value);
           else {
               OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
+	      YYABORT;
+          }
+    }
+    ;
+
+swap_pressure: TOKEN_KW_SWAP_PRESSURE swap_pressure_options
+    ;
+
+swap_pressure_options: swap_pressure_option
+    | swap_pressure_options swap_pressure_option
+    ;
+
+swap_pressure_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
+          if (strcmp($1.value, "threshold")) {
+              OHM_ERROR("cgrp: invalid swap-pressure parameter %s", $1.value);
+	      YYABORT;
+          }
+          ctx->swp.low  = $2.value;
+          ctx->swp.high = $3.value;
+    }
+    | TOKEN_IDENT TOKEN_UINT {
+          if (!strcmp($1.value, "min-delay"))
+              ctx->swp.interval = $2.value;
+          else {
+              OHM_ERROR("cgrp: invalid swap-pressure parameter %s", $1.value);
+	      YYABORT;
+          }
+    }
+    | TOKEN_IDENT string {
+          if (!strcmp($1.value, "hook"))
+              ctx->swp.hook = STRDUP($2.value);
+          else {
+              OHM_ERROR("cgrp: invalid swap-pressure parameter %s", $1.value);
 	      YYABORT;
           }
     }
@@ -339,6 +374,7 @@ optional_renice: /* empty */     { $$ = 0;  }
     ;
 
 procdef_name: TOKEN_PATH          { $$ = $1; }
+    |         TOKEN_STRING        { $$ = $1; }
     |         TOKEN_ASTERISK      { $$.value = "*"; }
     ;
 

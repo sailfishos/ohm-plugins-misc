@@ -114,7 +114,6 @@ static void complete(Transaction *t, gpointer data)
 /* simple wrapper: hide the GObject interface */
 OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char **factv, completion_cb_t callback, unsigned long timeout))
 {
-
     Transaction *t = NULL;
     GSList *facts = NULL;
     int i;
@@ -129,8 +128,28 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
         facts = g_slist_prepend(facts, g_strdup(factv[i]));
     }
 
-    if (callback == NULL) {
+    if (transid == 0) {
+        /* no real transaction is needed */
         queue_decision(signal, facts, 0, FALSE, 0);
+
+        if (callback) {
+
+            /* Why on earth did the caller do a "0" transaction and also
+             * specify a callback? The semantics say that signal_changed
+             * should be just a fire-and-forget function in that case.
+             * Well, let's answer somethig to make the caller happy. */
+
+            long success = 1;
+            void *argv[2];
+
+            OHM_DEBUG(DBG_SIGNALING,
+                    "Suspicious: caller does a '0' transaction and specifies a callback");
+
+            argv[0] = &transid;
+            argv[1] = &success;
+
+            callback("complete", "ii", argv);
+        }
     }
     else {
         t = queue_decision(signal, facts, transid, TRUE, timeout);
@@ -143,6 +162,8 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
     return 1;
 
 error:
+
+    OHM_DEBUG(DBG_SIGNALING, "Error sending signal");
 
     /* free stuff, unref factstore */
     return 0;

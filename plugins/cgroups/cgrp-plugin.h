@@ -340,6 +340,12 @@ typedef struct {
 
 
 typedef struct {
+    double alpha;                           /* smoothing factor, 2 / (N + 1) */
+    double S;                               /* current moving average */
+} ewma_t;
+
+
+typedef struct {
     unsigned int     low;                   /* low threshold */
     unsigned int     high;                  /* high threshold */
     unsigned int     interval;              /* polling interval */
@@ -352,6 +358,14 @@ typedef struct {
     guint            timer;                 /* sampling timer */
     int              alert;                 /* TRUE if above high threshold */
 } cgrp_iowait_t;
+
+
+typedef struct {
+    unsigned int     low;                   /* low threshold */
+    unsigned int     high;                  /* hight threshold */
+    unsigned int     interval;              /* minimum notification interval */
+    char            *hook;                  /* notification hook */
+} cgrp_swap_t;
 
 
 typedef struct {
@@ -389,6 +403,7 @@ typedef struct {
     /* I/O wait monitoring */
     int               proc_stat;            /* /proc/stat fd */
     cgrp_iowait_t     iow;                  /* I/O-wait state monitoring */
+    cgrp_swap_t       swp;                  /* swap pressure monitoring */
 } cgrp_context_t;
 
 

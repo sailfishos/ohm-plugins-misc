@@ -44,24 +44,11 @@ static gboolean g_watched_equal (gconstpointer watch_data, gconstpointer str_dat
     const gchar *udi = str_data;
 
     if (strcmp(data->udi, udi) == 0) {
-        return TRUE;
+        return 0; /* equal */
     }
 
-    return FALSE;
+    return 1; /* not equal */
 }
-
-#if 0
-static gboolean is_watched(hal_plugin *plugin, const gchar *udi)
-{
-    GSList *f = NULL;
-
-    GSList *orig = g_slist_find_custom(plugin->watched, udi, g_watched_equal);
-    if (orig) {
-        return TRUE;
-    }
-    return FALSE;
-}
-#endif
 
 static void remove_all_watches(hal_plugin *plugin)
 {
@@ -359,7 +346,7 @@ static void hal_capability_added_cb (LibHalContext *ctx,
     return;
 }
 
-static void hal_capability_lost_cb (LibHalContext *ctx, 
+static void hal_capability_lost_cb (LibHalContext *ctx,
         const char *udi, const char *capability)
 {
     hal_plugin *plugin = (hal_plugin *) libhal_ctx_get_user_data(ctx);
@@ -367,7 +354,7 @@ static void hal_capability_lost_cb (LibHalContext *ctx,
 
     OHM_DEBUG(DBG_FACTS, "> hal_capability_lost_cb: udi '%s', capability: '%s'\n",
             udi, capability);
-    
+
 #if 0
     if (process_udi(plugin, FALSE, TRUE, udi))
         libhal_device_remove_property_watch(ctx, udi, NULL);
@@ -381,7 +368,7 @@ static void hal_capability_lost_cb (LibHalContext *ctx,
              * capability */
 
             if (strcmp(dec->capability, capability) == 0) {
-                GSList *orig = g_slist_find_custom(dec->devices, udi, g_str_equal);
+                GSList *orig = g_slist_find_custom(dec->devices, udi, strcmp);
                 if (orig) {
                     dec->devices = g_slist_remove_link(dec->devices, orig);
                     g_free(orig->data);
@@ -468,11 +455,11 @@ static void hal_device_removed_cb (LibHalContext *ctx, const char *udi)
     GSList *e;
 
     OHM_DEBUG(DBG_FACTS, "> hal_device_removed_cb: udi '%s'\n", udi);
-    
+
     for (e = plugin->decorators; e != NULL; e = g_slist_next(e)) {
         decorator *dec = e->data;
         if (has_udi(dec, udi)) {
-            orig = g_slist_find_custom(dec->devices, udi, g_str_equal);
+            orig = g_slist_find_custom(dec->devices, udi, strcmp);
             if (orig) {
                 dec->devices = g_slist_remove_link(dec->devices, orig);
                 g_free(orig->data);
@@ -570,7 +557,7 @@ static gboolean fill_decorator(hal_plugin *plugin, decorator *dec)
 
     for (i = 0; i < n_devices; i++) {
 
-        GSList *orig = g_slist_find_custom(dec->devices, devices[i], g_str_equal);
+        GSList *orig = g_slist_find_custom(dec->devices, devices[i], strcmp);
         if (!orig) {
             gchar *udi = g_strdup(devices[i]);
             dec->devices = g_slist_prepend(dec->devices, udi);
@@ -710,8 +697,6 @@ error:
 
 static void delete_hal_context(hal_plugin *plugin)
 {
-    GSList *e = NULL;
-
     if (plugin->hal_ctx) {
 
         remove_all_watches(plugin);

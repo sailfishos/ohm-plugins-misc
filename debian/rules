@@ -11,7 +11,10 @@ DEB_DH_GENCONTROL_ARGS += -u-VGit-Id=$(GIT_VERSION)
 
 # for dbg package
 CFLAGS += -g -O2
-DEB_DH_STRIP_ARGS += --dbg-package=ohm-plugins-misc
+DEB_DH_STRIP_ARGS += --dbg-package=ohm-plugins-misc \
+                     --dbg-package=ohm-plugin-console \
+                     --dbg-package=ohm-plugin-timestamp \
+                     --dbg-package=libep
 
 DEB_TAR_SRCDIR = ${DEB_SOURCE_PACKAGE}-${DEB_UPSTREAM_VERSION}
 DEB_DH_INSTALL_SOURCEDIR = debian/tmp
@@ -46,4 +49,16 @@ DEB_INSTALL_DOCS_ohm-plugin-console := --no-act
 DEB_INSTALL_CHANGELOGS_ohm-plugin-console := --no-act
 DEB_INSTALL_DOCS_ohm-plugin-timestamp := --no-act
 DEB_INSTALL_CHANGELOGS_ohm-plugin-timestamp := --no-act
+DEB_INSTALL_DOCS_libep := --no-act
+DEB_INSTALL_CHANGELOGS_libep := --no-act
+DEB_INSTALL_DOCS_ohm-plugins-misc-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugins-misc-dbg := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-console-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-console-dbg := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-timestamp-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-timestamp-dbg := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-timestamp-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-timestamp-dbg := --no-act
+DEB_INSTALL_DOCS_libep-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_libep-dbg := --no-act
 
