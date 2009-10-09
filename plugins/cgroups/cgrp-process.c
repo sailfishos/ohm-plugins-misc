@@ -54,8 +54,14 @@ proc_init(cgrp_context_t *ctx)
     
     mypid = getpid();
     
+
+    /*
+     * Notes: we always claim success to be able to run the same
+     *        configuration on cgroupless kernels
+     */
+
     if (!netlink_create() || !proc_subscribe(ctx))
-        return FALSE;
+        return TRUE;
     
     return TRUE;
 }

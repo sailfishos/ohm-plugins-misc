@@ -329,8 +329,14 @@ typedef struct {
 } cgrp_options_t;
 
 
+typedef enum {
+    ESTIM_TYPE_UNKNOWN = 0,
+    ESTIM_TYPE_WINDOW,                      /* sliding window estimator */
+    ESTIM_TYPE_EWMA,                        /* EWMA estimator */
+} estim_type_t;
 
 typedef struct {
+    estim_type_t  type;                     /* ESTIM_TYPE_WINDOW */
     unsigned long total;                    /* total */
     int           size;                     /* window size */
     int           ready;                    /* has enough items ? */
@@ -338,12 +344,17 @@ typedef struct {
     unsigned long items[0];                 /* actual items */
 } sldwin_t;
 
-
 typedef struct {
-    double alpha;                           /* smoothing factor, 2 / (N + 1) */
-    double S;                               /* current moving average */
+    estim_type_t type;                      /* ESTIM_TYPE_EWMA */
+    double       alpha;                     /* smoothing factor, 2 / (N + 1) */
+    double       S;                         /* current moving average */
 } ewma_t;
 
+typedef union {
+    estim_type_t type;                      /* estimator type */
+    sldwin_t     win;
+    ewma_t       ewma;
+} estim_t;
 
 typedef struct {
     unsigned int     low;                   /* low threshold */

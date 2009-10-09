@@ -21,6 +21,10 @@ static sldwin_t      *sldwin_alloc (int);
 static void           sldwin_free  (sldwin_t *);
 static unsigned long  sldwin_update(sldwin_t *, unsigned long);
 
+static estim_t       *estim_alloc(estim_type_t, int);
+static void           estim_free(estim_t *);
+static unsigned long  estim_update(estim_t *, unsigned long);
+
 
 typedef struct {
     int  (*init)(cgrp_context_t *);
@@ -399,7 +403,7 @@ sldwin_alloc(int size)
     win   = (sldwin_t *)ALLOC_ARR(char, bytes);
 
     if (win != NULL) {
-        memset(win, 0, bytes);
+        win->type  = ESTIM_TYPE_WINDOW;
         win->size  = size;
     }
 
@@ -493,8 +497,10 @@ ewma_alloc(int nsample)
         return NULL;
     }
     
-    if (ALLOC_OBJ(ewma) != NULL)
+    if (ALLOC_OBJ(ewma) != NULL) {
+        ewma->type = ESTIM_TYPE_EWMA;
         ewma->alpha = 2.0 / (1.0 * nsample + 1);
+    }
     
     return ewma;
 }
@@ -518,6 +524,56 @@ ewma_update(ewma_t *ewma, unsigned long item)
 {
     ewma->S = ewma->alpha * item + (1.0 - ewma->alpha) * ewma->S;
     return (unsigned long)(ewma->S + 0.5);
+}
+
+
+/********************
+ * estim_alloc
+ ********************/
+static estim_t *
+estim_alloc(estim_type_t type, int size)
+{
+    estim_t *estim;
+
+    switch (type) {
+    case ESTIM_TYPE_WINDOW: estim = (estim_t *)sldwin_alloc(size); break;
+    case ESTIM_TYPE_EWMA:   estim = (estim_t *)ewma_alloc(size);   break;
+    default:                estim = NULL;
+    }
+
+    return estim;
+}
+
+
+/********************
+ * estim_free
+ ********************/
+static void
+estim_free(estim_t *estim)
+{
+    switch (estim->type) {
+    case ESTIM_TYPE_WINDOW: sldwin_free(&estim->win); break;
+    case ESTIM_TYPE_EWMA:   ewma_free(&estim->ewma);  break;
+    default:                                          break;
+    }
+}
+
+
+/********************
+ * estim_update
+ ********************/
+static unsigned long
+estim_update(estim_t *estim, unsigned long sample)
+{
+    unsigned long avg;
+
+    switch (estim->type) {
+    case ESTIM_TYPE_WINDOW: avg = sldwin_update(&estim->win, sample); break;
+    case ESTIM_TYPE_EWMA:   avg = ewma_update(&estim->ewma , sample); break;
+    default:                avg = 0;
+    }
+
+    return avg;
 }
 
 
