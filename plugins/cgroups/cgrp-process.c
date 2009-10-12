@@ -373,7 +373,7 @@ netlink_create(void)
     addr.nl_pid    = mypid;
     
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        OHM_ERROR("cgrp: failed to bind connector netlinl socket");
+        OHM_ERROR("cgrp: failed to bind connector netlink socket");
         goto fail;
     }
 
