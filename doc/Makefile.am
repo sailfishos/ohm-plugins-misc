@@ -20,7 +20,7 @@ all-local:
 	            $(PD_FIG2DEV) -L png $$fig $$png ; \
 	        done ; \
 	        popd ;\
-	        TOPDIR=$(abs_top_srcdir) MODULEDIR=$$f $(PD_DOXYGEN) Doxyfile;\
+	        TOPDIR=@abs_top_srcdir@ MODULEDIR=$$f $(PD_DOXYGEN) Doxyfile;\
 	        doxydir=$$f/doxygen ; \
 	        doxmldir=$$doxydir/xml ; \
 	        mkdir -p $$doxmldir ; \
