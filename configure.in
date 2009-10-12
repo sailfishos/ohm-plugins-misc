@@ -206,14 +206,18 @@ else
 fi
 
 if test "x${HAVE_LIBOSSO}" = x1 -a -f /usr/include/ioq-notify.h; then
+   swappressure=yes
    AC_DEFINE([HAVE_OSSO_SWAP_PRESSURE], 1, [Have OSSO swap pressure notification?])
    AC_MSG_NOTICE([OSSO swap pressure notification support ENABLED.])
+   AC_SUBST(LIBOSSO_CFLAGS)
+   AC_SUBST(LIBOSSO_LIBS)
 else
+   swappressure=no
    AC_MSG_NOTICE([OSSO swap pressure notification support DISABLED.])
 fi
 
 AC_SUBST(HAVE_OSSO_SWAP_PRESSURE)
-AM_CONDITIONAL([HAVE_OSSO_SWAP_PRESSURE], [test "x$HAVE_OSSO_SWAP_PRESSURE" = x1])
+AM_CONDITIONAL([HAVE_OSSO_SWAP_PRESSURE], [test "x$swappressure" = xyes])
 
 AC_CONFIG_FILES([Makefile
                  plugins/Makefile

@@ -32,7 +32,7 @@ libohm_cgroups_la_CFLAGS = @OHM_PLUGIN_CFLAGS@
 
 if HAVE_OSSO_SWAP_PRESSURE
 libohm_cgroups_la_CFLAGS  += @LIBOSSO_CFLAGS@
-libohm_cgroups_la_LDFLAGS += @LIBOSSO_LIBS@
+libohm_cgroups_la_LIBADD  += @LIBOSSO_LIBS@
 endif
 
 cgrp-lexer.c: cgrp-lexer.l
