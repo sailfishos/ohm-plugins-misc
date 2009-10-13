@@ -2,6 +2,8 @@
 
 static int DBG_HEADSET, DBG_BT, DBG_INFO;
 
+static gboolean plugin_is_real;
+
 OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("headset", "Wired headset events" , &DBG_HEADSET),
     OHM_DEBUG_FLAG("info", "Info signal events" , &DBG_INFO),
@@ -54,15 +56,37 @@ gboolean local_unset_observer(void *userdata)
     return unset_observer(userdata);
 }
 
+static gboolean bluetooth_init_later(gpointer data)
+{
+
+    OhmPlugin *plugin = data;
+
+    if (plugin_is_real)
+        bluetooth_init(plugin, DBG_BT);
+    return FALSE;
+}
+
+static gboolean headset_init_later(gpointer data)
+{
+    OhmPlugin *plugin = data;
+
+    if (plugin_is_real)
+        headset_init(plugin, DBG_HEADSET);
+    return FALSE;
+}
+
 static void plugin_init(OhmPlugin *plugin)
 {
+    plugin_is_real = TRUE;
+
     if (!OHM_DEBUG_INIT(accessories))
         g_warning("Failed to initialize accessories plugin debugging.");
 
     /* headset */
-    headset_init(plugin, DBG_HEADSET);
+    g_idle_add(headset_init_later, plugin);
+
     /* bluetooth*/
-    bluetooth_init(plugin, DBG_BT);
+    g_idle_add(bluetooth_init_later, plugin);
 }
 
 
@@ -72,6 +96,8 @@ static void plugin_exit(OhmPlugin *plugin)
     headset_deinit(plugin);
     /* bluetooth*/
     bluetooth_deinit(plugin);
+
+    plugin_is_real = FALSE;
 }
 
 
