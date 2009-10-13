@@ -564,20 +564,12 @@ optional_unit: /* empty */ { $$.value = 1; }
 int
 config_parse(cgrp_context_t *ctx, const char *path)
 {
-    FILE *fp;
-    int   status;
+    int status;
 
-    if ((fp = fopen(path, "r")) == NULL) {
-        OHM_ERROR("cgrp: failed to open \"%s\" for reading", path);
+    if (!lexer_push_input(path))
 	return FALSE;
-    }
 
-    lexer_open(fp, path);
-    status = cgrpyyparse(ctx);
-    lexer_close();
-    fclose(fp);
-
-    return status == 0;
+    return cgrpyyparse(ctx) == 0;
 }
 
 
@@ -598,7 +590,8 @@ cgrpyyerror(cgrp_context_t *ctx, const char *msg)
 {
     (void)ctx;
 
-    OHM_ERROR("parse error: %s near line %d", msg, lexer_line());
+    OHM_ERROR("parse error: %s near line %d in file %s", msg,
+              lexer_line(), lexer_file());
 #if 0
     exit(1);                              /* XXX would be better not to */
 #endif

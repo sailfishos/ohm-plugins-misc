@@ -1,19 +1,25 @@
-%{
+%{ /* -*- c -*- */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <regex.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "cgrp-plugin.h"
 #include "cgrp-parser-types.h"
 #include "cgrp-config.h"
 
+#include "mm.h"
 
 
 #define DEBUG(format, args...) do {                                     \
         if (lexer.debug)                                                \
-            printf("D: "format" on line %d\n" , ## args, lexer.line);   \
+            printf("D: "format" on line %d\n" , ## args, lexer_line()); \
     } while (0)
     
 
@@ -28,14 +34,50 @@
 
 #define RINGBUF_SIZE (16 * 1024)               /* token ring buffer size */
 
+
+enum {
+    INPUT_TYPE_FILE = 0,                       /* a single input file */
+    INPUT_TYPE_GLOB,                           /* a shell-like pattern */
+};
+
+
+typedef struct lexer_input_s lexer_input_t;
+
+#define LEXER_INPUT_COMMON                                                    \
+    lexer_input_t   *prev;                     /* previous input */           \
+    int              type;                     /* INPUT_TYPE_* */             \
+    YY_BUFFER_STATE  yybuf;                    /* (f)lex input buffer */      \
+    FILE            *fp;                       /* input stream */             \
+    char            *file;                     /* input file path */          \
+    int              line                      /* input line number */        \
+
+
+typedef struct {                               /* a single input file */
+    LEXER_INPUT_COMMON;
+} lexer_file_t;
+
+
+typedef struct {                               /* an input glob */
+    LEXER_INPUT_COMMON;
+    char    *dir;                              /* directory path */
+    char    *pattern;                          /* file pattern */
+    DIR     *dp;                               /* directory handle */
+    regex_t  regex;                            /* globbing pattern */
+} lexer_glob_t;
+
+
+struct lexer_input_s {
+    LEXER_INPUT_COMMON;
+};
+
+
+
 typedef struct {
-    YY_BUFFER_STATE  yybuf;                    /* (f)lex input buffer */
-    const char      *file;                     /* input file */
-    int              line;                     /* input line number */
     int              debug;                    /* debug lexical analysis ? */
     int              eol;                      /* last token EOL ? */
     char             tokens[RINGBUF_SIZE];     /* token ring buffer */
     int              offset;                   /* ring buffer offset */
+    lexer_input_t   *input;
 } lexer_t;
 
 
@@ -85,7 +127,7 @@ token_saven(lexer_t *l, char *token, int length)
     saved[length] = '\0';
 
     cgrpyylval.any.token  = saved;
-    cgrpyylval.any.lineno = l->line;
+    cgrpyylval.any.lineno = l->input->line;
     DEBUG("SAVE '%s'", saved);
 
     return saved;
@@ -107,7 +149,8 @@ lexer_error(lexer_t *l, const char *format, ...)
 {
     va_list ap;
     
-    OHM_ERROR("cgrp: lexical error on line %d in file %s", l->line, l->file);
+    OHM_ERROR("cgrp: lexical error on line %d in file %s",
+              l->input->line, l->input->file);
     
     va_start(ap, format);
     ohm_logv(OHM_LOG_ERROR, format, ap);
@@ -189,7 +232,7 @@ lexer_error(lexer_t *l, const char *format, ...)
     } while (0)
 
 #define PROCESS_EOL() do {                                              \
-        lexer.line++;                                                   \
+        lexer.input->line++;                                            \
         if (lexer.eol) 							\
             IGNORE(EOL);                                                \
         else {                                                          \
@@ -203,7 +246,7 @@ lexer_error(lexer_t *l, const char *format, ...)
     } while (0)
 
 #define PUSH_BACK_EOL() do {                                            \
-        lexer.line--;                                                   \
+        lexer.input->line--;                                            \
         unput('\n');                                                    \
     } while (0)
 
@@ -242,6 +285,14 @@ parse_sint32(lexer_t *l, char *str)
  *                  *** lexical analyzer public interface ***                *
  *****************************************************************************/
 
+static lexer_input_t *lexer_open_file (char *path);
+static void           lexer_close_file(lexer_file_t *input);
+static lexer_input_t *lexer_open_glob (char *path);
+static void           lexer_close_glob(lexer_glob_t *input);
+static int            lexer_more_glob(lexer_glob_t *input);
+
+
+#if 0
 int
 lexer_open(FILE *fp, const char *path)
 {
@@ -269,6 +320,68 @@ lexer_close(void)
     lexer.eol    = FALSE;
     lexer.offset = 0;
 }
+#endif
+
+
+int
+lexer_push_input(char *path)
+{
+    lexer_input_t *input;
+    
+    if (strchr(path, '*') || strchr(path, '?'))
+        input = lexer_open_glob(path);
+    else
+        input = lexer_open_file(path);
+
+    if (input != NULL) {
+        input->prev = lexer.input;
+        lexer.input = input;
+        
+        input->yybuf = cgrpyy_create_buffer(input->fp, YY_BUF_SIZE);
+        cgrpyy_switch_to_buffer(input->yybuf);
+        lexer.eol = TRUE;
+        return TRUE;
+    }
+    else {
+        OHM_ERROR("cgrp: failed to open input '%s'", path);
+        return FALSE;
+    }
+}
+
+
+int
+lexer_pop_input(void)
+{
+    lexer_input_t *input, *prev;
+
+    input = lexer.input;
+    prev  = input->prev;
+
+    cgrpyy_delete_buffer(input->yybuf);
+
+    if (input->type == INPUT_TYPE_GLOB) {
+        if (lexer_more_glob((lexer_glob_t *)input)) {
+            input->yybuf = cgrpyy_create_buffer(input->fp, YY_BUF_SIZE);
+            cgrpyy_switch_to_buffer(input->yybuf);
+            
+            return TRUE;
+        }
+        
+        lexer_close_glob((lexer_glob_t *)input);
+    }
+    else
+        lexer_close_file((lexer_file_t *)input);
+
+    lexer.input = prev;
+    
+    if (prev != NULL) {
+        cgrpyy_switch_to_buffer(prev->yybuf);
+        lexer.eol = TRUE;
+        return TRUE;
+    }
+    
+    return FALSE;
+}
 
 
 void
@@ -281,15 +394,193 @@ lexer_debug(int state)
 int
 lexer_line(void)
 {
-    return lexer.line;
+    return lexer.input ? lexer.input->line : 0;
 }
 
 
 const char *
 lexer_file(void)
 {
-    return lexer.file;
+    return lexer.input ? lexer.input->file : "<unknown>";
 }
+
+
+static lexer_input_t *
+lexer_open_file(char *path)
+{
+    lexer_file_t *input;
+
+    if (ALLOC_OBJ(input) == NULL) {
+        OHM_ERROR("cgrp: failed to allocate memory for new input %s", path);
+        exit(1);
+    }
+
+    input->type = INPUT_TYPE_FILE;
+    input->fp   = fopen(path, "r");
+
+    if (input->fp == NULL) {
+        OHM_ERROR("cgrp: failed to open input file '%s'", path);
+        lexer_close_file(input);
+        return NULL;
+    }
+
+    input->file = STRDUP(path);
+    input->line = 1;
+
+    DEBUG("opened file %s for parsing...", path);
+    
+    return (lexer_input_t *)input;
+}
+
+
+static void
+lexer_close_file(lexer_file_t *input)
+{
+    if (input == NULL)
+        return;
+    
+    if (input->fp)
+        fclose(input->fp);
+    FREE(input->file);
+    
+    FREE(input);
+}
+
+
+static lexer_input_t *
+lexer_open_glob(char *path)
+{
+    lexer_glob_t *input;
+    char         *base, *p, pattern[PATH_MAX], *q;
+    int           len;
+
+    if (ALLOC_OBJ(input) == NULL) {
+        OHM_ERROR("cgrp: failed to allocate memory for input '%s'", path);
+        return NULL;
+    }
+    
+    if ((base = strrchr(path, '/')) != NULL) {
+        if (((p = strchr(path, '*')) != NULL && p < base) ||
+            ((p = strchr(path, '?')) != NULL && p < base)) {
+            OHM_ERROR("cgrp: invalid include glob '%s'", path);
+            lexer_close_glob(input);
+            return NULL;
+        }
+
+        for (p = base; *p == '/'; p++)
+            ;
+        while (*base == '/' && base > path)
+            base--;
+
+        len        = base - path + 1;
+        input->dir = ALLOC_ARR(char, len + 1);
+        strncpy(input->dir, path, len);
+        input->dir[len] = '\0';
+
+        input->pattern = STRDUP(p);
+    }
+    else {
+        input->dir     = STRDUP(".");
+        input->pattern = STRDUP(path);
+    }
+    
+    
+    for (p = input->pattern, q = pattern; *p; p++) {
+        switch (*p) {
+        case '*': *q++ = '.';  *q++ = '*'; break;
+        case '?': *q++ = '.';              break;
+        case '.': *q++ = '\\'; *q++ = '.'; break;
+        default:  *q++ = *p;               break;
+        }
+    }
+    *q = '\0';
+
+    if (regcomp(&input->regex, pattern, REG_NOSUB | REG_NEWLINE) != 0) {
+        OHM_ERROR("cgrp: failed to compile regexp '%s' for '%s'",
+                  pattern, input->pattern);
+        lexer_close_glob(input);
+        return NULL;
+    }
+    
+    input->type = INPUT_TYPE_GLOB;
+    input->dp   = opendir(input->dir);
+    
+    if (input->dp == NULL) {
+        OHM_ERROR("cgrp: failed to open directory '%s'", input->dir);
+        lexer_close_glob(input);
+        return NULL;
+    }
+
+    if (lexer_more_glob(input) == FALSE) {
+        lexer_close_glob(input);
+        return NULL;
+    }
+
+    return (lexer_input_t *)input;
+}
+
+
+static void
+lexer_close_glob(lexer_glob_t *input)
+{
+    if (input == NULL)
+        return;
+
+    FREE(input->dir);
+    FREE(input->pattern);
+    FREE(input->file);
+
+    if (input->fp)
+        fclose(input->fp);
+    
+    if (input->dp) {
+        closedir(input->dp);
+        input->dp = NULL;
+    }
+
+    regfree(&input->regex);
+    
+    FREE(input);
+}
+ 
+
+static int
+lexer_more_glob(lexer_glob_t *input)
+{
+    struct dirent *de;
+    struct stat    st;
+    char           path[PATH_MAX];
+    regmatch_t     m;
+
+    FREE(input->file);
+    input->file = NULL;
+    if (input->fp != NULL) {
+        fclose(input->fp);
+        input->fp = NULL;
+    }
+    
+    while ((de = readdir(input->dp)) != NULL) {
+        snprintf(path, sizeof(path), "%s/%s", input->dir, de->d_name);
+        DEBUG("found input candidate %s...", path);
+
+        if (stat(path, &st) != 0 || !S_ISREG(st.st_mode))
+            continue;
+
+        if (!regexec(&input->regex, de->d_name, 1, &m, REG_NOTBOL|REG_NOTEOL)) {
+            if ((input->fp = fopen(path, "r")) != NULL) {
+                input->file = STRDUP(path);
+
+                DEBUG("opened file %s for parsing...", path);
+                
+                return TRUE;
+            }
+        }
+    }
+    
+    return FALSE;
+}
+
+
 
 
 /*****************************************************************************
@@ -308,6 +599,7 @@ cgrpyywrap(void)
 EOL                       \n
 WHITESPACE                [ \t]+
 
+INCLUDE                  ^#include[ \t]+'[^\n']*'$
 COMMENT_FULL             ^[ \t]*#.*$
 COMMENT_TRAIL             [ \t]*#.*$
 
@@ -356,6 +648,23 @@ UINT                   [0-9]+
 SINT                   [+|-]?[0-9]+
 
 %%
+
+{INCLUDE}                   { char path[PATH_MAX], *beg, *end;
+                              int len;
+                              
+                              beg = strchr(yytext, '\''); beg++;
+                              end = strchr(beg,    '\''); end--;
+                              len = end - beg + 1;
+                              if (len > PATH_MAX)
+                                  OHM_ERROR("cgrp: too long path '%s'", beg-1);
+                              else {
+                                  strncpy(path, beg, len);
+                                  path[len] = '\0';
+                                  lexer_push_input(path);
+                              }
+                            }
+                              
+                              
 
 {WHITESPACE}                { IGNORE(WHITESPACE);              }
 {COMMENT_FULL}              { IGNORE(COMMENT_FULL);
@@ -407,4 +716,13 @@ SINT                   [+|-]?[0-9]+
 {UINT}                      { PASS_NUMBER(UINT);               }
 {SINT}                      { PASS_NUMBER(SINT);               }
 
-<<EOF>>                     { yyterminate();                   }
+<<EOF>>                     { if (!lexer_pop_input())          
+                                  yyterminate();               
+/* 
+ * Local Variables:
+ * c-basic-offset: 4
+ * indent-tabs-mode: nil
+ * End:
+ * vim:set expandtab shiftwidth=4:
+ */
+                                                               }
