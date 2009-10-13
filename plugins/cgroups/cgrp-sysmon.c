@@ -237,9 +237,9 @@ iow_poll_start(gpointer ptr)
 #define IOW_DEFAULT_LOW      15
 #define IOW_DEFAULT_HIGH     50
 #define IOW_DEFAULT_INTERVAL 20
-#define IOW_MIN_INTERVAL      5
+#define IOW_MIN_INTERVAL      1
 #define IOW_DEFAULT_WINDOW    3
-#define IOW_MIN_WINDOW        2
+#define IOW_MIN_WINDOW        1
 #define IOW_DEFAULT_HOOK     "iowait_notify"
 
 
