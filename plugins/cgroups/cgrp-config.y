@@ -6,8 +6,9 @@
 #include "cgrp-parser-types.h"
 #include "mm.h"  
 
-int  cgrpyylex  (void);
-void cgrpyyerror(cgrp_context_t *, const char *);
+int        cgrpyylex  (void);
+void       cgrpyyerror(cgrp_context_t *, const char *);
+extern int lexer_start_token;
 
 %}
 
@@ -62,6 +63,9 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %type <string>   string
 %type <renice>   optional_renice
 
+%token START_FULL_PARSER
+%token START_ADDON_PARSER
+
 %token KEYWORD_GLOBAL
 %token KEYWORD_PARTITION
 %token KEYWORD_DESCRIPTION
@@ -85,6 +89,7 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 %token KEYWORD_CGROUPFS_OPTIONS
 %token KEYWORD_IOWAIT_NOTIFY
 %token KEYWORD_SWAP_PRESSURE
+%token KEYWORD_ADDON_RULES
 
 %token TOKEN_EOL "\n"
 %token TOKEN_ASTERISK "*"
@@ -108,7 +113,11 @@ void cgrpyyerror(cgrp_context_t *, const char *);
 
 %%
 
-configuration: global_section partition_section group_section rule_section
+configuration: START_FULL_PARSER 
+                 global_section partition_section group_section rule_section
+    | START_ADDON_PARSER
+                 rule_section
+    ;
 
 
 /*****************************************************************************
@@ -120,19 +129,20 @@ global_section: /* empty: whole section can be omitted */
     ;
 
 global_options: /* empty: allow just the header without any actual options */
-    | global_option "\n"
-    | global_options "\n" global_option
+    | global_option 
+    | global_options global_option
     ;
 
-global_option: KEYWORD_EXPORT_GROUPS {
+global_option: KEYWORD_EXPORT_GROUPS "\n" {
 	  CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_GROUP_FACTS);
     }
-    | KEYWORD_EXPORT_PARTITIONS {
+    | KEYWORD_EXPORT_PARTITIONS "\n" {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
     }
-    | iowait_notify
-    | swap_pressure
-    | cgroupfs_options
+    | iowait_notify "\n"
+    | swap_pressure "\n"
+    | cgroupfs_options "\n"
+    | addon_rules "\n"
     | error {
         OHM_ERROR("cgrp: failed to parse global options near token '%s'",
                   cgrpyylval.any.token);
@@ -220,6 +230,10 @@ mount_options: TOKEN_IDENT      { cgroup_set_option(ctx, $1.value); }
     | mount_options TOKEN_IDENT { cgroup_set_option(ctx, $2.value); }
     ;
 
+addon_rules: KEYWORD_ADDON_RULES path {
+          ctx->options.addon_rules = STRDUP($2.value);
+    }
+    ;
 
 
 /*****************************************************************************
@@ -520,7 +534,7 @@ string: TOKEN_IDENT  { $$ = $1; }
     ;
 
 
-path: TOKEN_PATH   {
+path: TOKEN_PATH {
           if ($1.value[0] != '/') {
               OHM_ERROR("cgrp: invalid path '%s'", $1.value);
               exit(1);
@@ -559,17 +573,47 @@ optional_unit: /* empty */ { $$.value = 1; }
 %%
 
 /********************
- * config_parse
+ * config_parse_config
  ********************/
 int
-config_parse(cgrp_context_t *ctx, const char *path)
+config_parse_config(cgrp_context_t *ctx, const char *path)
 {
-    int status;
+    lexer_start_token = START_FULL_PARSER;
 
     if (!lexer_push_input(path))
 	return FALSE;
 
     return cgrpyyparse(ctx) == 0;
+}
+
+
+/********************
+ * config_parse_addons
+ ********************/
+int
+config_parse_addons(cgrp_context_t *ctx)
+{
+    char *rules = ctx->options.addon_rules;
+    char  path[PATH_MAX];
+    int   success;
+
+    if (rules == NULL)
+        return TRUE;
+    
+    if (strchr(rules, '*'))
+        snprintf(path, sizeof(path), rules);
+    else
+        snprintf(path, sizeof(path), "%s/*.conf", rules);
+
+    lexer_start_token = START_ADDON_PARSER;
+    if (!lexer_push_input(path))
+        return FALSE;
+
+    CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES);
+    success = cgrpyyparse(ctx) == 0;
+    CGRP_CLR_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES);
+
+    return success;
 }
 
 

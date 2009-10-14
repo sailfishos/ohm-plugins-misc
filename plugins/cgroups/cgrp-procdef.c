@@ -40,6 +40,11 @@ procdef_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
     cgrp_procdef_t *procdef;
 
     if (!strcmp(pd->binary, "*")) {
+        if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES)) {
+            OHM_ERROR("cgrp: ignoring fallback addon rule ");
+            return pd; /* XXX TODO really dangerous, albeit works for now... */
+        }
+
         if (ctx->fallback != NULL) {
             OHM_ERROR("cgrp: multiple fallback process definitions");
             return NULL;
@@ -54,12 +59,22 @@ procdef_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
         }
     }
     else {
-        if (!REALLOC_ARR(ctx->procdefs, ctx->nprocdef, ctx->nprocdef + 1)) {
-            OHM_ERROR("cgrp: failed to allocate process definition");
-            return NULL;
-        }
+        if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES)) {
+            if (!REALLOC_ARR(ctx->addons, ctx->naddon, ctx->naddon + 1)) {
+                OHM_ERROR("cgrp: failed to allocate addon process definition");
+                return NULL;
+            }
 
-        procdef = ctx->procdefs + ctx->nprocdef++;
+            procdef = ctx->addons + ctx->naddon++;
+        }
+        else {
+            if (!REALLOC_ARR(ctx->procdefs, ctx->nprocdef, ctx->nprocdef + 1)) {
+                OHM_ERROR("cgrp: failed to allocate process definition");
+                return NULL;
+            }
+
+            procdef = ctx->procdefs + ctx->nprocdef++;
+        }
     }
 
     procdef->binary     = STRDUP(pd->binary);
@@ -99,14 +114,20 @@ procdef_dump(cgrp_context_t *ctx, FILE *fp)
 {
     int i;
     
-    fprintf(fp, "# process definitions\n");
+    fprintf(fp, "# process classification rules\n");
     for (i = 0; i < ctx->nprocdef; i++) {
         procdef_print(ctx, ctx->procdefs + i, fp);
         fprintf(fp, "\n");
     }
 
+    fprintf(fp, "# addon classification rules\n");
+    for (i = 0; i < ctx->naddon; i++) {
+        procdef_print(ctx, ctx->addons + i, fp);
+        fprintf(fp, "\n");
+    }
+
     if (ctx->fallback != NULL) {
-        fprintf(fp, "# fallback process definition\n");
+        fprintf(fp, "# fallback classification rule\n");
         procdef_print(ctx, ctx->fallback, fp);
     }
 }

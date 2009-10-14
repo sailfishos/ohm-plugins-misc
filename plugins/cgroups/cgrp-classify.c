@@ -42,6 +42,10 @@ classify_config(cgrp_context_t *ctx)
     for (i = 0, pd = ctx->procdefs; i < ctx->nprocdef; i++, pd++)
         if (!rule_hash_insert(ctx, pd))
             return FALSE;
+
+    for (i = 0, pd = ctx->addons; i < ctx->naddon; i++, pd++)
+        if (!rule_hash_insert(ctx, pd))
+            return FALSE;
     
     return TRUE;
 }

@@ -65,11 +65,14 @@ plugin_init(OhmPlugin *plugin)
     else
         port = (unsigned short)strtoul(portstr, NULL, 10);
     
-    if (!config_parse(ctx, config ? config : DEFAULT_CONFIG)) {
+    if (!config_parse_config(ctx, config ? config : DEFAULT_CONFIG)) {
         OHM_ERROR("cgrp: failed to parse %s", config);
         exit(1);
     }
 
+    if (!config_parse_addons(ctx))
+        OHM_WARNING("cgrp: failed to parse extra rules");
+    
     partition_add_root(ctx);
 
     ctx->resolve = resolve;

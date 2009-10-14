@@ -16,15 +16,15 @@
 
 #include "mm.h"
 
-
-#define DEBUG(format, args...) do {                                     \
-        if (lexer.debug)                                                \
-            printf("D: "format" on line %d\n" , ## args, lexer_line()); \
+    
+#define DEBUG(format, args...) do {            \
+        if (lexer.debug || 1)                  \
+            printf("D: "format"\n" , ## args); \
     } while (0)
     
 
-#define IGNORE(type) do {                              \
-        DEBUG("ignored %s", #type); \
+#define IGNORE(type) do {                                               \
+        DEBUG("ignored %s @ %s:%d", #type, lexer_file(), lexer_line()); \
     } while (0)
 
 
@@ -98,11 +98,46 @@ typedef enum {
 
 
 static lexer_t lexer;
-
+int            lexer_start_token;              /* parser selector token */
 
 /*****************************************************************************
  *                    *** token ring buffer management ***                   *
  *****************************************************************************/
+
+static char *
+printable_token(char *token)
+{
+    static char buf[PATH_MAX], *p, *q;
+    int         n;
+
+    p = token;
+    q = buf;
+    n = sizeof(buf) - 1;
+    while (*p && n > 0) {
+        switch (*p) {
+        case '\n':
+        case '\r':
+            if (n > 2) {
+                *q++ = '\\';
+                *q++ = *p == '\n' ? 'n': 'r';
+                n -= 2;
+            }
+            else {
+                *q++ = '.';
+                n--;
+            }
+            break;
+        default:
+            *q++ = *p;
+            n--;
+        }
+        p++;
+    }
+    *q = '\0';
+    
+    return buf;
+}
+
 
 static char *
 token_saven(lexer_t *l, char *token, int length)
@@ -128,7 +163,7 @@ token_saven(lexer_t *l, char *token, int length)
 
     cgrpyylval.any.token  = saved;
     cgrpyylval.any.lineno = l->input->line;
-    DEBUG("SAVE '%s'", saved);
+    DEBUG("SAVED '%s'", printable_token(saved));
 
     return saved;
 }
@@ -161,20 +196,20 @@ lexer_error(lexer_t *l, const char *format, ...)
 
 
 
-#define PASS_KEYWORD(kw) do {                   \
-        DEBUG("KEYWORD %s", #kw);               \
-                                                \
-        token_save(&lexer, cgrpyytext);         \
-        lexer.eol = FALSE;                      \
-                                                \
-        return KEYWORD_##kw;                    \
+#define PASS_KEYWORD(kw) do {                                           \
+        DEBUG("KEYWORD %s @ %s:%d", #kw, lexer_file(), lexer_line());   \
+                                                                        \
+        token_save(&lexer, cgrpyytext);                                 \
+        lexer.eol = FALSE;                                              \
+                                                                        \
+        return KEYWORD_##kw;                                            \
     } while (0)
 
 #define PASS_TOKEN(type) do {                                           \
         if (!strcmp(#type, "EOL"))                                      \
             lexer_error(&lexer, "internal error: TOKEN(EOL) !");        \
                                                                         \
-        DEBUG("TOKEN %s", #type);                                       \
+        DEBUG("TOKEN %s @ %s:%d", #type, lexer_file(), lexer_line());   \
                                                                         \
         lexer.eol = FALSE;                                              \
         token_save(&lexer, cgrpyytext);                                 \
@@ -185,7 +220,7 @@ lexer_error(lexer_t *l, const char *format, ...)
 #define PASS_NUMBER(type) do {                                          \
         char *__token;                                                  \
                                                                         \
-        DEBUG("NUMBER %s", #type);                                      \
+        DEBUG("NUMBER %s @ %s:%d", #type, lexer_file(), lexer_line());  \
                                                                         \
         lexer.eol = FALSE;                                              \
         __token = token_save(&lexer, cgrpyytext);                       \
@@ -211,7 +246,7 @@ lexer_error(lexer_t *l, const char *format, ...)
         char *__token, *__value;                                        \
         int   __len;                                                    \
                                                                         \
-        DEBUG("TOKEN %s", #type);                                       \
+        DEBUG("TOKEN %s @ %s:%d", #type, lexer_file(), lexer_line());   \
                                                                         \
         __len   = cgrpyyleng;                                           \
         __value = cgrpyytext;                                           \
@@ -236,7 +271,7 @@ lexer_error(lexer_t *l, const char *format, ...)
         if (lexer.eol) 							\
             IGNORE(EOL);                                                \
         else {                                                          \
-            DEBUG("TOKEN EOL");                                         \
+            DEBUG("TOKEN EOL @ %s:%d", lexer_file(), lexer_line());     \
                                                                         \
             lexer.eol = TRUE;                                           \
             token_saven(&lexer, "\n", 1);                               \
@@ -290,37 +325,6 @@ static void           lexer_close_file(lexer_file_t *input);
 static lexer_input_t *lexer_open_glob (char *path);
 static void           lexer_close_glob(lexer_glob_t *input);
 static int            lexer_more_glob(lexer_glob_t *input);
-
-
-#if 0
-int
-lexer_open(FILE *fp, const char *path)
-{
-    lexer.yybuf = cgrpyy_create_buffer(fp, YY_BUF_SIZE);
-    cgrpyy_switch_to_buffer(lexer.yybuf);
-    
-    lexer.file   = path;
-    lexer.line   = 1;
-    lexer.debug  = FALSE;
-    lexer.eol    = TRUE;
-    lexer.offset = 0;
-
-    return TRUE;
-}
-
-
-void
-lexer_close(void)
-{
-    cgrpyy_delete_buffer(lexer.yybuf);
-    
-    lexer.file   = "<none>";
-    lexer.line   = 0;
-    lexer.debug  = FALSE;
-    lexer.eol    = FALSE;
-    lexer.offset = 0;
-}
-#endif
 
 
 int
@@ -626,6 +630,7 @@ KEYWORD_EXPORT_FACT       export-fact
 KEYWORD_CGROUPFS_OPTIONS  cgroupfs-options
 KEYWORD_IOWAIT_NOTIFY     iowait-notify
 KEYWORD_SWAP_PRESSURE     swap-pressure
+KEYWORD_ADDON_RULES       addon-rules
 
 HEADER_OPEN            \[
 HEADER_CLOSE           \]
@@ -648,6 +653,34 @@ UINT                   [0-9]+
 SINT                   [+|-]?[0-9]+
 
 %%
+
+%{
+
+    /*
+     * Notes:
+     *   To avoid having to separate parsers, we need two entry points to
+     *   the parser. The first one is for parsing a full configuration file
+     *   including global options, partitions, groups, and rules. The second
+     *   is for parsing an additional set of add-on classification rules.
+     *
+     *   To accomplish this while still being able to share the productions of
+     *   the two parsers we
+     *     1) fork the parser at the top level production
+     *     2) have the parser control which parser is to be used (lexer_type)
+     *     3) have the lexer emit type-specific start-symbols to activate the
+     *        correct parser
+     */
+    
+    if (lexer_start_token != 0) {
+        int start_token;
+
+        start_token       = lexer_start_token;
+        lexer_start_token = 0;
+
+        return start_token;
+    }
+%}
+
 
 {INCLUDE}                   { char path[PATH_MAX], *beg, *end;
                               int len;
@@ -696,6 +729,7 @@ SINT                   [+|-]?[0-9]+
 {KEYWORD_CGROUPFS_OPTIONS}  { PASS_KEYWORD(CGROUPFS_OPTIONS);  }
 {KEYWORD_IOWAIT_NOTIFY}     { PASS_KEYWORD(IOWAIT_NOTIFY);     }
 {KEYWORD_SWAP_PRESSURE}     { PASS_KEYWORD(SWAP_PRESSURE);     }
+{KEYWORD_ADDON_RULES}       { PASS_KEYWORD(ADDON_RULES);       }
 
 {HEADER_OPEN}               { PASS_TOKEN(HEADER_OPEN);         }
 {HEADER_CLOSE}              { PASS_TOKEN(HEADER_CLOSE);        }

@@ -321,11 +321,13 @@ enum {
     CGRP_FLAG_MOUNT_CPU,
     CGRP_FLAG_MOUNT_MEMORY,
     CGRP_FLAG_MOUNT_CPUSET,
+    CGRP_FLAG_ADDON_RULES
 };
 
 
 typedef struct {
-    int flags;
+    int   flags;
+    char *addon_rules;                      /* add-on rule directory */
 } cgrp_options_t;
 
 
@@ -390,6 +392,8 @@ typedef struct {
     cgrp_procdef_t   *procdefs;             /* process definitions */
     int               nprocdef;             /* number of process definitions */
     cgrp_procdef_t   *fallback;             /* fallback process definition */
+    cgrp_procdef_t   *addons;               /* add-on rules */
+    int               naddon;               /* number of add-on rules */
 
     cgrp_options_t    options;              /* global options */
 
@@ -564,12 +568,12 @@ int  expr_eval(cgrp_expr_t *expr, cgrp_proc_attr_t *);
 
 
 /* cgrp-config.y */
-int  config_parse(cgrp_context_t *, const char *);
+int  config_parse_config(cgrp_context_t *, const char *);
+int  config_parse_addons(cgrp_context_t *);
 void config_print(cgrp_context_t *, FILE *);
 
 /* cgrp-lexer.l */
-int         lexer_open (FILE *, const char *);
-void        lexer_close(void);
+int         lexer_push_input(char *);
 int         lexer_line (void);
 const char *lexer_file (void);
 
