@@ -282,11 +282,12 @@ void
 prop_print(cgrp_context_t *ctx, cgrp_prop_expr_t *expr, FILE *fp)
 {
     const char *propname[] = {
-        [CGRP_PROP_BINARY]  = "binary",
-        [CGRP_PROP_CMDLINE] = "commandline",
-        [CGRP_PROP_TYPE]    = "type",
-        [CGRP_PROP_EUID]    = "user",
-        [CGRP_PROP_EGID]    = "group",
+        [CGRP_PROP_BINARY]     = "binary",
+        [CGRP_PROP_CMDLINE]    = "commandline",
+        [CGRP_PROP_TYPE]       =  "type",
+        [CGRP_PROP_EUID]       = "user",
+        [CGRP_PROP_EGID]       = "group",
+        [CGRP_PROP_RECLASSIFY] = "reclassify-count",
     };
     
     switch (expr->prop) {
@@ -295,6 +296,7 @@ prop_print(cgrp_context_t *ctx, cgrp_prop_expr_t *expr, FILE *fp)
     case CGRP_PROP_TYPE:
     case CGRP_PROP_EUID:
     case CGRP_PROP_EGID:
+    case CGRP_PROP_RECLASSIFY:
         fprintf(fp, "%s", propname[expr->prop]);
         break;
         
@@ -348,6 +350,9 @@ command_print(cgrp_context_t *ctx, cgrp_cmd_t *cmd, FILE *fp)
         break;
     case CGRP_CMD_IGNORE:
         fprintf(fp, "ignore");
+        break;
+    case CGRP_CMD_RECLASSIFY:
+        fprintf(fp, "reclassify-after %d", cmd->reclassify.delay);
         break;
     default:
         fprintf(fp, "<invalid command>");
