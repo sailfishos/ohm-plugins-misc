@@ -4,7 +4,7 @@
 #include <hal/libhal.h>
 
 #define BUTTONS_UDI_PREFIX  "/org/freedesktop/Hal/devices/"
-#define BUTTONS_POWER_UDI   BUTTONS_UDI_PREFIX "computer_logicaldev_input" 
+#define BUTTONS_POWER_UDI   BUTTONS_UDI_PREFIX "computer_logicaldev_input_0"
 
 
 typedef struct button_ev_s {

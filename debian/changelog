@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.0) unstable; urgency=low
+
+  * First release for maemo6.
+  * Using the new power button UDI.
+
+ -- Martin Wolf <ext-martin.2.wolf@nokia.com>  Mon, 08 Mar 2010 13:00:00 +0300
+
 ohm-plugins-misc (0.7.0) unstable; urgency=low
 
   * Introducing 'resource' plugin
