@@ -39,9 +39,17 @@ static int         proc_request    (enum proc_cn_mcast_op req);
 static int  netlink_create(void);
 static void netlink_close (void);
 
-
 static gboolean netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data);
 
+static void subscr_init(cgrp_context_t *ctx);
+static void subscr_exit(cgrp_context_t *ctx);
+static void subscr_notify(cgrp_context_t *ctx, int what, pid_t pid);
+
+typedef struct {
+    list_hook_t   hook;
+    void        (*cb)(cgrp_context_t *, int, pid_t, void *);
+    void         *data;
+} proc_handler_t;
 
 
 /********************
@@ -53,7 +61,8 @@ proc_init(cgrp_context_t *ctx)
     (void)ctx;
     
     mypid = getpid();
-    
+
+    subscr_init(ctx);
 
     /*
      * Notes: we always claim success to be able to run the same
@@ -74,6 +83,8 @@ void
 proc_exit(cgrp_context_t *ctx)
 {
     (void)ctx;
+
+    subscr_exit(ctx);
 
     proc_unsubscribe();
     netlink_close();
@@ -298,6 +309,8 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
             switch (event->what) {
             case PROC_EVENT_FORK:
                 classify_process(ctx, event->event_data.fork.child_pid, 0);
+                subscr_notify(ctx,
+                              event->what, event->event_data.fork.child_pid);
                 break;
             case PROC_EVENT_EXEC:
                 classify_process(ctx,event->event_data.exec.process_pid, 0);
@@ -790,6 +803,71 @@ procattr_dump(cgrp_proc_attr_t *attr)
         OHM_DEBUG(DBG_CLASSIFY, "  cmdline: %s", attr->cmdline);
 }
 
+
+
+/********************
+ * subscr_init
+ ********************/
+static void
+subscr_init(cgrp_context_t *ctx)
+{
+    list_init(&ctx->procsubscr);
+}
+
+
+/********************
+ * subscr_exit
+ ********************/
+static void
+subscr_exit(cgrp_context_t *ctx)
+{
+    proc_handler_t *handler;
+    list_hook_t    *p, *n;
+    
+    list_foreach(&ctx->procsubscr, p, n) {
+        handler = list_entry(p, proc_handler_t, hook);
+        list_delete(&handler->hook);
+        FREE(handler);
+    }
+}
+
+
+/********************
+ * subscr_notify
+ ********************/
+static void
+subscr_notify(cgrp_context_t *ctx, int what, pid_t pid)
+{
+    proc_handler_t *handler;
+    list_hook_t    *p, *n;
+    
+    list_foreach(&ctx->procsubscr, p, n) {
+        handler = list_entry(p, proc_handler_t, hook);
+        handler->cb(ctx, what, pid, handler->data);
+    }
+}
+
+
+/********************
+ * proc_notify
+ ********************/
+void
+proc_notify(cgrp_context_t *ctx,
+            void (*cb)(cgrp_context_t *, int, pid_t, void *),
+            void *data)
+{
+    proc_handler_t *handler;
+
+    if (ALLOC_OBJ(handler) == NULL) {
+        OHM_ERROR("cgrp: failed to allocate process notification handler");
+        return;
+    }
+
+    handler->cb   = cb;
+    handler->data = data;
+    
+    list_append(&ctx->procsubscr, &handler->hook);
+}
 
 
 /* 

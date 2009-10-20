@@ -18,7 +18,7 @@
 
     
 #define DEBUG(format, args...) do {            \
-        if (lexer.debug || 1)                  \
+        if (lexer.debug)                       \
             printf("D: "format"\n" , ## args); \
     } while (0)
     

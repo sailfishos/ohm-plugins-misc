@@ -13,18 +13,6 @@
 #include <ioq-notify.h>
 #endif
 
-#define INITIAL_DELAY 120                     /* before we start sampling */
-
-static int clkhz;
-
-static sldwin_t      *sldwin_alloc (int);
-static void           sldwin_free  (sldwin_t *);
-static unsigned long  sldwin_update(sldwin_t *, unsigned long);
-
-static estim_t       *estim_alloc(estim_type_t, int);
-static void           estim_free(estim_t *);
-static unsigned long  estim_update(estim_t *, unsigned long);
-
 
 typedef struct {
     int  (*init)(cgrp_context_t *);
@@ -37,12 +25,18 @@ static void iow_exit(cgrp_context_t *ctx);
 static int  swp_init(cgrp_context_t *ctx);
 static void swp_exit(cgrp_context_t *ctx);
 
+static void          estim_free(estim_t *);
+static unsigned long estim_update(estim_t *, unsigned long);
 
-sysmon_t monitors[] = {
+
+static sysmon_t monitors[] = {
     { iow_init, iow_exit },
     { swp_init, swp_exit },
     { NULL    , NULL     }
 };
+
+static int clkhz;
+
 
 
 /********************
@@ -84,7 +78,6 @@ sysmon_exit(cgrp_context_t *ctx)
         close(ctx->proc_stat);
         ctx->proc_stat = -1;
     }
-
 }
 
 
@@ -92,6 +85,71 @@ sysmon_exit(cgrp_context_t *ctx)
 /*****************************************************************************
  *                  *** polling I/O-wait state monitoring ***                *
  *****************************************************************************/
+#define DEFAULT_STARTUP_DELAY 120
+
+static gboolean iow_calculate(gpointer ptr);
+static gboolean iow_sample(int fd, unsigned long *sample, timestamp_t *stamp);
+
+
+/********************
+ * iow_init
+ ********************/
+static int
+iow_init(cgrp_context_t *ctx)
+{
+    cgrp_iowait_t *iow = &ctx->iow;
+
+    if (iow->thres_low == 0 && iow->thres_high == 0) {
+        OHM_INFO("cgrp: I/O-wait state monitoring disabled");
+        return TRUE;
+    }
+
+    if (iow->thres_high < iow->thres_low) {
+        OHM_ERROR("cgrp: invalid I/O-wait threshold %u-%u",
+                  iow->thres_low, iow->thres_high);
+        return TRUE;
+    }
+
+    if (iow->estim == NULL) {
+        OHM_INFO("cgrp: missing/invalid I/O wait estimator, disabling");
+        return TRUE;
+    }
+    
+    if (!iow->startup_delay)
+        iow->startup_delay = DEFAULT_STARTUP_DELAY;
+
+    OHM_INFO("cgrp: I/O wait notification enabled");
+    OHM_INFO("cgrp: threshold %u-%u, poll %u-%u, %s %u, hook %s, "
+             "startup delay %u",
+             iow->thres_low, iow->thres_high,
+             iow->poll_low, iow->poll_high,
+             iow->estim->type == ESTIM_TYPE_WINDOW ? "window" : "ewma",
+             iow->nsample, iow->hook,
+             iow->startup_delay);
+
+    iow_sample(ctx->proc_stat, &iow->sample, &iow->stamp);
+    iow->timer = g_timeout_add(1000 * iow->startup_delay, iow_calculate, ctx);
+    
+    return TRUE;
+}
+
+
+/********************
+ * iow_exit
+ ********************/
+static void
+iow_exit(cgrp_context_t *ctx)
+{
+    if (ctx->iow.timer != 0) {
+        g_source_remove(ctx->iow.timer);
+        ctx->iow.timer = 0;
+    }
+
+    estim_free(ctx->iow.estim);
+    ctx->iow.estim = NULL;
+    FREE(ctx->iow.hook);
+    ctx->iow.hook = NULL;
+}
 
 
 /********************
@@ -116,10 +174,10 @@ iow_notify(cgrp_context_t *ctx)
 
 
 /********************
- * iow_get_sample
+ * iow_sample
  ********************/
-static unsigned long
-iow_get_sample(int fd)
+static gboolean
+iow_sample(int fd, unsigned long *sample, timestamp_t *stamp)
 {
     unsigned long usr, nic, sys, idl, iow;
     char          buf[256], *p, *e;
@@ -130,7 +188,7 @@ iow_get_sample(int fd)
 
     if (n < 4 || strncmp(buf, "cpu ", 4)) {
         OHM_ERROR("failed to read /proc/stat");
-        return (unsigned long)-1;
+        return FALSE;
     }
 
     buf[n] = '\0';
@@ -147,9 +205,12 @@ iow_get_sample(int fd)
     iow = strtoul(p, &e, 10);
 
     if (*e != ' ')
-        return (unsigned long)-1;
+        return FALSE;
 
-    return iow;
+    *sample = iow;
+    clock_gettime(CLOCK_MONOTONIC, stamp);
+    
+    return TRUE;
 }
 
 
@@ -173,142 +234,71 @@ msec_diff(struct timespec *now, struct timespec *prv)
 
 
 /********************
- * iow_timer
+ * iow_schedule
  ********************/
-gboolean
-iow_timer(gpointer ptr)
+void
+iow_schedule(cgrp_context_t *ctx, unsigned long iow)
 {
-    cgrp_context_t *ctx = (cgrp_context_t *)ptr;
-    unsigned long   sample, dt, ds, rate, avg;
-    struct timespec now;
-
-    sample = iow_get_sample(ctx->proc_stat);
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    unsigned int delay;
+    double       u;
     
-    if (ctx->iow.stamp.tv_sec) {
-        dt   = msec_diff(&now, &ctx->iow.stamp);            /* sample period */
-        ds   = (sample - ctx->iow.sample) * 1000 / clkhz;   /* sample diff   */
-        rate = ds * 1000 / dt;                  /* normalize to 1 sec period */
-
-        avg = sldwin_update(ctx->iow.win, rate);
-
-        OHM_DEBUG(DBG_SYSMON, "I/O wait current = %.2f %%, average %.2f %%",
-                  (100.0 * rate) / 1000, (100.0 * avg)  / 1000);
+    if (iow <= ctx->iow.thres_low)
+        delay = ctx->iow.poll_high;
+    else if (iow >= ctx->iow.thres_high)
+        delay = ctx->iow.poll_low;
+    else {
+        u  = ctx->iow.poll_high - ctx->iow.poll_low;
+        u /= ctx->iow.thres_high - ctx->iow.thres_low;
         
-        avg = (100 * avg) / 1000;
-
-        if (ctx->iow.alert) {
-            if (avg < (unsigned long)ctx->iow.low) {
-                ctx->iow.alert = FALSE;
-                iow_notify(ctx);
-            }
-        }
-        else {
-            if (avg >= (unsigned long)ctx->iow.high) {
-                ctx->iow.alert = TRUE;
-                iow_notify(ctx);
-            }
-        }
+        delay = (ctx->iow.poll_high - (iow - ctx->iow.thres_low) * u + 0.5);
     }
 
-    ctx->iow.sample = sample;
-    ctx->iow.stamp  = now;
-    
-    return TRUE;
+    ctx->iow.timer = g_timeout_add(1000 * delay, iow_calculate, ctx);
+    OHM_DEBUG(DBG_SYSMON, "scheduled I/O wait sampling after %d sec", delay);
 }
 
 
 /********************
- * iow_poll_start
+ * iow_calculate
  ********************/
-gboolean
-iow_poll_start(gpointer ptr)
+static gboolean
+iow_calculate(gpointer ptr)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)ptr;
+    cgrp_iowait_t  *iow = &ctx->iow;
+    unsigned long   prevs, ds, dt, rate, avg;
+    timestamp_t     prevt;
+    
+    prevs = iow->sample;
+    prevt = iow->stamp;
+    iow_sample(ctx->proc_stat, &iow->sample, &iow->stamp);
+
+    dt   = msec_diff(&iow->stamp, &prevt);          /* sample period */
+    ds   = (iow->sample - prevs) * 1000 / clkhz;    /* sample diff   */
+    rate = ds * 1000 / dt;                    /* normalized to 1 sec */
         
-    ctx->iow.timer = g_timeout_add(1000 * ctx->iow.interval, iow_timer, ctx);
+    avg = estim_update(iow->estim, rate);
+    
+    OHM_DEBUG(DBG_SYSMON, "I/O wait sample %.2f %%, average %.2f %%",
+              (100.0 * rate) / 1000, (100.0 * avg) / 1000.0);
+
+    avg = (100 * avg) / 1000;
+
+    if (iow->alert) {
+        if (avg < (unsigned long)iow->thres_low) {
+            iow->alert = FALSE;
+            iow_notify(ctx);
+        }
+    }
+    else {
+        if (avg >= (unsigned long)iow->thres_high) {
+                iow->alert = TRUE;
+                iow_notify(ctx);
+        }
+    }
+    
+    iow_schedule(ctx, avg);
     return FALSE;
-}
-
-
-
-
-
-#define IOW_DEFAULT_LOW      15
-#define IOW_DEFAULT_HIGH     50
-#define IOW_DEFAULT_INTERVAL 20
-#define IOW_MIN_INTERVAL      1
-#define IOW_DEFAULT_WINDOW    3
-#define IOW_MIN_WINDOW        1
-#define IOW_DEFAULT_HOOK     "iowait_notify"
-
-
-/********************
- * iow_init
- ********************/
-static int
-iow_init(cgrp_context_t *ctx)
-{
-    if (ctx->iow.interval <= 0) {
-        OHM_INFO("cgrp: I/O-wait state monitoring disabled");
-        return TRUE;
-    }
-
-    if (ctx->iow.high < ctx->iow.low) {
-        OHM_WARNING("cgrp: invalid I/O-wait threshold, using default");
-        ctx->iow.low = ctx->iow.high = 0;
-    }
-
-    if (!ctx->iow.low) {
-        ctx->iow.low  = IOW_DEFAULT_LOW;
-        ctx->iow.high = IOW_DEFAULT_HIGH;
-    }
-
-    if (!ctx->iow.interval)
-        ctx->iow.interval = IOW_DEFAULT_INTERVAL;
-
-    if (ctx->iow.interval < IOW_MIN_INTERVAL)
-        ctx->iow.interval = IOW_MIN_INTERVAL;
-
-    if (!ctx->iow.window)
-        ctx->iow.window = 60 / ctx->iow.interval;
-    
-    if (ctx->iow.window < IOW_MIN_WINDOW)
-        ctx->iow.window = IOW_MIN_WINDOW;
-    
-    if (ctx->iow.hook == NULL)
-        ctx->iow.hook = STRDUP(IOW_DEFAULT_HOOK);
-
-    OHM_INFO("cgrp: I/O wait notification enabled");
-    OHM_INFO("cgrp: threshold %u %u, poll %u, window %u, hook %s",
-             ctx->iow.low, ctx->iow.high,
-             ctx->iow.interval, ctx->iow.window,
-             ctx->iow.hook);
-
-    if ((ctx->iow.win = sldwin_alloc(ctx->iow.window)) == NULL) {
-        OHM_ERROR("cgrp: failed to initialize I/O wait window");
-        return FALSE;
-    }
-    
-    ctx->iow.timer = g_timeout_add(1000 * INITIAL_DELAY, iow_poll_start, ctx);
-    
-    return TRUE;
-}
-
-
-/********************
- * iow_exit
- ********************/
-static void
-iow_exit(cgrp_context_t *ctx)
-{
-    if (ctx->iow.timer != 0) {
-        g_source_remove(ctx->iow.timer);
-        ctx->iow.timer = 0;
-    }
-
-    sldwin_free(ctx->iow.win);
-    ctx->iow.win = NULL;
 }
 
 
@@ -339,6 +329,7 @@ swp_notify(const osso_ioq_activity_t level, void *data)
     ctx->resolve(ctx->swp.hook, vars);
 }
 
+
 /********************
  * swp_init
  ********************/
@@ -354,6 +345,7 @@ swp_init(cgrp_context_t *ctx)
         return 0;
 }
 
+
 /********************
  * swp_exit
  ********************/
@@ -364,7 +356,9 @@ swp_exit(cgrp_context_t *ctx)
         osso_ioq_notify_deinit();
 }
 
+
 #else /* !HAVE_OSSO_SWAP_PRESSURE */
+
 
 static int
 swp_init(cgrp_context_t *ctx)
@@ -386,9 +380,114 @@ swp_exit(cgrp_context_t *ctx)
 #endif
 
 
+
 /*****************************************************************************
- *                       *** sliding window routines ***                     *
+ *                          *** estimator routines ***                       *
  *****************************************************************************/
+
+static ewma_t        *ewma_alloc   (int nsample);
+static unsigned long  ewma_update  (ewma_t *ewma, unsigned long item);
+static void           ewma_free    (ewma_t *ewma);
+static sldwin_t      *sldwin_alloc (int nsample);
+static void           sldwin_free  (sldwin_t *win);
+static unsigned long  sldwin_update(sldwin_t *win, unsigned long item);
+
+
+/********************
+ * ewma_alloc
+ ********************/
+static ewma_t *
+ewma_alloc(int nsample)
+{
+    ewma_t *ewma;
+    
+    if (nsample <= 0) {
+        OHM_ERROR("cgrp: invalid number of samples for EWMA");
+        return NULL;
+    }
+    
+    if (ALLOC_OBJ(ewma) != NULL) {
+        ewma->type = ESTIM_TYPE_EWMA;
+        ewma->alpha = 2.0 / (1.0 * nsample + 1);
+    }
+    
+    return ewma;
+}
+
+
+/********************
+ * ewma_free
+ ********************/
+static void
+ewma_free(ewma_t *ewma)
+{
+    FREE(ewma);
+}
+
+
+/********************
+ * ewma_update
+ ********************/
+static unsigned long
+ewma_update(ewma_t *ewma, unsigned long item)
+{
+    ewma->S = ewma->alpha * item + (1.0 - ewma->alpha) * ewma->S;
+    return (unsigned long)(ewma->S + 0.5);
+}
+
+
+/********************
+ * estim_alloc
+ ********************/
+estim_t *
+estim_alloc(char *estimator, int nsample)
+{
+    estim_t *estim;
+
+    if (!strcmp(estimator, "window"))
+        estim = (estim_t *)sldwin_alloc(nsample);
+    else if (!strcmp(estimator, "ewma"))
+        estim = (estim_t *)ewma_alloc(nsample);
+    else {
+        OHM_ERROR("cgrp: invalid estimator type %s", estimator);
+        return NULL;
+    }
+    
+    return estim;
+}
+
+
+/********************
+ * estim_free
+ ********************/
+static void
+estim_free(estim_t *estim)
+{
+    switch (estim->type) {
+    case ESTIM_TYPE_WINDOW: sldwin_free(&estim->win); break;
+    case ESTIM_TYPE_EWMA:   ewma_free(&estim->ewma);  break;
+    default:                                          break;
+    }
+}
+
+
+/********************
+ * estim_update
+ ********************/
+static unsigned long
+estim_update(estim_t *estim, unsigned long sample)
+{
+    unsigned long avg;
+
+    switch (estim->type) {
+    case ESTIM_TYPE_WINDOW: avg = sldwin_update(&estim->win, sample); break;
+    case ESTIM_TYPE_EWMA:   avg = ewma_update(&estim->ewma , sample); break;
+    default:                avg = 0;
+    }
+
+    return avg;
+}
+
 
 /********************
  * sldwin_alloc
@@ -478,103 +577,6 @@ sldwin_update(sldwin_t *win, unsigned long item)
     return (unsigned long)(avg + 0.5);
 }
 
-
-
-/*****************************************************************************
- *                            *** EWMA routines ***                          *
- *****************************************************************************/
-
-/********************
- * ewma_alloc
- ********************/
-static ewma_t *
-ewma_alloc(int nsample)
-{
-    ewma_t *ewma;
-    
-    if (nsample <= 0) {
-        OHM_ERROR("cgrp: invalid number of samples for EWMA");
-        return NULL;
-    }
-    
-    if (ALLOC_OBJ(ewma) != NULL) {
-        ewma->type = ESTIM_TYPE_EWMA;
-        ewma->alpha = 2.0 / (1.0 * nsample + 1);
-    }
-    
-    return ewma;
-}
-
-
-/********************
- * ewma_free
- ********************/
-static void
-ewma_free(ewma_t *ewma)
-{
-    FREE(ewma);
-}
-
-
-/********************
- * ewma_update
- ********************/
-static unsigned long
-ewma_update(ewma_t *ewma, unsigned long item)
-{
-    ewma->S = ewma->alpha * item + (1.0 - ewma->alpha) * ewma->S;
-    return (unsigned long)(ewma->S + 0.5);
-}
-
-
-/********************
- * estim_alloc
- ********************/
-static estim_t *
-estim_alloc(estim_type_t type, int size)
-{
-    estim_t *estim;
-
-    switch (type) {
-    case ESTIM_TYPE_WINDOW: estim = (estim_t *)sldwin_alloc(size); break;
-    case ESTIM_TYPE_EWMA:   estim = (estim_t *)ewma_alloc(size);   break;
-    default:                estim = NULL;
-    }
-
-    return estim;
-}
-
-
-/********************
- * estim_free
- ********************/
-static void
-estim_free(estim_t *estim)
-{
-    switch (estim->type) {
-    case ESTIM_TYPE_WINDOW: sldwin_free(&estim->win); break;
-    case ESTIM_TYPE_EWMA:   ewma_free(&estim->ewma);  break;
-    default:                                          break;
-    }
-}
-
-
-/********************
- * estim_update
- ********************/
-static unsigned long
-estim_update(estim_t *estim, unsigned long sample)
-{
-    unsigned long avg;
-
-    switch (estim->type) {
-    case ESTIM_TYPE_WINDOW: avg = sldwin_update(&estim->win, sample); break;
-    case ESTIM_TYPE_EWMA:   avg = ewma_update(&estim->ewma , sample); break;
-    default:                avg = 0;
-    }
-
-    return avg;
-}
 
 
 /* 

@@ -158,21 +158,27 @@ iowait_notify_options: iowait_notify_option
     ;
 
 iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
-          if (strcmp($1.value, "threshold")) {
-              OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
-	      YYABORT;
+          if (!strcmp($1.value, "threshold")) {
+              ctx->iow.thres_low  = $2.value;
+              ctx->iow.thres_high = $3.value;
           }
-          ctx->iow.low  = $2.value;
-          ctx->iow.high = $3.value;
-    }
-    | TOKEN_IDENT TOKEN_UINT {
-          if (!strcmp($1.value, "poll"))
-              ctx->iow.interval = $2.value;
-          else if (!strcmp($1.value, "window"))
-              ctx->iow.window = $2.value;
+          else if (!strcmp($1.value, "poll")) {
+              ctx->iow.poll_high = $2.value;
+              ctx->iow.poll_low  = $3.value;
+          }
           else {
               OHM_ERROR("cgrp: invalid iowait-notify parameter %s", $1.value);
 	      YYABORT;
+          }
+    }
+    | TOKEN_IDENT TOKEN_UINT {
+          if (!strcmp($1.value, "startup-delay"))
+              ctx->iow.startup_delay = $2.value;
+          else {
+              ctx->iow.nsample = $2.value;
+              ctx->iow.estim   = estim_alloc($1.value, $2.value);
+              if (ctx->iow.estim == NULL)
+                  YYABORT;
           }
     }
     | TOKEN_IDENT string {

@@ -354,22 +354,27 @@ typedef struct {
 
 typedef union {
     estim_type_t type;                      /* estimator type */
-    sldwin_t     win;
-    ewma_t       ewma;
+    sldwin_t     win;                       /* a sliding window integrator */
+    ewma_t       ewma;                      /* a weighted moving average */
 } estim_t;
 
+typedef struct timespec timestamp_t;
+
 typedef struct {
-    unsigned int     low;                   /* low threshold */
-    unsigned int     high;                  /* high threshold */
-    unsigned int     interval;              /* polling interval */
-    unsigned int     window;                /* sliding window size */
-    char            *hook;                  /* notification hook */
+    unsigned int     thres_low;             /* low threshold */
+    unsigned int     thres_high;            /* high threshold */
+    unsigned int     poll_low;              /* poll interval when low */
+    unsigned int     poll_high;             /* poll interval when high */
+    estim_type_t     type;                  /* estimator type */
+    unsigned int     nsample;               /*   and number of samples */
+    estim_t         *estim;                 /* estimator */
+    char            *hook;                  /* resolver notification hook */
+    unsigned int     startup_delay;         /* initial delay before sampling */
     
     unsigned long    sample;                /* last sample */
-    struct timespec  stamp;                 /* sample timestamp */
-    sldwin_t        *win;                   /* sample window */
-    guint            timer;                 /* sampling timer */
-    int              alert;                 /* TRUE if above high threshold */
+    timestamp_t      stamp;                 /*   and its timestamp */
+    guint            timer;                 /* next sampling timer */
+    int              alert;                 /* whether above high threshold */
 } cgrp_iowait_t;
 
 
@@ -404,15 +409,18 @@ typedef struct {
 
     cgrp_process_t   *active_process;       /* currently active process */
     cgrp_group_t     *active_group;         /* currently active group */
-    
+    list_hook_t       procsubscr;           /* event subscribers */
+
     OhmFactStore     *store;                /* ohm factstore */
     GObject          *sigconn;              /* policy signaling interface */
     gulong            sigdcn;               /* policy decision id */
     gulong            sigkey;               /* policy keychange id */
     
     int               notifsock;            /* notification fd */
-    GIOChannel       *notifchnl;
-    guint             notifsrc;
+    GIOChannel       *notifchnl;            /* g I/O channel and */
+    guint             notifsrc;             /*   event source */
+    list_hook_t       notifsubscr;          /* event subscribers */
+
     int             (*resolve)(char *, char **);
 
     /* I/O wait monitoring */
@@ -456,7 +464,8 @@ int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
 int process_set_priority(cgrp_process_t *, int);
 void procattr_dump(cgrp_proc_attr_t *);
 
-
+void proc_notify(cgrp_context_t *,
+                 void (*)(cgrp_context_t *, int, pid_t, void *), void *);
 
 /* cgrp-partition.c */
 int  partition_init(cgrp_context_t *);
@@ -594,7 +603,10 @@ void fact_del_process(OhmFact *, cgrp_process_t *);
 /* cgrp-notify.c */
 int  notify_init(cgrp_context_t *, int);
 void notify_exit(cgrp_context_t *);
-int  notify_group_change(cgrp_context_t *ctx, cgrp_group_t *, cgrp_group_t *);
+int  notify_group_change(cgrp_context_t *, cgrp_group_t *, cgrp_group_t *);
+void notify_subscribe(cgrp_context_t *,
+                      void (*)(cgrp_context_t *, cgrp_process_t *, char *,
+                               void *), void *);
 
 /* cgrp-console.c */
 int  console_init(cgrp_context_t *);
@@ -603,6 +615,8 @@ void console_exit(void);
 /* cgrp-sysmon.c */
 int  sysmon_init(cgrp_context_t *);
 void sysmon_exit(cgrp_context_t *);
+
+estim_t *estim_alloc(char *, int);
 
 
 

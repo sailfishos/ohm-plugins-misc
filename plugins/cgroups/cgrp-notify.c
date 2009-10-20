@@ -6,7 +6,17 @@
 
 #include "cgrp-plugin.h"
 
-static gboolean notify_cb(GIOChannel *, GIOCondition, gpointer);
+static gboolean notify_cb  (GIOChannel *, GIOCondition, gpointer);
+static void     subscr_init(cgrp_context_t *);
+static void     subscr_exit(cgrp_context_t *);
+
+
+typedef struct {
+    list_hook_t   hook;
+    void        (*cb)(cgrp_context_t *, cgrp_process_t *, char *, void *);
+    void         *data;
+} notif_handler_t;
+
 
 
 /********************
@@ -33,6 +43,8 @@ notify_init(cgrp_context_t *ctx, int port)
     }
     
     ctx->notifsrc = g_io_add_watch(ctx->notifchnl, G_IO_IN, notify_cb, ctx);
+
+    subscr_init(ctx);
     
     return TRUE;
 
@@ -52,6 +64,7 @@ notify_init(cgrp_context_t *ctx, int port)
 void
 notify_exit(cgrp_context_t *ctx)
 {
+    
     if (ctx->notifsrc) {
         g_source_remove(ctx->notifsrc);
         g_io_channel_unref(ctx->notifchnl);
@@ -61,6 +74,73 @@ notify_exit(cgrp_context_t *ctx)
     ctx->notifsrc  = 0;
     ctx->notifchnl = NULL;
     ctx->notifsock = -1;
+
+    subscr_exit(ctx);
+}
+
+
+/********************
+ * notify_subscribe
+ ********************/
+void
+notify_subscribe(cgrp_context_t *ctx,
+                 void (*cb)(cgrp_context_t *, cgrp_process_t *, char *, void *),
+                 void *data)
+{
+    notif_handler_t *handler;
+
+    if (ALLOC_OBJ(handler) == NULL) {
+        OHM_ERROR("cgrp: failed to allocate notification handler");
+        return;
+    }
+
+    handler->cb   = cb;
+    handler->data = data;
+    
+    list_append(&ctx->notifsubscr, &handler->hook);
+}
+
+
+/********************
+ * subscr_init
+ ********************/
+static void
+subscr_init(cgrp_context_t *ctx)
+{
+    list_init(&ctx->notifsubscr);
+}
+
+
+/********************
+ * subscr_exit
+ ********************/
+static void
+subscr_exit(cgrp_context_t *ctx)
+{
+    list_hook_t     *p, *n;
+    notif_handler_t *handler;
+    
+    list_foreach(&ctx->notifsubscr, p, n) {
+        handler = list_entry(p, notif_handler_t, hook);
+        list_delete(&handler->hook);
+        FREE(handler);
+    }
+}
+
+
+/********************
+ * notify_subscribers
+ ********************/
+static void
+notify_subscribers(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
+{
+    notif_handler_t *handler;
+    list_hook_t     *p, *n;
+
+    list_foreach(&ctx->notifsubscr, p, n) {
+        handler = list_entry(p, notif_handler_t, hook);
+        handler->cb(ctx, process, state, handler->data);
+    }
 }
 
 
@@ -92,7 +172,8 @@ notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
     
     buf[size] = '\0';
     OHM_DEBUG(DBG_NOTIFY, "got active/standby notification: '%s'", buf);
-    
+
+    process     = NULL;
     prev_active = ctx->active_group;
     pidp = buf;
     while (pidp && *pidp) {
@@ -118,6 +199,8 @@ notify_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 
     curr_active = ctx->active_group;
     notify_group_change(ctx, prev_active, curr_active);
+
+    notify_subscribers(ctx, process, state);
     
  out:
     return TRUE;
