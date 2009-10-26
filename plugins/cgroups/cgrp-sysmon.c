@@ -22,6 +22,8 @@ typedef struct {
 
 static int  iow_init(cgrp_context_t *ctx);
 static void iow_exit(cgrp_context_t *ctx);
+static int  ioq_init(cgrp_context_t *ctx);
+static void ioq_exit(cgrp_context_t *ctx);
 static int  swp_init(cgrp_context_t *ctx);
 static void swp_exit(cgrp_context_t *ctx);
 
@@ -31,6 +33,7 @@ static unsigned long estim_update(estim_t *, unsigned long);
 
 static sysmon_t monitors[] = {
     { iow_init, iow_exit },
+    { ioq_init, ioq_exit },
     { swp_init, swp_exit },
     { NULL    , NULL     }
 };
@@ -303,6 +306,214 @@ iow_calculate(gpointer ptr)
 
 
 /*****************************************************************************
+ *                      *** I/O queue length monitoring ***                  *
+ *****************************************************************************/
+
+/********************
+ * ioq_config
+ ********************/
+static int
+ioq_config(char *syspath, char *entry, unsigned int setting)
+{
+    char path[PATH_MAX], value[64];
+    int  fd, len, chk;
+
+    snprintf(path, sizeof(path), "%s/%s", syspath, entry);
+    if ((fd = open(path, O_WRONLY)) < 0)
+        return FALSE;
+
+    len = snprintf(value, sizeof(value), "%u\n", setting);
+    chk = write(fd, value, len);
+    close(fd);
+
+    return (len == chk);
+}
+
+
+/********************
+ * ioq_open
+ ********************/
+static int
+ioq_open(cgrp_ioqlen_t *ioq)
+{
+    char qa[PATH_MAX];
+    
+    if (ioq->period < 200)
+        ioq->period = 200;
+    if (ioq->period > 5000)
+        ioq->period = 5000;
+
+    if (!ioq_config(ioq->path, "qa_period", ioq->period)) {
+        OHM_WARNING("cgrp: cannot enable I/O monitoring for %s", ioq->path);
+        return FALSE;
+    }
+    
+    ioq_config(ioq->path, "qa_low_wm", 0);
+    ioq_config(ioq->path, "qa_high_wm", 0);
+
+    if (!ioq_config(ioq->path, "qa_high_wm", ioq->thres_high) ||
+        !ioq_config(ioq->path, "qa_low_wm", ioq->thres_low)) {
+        OHM_WARNING("cgrp: cannot initialize I/O monitoring for %s", ioq->path);
+        return FALSE;
+    }
+    
+    snprintf(qa, sizeof(qa), "%s/qa", ioq->path);
+    ioq->qafd = open(qa, O_RDONLY);
+    if (ioq->qafd < 0) {
+        OHM_WARNING("cgrp: cannot initialize I/O monitoring for %s", ioq->path);
+        return FALSE;
+    }
+
+    OHM_INFO("I/O qlen notifications for %s enabled", ioq->path);
+
+    return TRUE;
+}
+
+
+/********************
+ * ioq_close
+ ********************/
+static void
+ioq_close(cgrp_ioqlen_t *ioq)
+{
+    if (ioq->qafd >= 0) {
+        close(ioq->qafd);
+        ioq->qafd = -1;
+    }
+}
+
+
+/********************
+ * ioq_notify
+ ********************/
+static int
+ioq_notify(cgrp_context_t *ctx, cgrp_ioqlen_t *ioq, unsigned int qa)
+{
+    char *vars[2 + 1];
+    char *state;
+    
+    if (qa <= ioq->thres_low)
+        state = "low";
+    else if (qa >= ioq->thres_high)
+        state = "high";
+    else {
+        OHM_ERROR("cgrp: bogus I/O queue length notification for %s",
+                  ioq->path);
+        return FALSE;
+    }
+    
+    vars[0] = "iowait";
+    vars[1] = state;
+    vars[2] = NULL;
+    
+    OHM_DEBUG(DBG_SYSMON, "I/O qlen %s notification", state);
+    return ctx->resolve(ioq->hook, vars) == 0;
+}
+
+
+/********************
+ * ioq_cb
+ ********************/
+static gboolean
+ioq_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)data;
+    char            buf[64], *end;
+    unsigned int    qa;
+    int             len;
+
+    (void)chnl;
+
+    if ((mask & G_IO_IN) || (mask & G_IO_PRI)) {
+        lseek(ctx->ioq.qafd, 0, SEEK_SET);
+        len = read(ctx->ioq.qafd, buf, sizeof(buf) - 1);
+        if (len < 0) {
+            OHM_ERROR("cgrp: failed to read I/O queue length for %s",
+                      ctx->ioq.path);
+            return FALSE;
+        }
+        
+        qa = (int)strtoul(buf, &end, 10);
+        if (*end != '\n') {
+            OHM_ERROR("cgrp: got invalid I/O queue length data for %s",
+                      ctx->ioq.path);
+            return FALSE;
+        }
+
+        ioq_notify(ctx, &ctx->ioq, qa);
+    }
+    
+    return TRUE;
+}
+
+
+/********************
+ * ioq_add_watch
+ ********************/
+static int
+ioq_add_watch(cgrp_context_t *ctx, cgrp_ioqlen_t *ioq)
+{
+    GIOCondition mask;
+    
+    ioq->gioc = g_io_channel_unix_new(ioq->qafd);
+    if (ioq->gioc == NULL) {
+        OHM_WARNING("cgrp: cannot monitor %s for I/O qlen events", ioq->path);
+        return TRUE;
+    }
+
+    mask = G_IO_IN | G_IO_HUP | G_IO_PRI | G_IO_ERR;
+    ioq->gsrc = g_io_add_watch(ioq->gioc, mask, ioq_cb, ctx);
+
+    return (ioq->gsrc != 0);
+}
+
+
+/********************
+ * ioq_del_watch
+ ********************/
+static void
+ioq_del_watch(cgrp_ioqlen_t *ioq)
+{
+    if (ioq->gsrc != 0) {
+        g_source_remove(ioq->gsrc);
+        ioq->gsrc = 0;
+    }
+
+    if (ioq->gioc != NULL) {
+        g_io_channel_unref(ioq->gioc);
+        ioq->gioc = NULL;
+    }
+}
+
+
+/********************
+ * ioq_init
+ ********************/
+static int
+ioq_init(cgrp_context_t *ctx)
+{
+    if (ctx->ioq.path == NULL || ctx->ioq.period == 0)
+        return TRUE;
+
+    ioq_open(&ctx->ioq);
+    ioq_add_watch(ctx, &ctx->ioq);
+    
+    return TRUE;
+}
+
+
+/********************
+ * ioq_exit
+ ********************/
+static void
+ioq_exit(cgrp_context_t *ctx)
+{
+    ioq_del_watch(&ctx->ioq);
+    ioq_close(&ctx->ioq);
+}
+
+
+/*****************************************************************************
  *                     *** OSSO swap pressure monitoring ***                 *
  *****************************************************************************/
 
@@ -463,10 +674,13 @@ estim_alloc(char *estimator, int nsample)
 static void
 estim_free(estim_t *estim)
 {
+    if (estim == NULL)
+        return;
+    
     switch (estim->type) {
-    case ESTIM_TYPE_WINDOW: sldwin_free(&estim->win); break;
-    case ESTIM_TYPE_EWMA:   ewma_free(&estim->ewma);  break;
-    default:                                          break;
+    case ESTIM_TYPE_WINDOW: sldwin_free((sldwin_t *)estim); break;
+    case ESTIM_TYPE_EWMA:   ewma_free((ewma_t *)estim)  ;   break;
+    default:                                                break;
     }
 }
 

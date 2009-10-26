@@ -379,6 +379,19 @@ typedef struct {
 
 
 typedef struct {
+    char            *path;                  /* sysdev path */
+    unsigned int     thres_low;             /* low threshold */
+    unsigned int     thres_high;            /* high threshold */
+    unsigned int     period;                /* calculation period (msec) */
+    char            *hook;                  /* resolver notification hook */
+
+    int              qafd;                  /* average queue length fd */
+    GIOChannel      *gioc;                  /*   associated GIO channel */
+    guint            gsrc;                  /*   and event source */
+} cgrp_ioqlen_t;
+
+
+typedef struct {
     unsigned int     low;                   /* low threshold */
     unsigned int     high;                  /* hight threshold */
     unsigned int     interval;              /* minimum notification interval */
@@ -426,6 +439,7 @@ typedef struct {
     /* I/O wait monitoring */
     int               proc_stat;            /* /proc/stat fd */
     cgrp_iowait_t     iow;                  /* I/O-wait state monitoring */
+    cgrp_ioqlen_t     ioq;                  /* I/O queue length monitoring */
     cgrp_swap_t       swp;                  /* swap pressure monitoring */
 } cgrp_context_t;
 

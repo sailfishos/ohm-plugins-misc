@@ -88,6 +88,7 @@ extern int lexer_start_token;
 %token KEYWORD_EXPORT_FACT
 %token KEYWORD_CGROUPFS_OPTIONS
 %token KEYWORD_IOWAIT_NOTIFY
+%token KEYWORD_IOQLEN_NOTIFY
 %token KEYWORD_SWAP_PRESSURE
 %token KEYWORD_ADDON_RULES
 
@@ -140,6 +141,7 @@ global_option: KEYWORD_EXPORT_GROUPS "\n" {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
     }
     | iowait_notify "\n"
+    | ioqlen_notify "\n"
     | swap_pressure "\n"
     | cgroupfs_options "\n"
     | addon_rules "\n"
@@ -195,6 +197,48 @@ iowait_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
           exit(1);
     }
     ;
+
+
+ioqlen_notify: KEYWORD_IOQLEN_NOTIFY path ioqlen_notify_options {
+        ctx->ioq.path = STRDUP($2.value);
+    }
+    ;
+
+ioqlen_notify_options: ioqlen_notify_option
+    | ioqlen_notify_options ioqlen_notify_option
+    ;
+
+ioqlen_notify_option: TOKEN_IDENT TOKEN_UINT TOKEN_UINT {
+          if (!strcmp($1.value, "threshold")) {
+              ctx->ioq.thres_low  = $2.value;
+              ctx->ioq.thres_high = $3.value;
+          }
+          else {
+              OHM_ERROR("cgrp: invalid ioqlen-notify parameter %s", $1.value);
+	      YYABORT;
+          }
+    }
+    | TOKEN_IDENT TOKEN_UINT {
+          if (!strcmp($1.value, "period"))
+              ctx->ioq.period = $2.value;
+          else {
+              OHM_ERROR("cgrp: invalid ioqlen-notify parameter %s", $1.value);
+	      YYABORT;
+          }
+    } 
+    | TOKEN_IDENT string {
+          if (!strcmp($1.value, "hook"))
+              ctx->ioq.hook = STRDUP($2.value);
+          else {
+              OHM_ERROR("cgrp: invalid ioqlen-notify parameter %s", $1.value);
+	      YYABORT;
+          }
+    }
+    | error { 
+          OHM_ERROR("cgrp: failed to parse I/O wait options near token '%s'",
+                    cgrpyylval.any.token);
+          exit(1);
+    }
 
 swap_pressure: KEYWORD_SWAP_PRESSURE swap_pressure_options
     ;
