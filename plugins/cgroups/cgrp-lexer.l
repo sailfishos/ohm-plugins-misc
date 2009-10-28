@@ -653,6 +653,8 @@ STRING                 (('[^\n']*')|(\"[^\n\"]*\"))
 UINT                   [0-9]+
 SINT                   [+|-]?[0-9]+
 
+ESCAPE		       \\
+
 %%
 
 %{
@@ -751,6 +753,16 @@ SINT                   [+|-]?[0-9]+
 {STRING}                    { PASS_STRING(STRING);             }
 {UINT}                      { PASS_NUMBER(UINT);               }
 {SINT}                      { PASS_NUMBER(SINT);               }
+
+{ESCAPE}		    { int c;
+			      if ((c = input()) != '\n')
+			          unput(c);
+			      else {
+			          DEBUG("escaped \\n @ %s:%d",
+				        lexer_file(), lexer_line());
+			          lexer.input->line++;
+			      }
+			    }
 
 <<EOF>>                     { if (!lexer_pop_input())          
                                   yyterminate();               
