@@ -15,8 +15,16 @@ ohm-plugins-misc (0.6.63) unstable; urgency=low
 
   * videoep support for callui window popup/popdown messages (Fixes: NB#144826)
   * bumped version number Fixes: NB#145290
-	
- -- Janos Kovacs <janos.f.kovacs@nokia.com>  Tue, 03 Nov 2009 22:15:00 +0300
+  * Basic support for block device I/O qlen notifications (Artems patches).
+  * Support for OSSO I/O qlen / swap pressure monitoring.
+  * Basic support for variable polling interval in I/O wait monitoring.
+  * Basic support for addon classification rules.
+  * Rudimentary support for include-directive in the configuration file.
+  * Parser improvements (much better error reporting).
+  * Allow int32 handles in NewChannels (workaround for butterfly/msn CM).
+  * Support for thread name evaluation in classification rules.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 28 Oct 2009 14:18:57 +0200
 
 ohm-plugins-misc (0.6.62) unstable; urgency=low
 
