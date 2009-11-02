@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.1) unstable; urgency=low
+
+  * Removed telephony/mission-control
+
+ -- Martin Wolf <ext-martin.2.wolf@nokia.com>  Thu, 01 Oct 2009 16:11:01 +0300
+
 ohm-plugins-misc (1:1.0) unstable; urgency=low
 
   * First release for maemo6.

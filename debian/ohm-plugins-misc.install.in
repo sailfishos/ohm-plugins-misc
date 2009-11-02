@@ -1,4 +1,4 @@
-usr/lib/mission-control/*
+#usr/lib/mission-control/*
 usr/lib/ohm/libohm_accessories.so
 usr/lib/ohm/libohm_dvfs.so
 usr/lib/ohm/libohm_gconf.so
