@@ -8,7 +8,8 @@ typedef struct notify_s {
     guint           evsrc;
     time_t          start;
     int             transit;
-    int             popup;
+    int             sysui;
+    int             callui;
 } notify_t;
 
 static notify_t *notify_init(unsigned short);

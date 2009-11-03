@@ -4,9 +4,11 @@
 static int       setup_notify_connection(notify_t *, unsigned short);
 static void      teardown_notify_connection(notify_t *);
 static int       dres_systemui_notify(notify_t *, int);
+static int       dres_callui_notify(notify_t *, int);
 static int       dres_rotation_notify(notify_t *, int);
-static int       parse_systemui_notification(char *);
-static int       parse_rotation_notification(char *);
+static int       parse_systemui_notification(char *, int *);
+static int       parse_callui_notification(char *, int *);
+static int       parse_rotation_notification(char *, int *);
 static gboolean  notify_cb(GIOChannel *, GIOCondition, gpointer);
 
 
@@ -137,6 +139,30 @@ static int dres_systemui_notify(notify_t *notif, int popup)
 #undef DRESIF_VARTYPE
 }
 
+static int dres_callui_notify(notify_t *notif, int popup)
+{
+#define DRESIF_VARTYPE(t)  (char *)(t)
+#define DRESIF_VARVALUE(v) (char *)(v)
+
+    (void)notif;
+
+    char *target;
+    char *vars[10];
+    int   i;
+    int   status;
+
+    target = popup ? "callui_popup" : "callui_popdown";
+
+    vars[i=0] = NULL;
+
+    status = resolve(target, vars);
+
+    return status;
+
+#undef DRESIF_VARVALUE
+#undef DRESIF_VARTYPE
+}
+
 static int dres_rotation_notify(notify_t *notif, int transit)
 {
 #define DRESIF_VARTYPE(t)  (char *)(t)
@@ -161,26 +187,57 @@ static int dres_rotation_notify(notify_t *notif, int transit)
 #undef DRESIF_VARTYPE
 }
 
-static int parse_systemui_notification(char *msg)
+static int parse_systemui_notification(char *msg, int *length)
 {
     static char keywd[] = "systemui ";
 
     int kwdlen  = sizeof(keywd) - 1;
     int popup   = -1;
 
+    *length = 0;
+
     if (!strncmp(msg, keywd, kwdlen)) {
         msg += kwdlen;
 
-        if (!strncmp(msg, "popup", 5))
+        if (!strncmp(msg, "popup", 5)) {
             popup = 1;
-        else if (!strncmp(msg, "popdown", 7))
+            *length = kwdlen + 5 + (msg[5] == '\n' ? 1 : 0);
+        }
+        else if (!strncmp(msg, "popdown", 7)) {
             popup = 0;
+            *length = kwdlen + 7 + (msg[7] == '\n' ? 1 : 0);
+        }
     }
 
     return popup;
 }
 
-static int parse_rotation_notification(char *msg)
+static int parse_callui_notification(char *msg, int *length)
+{
+    static char keywd[] = "callui ";
+
+    int kwdlen  = sizeof(keywd) - 1;
+    int popup   = -1;
+
+    *length = 0;
+
+    if (!strncmp(msg, keywd, kwdlen)) {
+        msg += kwdlen;
+
+        if (!strncmp(msg, "popup", 5)) {
+            popup = 1;
+            *length = kwdlen + 5 + (msg[5] == '\n' ? 1 : 0);
+        }
+        else if (!strncmp(msg, "popdown", 7)) {
+            popup = 0;
+            *length = kwdlen + 7 + (msg[7] == '\n' ? 1 : 0);
+        }
+    }
+
+    return popup;
+}
+
+static int parse_rotation_notification(char *msg, int *length)
 {
     static char keywd[] = "rotation-transition";
 
@@ -188,14 +245,20 @@ static int parse_rotation_notification(char *msg)
     int   transit = -1;
     char *p;
 
+    *length = 0;
+
     if (!strncmp(msg, keywd, kwdlen)) {
         for (p = msg + kwdlen;   *p && *p == ' ';   p++)
             ;
 
-        if (!strcmp(p, "on"))
+        if (!strcmp(p, "on")) {
             transit = 1;
-        else if (!strcmp(p, "off"))
+            *length = ((p + 2) - msg) + (p[2] == '\n' ? 1 : 0);
+        }
+        else if (!strcmp(p, "off")) {
             transit = 0;
+            *length = ((p + 3) - msg) + (p[3] == '\n' ? 1 : 0);
+        }
     }
 
     return transit;
@@ -209,8 +272,11 @@ static gboolean notify_cb(GIOChannel *ch, GIOCondition cond, gpointer data)
     gboolean         retval;
     char             buf[156];
     int              len;
+    char            *p, *e;
+    int              l;
     time_t           now;
-    int              popup;
+    int              sysui;
+    int              callui;
     int              transit;
 
     if (ch != notif->chan) {
@@ -241,30 +307,68 @@ static gboolean notify_cb(GIOChannel *ch, GIOCondition cond, gpointer data)
             else
                 now = tp.tv_sec;
 
-            if (len > 0 && (now - notif->start) > STARTUP_BLOCK_TIME) {
+
+            if ((now - notif->start) > STARTUP_BLOCK_TIME) {
                 buf[len] = '\0';
 
-                while (buf[--len] == '\0') ;
-                if (buf[len] == '\n') buf[len] = '\0';
+#           if 0
+                {
+                    char dbgmsg[256];
+                    char *f, *t;
 
-                if ((popup = parse_systemui_notification(buf)) >= 0) {
-
-                    OHM_DEBUG(DBG_INFO, "systemui: %d", popup);
-
-                    if (popup != notif->popup) {
-                        dres_systemui_notify(notif, popup);
-                        notif->popup = popup;
+                    for (f = buf, t = dbgmsg;  *f;   f++) {
+                        if (*f == '\n')     t   += sprintf(t, "<lf>");
+                        else if (*f < ' ')  t   += sprintf(t, "<0x%02x>", *f); 
+                        else               *t++  = *f;
                     }
+                    *t = '\0';
+                    
+                    OHM_DEBUG(DBG_INFO, "got message: '%s'", dbgmsg);
                 }
-                else if ((transit = parse_rotation_notification(buf)) >= 0) {
+#           endif
 
-                    OHM_DEBUG(DBG_INFO, "rotation-transition: %d", transit);
+                while (len > 0 && buf[len-1] == '\0')
+                    len--;
 
-                    if (transit !=  notif->transit) {
-                        dres_rotation_notify(notif, transit);
-                        notif->transit = transit;
+                for (p = buf;   *p  && p < (buf + len);   p += l) {
+
+                    if ((sysui = parse_systemui_notification(p, &l)) >= 0) {
+
+                        OHM_DEBUG(DBG_INFO, "systemui: %d", sysui);
+                        
+                        if (sysui != notif->sysui) {
+                            dres_systemui_notify(notif, sysui);
+                            notif->sysui = sysui;
+                        }
                     }
-                }
+                    else if ((callui = parse_callui_notification(p, &l)) >= 0){
+
+                        OHM_DEBUG(DBG_INFO, "callui: %d", callui);
+                        
+                        if (callui != notif->callui) {
+                            dres_callui_notify(notif, callui);
+                            notif->callui = callui;
+                        }
+                    }
+                    else if ((transit = parse_rotation_notification(p,&l))>=0){
+                        
+                        OHM_DEBUG(DBG_INFO, "rotation-transition: %d",transit);
+                        
+                        if (transit !=  notif->transit) {
+                            dres_rotation_notify(notif, transit);
+                            notif->transit = transit;
+                        }
+                    }
+                    else {
+                        for (l = 0;  p[l] != '\0';  l++) {
+                            if (p[l] == '\n') {
+                                l++;
+                                break;
+                            }
+                        }
+                    }
+
+                } /* for */
             }
         }
     }
