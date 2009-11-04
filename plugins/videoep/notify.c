@@ -251,11 +251,11 @@ static int parse_rotation_notification(char *msg, int *length)
         for (p = msg + kwdlen;   *p && *p == ' ';   p++)
             ;
 
-        if (!strcmp(p, "on")) {
+        if (!strncmp(p, "on", 2)) {
             transit = 1;
             *length = ((p + 2) - msg) + (p[2] == '\n' ? 1 : 0);
         }
-        else if (!strcmp(p, "off")) {
+        else if (!strncmp(p, "off", 3)) {
             transit = 0;
             *length = ((p + 3) - msg) + (p[3] == '\n' ? 1 : 0);
         }
