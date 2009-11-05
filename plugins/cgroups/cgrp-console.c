@@ -53,6 +53,7 @@ help(void)
 {
     printf("cgroup help:          show this help\n");
     printf("cgroup show groups    show groups\n");
+    printf("cgroup show config    show configuration\n");
 }
 
 
