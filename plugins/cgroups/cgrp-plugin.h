@@ -591,11 +591,14 @@ int  expr_eval(cgrp_expr_t *expr, cgrp_proc_attr_t *);
 
 
 /* cgrp-config.y */
-int  config_parse_config(cgrp_context_t *, const char *);
+int  config_parse_config(cgrp_context_t *, char *);
 int  config_parse_addons(cgrp_context_t *);
 void config_print(cgrp_context_t *, FILE *);
 
 /* cgrp-lexer.l */
+void        lexer_reset(int);
+void        lexer_disable_include(void);
+void        lexer_enable_include(void);
 int         lexer_push_input(char *);
 int         lexer_line (void);
 const char *lexer_file (void);

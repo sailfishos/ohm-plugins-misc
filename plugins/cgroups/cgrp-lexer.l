@@ -71,13 +71,12 @@ struct lexer_input_s {
 };
 
 
-
 typedef struct {
     int              debug;                    /* debug lexical analysis ? */
     int              eol;                      /* last token EOL ? */
     char             tokens[RINGBUF_SIZE];     /* token ring buffer */
     int              offset;                   /* ring buffer offset */
-    lexer_input_t   *input;
+    lexer_input_t   *input;                    /* current input */
 } lexer_t;
 
 
@@ -98,7 +97,8 @@ typedef enum {
 
 
 static lexer_t lexer;
-int            lexer_start_token;              /* parser selector token */
+static int     lexer_start_token;              /* parser selector token */
+static int     lexer_noinclude;                /* disable includes */
 
 /*****************************************************************************
  *                    *** token ring buffer management ***                   *
@@ -358,6 +358,9 @@ lexer_pop_input(void)
 {
     lexer_input_t *input, *prev;
 
+    if (lexer.input == NULL)
+        return FALSE;
+
     input = lexer.input;
     prev  = input->prev;
 
@@ -406,6 +409,31 @@ const char *
 lexer_file(void)
 {
     return lexer.input ? lexer.input->file : "<unknown>";
+}
+
+
+void
+lexer_reset(int start_token)
+{
+    while (lexer_pop_input())
+        ;
+
+    lexer_start_token = start_token;
+    lexer_noinclude   = FALSE;
+}
+
+
+void
+lexer_disable_include(void)
+{
+    lexer_noinclude = TRUE;
+}
+
+
+void
+lexer_enable_include(void)
+{
+    lexer_noinclude = FALSE;
 }
 
 
@@ -648,7 +676,7 @@ IMPLIES                =>
 
 ASTERISK               \*
 IDENT                  [a-zA-Z_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])*
-PATH                   (\/{IDENT})+
+PATH                   (\/({IDENT}|\.))+
 STRING                 (('[^\n']*')|(\"[^\n\"]*\"))
 UINT                   [0-9]+
 SINT                   [+|-]?[0-9]+
@@ -687,7 +715,9 @@ ESCAPE		       \\
 
 {INCLUDE}                   { char path[PATH_MAX], *beg, *end;
                               int len;
-                              
+
+			      if (lexer_noinclude)
+			          return 1;                              
                               beg = strchr(yytext, '\''); beg++;
                               end = strchr(beg,    '\''); end--;
                               len = end - beg + 1;

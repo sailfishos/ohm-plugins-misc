@@ -1,6 +1,14 @@
 %{
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <regex.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "cgrp-plugin.h"
 #include "cgrp-parser-types.h"
@@ -622,13 +630,17 @@ optional_unit: /* empty */ { $$.value = 1; }
 
 %%
 
+/*****************************************************************************
+ *                        *** parser public interface ***                    *
+ *****************************************************************************/
+
 /********************
  * config_parse_config
  ********************/
 int
-config_parse_config(cgrp_context_t *ctx, const char *path)
+config_parse_config(cgrp_context_t *ctx, char *path)
 {
-    lexer_start_token = START_FULL_PARSER;
+    lexer_reset(START_FULL_PARSER);
 
     if (!lexer_push_input(path))
 	return FALSE;
@@ -638,32 +650,107 @@ config_parse_config(cgrp_context_t *ctx, const char *path)
 
 
 /********************
+ * config_parse_addon
+ ********************/
+int
+config_parse_addon(cgrp_context_t *ctx, char *path)
+{
+    int success;
+
+    lexer_reset(START_ADDON_PARSER);
+    if (!lexer_push_input(path))
+        return FALSE;
+
+    CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES);
+    lexer_disable_include();
+    success = cgrpyyparse(ctx) == 0;
+    lexer_enable_include();
+    CGRP_CLR_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES);
+
+    return success;
+}
+
+
+/********************
  * config_parse_addons
  ********************/
 int
 config_parse_addons(cgrp_context_t *ctx)
 {
-    char *rules = ctx->options.addon_rules;
-    char  path[PATH_MAX];
-    int   success;
-
-    if (rules == NULL)
+    char           glob[PATH_MAX], pattern[PATH_MAX];
+    char           dir[PATH_MAX], file[PATH_MAX];
+    char          *path, *base, *p, *q;
+    int            len;
+    DIR           *dp;
+    struct dirent *de;
+    struct stat    st;
+    regex_t        regex;
+    regmatch_t     m;
+    
+    path = ctx->options.addon_rules;
+    if (path == NULL)
         return TRUE;
     
-    if (strchr(rules, '*'))
-        snprintf(path, sizeof(path), rules);
-    else
-        snprintf(path, sizeof(path), "%s/*.conf", rules);
+    if ((base = strrchr(path, '/')) != NULL) {
+        if (((p = strchr(path, '*')) != NULL && p < base) ||
+            ((p = strchr(path, '?')) != NULL && p < base)) {
+            OHM_ERROR("cgrp: invalid addon rule pattern '%s'", path);
+            return FALSE;
+        }
+        
+        for (p = base; *p == '/'; p++)
+            ;
+        strcpy(glob, p);
 
-    lexer_start_token = START_ADDON_PARSER;
-    if (!lexer_push_input(path))
+        while (*base == '/' && base > path)
+            base--;
+
+        len = base - path + 1;
+        strncpy(dir, path, len);
+        dir[len] = '\0';
+    }
+    else {
+        OHM_ERROR("cgrp: invalid addon rule pattern '%s'", path);
         return FALSE;
+    }
+    
+    for (p = glob, q = pattern; *p; p++) {
+        switch (*p) {
+        case '*': *q++ = '.';  *q++ = '*'; break;
+        case '?': *q++ = '.';              break;
+        case '.': *q++ = '\\'; *q++ = '.'; break;
+        default:  *q++ = *p;               break;
+        }
+    }
+    *q = '\0';
 
-    CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES);
-    success = cgrpyyparse(ctx) == 0;
-    CGRP_CLR_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES);
+    if (regcomp(&regex, pattern, /*REG_NOSUB |*/ REG_NEWLINE) != 0) {
+        OHM_ERROR("cgrp: failed to compile regexp '%s' for '%s'",
+                  pattern, glob);
+        return FALSE;
+    }
+    
+    if ((dp = opendir(dir)) == NULL) {
+        regfree(&regex);
+        return TRUE;
+    }
 
-    return success;
+    while ((de = readdir(dp)) != NULL) {
+        snprintf(file, sizeof(file), "%s/%s", dir, de->d_name);
+        
+        if (stat(file, &st) != 0 || !S_ISREG(st.st_mode))
+            continue;
+        
+        if (!regexec(&regex, de->d_name, 1, &m, REG_NOTBOL|REG_NOTEOL) &&
+            m.rm_so == 0 && m.rm_eo == (regoff_t)strlen(de->d_name)) {
+            config_parse_addon(ctx, file);
+        }
+    }
+    
+    closedir(dp);
+    regfree(&regex);
+    
+    return TRUE;
 }
 
 
