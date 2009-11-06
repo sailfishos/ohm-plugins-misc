@@ -9,6 +9,7 @@
 #include <regex.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/inotify.h>
 
 #include "cgrp-plugin.h"
 #include "cgrp-parser-types.h"
@@ -288,8 +289,19 @@ mount_options: TOKEN_IDENT      { cgroup_set_option(ctx, $1.value); }
     | mount_options TOKEN_IDENT { cgroup_set_option(ctx, $2.value); }
     ;
 
-addon_rules: KEYWORD_ADDON_RULES path {
-          ctx->options.addon_rules = STRDUP($2.value);
+addon_rules: KEYWORD_ADDON_RULES optional_monitor path {
+          ctx->options.addon_rules = STRDUP($3.value);
+    }
+    ;
+
+optional_monitor: /* empty */ {
+          CGRP_CLR_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_MONITOR);
+    }
+    | TOKEN_IDENT {
+          if (!strcmp($1.value, "monitor"))
+              CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_MONITOR);
+          else
+              OHM_ERROR("cgrp: ignoring addon-rule option '%s'", $1.value);
     }
     ;
 
@@ -756,6 +768,133 @@ config_parse_addons(cgrp_context_t *ctx)
     regfree(&regex);
     
     return TRUE;
+}
+
+
+/********************
+ * config_change_cb
+ ********************/
+static gboolean
+config_change_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)data;
+    struct { 
+        struct inotify_event event;
+        char                 path[PATH_MAX];
+    } event;
+
+    (void)chnl;
+
+    
+    if (mask & (G_IO_IN | G_IO_PRI)) {
+        read(ctx->addonwd, &event, sizeof(event));
+        
+        OHM_DEBUG(DBG_CONFIG,
+                  "configuration updated (event 0x%x), scheduling reload",
+                  event.event.mask);
+        
+        config_schedule_reload(ctx);
+    }
+
+    return TRUE;
+}
+
+
+/********************
+ * config_schedule_reload
+ ********************/
+gboolean
+reload_config(gpointer data)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)data;
+    
+    OHM_INFO("cgrp: reloading addon classification rules");
+
+    addon_reload(ctx);
+    ctx->addontmr = 0;
+    
+    OHM_INFO("cgrp: reclassifying existing processes");
+    process_scan_proc(ctx);
+    
+    return FALSE;
+}
+
+void
+config_schedule_reload(cgrp_context_t *ctx)
+{
+    if (ctx->addontmr != 0)
+        g_source_remove(ctx->addontmr);
+    
+    ctx->addontmr = g_timeout_add(15 * 1000, reload_config, ctx);
+}
+
+
+/********************
+ * config_monitor_init
+ ********************/
+int
+config_monitor_init(cgrp_context_t *ctx)
+{
+    char         dir[PATH_MAX], *end;
+    uint32_t     eventmask;
+    GIOCondition condmask;
+    
+    if (ctx->options.addon_rules == NULL)
+        return TRUE;
+
+    if (!CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_MONITOR))
+        return TRUE;
+
+    strcpy(dir, ctx->options.addon_rules);
+    if ((end = strrchr(dir, '/')) == NULL)
+        return FALSE;
+    while (*end == '/' && end > dir)
+        *end-- = '\0';
+
+    if ((ctx->addonwd = inotify_init()) < 0) {
+        OHM_ERROR("cgrp: failed to create inotify watch for addon rules");
+        return FALSE;
+    }
+
+    eventmask = IN_CLOSE_WRITE | IN_DELETE | IN_MOVE;
+    if (inotify_add_watch(ctx->addonwd, dir, eventmask) < 0) {
+        OHM_ERROR("cgrp: failed to set up inotify addon rules monitoring");
+        return FALSE;
+    }
+
+    if ((ctx->addonchnl = g_io_channel_unix_new(ctx->addonwd)) == NULL) {
+        OHM_ERROR("cgrp: failed to allocate watch for addon rules");
+        return FALSE;
+    }
+    
+    condmask = G_IO_IN | G_IO_HUP | G_IO_PRI | G_IO_ERR;
+    ctx->addonsrc = g_io_add_watch(ctx->addonchnl, condmask,
+                                   config_change_cb, ctx);
+    
+    return ctx->addonsrc != 0;
+}
+
+
+/********************
+ * config_monitor_exit
+ ********************/
+void
+config_monitor_exit(cgrp_context_t *ctx)
+{
+    if (ctx->addonsrc != 0) {
+        g_source_remove(ctx->addonsrc);
+        ctx->addonsrc = 0;
+    }
+    
+    if (ctx->addonchnl != NULL) {
+        g_io_channel_unref(ctx->addonchnl);
+        ctx->addonchnl = NULL;
+    }
+
+    if (ctx->addonwd > 0) {
+        close(ctx->addonwd);
+        ctx->addonwd = -1;
+    }
 }
 
 

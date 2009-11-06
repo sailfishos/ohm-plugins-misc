@@ -4,7 +4,7 @@
 
 /* debug flags */
 int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
-int DBG_SYSMON;
+int DBG_SYSMON, DBG_CONFIG;
 
 OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("event"   , "process events"        , &DBG_EVENT),
@@ -12,7 +12,9 @@ OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("classify", "process classification", &DBG_CLASSIFY),
     OHM_DEBUG_FLAG("notify"  , "UI notifications"      , &DBG_NOTIFY),
     OHM_DEBUG_FLAG("action"  , "policy actions"        , &DBG_ACTION),
-    OHM_DEBUG_FLAG("sysmon"  , "system monitoring"     , &DBG_SYSMON));
+    OHM_DEBUG_FLAG("sysmon"  , "system monitoring"     , &DBG_SYSMON),
+    OHM_DEBUG_FLAG("config"  , "configuration"         , &DBG_CONFIG)
+);
 
 
 OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri, gchar **interested));
@@ -90,6 +92,8 @@ plugin_init(OhmPlugin *plugin)
 
     process_scan_proc(ctx);
 
+    config_monitor_init(ctx);
+
     console_init(ctx);
 
     OHM_INFO("cgrp: plugin ready...");
@@ -106,6 +110,7 @@ plugin_exit(OhmPlugin *plugin)
 
     console_exit();
 
+    config_monitor_exit(ctx);
     ep_exit(ctx, signaling_unregister);
     sysmon_exit(ctx);
     proc_exit(ctx);

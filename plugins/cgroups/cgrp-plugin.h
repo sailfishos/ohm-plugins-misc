@@ -321,13 +321,14 @@ enum {
     CGRP_FLAG_MOUNT_CPU,
     CGRP_FLAG_MOUNT_MEMORY,
     CGRP_FLAG_MOUNT_CPUSET,
-    CGRP_FLAG_ADDON_RULES
+    CGRP_FLAG_ADDON_RULES,
+    CGRP_FLAG_ADDON_MONITOR,
 };
 
 
 typedef struct {
     int   flags;
-    char *addon_rules;                      /* add-on rule directory */
+    char *addon_rules;                      /* add-on rule pattern */
 } cgrp_options_t;
 
 
@@ -412,6 +413,10 @@ typedef struct {
     cgrp_procdef_t   *fallback;             /* fallback process definition */
     cgrp_procdef_t   *addons;               /* add-on rules */
     int               naddon;               /* number of add-on rules */
+    int               addonwd;              /* addon watch descriptor */
+    GIOChannel       *addonchnl;            /* g I/O channel and */
+    guint             addonsrc;             /*   event source */
+    guint             addontmr;             /* addon reload timer */
 
     cgrp_options_t    options;              /* global options */
 
@@ -457,7 +462,7 @@ typedef struct {
 
 /* cgrp-plugin.c */
 extern int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
-extern int DBG_SYSMON;
+extern int DBG_SYSMON, DBG_CONFIG;
 
 /* cgrp-process.c */
 int  proc_init(cgrp_context_t *);
@@ -609,6 +614,11 @@ int  expr_eval(cgrp_expr_t *expr, cgrp_proc_attr_t *);
 int  config_parse_config(cgrp_context_t *, char *);
 int  config_parse_addons(cgrp_context_t *);
 void config_print(cgrp_context_t *, FILE *);
+void config_schedule_reload(cgrp_context_t *);
+int  config_monitor_init(cgrp_context_t *);
+void config_monitor_exit(cgrp_context_t *);
+
+
 
 /* cgrp-lexer.l */
 void        lexer_reset(int);
