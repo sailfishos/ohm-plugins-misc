@@ -65,6 +65,111 @@ rule_hash_lookup(cgrp_context_t *ctx, const char *binary)
 }
 
 
+
+/********************
+ * addon_hash_init
+ ********************/
+int
+addon_hash_init(cgrp_context_t *ctx)
+{
+    if ((ctx->addontbl = g_hash_table_new(g_str_hash, g_str_equal)) != NULL)
+        return TRUE;
+    else
+        return FALSE;
+}
+
+
+/********************
+ * addon_hash_exit
+ ********************/
+void
+addon_hash_exit(cgrp_context_t *ctx)
+{
+    if (ctx->addontbl) {
+        g_hash_table_destroy(ctx->addontbl);
+        ctx->addontbl = NULL;
+    }
+}
+
+
+/********************
+ * addon_hash_reset
+ ********************/
+void
+addon_hash_reset(cgrp_context_t *ctx)
+{
+    if (ctx->addontbl) {
+        g_hash_table_destroy(ctx->addontbl);
+        ctx->addontbl = NULL;
+    }
+}
+
+
+/********************
+ * addon_hash_insert
+ ********************/
+int
+addon_hash_insert(cgrp_context_t *ctx, cgrp_procdef_t *pd)
+{
+    if (rule_hash_lookup(ctx, pd->binary) != NULL ||
+        addon_hash_lookup(ctx, pd->binary) != NULL) {
+        OHM_ERROR("cgrp: procdef for '%s' already exists", pd->binary);
+        return FALSE;
+    }
+
+    g_hash_table_insert(ctx->addontbl, pd->binary, pd);
+    return TRUE;
+}
+
+
+/********************
+ * addon_hash_delete
+ ********************/
+int
+addon_hash_delete(cgrp_context_t *ctx, const char *binary)
+{
+    return g_hash_table_remove(ctx->addontbl, binary);
+}
+
+
+/********************
+ * addon_hash_lookup
+ ********************/
+cgrp_procdef_t *
+addon_hash_lookup(cgrp_context_t *ctx, const char *binary)
+{
+    return g_hash_table_lookup(ctx->addontbl, binary);
+}
+
+
+/********************
+ * addon_hash_dump
+ ********************/
+typedef struct {
+    cgrp_context_t *ctx;
+    FILE           *fp;
+} addon_dump_t;
+
+static void
+dump_addon(gpointer key, gpointer value, gpointer data)
+{
+    addon_dump_t *dump = (addon_dump_t *)data;
+
+    (void)key;
+
+    procdef_print(dump->ctx, value, dump->fp);
+    fprintf(dump->fp, "\n");
+}
+
+void
+addon_hash_dump(cgrp_context_t *ctx, FILE *fp)
+{
+    addon_dump_t dump = { ctx: ctx, fp: fp };
+
+    g_hash_table_foreach(ctx->addontbl, dump_addon, &dump);
+}
+
+
 /********************
  * proc_hash_init
  ********************/

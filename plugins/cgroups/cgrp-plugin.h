@@ -416,6 +416,7 @@ typedef struct {
     cgrp_options_t    options;              /* global options */
 
     GHashTable       *ruletbl;              /* lookup table of procdefs */
+    GHashTable       *addontbl;             /* lookup table of extra procdefs */
     GHashTable       *grouptbl;             /* lookup table of groups */
     GHashTable       *parttbl;              /* lookup table of partitions */
     list_hook_t      *proctbl;              /* lookup table of processes */
@@ -523,8 +524,12 @@ int  group_set_priority(cgrp_group_t *, int);
 int  procdef_init(cgrp_context_t *);
 void procdef_exit(cgrp_context_t *);
 
-cgrp_procdef_t *procdef_add(cgrp_context_t *, cgrp_procdef_t *);
-void            procdef_purge(cgrp_procdef_t *);
+int  procdef_add(cgrp_context_t *, cgrp_procdef_t *);
+void procdef_purge(cgrp_procdef_t *);
+
+int  addon_add(cgrp_context_t *, cgrp_procdef_t *);
+void addon_reset(cgrp_context_t *);
+int  addon_reload(cgrp_context_t *);
 
 void procdef_dump(cgrp_context_t *, FILE *);
 void procdef_print(cgrp_context_t *, cgrp_procdef_t *, FILE *);
@@ -535,6 +540,7 @@ cgrp_cmd_t *rule_eval(cgrp_procdef_t *, cgrp_proc_attr_t *);
 int  classify_init  (cgrp_context_t *);
 void classify_exit  (cgrp_context_t *);
 int  classify_config(cgrp_context_t *);
+int  classify_reconfig(cgrp_context_t *);
 int  classify_process(cgrp_context_t *, pid_t, int);
 
 
@@ -550,6 +556,15 @@ void rule_hash_exit  (cgrp_context_t *);
 int  rule_hash_insert(cgrp_context_t *, cgrp_procdef_t *);
 int  rule_hash_remove(cgrp_context_t *, const char *);
 cgrp_procdef_t *rule_hash_lookup(cgrp_context_t *, const char *);
+
+int  addon_hash_init  (cgrp_context_t *);
+void addon_hash_exit  (cgrp_context_t *);
+void addon_hash_reset (cgrp_context_t *);
+int  addon_hash_insert(cgrp_context_t *, cgrp_procdef_t *);
+int  addon_hash_remove(cgrp_context_t *, const char *);
+cgrp_procdef_t *addon_hash_lookup(cgrp_context_t *, const char *);
+void addon_hash_dump(cgrp_context_t *, FILE *);
+
 
 int  proc_hash_init  (cgrp_context_t *);
 void proc_hash_exit  (cgrp_context_t *);

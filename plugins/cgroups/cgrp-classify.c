@@ -10,7 +10,7 @@
 int
 classify_init(cgrp_context_t *ctx)
 {
-    if (!rule_hash_init(ctx) || !proc_hash_init(ctx)) {
+    if (!rule_hash_init(ctx) || !proc_hash_init(ctx) || !addon_hash_init(ctx)) {
         classify_exit(ctx);
         return FALSE;
     }
@@ -44,8 +44,23 @@ classify_config(cgrp_context_t *ctx)
             return FALSE;
 
     for (i = 0, pd = ctx->addons; i < ctx->naddon; i++, pd++)
-        if (!rule_hash_insert(ctx, pd))
-            return FALSE;
+        addon_hash_insert(ctx, pd);
+    
+    return TRUE;
+}
+
+
+/********************
+ * classify_reconfig
+ ********************/
+int
+classify_reconfig(cgrp_context_t *ctx)
+{
+    cgrp_procdef_t *pd;
+    int             i;
+
+    for (i = 0, pd = ctx->addons; i < ctx->naddon; i++, pd++)
+        addon_hash_insert(ctx, pd);
     
     return TRUE;
 }
@@ -88,10 +103,11 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassify)
         return -ENOENT;                       /* we assume it's gone already */
 
     /* we ignore processes with no matching rule */
-    if ((rule = rule_hash_lookup(ctx, process.binary)) == NULL &&
-        (rule = ctx->fallback)                         == NULL)
+    if ((rule = rule_hash_lookup(ctx,  process.binary)) == NULL &&
+        (rule = addon_hash_lookup(ctx, process.binary)) == NULL &&
+        (rule = ctx->fallback)                          == NULL)
         return 0;
-
+    
     /* try binary-specific rules */
     if ((cmd = rule_eval(rule, &procattr)) != NULL) {
         if (rule->renice)

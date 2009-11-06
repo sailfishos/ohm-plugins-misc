@@ -446,8 +446,13 @@ rule: "[" KEYWORD_RULE rule_path "]" "\n" optional_renice rule_statements {
         rule.binary     = $3.value;
 	rule.renice     = $6;
         rule.statements = $7;
-        if (!procdef_add(ctx, &rule))
-	    YYABORT;
+
+        if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES))
+            addon_add(ctx, &rule);
+        else {
+            if (!procdef_add(ctx, &rule))
+                YYABORT;
+        }
     }
     ;
 

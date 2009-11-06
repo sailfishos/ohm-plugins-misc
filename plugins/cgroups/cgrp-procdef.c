@@ -28,53 +28,40 @@ procdef_exit(cgrp_context_t *ctx)
     FREE(ctx->procdefs);
     ctx->procdefs = NULL;
     ctx->nprocdef = 0;
+
+    addon_reset(ctx);
 }
 
 
 /********************
  * procdef_add
  ********************/
-cgrp_procdef_t *
+int
 procdef_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
 {
     cgrp_procdef_t *procdef;
 
     if (!strcmp(pd->binary, "*")) {
-        if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES)) {
-            OHM_ERROR("cgrp: ignoring fallback addon rule ");
-            return pd; /* XXX TODO really dangerous, albeit works for now... */
-        }
-
         if (ctx->fallback != NULL) {
             OHM_ERROR("cgrp: multiple fallback process definitions");
-            return NULL;
+            return FALSE;
         }
         else {
             if (!ALLOC_OBJ(ctx->fallback)) {
                 OHM_ERROR("cgrp: failed to allocate fallback "
                           "process definition");
-                return NULL;
+                return FALSE;
             }
             procdef = ctx->fallback;
         }
     }
     else {
-        if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES)) {
-            if (!REALLOC_ARR(ctx->addons, ctx->naddon, ctx->naddon + 1)) {
-                OHM_ERROR("cgrp: failed to allocate addon process definition");
-                return NULL;
-            }
-
-            procdef = ctx->addons + ctx->naddon++;
+        if (!REALLOC_ARR(ctx->procdefs, ctx->nprocdef, ctx->nprocdef + 1)) {
+            OHM_ERROR("cgrp: failed to allocate process definition");
+            return FALSE;
         }
-        else {
-            if (!REALLOC_ARR(ctx->procdefs, ctx->nprocdef, ctx->nprocdef + 1)) {
-                OHM_ERROR("cgrp: failed to allocate process definition");
-                return NULL;
-            }
 
-            procdef = ctx->procdefs + ctx->nprocdef++;
-        }
+        procdef = ctx->procdefs + ctx->nprocdef++;
     }
 
     procdef->binary     = STRDUP(pd->binary);
@@ -84,10 +71,79 @@ procdef_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
     if (procdef->binary == NULL) {
         OHM_ERROR("cgrp: failed to add %sprocess definition",
                   !strcmp(pd->binary, "*" ? "fallback " : ""));
-        return NULL;
+        return FALSE;
     }
     
-    return procdef;
+    return TRUE;
+}
+
+
+/********************
+ * addon_add
+ ********************/
+int
+addon_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
+{
+    cgrp_procdef_t *procdef;
+
+    if (!strcmp(pd->binary, "*")) {
+        OHM_ERROR("cgrp: ignoring fallback addon rule ");
+        return TRUE;
+    }
+
+    if (!REALLOC_ARR(ctx->addons, ctx->naddon, ctx->naddon + 1)) {
+        OHM_ERROR("cgrp: failed to allocate addon process definition");
+        return FALSE;
+    }
+
+    procdef = ctx->addons + ctx->naddon++;
+
+    procdef->binary     = STRDUP(pd->binary);
+    procdef->renice     = pd->renice;
+    procdef->statements = pd->statements;
+
+    if (procdef->binary == NULL) {
+        OHM_ERROR("cgrp: failed to add addon process definition %s",
+                  pd->binary);
+        return FALSE;
+    }
+    
+    return TRUE;
+}
+
+
+/********************
+ * addon_reset
+ ********************/
+void
+addon_reset(cgrp_context_t *ctx)
+{
+    int i;
+    
+    for (i = 0; i < ctx->naddon; i++)
+        procdef_purge(ctx->addons + i);
+
+    FREE(ctx->addons);
+    ctx->addons = NULL;
+    ctx->naddon = 0;
+}
+
+
+/********************
+ * addon_reload
+ ********************/
+int
+addon_reload(cgrp_context_t *ctx)
+{
+    int success;
+    
+    addon_reset(ctx);
+    addon_hash_reset(ctx);
+
+    success  = config_parse_addons(ctx);
+    success |= classify_reconfig(ctx);
+    
+    return success;
 }
 
 
@@ -103,7 +159,6 @@ procdef_purge(cgrp_procdef_t *procdef)
     procdef->binary     = NULL;
     procdef->statements = NULL;
 }
-
 
 
 /********************
@@ -130,6 +185,11 @@ procdef_dump(cgrp_context_t *ctx, FILE *fp)
         fprintf(fp, "# fallback classification rule\n");
         procdef_print(ctx, ctx->fallback, fp);
     }
+
+#if 0
+    fprintf(fp, "# addon hash table\n");
+    addon_hash_dump(ctx, fp);
+#endif
 }
 
 
