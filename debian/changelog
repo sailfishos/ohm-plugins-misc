@@ -1,8 +1,10 @@
 ohm-plugins-misc (1:1.1) unstable; urgency=low
 
   * Removed telephony/mission-control
+  * Fixes: NB#138664 - ohm-plugins-misc: Failed to build package
+  * Fixes: NB#141241 - package 'ohm-plugins-misc' can not be built with BIFH
 
- -- Martin Wolf <ext-martin.2.wolf@nokia.com>  Thu, 01 Oct 2009 16:11:01 +0300
+ -- Wolf Bergenheim <ext-wolf.2.bergenheim@nokia.com>  Fri, 06 Nov 2009 14:44:18 +0200
 
 ohm-plugins-misc (1:1.0) unstable; urgency=low
 
