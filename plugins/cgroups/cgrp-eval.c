@@ -284,7 +284,8 @@ prop_print(cgrp_context_t *ctx, cgrp_prop_expr_t *expr, FILE *fp)
     const char *propname[] = {
         [CGRP_PROP_BINARY]     = "binary",
         [CGRP_PROP_CMDLINE]    = "commandline",
-        [CGRP_PROP_TYPE]       =  "type",
+        [CGRP_PROP_NAME]       = "name",
+        [CGRP_PROP_TYPE]       = "type",
         [CGRP_PROP_EUID]       = "user",
         [CGRP_PROP_EGID]       = "group",
         [CGRP_PROP_RECLASSIFY] = "reclassify-count",
@@ -293,6 +294,7 @@ prop_print(cgrp_context_t *ctx, cgrp_prop_expr_t *expr, FILE *fp)
     switch (expr->prop) {
     case CGRP_PROP_BINARY:
     case CGRP_PROP_CMDLINE:
+    case CGRP_PROP_NAME:
     case CGRP_PROP_TYPE:
     case CGRP_PROP_EUID:
     case CGRP_PROP_EGID:
@@ -415,6 +417,13 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
         v1.type = CGRP_VALUE_TYPE_STRING;
         v1.str  = CGRP_TST_MASK(attr->mask, CGRP_PROC_CMDLINE) ?
             attr->cmdline : "";
+        break;
+
+    case CGRP_PROP_NAME:
+        process_get_name(attr);
+        v1.type = CGRP_VALUE_TYPE_STRING;
+        v1.str  = CGRP_TST_MASK(attr->mask, CGRP_PROC_NAME) ?
+            attr->name : "";
         break;
         
     case CGRP_PROP_TYPE:

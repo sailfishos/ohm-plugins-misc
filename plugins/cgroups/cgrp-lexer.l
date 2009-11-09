@@ -644,6 +644,7 @@ KEYWORD_MEM_LIMIT         memory-limit
 KEYWORD_RULE              rule
 KEYWORD_BINARY            binary
 KEYWORD_CMDLINE           commandline
+KEYWORD_NAME              name
 KEYWORD_GROUP             group
 KEYWORD_RENICE            renice
 KEYWORD_TYPE              type
@@ -752,6 +753,7 @@ ESCAPE		       \\
 {KEYWORD_PARENT}            { PASS_KEYWORD(PARENT);            }
 {KEYWORD_BINARY}            { PASS_KEYWORD(BINARY);            }
 {KEYWORD_CMDLINE}           { PASS_KEYWORD(CMDLINE);           }
+{KEYWORD_NAME}              { PASS_KEYWORD(NAME);              }
 {KEYWORD_TYPE}              { PASS_KEYWORD(TYPE);              }
 {KEYWORD_IGNORE}            { PASS_KEYWORD(IGNORE);            }
 {KEYWORD_RECLASS_AFTER}     { PASS_KEYWORD(RECLASS_AFTER);     }

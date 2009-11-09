@@ -84,6 +84,7 @@ extern int lexer_start_token;
 %token KEYWORD_RULE
 %token KEYWORD_BINARY
 %token KEYWORD_CMDLINE
+%token KEYWORD_NAME
 %token KEYWORD_GROUP
 %token KEYWORD_RENICE
 %token KEYWORD_USER
@@ -539,6 +540,7 @@ prop_expr: prop "==" value { $$ = prop_expr($1, CGRP_OP_EQUAL, &$3); }
 prop: TOKEN_ARG          { $$ = CGRP_PROP_ARG($1.value); }
     | KEYWORD_BINARY     { $$ = CGRP_PROP_BINARY;        }
     | KEYWORD_CMDLINE    { $$ = CGRP_PROP_CMDLINE;       }
+    | KEYWORD_NAME       { $$ = CGRP_PROP_NAME;          }
     | KEYWORD_TYPE       { $$ = CGRP_PROP_TYPE;          }
     | KEYWORD_USER       { $$ = CGRP_PROP_EUID;          }
     | KEYWORD_GROUP      { $$ = CGRP_PROP_EGID;          }

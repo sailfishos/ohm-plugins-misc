@@ -551,6 +551,24 @@ process_get_argv(cgrp_proc_attr_t *attr)
 
 
 /********************
+ * process_get_name
+ ********************/
+char *
+process_get_name(cgrp_proc_attr_t *attr)
+{
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_NAME))
+        return attr->name;
+    
+    process_get_type(attr);
+
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_NAME))
+        return attr->name;
+    else
+        return NULL;
+}
+
+
+/********************
  * process_get_euid
  ********************/
 uid_t
@@ -630,12 +648,23 @@ process_get_type(cgrp_proc_attr_t *attr)
     p          = stat;
     nfield     = 0;
 
-    if (attr->binary == NULL || !*attr->binary) {
-        FIND_FIELD(FIELD_NAME);
-        bin = p;
+    FIND_FIELD(FIELD_NAME);
+    bin = p;
+    if (*bin == '(')
+        bin++;
+    for (e = bin; *e != ')' && *e != ' ' && *e; e++)
+        ;
+    if (*e == ')')
+        e--;
+    if (e >= bin) {
+        size = e - bin + 1;
+        if (size > CGRP_COMM_LEN - 1)
+            size = CGRP_COMM_LEN - 1;
+        strncpy(attr->name, bin, size);
+        attr->name[size] = '\0';
     }
-    else
-        bin = NULL;
+    CGRP_SET_MASK(attr->mask, CGRP_PROC_NAME);
+
 
     FIND_FIELD(FIELD_PPID);
     ppid = p;
@@ -647,28 +676,19 @@ process_get_type(cgrp_proc_attr_t *attr)
     attr->type  = (*vmsz == '0') ? CGRP_PROC_KERNEL : CGRP_PROC_USER;
     CGRP_SET_MASK(attr->mask, CGRP_PROC_PPID);
     CGRP_SET_MASK(attr->mask, CGRP_PROC_TYPE);
+
     
-    if (bin != NULL && *bin == '(') {
-        bin++;
-        for (e = bin; *e != ')' && *e != ' ' && *e; e++)
-            ;
-        if (*e == ')')
-            e--;
-
-        /*
-         * Notes: if the buffer is not NULL, we expect it to point to a valid
-         *     buffer of at least PATH_MAX bytes. This is used during process
-         *     discovery to avoid having to allocate a dynamic buffer for
-         *     processes that are ignored.
-         */
-        
-        if (attr->binary == NULL) {
-            if ((attr->binary = ALLOC_ARR(char, e - bin + 1)) == NULL)
-                return attr->type;
-        }
-
-        sprintf(attr->binary, "%.*s", e - bin + 1, bin);
-        CGRP_SET_MASK(attr->mask, CGRP_PROC_BINARY);
+    /*
+     * Notes: if the buffer is not NULL, we expect it to point to a valid
+     *     buffer of at least PATH_MAX bytes. This is used during process
+     *     discovery to avoid having to allocate a dynamic buffer for
+     *     processes that are ignored.
+     */
+    
+    if (attr->binary == NULL) {
+        attr->binary = STRDUP(attr->name);
+        if (attr->binary != NULL)
+            CGRP_SET_MASK(attr->mask, CGRP_PROC_BINARY);
     }
     
     return attr->type;
