@@ -368,10 +368,11 @@ static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
         break;
 
     case fldtype_integer:
-        if (G_VALUE_TYPE(gv) != G_TYPE_LONG)
-            goto type_mismatch;
-        else
-            *(long *)vptr = g_value_get_long(gv);
+        switch (G_VALUE_TYPE(gv)) {
+        case G_TYPE_LONG: *(long *)vptr = g_value_get_long(gv); break;
+        case G_TYPE_INT:  *(long *)vptr = g_value_get_int(gv);  break;
+        default:          goto type_mismatch;
+        }
         break;
 
     case fldtype_unsignd:
@@ -728,6 +729,11 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
                     fld.type = fldtype_integer;
                     fld.value.integer = g_value_get_long(gval);
                     break;
+
+                case G_TYPE_INT:
+                    fld.type = fldtype_integer;
+                    fld.value.integer = g_value_get_int(gval);
+                    break;
                     
                 case G_TYPE_ULONG:
                     fld.type = fldtype_unsignd;
@@ -745,8 +751,8 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
                     break;
                     
                 default:
-                    OHM_ERROR("[%s] Unsupported data type for field '%s'",
-                              __FUNCTION__, fld.name);
+                    OHM_ERROR("[%s] Unsupported data type (%d) for field '%s'",
+                              __FUNCTION__, G_VALUE_TYPE(gval), fld.name);
                     return;
                 }
                 

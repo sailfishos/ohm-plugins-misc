@@ -284,6 +284,7 @@ static void sm_init(OhmPlugin *plugin)
     ADD_FIELD_WATCH(FACTSTORE_PRIVACY  , NULL  , "value"   , privacy_cb  );
     ADD_FIELD_WATCH(FACTSTORE_BLUETOOTH, NULL  , "value"   , bluetooth_cb);
     ADD_FIELD_WATCH(FACTSTORE_MUTE     , selist, "mute"    , mute_cb     );
+    ADD_FIELD_WATCH(FACTSTORE_MUTE     , selist, "forced"  , mute_cb     );
 
 #undef ADD_FIELD_WATCH
 
@@ -1445,34 +1446,21 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
 {
     (void)entry;
     (void)name;
+    (void)fld;
     (void)usrdata;
 
     char *mute;
-    int   state;
-    char *hidden;
+    int   state, forced;
 
 
-    /* 
-     * Notes: We omit sending the signal if requested so. This hack is
-     *        currently used for muting during DTMF transmission without
-     *        letting the client (ie. the UI) know about it.
-     */
-
-    hidden = NULL;
-    fsif_get_field_by_entry(entry, fldtype_string, "hidden", &hidden);
-    if (hidden != NULL && !strcmp(hidden, "yes")) {
-        
-        OHM_DEBUG(DBG_QUE, "Hidden mute change, omitting notification.");
-        return;
-    }
+    forced = FALSE;
+    fsif_get_field_by_entry(entry, fldtype_integer, "forced", &forced);
     
-
-    if (fld->type == fldtype_string && fld->value.string)
-        mute = fld->value.string;
-    else {
-        OHM_ERROR("[%s] invalid field type", __FUNCTION__);
+    if (forced)           /* suppress notification for forced mutes */
         return;
-    }
+    
+    mute = NULL;
+    fsif_get_field_by_entry(entry, fldtype_string, "mute", &mute);
 
     if (mute == NULL) {
         OHM_ERROR("[%s] invalid field value '<null>'", __FUNCTION__);
