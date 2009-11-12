@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.64) unstable; urgency=low
+
+  * Adjusted mute suppression to the fixes in policy-settings.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 12 Nov 2009 19:11:57 +0200
+
 ohm-plugins-misc (0.6.63) unstable; urgency=low
 
   * videoep support for callui window popup/popdown messages (Fixes: NB#144826)
