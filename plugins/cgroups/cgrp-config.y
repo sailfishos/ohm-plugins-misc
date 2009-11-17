@@ -34,7 +34,7 @@ extern int lexer_start_token;
     cgrp_procdef_t   *rules;
     cgrp_stmt_t      *stmt;
     cgrp_expr_t      *expr;
-    cgrp_cmd_t        cmd;
+    cgrp_cmd_t       *cmd;
     cgrp_prop_type_t  prop;
     cgrp_value_t      value;
     cgrp_context_t    ctx;
@@ -64,6 +64,7 @@ extern int lexer_start_token;
 %type <expr>     prop_expr
 %type <prop>     prop
 %type <value>    value
+%type <cmd>      commands
 %type <cmd>      command
 %type <cmd>      command_group
 %type <cmd>      command_ignore
@@ -107,13 +108,14 @@ extern int lexer_start_token;
 %token TOKEN_HEADER_OPEN "["
 %token TOKEN_HEADER_CLOSE "]"
 
-%token TOKEN_AND   "&&"
-%token TOKEN_OR    "||"
-%token TOKEN_NOT   "!"
-%token TOKEN_EQUAL "=="
-%token TOKEN_NOTEQ "!="
-%token TOKEN_LESS  "<"
-%token TOKEN_IMPLIES "=>"
+%token TOKEN_AND       "&&"
+%token TOKEN_OR        "||"
+%token TOKEN_NOT       "!"
+%token TOKEN_EQUAL     "=="
+%token TOKEN_NOTEQ     "!="
+%token TOKEN_LESS      "<"
+%token TOKEN_IMPLIES   "=>"
+%token TOKEN_SEMICOLON ";"
 
 %token <uint32> TOKEN_ARG
 %token <string> TOKEN_IDENT
@@ -496,7 +498,7 @@ rule_statements: rule_statement "\n" {
     }
     ;
 
-rule_statement: expr "=>" command {
+rule_statement: expr "=>" commands {
         cgrp_stmt_t *stmt;
 
         if (ALLOC_OBJ(stmt) == NULL) {
@@ -508,7 +510,7 @@ rule_statement: expr "=>" command {
 
         $$ = stmt;
     }
-    | command {
+    | commands {
         cgrp_stmt_t *stmt;
 
         if (ALLOC_OBJ(stmt) == NULL) {
@@ -570,20 +572,62 @@ value: TOKEN_STRING {
     }
     ;
 
+
+commands: command {
+        cgrp_cmd_t *cmd;
+
+        if (ALLOC_OBJ(cmd) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new command");
+	    exit(1);
+        }
+        *cmd = *$1;
+        cmd->any.next = NULL;
+
+        $$ = cmd;
+    }
+    | commands ";" command {
+        cgrp_cmd_t *cmd, *p;
+
+        if (ALLOC_OBJ(cmd) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new command");
+            exit(1);
+        }
+        *cmd = *$3;
+        cmd->any.next = NULL;
+
+        for (p = $1; p->any.next != NULL; p = p->any.next)
+            ;
+        p->any.next = cmd;     
+
+        $$ = $1;
+    }
+    ;
+
 command: command_group   { $$ = $1; }
     | command_ignore     { $$ = $1; }
     | command_reclassify { $$ = $1; }
     ;
 
 command_group: KEYWORD_GROUP group_name {
-        cgrp_group_t *group;
+	cgrp_cmd_group_t *cmd;
+        cgrp_group_t     *group;
 
+	/* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
         if ((group = group_find(ctx, $2.value)) == NULL) {
             OHM_ERROR("cgrp: reference to nonexisting group \"%s\"", $2.value);
             exit(1);
         }
-        $$.group.type  = CGRP_CMD_GROUP;
-	$$.group.group = group;
+
+	if (ALLOC_OBJ(cmd) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new group command");
+	    exit(1);
+        }
+
+        cmd->type  = CGRP_CMD_GROUP;
+        cmd->group = group;
+        cmd->next  = NULL; 
+
+	$$ = (cgrp_cmd_t *)cmd;
     }
     ;
 
@@ -591,12 +635,34 @@ group_name: TOKEN_STRING { $$ = $1; }
     | TOKEN_IDENT        { $$ = $1; }
     ;
 
-command_ignore: KEYWORD_IGNORE { $$.ignore.type = CGRP_CMD_IGNORE; }
+command_ignore: KEYWORD_IGNORE {
+	  cgrp_cmd_any_t *cmd;
+
+	  /* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
+          if (ALLOC_OBJ(cmd) == NULL) {
+	      OHM_ERROR("cgrp: failed to allocate new ignore command");
+	      exit(1);
+          }
+
+          cmd->type = CGRP_CMD_IGNORE;
+
+          $$ = (cgrp_cmd_t *)cmd;
+    }
     ;
 
 command_reclassify: KEYWORD_RECLASS_AFTER TOKEN_UINT {
-          $$.reclassify.type  = CGRP_CMD_RECLASSIFY;
-	  $$.reclassify.delay = $2.value;
+	  cgrp_cmd_reclassify_t *cmd;
+
+	  /* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
+          if (ALLOC_OBJ(cmd) == NULL) {
+	      OHM_ERROR("cgrp: failed to allocate new ignore command");
+	      exit(1);
+          }
+
+          cmd->type  = CGRP_CMD_RECLASSIFY;
+          cmd->delay = $2.value;
+
+          $$ = (cgrp_cmd_t *)cmd;
     }
     ;
 

@@ -3,6 +3,7 @@
 
 static int  prop_type_check(cgrp_prop_expr_t *);
 static void free_expr(cgrp_expr_t *);
+static void command_free_all(cgrp_cmd_t *);
 
 
 /********************
@@ -183,7 +184,7 @@ statement_free(cgrp_stmt_t *stmt)
 {
     if (stmt) {
         free_expr(stmt->expr);
-        /* command_free(expr->command); */
+        command_free_all(stmt->command);
     }
 }
 
@@ -231,7 +232,7 @@ statement_print(cgrp_context_t *ctx, cgrp_stmt_t *stmt, FILE *fp)
         fprintf(fp, " => ");
     }
     
-    command_print(ctx, &stmt->command, fp);
+    command_print(ctx, stmt->command, fp);
     fprintf(fp, "\n");
 }
 
@@ -339,25 +340,58 @@ value_print(cgrp_context_t *ctx, cgrp_value_t *value, FILE *fp)
 
 
 /********************
+ * command_free
+ ********************/
+static inline void
+command_free(cgrp_cmd_t *command)
+{
+    FREE(command);
+}
+
+
+/********************
+ * command_free_all
+ ********************/
+void
+command_free_all(cgrp_cmd_t *command)
+{
+    cgrp_cmd_t *next;
+
+    while (command) {
+        next = command->any.next;
+        command_free(command);
+        command = next;
+    }
+}
+
+
+/********************
  * command_print
  ********************/
 void
 command_print(cgrp_context_t *ctx, cgrp_cmd_t *cmd, FILE *fp)
 {
+    char *t = "";
+    
     (void)ctx;
     
-    switch (cmd->any.type) {
-    case CGRP_CMD_GROUP:
-        fprintf(fp, "group %s", cmd->group.group->name);
-        break;
-    case CGRP_CMD_IGNORE:
-        fprintf(fp, "ignore");
-        break;
-    case CGRP_CMD_RECLASSIFY:
-        fprintf(fp, "reclassify-after %d", cmd->reclassify.delay);
-        break;
-    default:
-        fprintf(fp, "<invalid command>");
+    while (cmd != NULL) {
+        switch (cmd->any.type) {
+        case CGRP_CMD_GROUP:
+            fprintf(fp, "%sgroup %s", t, cmd->group.group->name);
+            break;
+        case CGRP_CMD_IGNORE:
+            fprintf(fp, "%signore", t);
+            break;
+        case CGRP_CMD_RECLASSIFY:
+            fprintf(fp, "%sreclassify-after %d", t, cmd->reclassify.delay);
+            break;
+        default:
+            fprintf(fp, "%s<invalid command>", t);
+        }
+        
+        cmd = cmd->any.next;
+        t = "; ";
     }
 }
 

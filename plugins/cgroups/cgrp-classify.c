@@ -175,57 +175,61 @@ command_execute(cgrp_context_t *ctx, cgrp_proc_attr_t *process, cgrp_cmd_t *cmd)
 {
     cgrp_process_t *proc;
     
-    switch (cmd->any.type) {
-    case CGRP_CMD_GROUP: 
-        if ((proc = proc_hash_remove(ctx, process->pid)) != NULL) {
-            FREE(proc->binary);
-            proc->binary = STRDUP(process->binary);
-        }
-        else {
-            if (ALLOC_OBJ(proc) != NULL) {
+    while (cmd != NULL) {
+        switch (cmd->any.type) {
+        case CGRP_CMD_GROUP: 
+            if ((proc = proc_hash_remove(ctx, process->pid)) != NULL) {
+                FREE(proc->binary);
                 proc->binary = STRDUP(process->binary);
-                list_init(&proc->proc_hook);
-                list_init(&proc->group_hook);
             }
-            proc->pid = process->pid;
-        }
-        
-        if (proc == NULL || proc->binary == NULL) {
-            OHM_ERROR("cgrp: out of memory");
-            return FALSE;
-        }
-
-        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid,
-                  process->binary, cmd->group.group->name);
-        group_add_process(ctx, cmd->group.group, proc);
-        proc_hash_insert(ctx, proc);
-        break;
-
-    case CGRP_CMD_IGNORE:
-        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: ignored",
-                  process->pid, process->binary);
-        if ((proc = proc_hash_lookup(ctx, process->pid)) != NULL)
-            process_ignore(ctx, proc);
-        break;
-
-    case CGRP_CMD_RECLASSIFY:
-        if (process->reclassify < CGRP_RECLASSIFY_MAX) {
-            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: reclassify #%d after %u msecs",
-                      process->pid, process->binary, process->reclassify + 1,
-                      cmd->reclassify.delay);        
-            schedule_reclassify(ctx, process->pid, cmd->reclassify.delay,
-                                process->reclassify + 1);
-        }
-        else {
-            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: too many reclassifications",
+            else {
+                if (ALLOC_OBJ(proc) != NULL) {
+                    proc->binary = STRDUP(process->binary);
+                    list_init(&proc->proc_hook);
+                    list_init(&proc->group_hook);
+                }
+                proc->pid = process->pid;
+            }
+            
+            if (proc == NULL || proc->binary == NULL) {
+                OHM_ERROR("cgrp: out of memory");
+                return FALSE;
+            }
+            
+            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid,
+                      process->binary, cmd->group.group->name);
+            group_add_process(ctx, cmd->group.group, proc);
+            proc_hash_insert(ctx, proc);
+            break;
+            
+        case CGRP_CMD_IGNORE:
+            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: ignored",
                       process->pid, process->binary);
             if ((proc = proc_hash_lookup(ctx, process->pid)) != NULL)
                 process_ignore(ctx, proc);
+            break;
+            
+        case CGRP_CMD_RECLASSIFY:
+            if (process->reclassify < CGRP_RECLASSIFY_MAX) {
+                OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: reclassify #%d, %u msecs",
+                          process->pid, process->binary,
+                          process->reclassify + 1, cmd->reclassify.delay);
+                schedule_reclassify(ctx, process->pid, cmd->reclassify.delay,
+                                    process->reclassify + 1);
+            }
+            else {
+                OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: too many reclassifications",
+                          process->pid, process->binary);
+                if ((proc = proc_hash_lookup(ctx, process->pid)) != NULL)
+                    process_ignore(ctx, proc);
+            }
+            break;
+            
+        default:
+            OHM_ERROR("cgrp: <invalid command>\n");
         }
-        break;
         
-    default:
-        fprintf(stdout, "<invalid command>\n");
+        cmd = cmd->any.next;
     }
     
     return TRUE;

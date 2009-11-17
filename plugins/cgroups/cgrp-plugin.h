@@ -103,6 +103,8 @@ typedef struct {
  * classification commands
  */
 
+typedef union cgrp_cmd_u cgrp_cmd_t;
+
 typedef enum {
     CGRP_CMD_UNKNOWN = 0,
     CGRP_CMD_GROUP,                         /* group classification */
@@ -110,8 +112,9 @@ typedef enum {
     CGRP_CMD_RECLASSIFY,                    /* reclassify after a timeout */
 } cgrp_cmd_type_t;
 
-#define CGRP_CMD_COMMON \
-    cgrp_cmd_type_t type                    /* command type */
+#define CGRP_CMD_COMMON                                         \
+    cgrp_cmd_type_t  type;                   /* command type */ \
+    cgrp_cmd_t      *next                    /* next command */
 
 typedef struct {
     CGRP_CMD_COMMON;                        /* type, common fields */
@@ -127,12 +130,12 @@ typedef struct {
     unsigned int delay;                     /* after this many msecs */
 } cgrp_cmd_reclassify_t;
 
-typedef union {
+union cgrp_cmd_u {
     cgrp_cmd_any_t         any;             /* any command */
     cgrp_cmd_group_t       group;           /* group classification command */
     cgrp_cmd_any_t         ignore;          /* ignore command */
     cgrp_cmd_reclassify_t  reclassify;      /* reclassify command */
-} cgrp_cmd_t;
+};
 
 
 /*
@@ -230,7 +233,7 @@ union cgrp_expr_u {
 typedef struct cgrp_stmt_s cgrp_stmt_t;
 struct cgrp_stmt_s {
     cgrp_expr_t   *expr;                    /* test expression */
-    cgrp_cmd_t     command;                 /* command if expr is true */
+    cgrp_cmd_t    *command;                 /* command if expr is true */
     cgrp_stmt_t   *next;                    /* more statements */
 };
 

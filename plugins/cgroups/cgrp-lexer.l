@@ -674,6 +674,7 @@ AND                    &&
 OR                     \|\|
 NOT                    \!
 IMPLIES                =>
+SEMICOLON              ;
 
 ASTERISK               \*
 IDENT                  [a-zA-Z_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])*
@@ -778,6 +779,7 @@ ESCAPE		       \\
 {OR}                        { PASS_TOKEN(OR);                  }
 {NOT}                       { PASS_TOKEN(NOT);                 }
 {IMPLIES}                   { PASS_TOKEN(IMPLIES);             }
+{SEMICOLON}                 { PASS_TOKEN(SEMICOLON);           }
 
 {ASTERISK}                  { PASS_TOKEN(ASTERISK);            }
 {IDENT}                     { PASS_STRING(IDENT);              }

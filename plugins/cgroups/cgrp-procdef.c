@@ -199,12 +199,35 @@ procdef_dump(cgrp_context_t *ctx, FILE *fp)
 void
 procdef_print(cgrp_context_t *ctx, cgrp_procdef_t *procdef, FILE *fp)
 {
+#if 0
+    cgrp_procdef_t *rule;
+    char           *type;
+#endif
+
     (void)ctx;
 
     fprintf(fp, "[rule '%s']\n", procdef->binary);
     if (procdef->renice)
         fprintf(fp, "renice %d\n", procdef->renice);
     statements_print(ctx, procdef->statements, fp);
+
+#if 0
+    if ((rule = rule_hash_lookup(ctx, procdef->binary)) != NULL)
+        type = "basic";
+    else if ((rule = addon_hash_lookup(ctx, procdef->binary)) != NULL)
+        type = "addon";
+    else
+        type = NULL;
+
+    if (type != NULL) {
+        fprintf(fp, "# %s rule: [rule '%s']\n", type, rule->binary);
+        if (rule->renice)
+            fprintf(fp, "renice %d\n", rule->renice);
+        statements_print(ctx, rule->statements, fp);
+    }
+    else
+        fprintf(fp, "# no hashed rule\n");
+#endif
 }
 
 
@@ -218,8 +241,8 @@ rule_eval(cgrp_procdef_t *rule, cgrp_proc_attr_t *procattr)
 
     for (stmt = rule->statements; stmt != NULL; stmt = stmt->next)
         if (stmt->expr == NULL || expr_eval(stmt->expr, procattr))
-            return &stmt->command;
-
+            return stmt->command;
+    
     return NULL;
 }
 
