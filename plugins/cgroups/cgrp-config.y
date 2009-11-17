@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <regex.h>
+#include <sched.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/inotify.h>
@@ -71,6 +72,7 @@ extern int lexer_start_token;
 %type <cmd>      command_group
 %type <cmd>      command_ignore
 %type <cmd>      command_reclassify
+%type <cmd>      command_schedule
 %type <string>   group_name
 %type <string>   string
 %type <renice>   optional_renice
@@ -93,6 +95,7 @@ extern int lexer_start_token;
 %token KEYWORD_NAME
 %token KEYWORD_GROUP
 %token KEYWORD_RENICE
+%token KEYWORD_SCHEDULE
 %token KEYWORD_USER
 %token KEYWORD_PARENT
 %token KEYWORD_TYPE
@@ -635,6 +638,7 @@ commands: command {
 command: command_group   { $$ = $1; }
     | command_ignore     { $$ = $1; }
     | command_reclassify { $$ = $1; }
+    | command_schedule   { $$ = $1; }
     ;
 
 command_group: KEYWORD_GROUP group_name {
@@ -669,7 +673,7 @@ command_ignore: KEYWORD_IGNORE {
 
 	  /* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
           if (ALLOC_OBJ(cmd) == NULL) {
-	      OHM_ERROR("cgrp: failed to allocate new ignore command");
+	      OHM_ERROR("cgrp: failed to allocate new command");
 	      exit(1);
           }
 
@@ -684,12 +688,49 @@ command_reclassify: KEYWORD_RECLASS_AFTER TOKEN_UINT {
 
 	  /* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
           if (ALLOC_OBJ(cmd) == NULL) {
-	      OHM_ERROR("cgrp: failed to allocate new ignore command");
+	      OHM_ERROR("cgrp: failed to allocate new command");
 	      exit(1);
           }
 
           cmd->type  = CGRP_CMD_RECLASSIFY;
           cmd->delay = $2.value;
+
+          $$ = (cgrp_cmd_t *)cmd;
+    }
+    ;
+
+command_schedule: KEYWORD_SCHEDULE TOKEN_IDENT TOKEN_UINT {
+	  cgrp_cmd_schedule_t *cmd;
+
+	  /* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
+          if (ALLOC_OBJ(cmd) == NULL) {
+	      OHM_ERROR("cgrp: failed to allocate new command");
+	      exit(1);
+          }
+
+          cmd->type     = CGRP_CMD_SCHEDULE;
+          cmd->priority = 0;
+
+	  if (!strcmp($2.value, "fifo")) {
+	      cmd->policy   = SCHED_FIFO;
+	      cmd->priority = (int)$3.value;
+          }
+	  else if (!strcmp($2.value, "rr") || !strcmp($2.value, "roundrobin")) {
+	      cmd->policy   = SCHED_RR;
+	      cmd->priority = (int)$3.value;
+          }
+          else if (!strcmp($2.value, "other"))
+	      cmd->policy = SCHED_OTHER;
+#ifdef SCHED_BATCH
+	  else if (!strcmp($2.value, "batch"))
+	      cmd->policy = SCHED_BATCH;
+#endif
+	  else {
+	      OHM_ERROR("cgrp: ignoring invalid scheduling policy '%s'",
+                        $2.value);
+	      cmd->policy   = SCHED_OTHER;
+	      cmd->priority = 0;
+          }
 
           $$ = (cgrp_cmd_t *)cmd;
     }

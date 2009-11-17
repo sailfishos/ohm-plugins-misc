@@ -648,6 +648,7 @@ KEYWORD_CMDLINE           commandline
 KEYWORD_NAME              name
 KEYWORD_GROUP             group
 KEYWORD_RENICE            renice
+KEYWORD_SCHEDULE          schedule
 KEYWORD_TYPE              type
 KEYWORD_USER              user
 KEYWORD_PARENT            parent
@@ -752,6 +753,7 @@ ESCAPE		       \\
 {KEYWORD_RULE}              { PASS_KEYWORD(RULE);              }
 {KEYWORD_GROUP}             { PASS_KEYWORD(GROUP);             }
 {KEYWORD_RENICE}            { PASS_KEYWORD(RENICE);            }
+{KEYWORD_SCHEDULE}          { PASS_KEYWORD(SCHEDULE);          }
 {KEYWORD_USER}              { PASS_KEYWORD(USER);              }
 {KEYWORD_PARENT}            { PASS_KEYWORD(PARENT);            }
 {KEYWORD_BINARY}            { PASS_KEYWORD(BINARY);            }

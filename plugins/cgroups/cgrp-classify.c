@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <sched.h>
 
 #include "cgrp-plugin.h"
 
@@ -223,6 +224,14 @@ command_execute(cgrp_context_t *ctx, cgrp_proc_attr_t *process, cgrp_cmd_t *cmd)
                 if ((proc = proc_hash_lookup(ctx, process->pid)) != NULL)
                     process_ignore(ctx, proc);
             }
+            break;
+
+        case CGRP_CMD_SCHEDULE: {
+            struct sched_param sched;
+
+            sched.sched_priority = cmd->schedule.priority;
+            sched_setscheduler(process->pid, cmd->schedule.policy, &sched);
+        }
             break;
             
         default:

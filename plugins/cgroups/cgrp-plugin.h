@@ -112,6 +112,7 @@ typedef enum {
     CGRP_CMD_GROUP,                         /* group classification */
     CGRP_CMD_IGNORE,                        /* ignore */
     CGRP_CMD_RECLASSIFY,                    /* reclassify after a timeout */
+    CGRP_CMD_SCHEDULE,                      /* set scheduling policy */
 } cgrp_cmd_type_t;
 
 #define CGRP_CMD_COMMON                                         \
@@ -132,11 +133,18 @@ typedef struct {
     unsigned int delay;                     /* after this many msecs */
 } cgrp_cmd_reclassify_t;
 
+typedef struct {
+    CGRP_CMD_COMMON;                        /* type, common fields */
+    int policy;                             /* scheduling policy */
+    int priority;                           /* policy-specific priority */
+} cgrp_cmd_schedule_t;
+
 union cgrp_cmd_u {
     cgrp_cmd_any_t         any;             /* any command */
     cgrp_cmd_group_t       group;           /* group classification command */
     cgrp_cmd_any_t         ignore;          /* ignore command */
     cgrp_cmd_reclassify_t  reclassify;      /* reclassify command */
+    cgrp_cmd_schedule_t    schedule;        /* scheduling policy command */
 };
 
 

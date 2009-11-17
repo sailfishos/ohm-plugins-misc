@@ -386,6 +386,10 @@ command_print(cgrp_context_t *ctx, cgrp_cmd_t *cmd, FILE *fp)
         case CGRP_CMD_RECLASSIFY:
             fprintf(fp, "%sreclassify-after %d", t, cmd->reclassify.delay);
             break;
+        case CGRP_CMD_SCHEDULE:
+            fprintf(fp, "%sschedule %d %d", t, cmd->schedule.policy,
+                    cmd->schedule.priority);
+            break;
         default:
             fprintf(fp, "%s<invalid command>", t);
         }
