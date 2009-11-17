@@ -640,6 +640,7 @@ KEYWORD_PARTITION         partition
 KEYWORD_DESCRIPTION       description
 KEYWORD_PATH              path
 KEYWORD_CPU_SHARES        cpu-shares
+KEYWORD_REALTIME_LIMIT    realtime-limit
 KEYWORD_MEM_LIMIT         memory-limit
 KEYWORD_RULE              rule
 KEYWORD_BINARY            binary
@@ -746,6 +747,7 @@ ESCAPE		       \\
 {KEYWORD_DESCRIPTION}       { PASS_KEYWORD(DESCRIPTION);       }
 {KEYWORD_CPU_SHARES}        { PASS_KEYWORD(CPU_SHARES);        }
 {KEYWORD_MEM_LIMIT}         { PASS_KEYWORD(MEM_LIMIT);         }
+{KEYWORD_REALTIME_LIMIT}    { PASS_KEYWORD(REALTIME_LIMIT);    }
 {KEYWORD_PATH}              { PASS_KEYWORD(PATH);              }
 {KEYWORD_RULE}              { PASS_KEYWORD(RULE);              }
 {KEYWORD_GROUP}             { PASS_KEYWORD(GROUP);             }

@@ -39,6 +39,7 @@ extern int lexer_start_token;
     cgrp_value_t      value;
     cgrp_context_t    ctx;
     int               renice;
+    s64_t             time;
 }
 
 %defines
@@ -50,6 +51,7 @@ extern int lexer_start_token;
 %type <string>   path
 %type <uint32>   partition_cpu_share
 %type <uint32>   partition_mem_limit
+%type <part>     partition_rt_limit
 %type <uint32>   optional_unit
 %type <group>    group
 %type <group>    group_properties
@@ -72,6 +74,8 @@ extern int lexer_start_token;
 %type <string>   group_name
 %type <string>   string
 %type <renice>   optional_renice
+%type <time>     time_unit
+%type <time>     time_usec
 
 %token START_FULL_PARSER
 %token START_ADDON_PARSER
@@ -82,6 +86,7 @@ extern int lexer_start_token;
 %token KEYWORD_PATH
 %token KEYWORD_CPU_SHARES
 %token KEYWORD_MEM_LIMIT
+%token KEYWORD_REALTIME_LIMIT
 %token KEYWORD_RULE
 %token KEYWORD_BINARY
 %token KEYWORD_CMDLINE
@@ -352,13 +357,18 @@ partition_properties: partition_path "\n" {
           $$ = $1;
           CGRP_SET_FLAG($$.flags, CGRP_PARTITION_FACT);
     }
-    | partition_properties  partition_cpu_share "\n" {
+    | partition_properties partition_cpu_share "\n" {
           $$           = $1;
           $$.limit.cpu = $2.value;
     }
     | partition_properties partition_mem_limit "\n" {
           $$           = $1;
           $$.limit.mem = $2.value;
+    }
+    | partition_properties partition_rt_limit "\n" {
+          $$                  = $1;
+          $$.limit.rt_period  = $2.limit.rt_period;
+          $$.limit.rt_runtime = $2.limit.rt_runtime;
     }
     | partition_properties error {
         OHM_ERROR("cgrp: failed to parse partition properties near token '%s'",
@@ -382,6 +392,25 @@ partition_mem_limit: KEYWORD_MEM_LIMIT TOKEN_UINT optional_unit {
     }
     ;
 
+partition_rt_limit: KEYWORD_REALTIME_LIMIT 
+                      TOKEN_IDENT time_usec TOKEN_IDENT time_usec {
+          if (!strcmp($2.value, "period") &&
+              !strcmp($4.value, "runtime")) {
+	      $$.limit.rt_period  = $3;
+	      $$.limit.rt_runtime = $5;
+          }
+	  else if (!strcmp($2.value, "period") &&
+                   !strcmp($4.value, "runtime")) {
+	      $$.limit.rt_period  = $5;
+	      $$.limit.rt_runtime = $3;
+          }
+	  else {
+              OHM_ERROR("cgrp: invalid realtime limits ('%s', '%s')",
+	                $2.value, $4.value);
+              exit(1);
+          }
+    }
+    ;
 
 /*****************************************************************************
  *                             *** group section ***                         *
@@ -711,7 +740,31 @@ optional_unit: /* empty */ { $$.value = 1; }
     ;
 
 
+time_usec: TOKEN_UINT time_unit {
+          if ($2 == 0)
+	      $2 = 1000000;
+          $$ = (s64_t)$1.value * $2;
+    }
+    | TOKEN_SINT time_unit {
+          if ($2 == 0)
+	      $2 = 1000000;
+          $$ = $1.value * $2;
+    }
+    ;
 
+time_unit: /* use default units */ {
+          $$ = 0;
+    }
+    | TOKEN_IDENT {
+          if      (!strcmp($1.value,  "sec")) $$ = 1000 * 1000;
+	  else if (!strcmp($1.value, "msec")) $$ = 1000;
+          else if (!strcmp($1.value, "usec")) $$ = 1;
+          else {
+              OHM_ERROR("cgrp: invalid time unit '%s'", $1.value);
+	      exit(1);
+          }
+    }
+    ;
 
 %%
 

@@ -67,6 +67,8 @@ typedef struct {
     struct {                                /* resource limits */
         unsigned int  cpu;                    /* CPU shares */
         u64_t         mem;                    /* max memory in bytes */
+        int           rt_period;              /* total CPU period */
+        int           rt_runtime;             /* allowed realtime period */
     } limit;
 
 #if 0    
@@ -513,6 +515,8 @@ int partition_add_group(cgrp_partition_t *, cgrp_group_t *, int);
 int partition_freeze(cgrp_context_t *, cgrp_partition_t *, int);
 int partition_limit_cpu(cgrp_partition_t *, unsigned int);
 int partition_limit_mem(cgrp_partition_t *, unsigned int);
+int partition_limit_rt(cgrp_partition_t *, int, int);
+
 
 
 /* cgrp-group.c */

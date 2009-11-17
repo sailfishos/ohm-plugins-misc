@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdarg.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -19,16 +20,20 @@
 #define CGROUP_CPUSET  "cpuset"
 
 /* cgroup control entries */
-#define TASKS   "tasks"
-#define FREEZER "freezer.state"
-#define CPU     "cpu.shares"
-#define MEMORY  "memory.limit_in_bytes"
-
+#define TASKS      "tasks"
+#define FREEZER    "freezer.state"
+#define CPU        "cpu.shares"
+#define MEMORY     "memory.limit_in_bytes"
+#define RT_PERIOD  "cpu.rt_period_us"
+#define RT_RUNTIME "cpu.rt_runtime_us"
 
 static int discover_cgroupfs(cgrp_context_t *);
 static int mount_cgroupfs   (cgrp_context_t *);
 
 static int  open_control (cgrp_partition_t *, char *);
+static int  write_control(int, char *, ...)     \
+    __attribute__ ((format(printf, 2, 3)));
+
 static void foreach_print(gpointer, gpointer, gpointer);
 static void foreach_del  (gpointer, gpointer, gpointer);
 
@@ -159,6 +164,8 @@ partition_add(cgrp_context_t *ctx, cgrp_partition_t *p)
     
     partition_limit_cpu(partition, p->limit.cpu);
     partition_limit_mem(partition, p->limit.mem);
+    partition_limit_rt(partition, p->limit.rt_period, p->limit.rt_runtime);
+    
 
     if (!part_hash_insert(ctx, partition)) {
         OHM_ERROR("cgrp: failed to add partition '%s'", partition->name);
@@ -249,6 +256,8 @@ partition_print(cgrp_partition_t *partition, FILE *fp)
         }
         fprintf(fp, "memory-limit %llu%s\n", mem / unitdiv, unitsuf);
     }
+    fprintf(fp, "realtime-limit period %d runtime %d\n",
+            partition->limit.rt_period, partition->limit.rt_runtime);
 }
 
 
@@ -372,7 +381,7 @@ int
 partition_limit_cpu(cgrp_partition_t *partition, unsigned int share)
 {
     char val[64];
-    int  len, chk;
+    int  len, chk;    
 
     partition->limit.cpu = share;
     
@@ -407,6 +416,56 @@ partition_limit_mem(cgrp_partition_t *partition, unsigned int limit)
 }
 
 
+/********************
+ * partition_limit_rt
+ ********************/
+int
+partition_limit_rt(cgrp_partition_t *partition, int period, int runtime)
+{
+    int ctlper, ctlrun, success;
+
+    if (period == 0)
+        return TRUE;
+    
+    partition->limit.rt_period  = period;
+    partition->limit.rt_runtime = runtime;
+
+    ctlper = open_control(partition, RT_PERIOD);
+    ctlrun = open_control(partition, RT_RUNTIME);
+    
+    /*
+     * Notes: Reconfiguring a partition could fail if we ever tried to change
+     *     the limits from (period0, runtime0) to (period1, runtime1) where
+     *     runtime0 > period1 (transiently the allowed RT slice would exceed
+     *     the total CPU period).
+     *
+     *     To avoid this we first set runtime to -1 (runtime implicitly equal
+     *     to period) then update period and runtime. In principle there is a
+     *     small but non-0 chance of a runaway RT process getting scheduled
+     *     before setting the real limits and starving the affected cgroup(s).
+     *     If we ourselves were running in one of those cgroups, it would
+     *     block us from running ever again...
+     */
+
+    if (ctlper >= 0 && ctlrun >= 0) {
+        if (write_control(ctlrun, "%d", -1)) {
+            success  = write_control(ctlper, "%d", period);
+            success &= write_control(ctlrun, "%d", runtime);
+        }
+        else
+            success = FALSE;
+    }
+    else
+        success = FALSE;
+    
+    if (ctlper)
+        close(ctlper);
+    if (ctlrun)
+        close(ctlrun);
+    
+    return success;
+}
+
 
 /********************
  * open_control
@@ -418,6 +477,25 @@ open_control(cgrp_partition_t *partition, char *control)
 
     snprintf(path, sizeof(path), "%s/%s", partition->path, control);
     return open(path, O_WRONLY);
+}
+
+
+/********************
+ * write_control
+ ********************/
+static int
+write_control(int fd, char *format, ...)
+{
+    va_list ap;
+    char    buf[256];
+    int     len, chk;
+    
+    va_start(ap, format);
+    len = vsnprintf(buf, sizeof(buf), format, ap);
+    chk = write(fd, buf, len);
+    va_end(ap);
+    
+    return chk == len;
 }
 
 
