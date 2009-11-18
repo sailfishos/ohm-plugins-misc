@@ -148,6 +148,66 @@ union cgrp_cmd_u {
 };
 
 
+
+/*
+ * classification actions
+ */
+
+union cgrp_action_u;
+typedef union cgrp_action_u cgrp_action_t;
+
+typedef enum {
+    CGRP_ACTION_UNKNOWN = 0,
+    CGRP_ACTION_GROUP,                      /* assign process to a group */
+    CGRP_ACTION_SCHEDULE,                   /* set scheduling policy */
+    CGRP_ACTION_RENICE,                     /* renice process */
+    CGRP_ACTION_RECLASSIFY,                 /* reclassify after a delay */
+    CGRP_ACTION_IGNORE,                     /* apply the default rules */
+    CGRP_ACTION_MAX,
+} cgrp_action_type_t;
+
+
+#define CGRP_ACTION_COMMON                  /* common action fields */  \
+    cgrp_action_type_t  type;               /*   action type */         \
+    cgrp_action_t      *next                /*   next action if any */
+
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+} cgrp_action_any_t;
+
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    cgrp_group_t *group;                    /* group to assign to */
+} cgrp_action_group_t;
+
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    int policy;                             /* scheduling policy */
+    int priority;                           /* priority if applicable */
+} cgrp_action_schedule_t;
+
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    int priority;                           /* scheduling priority */
+} cgrp_action_renice_t;
+
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    int delay;                              /* retry after this many msecs */
+} cgrp_action_classify_t;
+
+
+union cgrp_action_u {
+    cgrp_action_type_t     type;
+    cgrp_action_any_t      any;
+    cgrp_action_group_t    group;
+    cgrp_action_schedule_t schedule;
+    cgrp_action_renice_t   renice;
+    cgrp_action_classify_t classify;
+};
+
+
+
 /*
  * classification statement expressions
  */
@@ -567,7 +627,17 @@ void classify_exit  (cgrp_context_t *);
 int  classify_config(cgrp_context_t *);
 int  classify_reconfig(cgrp_context_t *);
 int  classify_process(cgrp_context_t *, pid_t, int);
+void classify_schedule(cgrp_context_t *, pid_t, unsigned int, int);
 
+
+/* cgrp-action.c */
+cgrp_action_t *action_add(cgrp_action_t *, cgrp_action_t *);
+void           action_del(cgrp_action_t *);
+
+int            action_print(cgrp_context_t *, FILE *, cgrp_action_t *);
+int            action_exec (cgrp_context_t *, cgrp_proc_attr_t *,
+                            cgrp_action_t *);
+void           action_free (cgrp_action_t *);
 
 /* cgrp-ep.c */
 int  ep_init(cgrp_context_t *, GObject *(*)(gchar *, gchar **));

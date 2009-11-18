@@ -24,7 +24,8 @@ libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-console.c   \
 			    cgrp-sysmon.c    \
 			    cgrp-config.y    \
-			    cgrp-lexer.l
+			    cgrp-lexer.l     \
+	                    cgrp-action.c
 
 libohm_cgroups_la_LIBADD = @OHM_PLUGIN_LIBS@
 libohm_cgroups_la_LDFLAGS = -module -avoid-version

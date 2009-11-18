@@ -149,9 +149,12 @@ free_reclassify(gpointer data)
 }
 
 
-static void
-schedule_reclassify(cgrp_context_t *ctx, pid_t pid, unsigned int delay,
-                    int count)
+/********************
+ * classify_schedule
+ ********************/
+void
+classify_schedule(cgrp_context_t *ctx, pid_t pid, unsigned int delay,
+                  int count)
 {
     cgrp_reclassify_t *reclassify;
 
@@ -215,8 +218,8 @@ command_execute(cgrp_context_t *ctx, cgrp_proc_attr_t *process, cgrp_cmd_t *cmd)
                 OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: reclassify #%d, %u msecs",
                           process->pid, process->binary,
                           process->reclassify + 1, cmd->reclassify.delay);
-                schedule_reclassify(ctx, process->pid, cmd->reclassify.delay,
-                                    process->reclassify + 1);
+                classify_schedule(ctx, process->pid, cmd->reclassify.delay,
+                                  process->reclassify + 1);
             }
             else {
                 OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: too many reclassifications",

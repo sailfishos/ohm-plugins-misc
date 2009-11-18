@@ -36,6 +36,7 @@ extern int lexer_start_token;
     cgrp_stmt_t      *stmt;
     cgrp_expr_t      *expr;
     cgrp_cmd_t       *cmd;
+    cgrp_action_t    *action;
     cgrp_prop_type_t  prop;
     cgrp_value_t      value;
     cgrp_context_t    ctx;
@@ -78,6 +79,18 @@ extern int lexer_start_token;
 %type <renice>   optional_renice
 %type <time>     time_unit
 %type <time>     time_usec
+%type <uint32>   schedule_priority
+%type <sint32>   renice_priority
+
+%type <action> action
+%type <action> actions
+%type <action> action_group
+%type <action> action_classify
+%type <action> action_schedule
+%type <action> action_renice
+%type <action> action_ignore
+
+
 
 %token START_FULL_PARSER
 %token START_ADDON_PARSER
@@ -734,6 +747,105 @@ command_schedule: KEYWORD_SCHEDULE TOKEN_IDENT TOKEN_UINT {
 
           $$ = (cgrp_cmd_t *)cmd;
     }
+    ;
+
+
+/*****************************************************************************
+ *                      *** classifiaction actions ***                       *
+ *****************************************************************************/
+
+actions: action          { $$ = $1; }
+    | actions ";" action { $$ = $1; action_add($$, $3); }
+    ;
+
+action: action_group    { $$ = $1; }
+    |   action_classify { $$ = $1; }
+    |   action_schedule { $$ = $1; }
+    |   action_renice   { $$ = $1; }
+    |   action_ignore   { $$ = $1; }
+    ;
+
+action_group: KEYWORD_GROUP group_name {
+	cgrp_action_t *action;
+	cgrp_group_t  *group = group_find(ctx, $2.value);
+
+        if (group == NULL) {
+            OHM_ERROR("cgrp: reference to unknown group '%s'", $2.value);
+	    YYABORT;
+        }
+
+        action = action_group_new(group);
+	if (action == NULL) {
+	    OHM_ERROR("cgrp: failed to allocate new group action");
+	    YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
+action_classify: KEYWORD_RECLASS_AFTER TOKEN_UINT {
+        cgrp_action_t *action;
+
+        action = action_classify_new($2.value);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new classify action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
+action_schedule: KEYWORD_SCHEDULE TOKEN_IDENT schedule_priority {
+        cgrp_action_t *action;
+
+        action = action_schedule_new($2.value, $3.value);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new schedule action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
+action_renice: KEYWORD_RENICE renice_priority {
+        cgrp_action_t *action;
+
+        action = action_renice_new($2.value);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new renice action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
+action_ignore: KEYWORD_IGNORE {
+        cgrp_action_t *action;
+
+        action = action_ignore_new();
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new ignore action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
+group_name: TOKEN_STRING { $$ = $1; }
+    | TOKEN_IDENT        { $$ = $1; }
+    ;
+
+schedule_priority: /* empty */ { $$.value = 0; }
+    | TOKEN_UINT               { $$ = $1;      }
+    ;
+
+renice_priority: TOKEN_UINT    { $$.value = $1.value; }
+    |            TOKEN_SINT    { $$.value = $1.value; }
     ;
 
 
