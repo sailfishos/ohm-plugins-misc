@@ -76,7 +76,7 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassify)
     cgrp_process_t    process;
     cgrp_proc_attr_t  procattr;
     cgrp_procdef_t   *rule;
-    cgrp_cmd_t       *cmd;
+    cgrp_action_t    *actions;
     char             *argv[CGRP_MAX_ARGS];
     char              args[CGRP_MAX_CMDLINE];
     char              cmdl[CGRP_MAX_CMDLINE];
@@ -109,19 +109,23 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassify)
         (rule = ctx->fallback)                          == NULL)
         return 0;
     
+    /* take care of the renice kludge if necessary */
+    if (rule->renice)
+        process_set_priority(&process, rule->renice);
+    
     /* try binary-specific rules */
-    if ((cmd = rule_eval(rule, &procattr)) != NULL) {
+    if ((actions = rule_eval(ctx, rule, &procattr)) != NULL) {
         if (rule->renice)
             process_set_priority(&process, rule->renice);
         procattr_dump(&procattr);
-        return command_execute(ctx, &procattr, cmd);
+        return action_exec(ctx, &procattr, actions);
     }
     
     /* then fallback rule if any */
     if (rule != ctx->fallback && ctx->fallback != NULL)
-        if ((cmd = rule_eval(ctx->fallback, &procattr)) != NULL) {
+        if ((actions = rule_eval(ctx, ctx->fallback, &procattr)) != NULL) {
             procattr_dump(&procattr);
-            return command_execute(ctx, &procattr, cmd);
+            return action_exec(ctx, &procattr, actions);
         }
     
     return 0;

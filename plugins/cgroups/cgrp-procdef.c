@@ -234,14 +234,14 @@ procdef_print(cgrp_context_t *ctx, cgrp_procdef_t *procdef, FILE *fp)
 /********************
  * rule_eval
  ********************/
-cgrp_cmd_t *
-rule_eval(cgrp_procdef_t *rule, cgrp_proc_attr_t *procattr)
+cgrp_action_t *
+rule_eval(cgrp_context_t *ctx, cgrp_procdef_t *rule, cgrp_proc_attr_t *procattr)
 {
     cgrp_stmt_t *stmt;
 
     for (stmt = rule->statements; stmt != NULL; stmt = stmt->next)
-        if (stmt->expr == NULL || expr_eval(stmt->expr, procattr))
-            return stmt->command;
+        if (stmt->expr == NULL || expr_eval(ctx, stmt->expr, procattr))
+            return stmt->actions;
     
     return NULL;
 }

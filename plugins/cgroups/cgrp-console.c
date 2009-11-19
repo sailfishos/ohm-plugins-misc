@@ -54,6 +54,7 @@ help(void)
     printf("cgroup help:          show this help\n");
     printf("cgroup show groups    show groups\n");
     printf("cgroup show config    show configuration\n");
+    printf("cgroup reclassify     reclassify all processes\n");
 }
 
 
@@ -78,15 +79,40 @@ show_config(void)
 
 
 /********************
+ * reclassify
+ ********************/
+static void
+reclassify(char *what)
+{
+    pid_t pid;
+    
+    printf("reclassifying process <%s>\n", what);
+
+    if (!*what || !strcmp(what, "all"))
+        process_scan_proc(ctx);
+    else {
+        pid = (pid_t)strtoul(what, NULL, 10);
+        classify_process(ctx, pid, 0);
+    }
+}
+
+
+/********************
  * console_command
  ********************/
 static void
 console_command(char *command)
 {
-    if      (!strcmp(command, "help"))        help();
-    else if (!strcmp(command, "show groups")) show_groups();
-    else if (!strcmp(command, "show config")) show_config();
-    else printf("unknown cgroup command \"%s\"\n", command);
+    if (!strcmp(command, "help"))
+        help();
+    else if (!strcmp(command, "show groups"))
+        show_groups();
+    else if (!strcmp(command, "show config"))
+        show_config();
+    else if (!strncmp(command, "reclassify", sizeof("reclassify") - 1))
+        reclassify(command + sizeof("reclassify") - 1);
+    else
+        printf("unknown cgroup command \"%s\"\n", command);
 }
 
 

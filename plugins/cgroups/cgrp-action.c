@@ -11,6 +11,19 @@
 #  define SCHED_BATCH SCHED_OTHER
 #endif
 
+#define ACTION_FUNCTIONS(a)                                             \
+    int  action_##a##_print(cgrp_context_t *, FILE *, cgrp_action_t *); \
+    int  action_##a##_exec (cgrp_context_t *, cgrp_proc_attr_t *,       \
+                            cgrp_action_t *);                           \
+    void action_##a##_del  (cgrp_action_t *)
+
+ACTION_FUNCTIONS(group);
+ACTION_FUNCTIONS(schedule);
+ACTION_FUNCTIONS(renice);
+ACTION_FUNCTIONS(classify);
+ACTION_FUNCTIONS(ignore);
+
+#undef ACTION_FUNCTIONS
 
 typedef struct {
     int  (*exec) (cgrp_context_t *, cgrp_proc_attr_t *, cgrp_action_t *);
@@ -19,23 +32,19 @@ typedef struct {
 } action_handler_t;
 
 
-#define ACTION(type, execcb, printcb, freecb)               \
-    [CGRP_ACTION_##type] = {                                \
-       .exec:  action_##execcb,                             \
-       .print: action_##printcb,                            \
-       .free:  action_##freecb,                             \
+#define ACTION(type, execcb, printcb, freecb)                 \
+    [CGRP_ACTION_##type] = {                                  \
+        .exec  = action_##execcb,                             \
+        .print = action_##printcb,                            \
+        .free  = action_##freecb,                             \
     }
 
 static action_handler_t actions[] = {
-#if 0
-    ACTION(GROUP,    group_exec   , group_print   , group_del),
-    ACTION(SCHEDULE, schedule_exec, schedule_print, schedule_del),
-    ACTION(RENICE  , renice_exec  , renice_print  , renice_del),
-    ACTION(CLASSIFY, classify_exec, classify_print, classify_del),
-    ACTION(IGNORE  , ignore_exec  , ignore_print  , ignore_del)
-#else
-    [CGRP_ACTION_GROUP] = { NULL, NULL, NULL }
-#endif
+    ACTION(GROUP     , group_exec   , group_print   , group_del),
+    ACTION(SCHEDULE  , schedule_exec, schedule_print, schedule_del),
+    ACTION(RENICE    , renice_exec  , renice_print  , renice_del),
+    ACTION(RECLASSIFY, classify_exec, classify_print, classify_del),
+    ACTION(IGNORE    , ignore_exec  , ignore_print  , ignore_del)
 };
 
 #undef ACTION
@@ -84,16 +93,29 @@ action_del(cgrp_action_t *actions)
 int
 action_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
 {
-    int type = action->type;
-    
-    if (CGRP_ACTION_UNKNOWN < type && type < CGRP_ACTION_MAX) {
-        if (actions[type].print != NULL)
-            return actions[type].print(ctx, fp, action);
-        else
-            return -1;
+    int   type = action->type;
+    char *t    = "";;
+    int   n, len;
+
+    n = len = 0;
+    while (action != NULL && n >= 0) {
+        if (CGRP_ACTION_UNKNOWN < type && type < CGRP_ACTION_MAX) {
+            n = fprintf(fp, "%s", t);
+            if (actions[type].print != NULL)
+                n = actions[type].print(ctx, fp, action);
+            else
+                goto unknown;
+        }
+        else {
+        unknown:
+            n = fprintf(fp, "%s<unknown action>", t);
+        }
+        
+        action  = action->any.next;
+        len    += n;
     }
-    else
-        return -1;
+    
+    return n;
 }
 
 
@@ -104,15 +126,25 @@ int
 action_exec(cgrp_context_t *ctx, cgrp_proc_attr_t *attr, cgrp_action_t *action)
 {
     int type = action->type;
-
-    if (CGRP_ACTION_UNKNOWN < type && type < CGRP_ACTION_MAX) {
-        if (actions[type].exec != NULL)
-            return actions[type].exec(ctx, attr, action);
-        else
-            return FALSE;
+    int success;
+    
+    success = TRUE;
+    while (action != NULL) {
+        if (CGRP_ACTION_UNKNOWN < type && type < CGRP_ACTION_MAX) {
+            if (actions[type].exec != NULL)
+                success &= actions[type].exec(ctx, attr, action);
+            else
+                goto unknown;
+        }
+        else {
+        unknown:
+            success = FALSE;
+        }
+        
+        action = action->any.next;
     }
-    else
-        return FALSE;
+
+    return success;
 }
 
 
@@ -393,8 +425,10 @@ action_classify_new(int delay)
 {
     cgrp_action_classify_t *action;
     
-    if (ALLOC_OBJ(action) != NULL)
+    if (ALLOC_OBJ(action) != NULL) {
+        action->type  = CGRP_ACTION_RECLASSIFY;
         action->delay = delay;
+    }
 
     return (cgrp_action_t *)action;
 }
@@ -494,6 +528,7 @@ action_ignore_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
     
     return fprintf(fp, "ignore");
 }
+
 
 /********************
  * action_ignore_exec

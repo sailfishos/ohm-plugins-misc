@@ -303,7 +303,7 @@ union cgrp_expr_u {
 typedef struct cgrp_stmt_s cgrp_stmt_t;
 struct cgrp_stmt_s {
     cgrp_expr_t   *expr;                    /* test expression */
-    cgrp_cmd_t    *command;                 /* command if expr is true */
+    cgrp_action_t *actions;                 /* actions if expr is true */
     cgrp_stmt_t   *next;                    /* more statements */
 };
 
@@ -618,7 +618,8 @@ int  addon_reload(cgrp_context_t *);
 
 void procdef_dump(cgrp_context_t *, FILE *);
 void procdef_print(cgrp_context_t *, cgrp_procdef_t *, FILE *);
-cgrp_cmd_t *rule_eval(cgrp_procdef_t *, cgrp_proc_attr_t *);
+cgrp_action_t *rule_eval(cgrp_context_t *,
+                         cgrp_procdef_t *, cgrp_proc_attr_t *);
 
 
 /* cgrp-classify.c */
@@ -638,6 +639,15 @@ int            action_print(cgrp_context_t *, FILE *, cgrp_action_t *);
 int            action_exec (cgrp_context_t *, cgrp_proc_attr_t *,
                             cgrp_action_t *);
 void           action_free (cgrp_action_t *);
+
+cgrp_action_t *action_group_new   (cgrp_group_t *);
+cgrp_action_t *action_schedule_new(char *, int);
+cgrp_action_t *action_renice_new  (int);
+cgrp_action_t *action_classify_new(int);
+cgrp_action_t *action_ignore_new  (void);
+
+
+
 
 /* cgrp-ep.c */
 int  ep_init(cgrp_context_t *, GObject *(*)(gchar *, gchar **));
@@ -697,7 +707,7 @@ void prop_print(cgrp_context_t *, cgrp_prop_expr_t *, FILE *);
 void value_print(cgrp_context_t *, cgrp_value_t *, FILE *);
 void command_print(cgrp_context_t *, cgrp_cmd_t *, FILE *);
 int  command_execute(cgrp_context_t *, cgrp_proc_attr_t *, cgrp_cmd_t *);
-int  expr_eval(cgrp_expr_t *expr, cgrp_proc_attr_t *);
+int  expr_eval(cgrp_context_t *, cgrp_expr_t *, cgrp_proc_attr_t *);
 
 
 /* cgrp-config.y */

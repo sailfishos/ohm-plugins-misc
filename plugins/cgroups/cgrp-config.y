@@ -543,7 +543,7 @@ rule_statements: rule_statement "\n" {
     }
     ;
 
-rule_statement: expr "=>" commands {
+rule_statement: expr "=>" actions {
         cgrp_stmt_t *stmt;
 
         if (ALLOC_OBJ(stmt) == NULL) {
@@ -551,11 +551,11 @@ rule_statement: expr "=>" commands {
             exit(1);
         }
         stmt->expr    = $1;
-        stmt->command = $3;
+        stmt->actions = $3;
 
         $$ = stmt;
     }
-    | commands {
+    | actions {
         cgrp_stmt_t *stmt;
 
         if (ALLOC_OBJ(stmt) == NULL) {
@@ -563,7 +563,7 @@ rule_statement: expr "=>" commands {
             exit(1);
         }
         stmt->expr    = NULL;
-        stmt->command = $1;
+        stmt->actions = $1;
 
         $$ = stmt;
     }

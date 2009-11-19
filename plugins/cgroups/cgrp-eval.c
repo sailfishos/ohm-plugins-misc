@@ -184,7 +184,7 @@ statement_free(cgrp_stmt_t *stmt)
 {
     if (stmt) {
         free_expr(stmt->expr);
-        command_free_all(stmt->command);
+        action_del(stmt->actions);
     }
 }
 
@@ -232,7 +232,7 @@ statement_print(cgrp_context_t *ctx, cgrp_stmt_t *stmt, FILE *fp)
         fprintf(fp, " => ");
     }
     
-    command_print(ctx, stmt->command, fp);
+    action_print(ctx, fp, stmt->actions);
     fprintf(fp, "\n");
 }
 
@@ -404,18 +404,19 @@ command_print(cgrp_context_t *ctx, cgrp_cmd_t *cmd, FILE *fp)
  * bool_eval
  ********************/
 int
-bool_eval(cgrp_bool_expr_t *expr, cgrp_proc_attr_t *procattr)
+bool_eval(cgrp_context_t *ctx,
+          cgrp_bool_expr_t *expr, cgrp_proc_attr_t *procattr)
 {
     cgrp_expr_t *arg1 = expr->arg1;
     cgrp_expr_t *arg2 = expr->arg2;
     
     switch (expr->op) {
     case CGRP_BOOL_AND:
-        return expr_eval(arg1, procattr) && expr_eval(arg2, procattr);
+        return expr_eval(ctx, arg1, procattr) && expr_eval(ctx, arg2, procattr);
     case CGRP_BOOL_OR:
-        return expr_eval(arg1, procattr) || expr_eval(arg2, procattr);
+        return expr_eval(ctx, arg1, procattr) || expr_eval(ctx, arg2, procattr);
     case CGRP_BOOL_NOT:
-        return !expr_eval(arg1, procattr);
+        return !expr_eval(ctx, arg1, procattr);
     default:
         OHM_ERROR("cgrp: invalid boolean expression 0x%x", expr->op);
         return FALSE;
@@ -561,10 +562,10 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
  * expr_eval
  ********************/
 int
-expr_eval(cgrp_expr_t *expr, cgrp_proc_attr_t *procattr)
+expr_eval(cgrp_context_t *ctx, cgrp_expr_t *expr, cgrp_proc_attr_t *procattr)
 {
     switch (expr->type) {
-    case CGRP_EXPR_BOOL: return bool_eval(&expr->bool, procattr);
+    case CGRP_EXPR_BOOL: return bool_eval(ctx, &expr->bool, procattr);
     case CGRP_EXPR_PROP: return prop_eval(&expr->prop, procattr);
     default:
         OHM_ERROR("cgrp: invalid expression type 0x%x", expr->type);
