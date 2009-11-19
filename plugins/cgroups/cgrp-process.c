@@ -629,7 +629,7 @@ process_get_type(cgrp_proc_attr_t *attr)
     
     char  path[64], stat[1024], *p, *e;
     char *bin, *ppid, *vmsz;
-    int   fd, size, nfield;
+    int   fd, size, len, nfield;
 
     if (CGRP_TST_MASK(attr->mask, CGRP_PROC_TYPE))
         return attr->type;
@@ -657,11 +657,11 @@ process_get_type(cgrp_proc_attr_t *attr)
     if (*e == ')')
         e--;
     if (e >= bin) {
-        size = e - bin + 1;
-        if (size > CGRP_COMM_LEN - 1)
-            size = CGRP_COMM_LEN - 1;
-        strncpy(attr->name, bin, size);
-        attr->name[size] = '\0';
+        len = e - bin + 1;
+        if (len > CGRP_COMM_LEN - 1)
+            len = CGRP_COMM_LEN - 1;
+        strncpy(attr->name, bin, len);
+        attr->name[len] = '\0';
     }
     CGRP_SET_MASK(attr->mask, CGRP_PROC_NAME);
 
