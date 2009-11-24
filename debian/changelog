@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.6.65) unstable; urgency=low
+
+  * Accessory plugin fix: transaction id must be an integer, not a string.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 24 Nov 2009 23:49:51 +0200
+
 ohm-plugins-misc (0.6.64) unstable; urgency=low
 
   * Adjusted mute suppression to the fixes in policy-settings.
