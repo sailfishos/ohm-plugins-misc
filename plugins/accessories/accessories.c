@@ -282,14 +282,14 @@ int dres_all(void)
     int   i;
     int   status;
     char *callback = (char *)"";
-    char *txid = "0";
+    int   txid = 0;
 
     vars[i=0] = "completion_callback";
     vars[++i] = DRES_VARTYPE('s');
     vars[++i] = DRES_VARVALUE(callback);
 
     vars[++i] = "transaction_id";
-    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARTYPE('i');
     vars[++i] = DRES_VARVALUE(txid);
 
     vars[++i] = NULL;
