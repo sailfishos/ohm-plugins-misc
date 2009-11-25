@@ -1,5 +1,7 @@
 #include "accessories.h"
 
+#define FACT_DEVICE_ACCESSIBLE "com.nokia.policy.audio_device_accessible"
+
 static int DBG_HEADSET, DBG_BT, DBG_INFO;
 
 static gboolean plugin_is_real;
@@ -101,6 +103,73 @@ static void plugin_exit(OhmPlugin *plugin)
 }
 
 
+static int is_spurious_event(char *device, int driver, int connected)
+{
+    /*
+     * Filter out obviously spurious/duplicate events. Spurious events are
+     * events that obviously do not represent any state change (eg. getting
+     * a connected=0 event while already in disconnected state).
+     */
+
+    GSList  *list;
+    OhmFact *fact;
+    GValue  *gval;
+    int      val, dmatch, cmatch, spurious;
+
+
+    spurious = FALSE;
+    for (list = ohm_fact_store_get_facts_by_name(ohm_get_fact_store(),
+                                                 FACT_DEVICE_ACCESSIBLE);
+         list != NULL;
+         list = list->next) {
+        fact = (OhmFact *)list->data;
+        
+        if ((gval = ohm_fact_get(fact, "name")) == NULL)
+            continue;
+        
+        if (G_VALUE_TYPE(gval) != G_TYPE_STRING)
+            continue;
+        
+        if (strcmp(g_value_get_string(gval), device))
+            continue;
+        
+        if (driver != -1 && (gval = ohm_fact_get(fact, "driver")) != NULL) {
+            switch (G_VALUE_TYPE(gval)) {
+            case G_TYPE_INT:   val = g_value_get_int(gval);   break;
+            case G_TYPE_UINT:  val = g_value_get_uint(gval);  break;
+            case G_TYPE_LONG:  val = g_value_get_long(gval);  break;
+            case G_TYPE_ULONG: val = g_value_get_ulong(gval); break;
+            default:           val = driver;    /* ignored (ie. match) */
+            }
+            dmatch = (val == driver);
+        }
+        else
+            dmatch = TRUE;
+        
+        if (connected != -1 && (gval=ohm_fact_get(fact,"connected")) != NULL) {
+            switch (G_VALUE_TYPE(gval)) {
+            case G_TYPE_INT:   val = g_value_get_int(gval);   break;
+            case G_TYPE_UINT:  val = g_value_get_uint(gval);  break;
+            case G_TYPE_LONG:  val = g_value_get_long(gval);  break;
+            case G_TYPE_ULONG: val = g_value_get_ulong(gval); break;
+            default:           val = connected; /* ignored (ie. match) */
+            }
+            cmatch = (val == connected);
+        }
+        else
+            cmatch = TRUE;
+        
+        spurious = dmatch && cmatch; /* no change is a spurious event */
+        break;
+    }
+
+    OHM_DEBUG(DBG_INFO, "%s, driver: %d, connected: %d is %sa spurious event",
+              device, driver, connected, spurious ? "" : "not ");
+
+    return spurious;
+}
+
+
 static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 {
     int              driver    = -1;
@@ -180,7 +249,8 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 
             OHM_DEBUG(DBG_INFO, "info, setting device '%s' with driver value: '%d' to connected value: '%d'",
                     device ? device : "NULL", driver, connected);
-            dres_accessory_request(device, driver, connected);
+            if (!is_spurious_event(device, driver, connected))
+                dres_accessory_request(device, driver, connected);
       
         } while (dbus_message_iter_next(&devit));
 
