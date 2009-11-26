@@ -42,6 +42,7 @@
 #define PROP_REQUESTED        TP_CHANNEL".Requested"
 #define INITIATOR_SELF        "<self>"
 #define PROP_EMERGENCY        TP_EMERGENCY".InitialEmergencyService"
+#define PROP_INTERFACES       TP_CHANNEL".Interfaces"
 
 #define NEW_CHANNEL        "NewChannel"
 #define NEW_CHANNELS       "NewChannels"
@@ -137,6 +138,7 @@ struct call_s {
     unsigned int  audio;                       /* audio stream ID or 0 */
     unsigned int  video;                       /* video stream ID or 0 */
     guint         timeout;                     /* stream add timeout */
+    int           holdable;                    /* whether call supports hold */
 };
 
 
@@ -192,6 +194,7 @@ typedef struct {
     int             nmember;                   /* number of members */
     unsigned int    audio;                     /* audio stream ID or 0 */
     unsigned int    video;                     /* video stream ID or 0 */
+    char          **interfaces;                /* supported interfaces */
 } channel_event_t;
 
 

@@ -95,7 +95,8 @@ static int         holdorder;                    /* autohold order */
 call_t *call_register(const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
                       int conference, int emergency,
-                      unsigned int audio, unsigned int video);
+                      unsigned int audio, unsigned int video,
+                      char **interfaces);
 call_t *call_lookup(const char *path);
 void    call_destroy(call_t *call);
 void    call_foreach(GHFunc callback, gpointer data);
@@ -157,6 +158,7 @@ static GHashTable *deferred;                     /* deferred events */
 #define FACT_FIELD_EMERG     "emergency"
 #define FACT_FIELD_CONNECTED "connected"
 #define FACT_FIELD_VIDEO     "video"
+#define FACT_FIELD_HOLD      "holdable"
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
 
@@ -671,11 +673,37 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
         ptrarr[_n] = NULL;                                              \
     } while (0)
 
+
+#define VARIANT_STRING_ARRAY(dict, ptrarr) do {                         \
+        int _t, _max, _n;                                               \
+        DBusMessageIter _entry, _arr;                                   \
+                                                                        \
+        SUB_ITER((dict), &_entry);                                      \
+        (ptrarr)[0] = NULL;                                             \
+        CHECK_TYPE((_t = ITER_TYPE(&_entry)), DBUS_TYPE_ARRAY);         \
+        SUB_ITER(&_entry, &_arr);                                       \
+        _max = sizeof(ptrarr) / sizeof(ptrarr[0]) - 1;                  \
+        _n   = 0;                                                       \
+        ITER_FOREACH(&_arr, _t) {                                       \
+            if (_n >= _max) {                                           \
+                OHM_ERROR("Too many object paths in DBUS signal %s.",   \
+                          NEW_CHANNELS);                                \
+                return DBUS_HANDLER_RESULT_HANDLED;                     \
+            }                                                           \
+            CHECK_TYPE(_t, DBUS_TYPE_STRING);                           \
+            dbus_message_iter_get_basic(&_arr, (ptrarr) + _n);          \
+            _n++;                                                       \
+        }                                                               \
+        ptrarr[_n] = NULL;                                              \
+    } while (0)
+
     
-#define MAX_MEMBERS 8
+#define MAX_MEMBERS     8
+#define MAX_INTERFACES 64
 
     DBusMessageIter  imsg, iarr, istruct, iprop, idict;
-    char            *path, *type, *name, *initiator, *members[MAX_MEMBERS];
+    char            *path, *type, *name, *initiator;
+    char            *members[MAX_MEMBERS], *interfaces[MAX_INTERFACES];
     channel_event_t  event;
     int              init_handle, target_handle;
     int              requested, t;
@@ -758,6 +786,11 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                 }
                 else if (!strcmp(name, PROP_EMERGENCY))
                     event.emergency = TRUE;
+                else if (!strcmp(name, PROP_INTERFACES)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_STRING_ARRAY(&idict, interfaces);
+                    event.interfaces = &interfaces[0];
+                }
             }
             
         }
@@ -1667,7 +1700,8 @@ event_handler(event_t *event)
                                  event->channel.peer_handle,
                                  event->channel.members != NULL,
                                  event->channel.emergency,
-                                 event->channel.audio, event->channel.video);
+                                 event->channel.audio, event->channel.video,
+                                 event->channel.interfaces);
             call->dir = event->channel.dir;
 
             if (event->channel.nmember > 0)
@@ -1690,6 +1724,7 @@ event_handler(event_t *event)
              *    direction detection altogether and always use NewChannels.
              */
             call->dir = event->channel.dir;
+            
             policy_call_update(call, UPDATE_DIR);
         }
         if (event->channel.members != NULL) {
@@ -2049,12 +2084,29 @@ call_timeout(gpointer data)
 
 
 /********************
+ * has_interface
+ ********************/
+static inline int
+has_interface(char **interfaces, char *interface)
+{
+    int i;
+
+    for (i = 0; interfaces[i] != NULL; i++)
+        if (!strcmp(interfaces[i], interface))
+            return TRUE;
+    
+    return FALSE;
+}
+
+
+/********************
  * call_register
  ********************/
 call_t *
 call_register(const char *path, const char *name, const char *peer,
               unsigned int peer_handle, int conference, int emergency,
-              unsigned int audio, unsigned int video)
+              unsigned int audio, unsigned int video,
+              char **interfaces)
 {
     call_t *call;
 
@@ -2102,6 +2154,15 @@ call_register(const char *path, const char *name, const char *peer,
         nipcall++;
     
     OHM_INFO("Call %s (#%d) registered.", path, ncscall + nipcall);
+
+    if (has_interface(interfaces, TP_CHANNEL_HOLD))
+        call->holdable = TRUE;
+    
+#undef __TEST_HACK__
+#ifdef __TEST_HACK__
+    if (call->id & 0x1)
+        call->holdable = FALSE;
+#endif
 
     if (!audio && !video)
         call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
@@ -2964,7 +3025,7 @@ int
 policy_call_export(call_t *call)
 {
     OhmFact    *fact;
-    const char *state, *dir, *path, *video;
+    const char *state, *dir, *path, *video, *hold;
     char        id[16], parent[16];
     
     
@@ -2983,6 +3044,7 @@ policy_call_export(call_t *call)
     state = state_name(call->state);
     dir   = dir_name(call->dir);
     video = call->video ? "yes" : "no";
+    hold  = call->holdable ? "yes" : "no";
     snprintf(id, sizeof(id), "%d", call->id);
     if (call->parent == call)
         snprintf(parent, sizeof(parent), "%d", call->id);
@@ -2994,6 +3056,7 @@ policy_call_export(call_t *call)
         !set_string_field(fact, FACT_FIELD_DIR  , dir)   ||
         !set_string_field(fact, FACT_FIELD_ID   , id)    ||
         !set_string_field(fact, FACT_FIELD_VIDEO, video) ||
+        !set_string_field(fact, FACT_FIELD_HOLD , hold)  ||
         (parent[0] && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
         (call->emergency && !set_string_field(fact, FACT_FIELD_EMERG, "yes")) ||
         (call->video && !set_string_field(fact, FACT_FIELD_VIDEO, "yes"))) {
