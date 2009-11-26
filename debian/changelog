@@ -2,6 +2,7 @@ ohm-plugins-misc (0.6.65) unstable; urgency=low
 
   * Accessory plugin fix: transaction id must be an integer, not a string.
   * Filter spurious/duplicate accessory events (Fixes: NB 147573).
+  * Tag calls that do not support holding by holdable=no in the factstore.
 
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 24 Nov 2009 23:49:51 +0200
 
