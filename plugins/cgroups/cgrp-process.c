@@ -308,12 +308,12 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
             proc_dump_event(event);
             switch (event->what) {
             case PROC_EVENT_FORK:
-                classify_process(ctx, event->event_data.fork.child_pid, 0);
+                classify_by_binary(ctx, event->event_data.fork.child_pid, 0);
                 subscr_notify(ctx,
                               event->what, event->event_data.fork.child_pid);
                 break;
             case PROC_EVENT_EXEC:
-                classify_process(ctx,event->event_data.exec.process_pid, 0);
+                classify_by_binary(ctx,event->event_data.exec.process_pid, 0);
                 break;
             case PROC_EVENT_UID:
                 break;
@@ -430,7 +430,7 @@ process_scan_proc(cgrp_context_t *ctx)
         OHM_DEBUG(DBG_CLASSIFY, "discovering process <%s>", de->d_name);
 
         pid = (pid_t)strtoul(de->d_name, NULL, 10);
-        classify_process(ctx, pid, 0);
+        classify_by_binary(ctx, pid, 0);
     }
 
     closedir(dp);

@@ -71,18 +71,58 @@ classify_reconfig(cgrp_context_t *ctx)
  * classify_process
  ********************/
 int
-classify_process(cgrp_context_t *ctx, pid_t pid, int reclassify)
+classify_process(cgrp_context_t *ctx,
+                 cgrp_process_t *process, cgrp_proc_attr_t *procattr)
+{
+    cgrp_procdef_t *rule;
+    cgrp_action_t  *actions;
+    
+    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u>",
+              procattr->reclassify ? "re" : "", process->pid);
+    
+    /* we ignore processes with no matching rule */
+    if ((rule = rule_hash_lookup(ctx,  procattr->binary)) == NULL &&
+        (rule = addon_hash_lookup(ctx, procattr->binary)) == NULL &&
+        (rule = ctx->fallback)                            == NULL)
+        return 0;
+    
+    /* take care of the renice kludge if necessary */
+    if (rule->renice)
+        process_set_priority(process, rule->renice);
+    
+    /* try binary-specific rules */
+    if ((actions = rule_eval(ctx, rule, procattr)) != NULL) {
+        if (rule->renice)
+            process_set_priority(process, rule->renice);
+        procattr_dump(procattr);
+        return action_exec(ctx, procattr, actions);
+    }
+    
+    /* then fallback rule if any */
+    if (rule != ctx->fallback && ctx->fallback != NULL)
+        if ((actions = rule_eval(ctx, ctx->fallback, procattr)) != NULL) {
+            procattr_dump(procattr);
+            return action_exec(ctx, procattr, actions);
+        }
+    
+    return 0;
+}
+
+
+/********************
+ * classify_by_binary
+ ********************/
+int
+classify_by_binary(cgrp_context_t *ctx, pid_t pid, int reclassify)
 {
     cgrp_process_t    process;
     cgrp_proc_attr_t  procattr;
-    cgrp_procdef_t   *rule;
-    cgrp_action_t    *actions;
     char             *argv[CGRP_MAX_ARGS];
     char              args[CGRP_MAX_CMDLINE];
     char              cmdl[CGRP_MAX_CMDLINE];
     char              bin[PATH_MAX];
     
-    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u>",
+    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by binary",
               reclassify ? "re" : "", pid);
     
     memset(&process,  0, sizeof(process));
@@ -103,32 +143,39 @@ classify_process(cgrp_context_t *ctx, pid_t pid, int reclassify)
     if (!process_get_binary(&procattr))
         return -ENOENT;                       /* we assume it's gone already */
 
-    /* we ignore processes with no matching rule */
-    if ((rule = rule_hash_lookup(ctx,  process.binary)) == NULL &&
-        (rule = addon_hash_lookup(ctx, process.binary)) == NULL &&
-        (rule = ctx->fallback)                          == NULL)
-        return 0;
-    
-    /* take care of the renice kludge if necessary */
-    if (rule->renice)
-        process_set_priority(&process, rule->renice);
-    
-    /* try binary-specific rules */
-    if ((actions = rule_eval(ctx, rule, &procattr)) != NULL) {
-        if (rule->renice)
-            process_set_priority(&process, rule->renice);
-        procattr_dump(&procattr);
-        return action_exec(ctx, &procattr, actions);
+    return classify_process(ctx, &process, &procattr);
+}
+
+
+/********************
+ * classify_by_argv0
+ ********************/
+int
+classify_by_argv0(cgrp_context_t *ctx, cgrp_proc_attr_t *procattr)
+{
+    cgrp_process_t process;
+
+    if (procattr->byargv0) {
+        OHM_ERROR("cgrp: classify-by-argv0 loop for process <%u>",
+                  procattr->pid);
+        return -EINVAL;
     }
     
-    /* then fallback rule if any */
-    if (rule != ctx->fallback && ctx->fallback != NULL)
-        if ((actions = rule_eval(ctx, ctx->fallback, &procattr)) != NULL) {
-            procattr_dump(&procattr);
-            return action_exec(ctx, &procattr, actions);
-        }
+    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by argv0",
+              procattr->reclassify ? "re" : "", procattr->pid);
+
+    memset(&process, 0, sizeof(process));
     
-    return 0;
+    if (process_get_argv(procattr) == NULL)
+        return -ENOENT;                       /* we assume it's gone already */
+ 
+    procattr->binary  = procattr->argv[0];
+    procattr->byargv0 = TRUE;
+    
+    process.pid    = procattr->pid;
+    process.binary = procattr->binary;
+   
+    return classify_process(ctx, &process, procattr);
 }
 
 
@@ -141,7 +188,7 @@ reclassify_process(gpointer data)
     cgrp_reclassify_t *reclassify = (cgrp_reclassify_t *)data;
 
     OHM_DEBUG(DBG_CLASSIFY, "reclassifying process <%u>", reclassify->pid);
-    classify_process(reclassify->ctx, reclassify->pid, reclassify->count);
+    classify_by_binary(reclassify->ctx, reclassify->pid, reclassify->count);
     return FALSE;
 }
 

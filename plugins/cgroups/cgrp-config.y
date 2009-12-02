@@ -108,6 +108,7 @@ extern int lexer_start_token;
 %token KEYWORD_IGNORE
 %token KEYWORD_RECLASSIFY
 %token KEYWORD_RECLASS_AFTER
+%token KEYWORD_CLASSIFY_ARGV0
 %token KEYWORD_EXPORT_GROUPS
 %token KEYWORD_EXPORT_PARTITIONS
 %token KEYWORD_EXPORT_FACT
@@ -619,11 +620,11 @@ actions: action          { $$ = $1; }
     | actions ";" action { $$ = $1; action_add($$, $3); }
     ;
 
-action: action_group    { $$ = $1; }
-    |   action_classify { $$ = $1; }
-    |   action_schedule { $$ = $1; }
-    |   action_renice   { $$ = $1; }
-    |   action_ignore   { $$ = $1; }
+action: action_group          { $$ = $1; }
+    |   action_classify       { $$ = $1; }
+    |   action_schedule       { $$ = $1; }
+    |   action_renice         { $$ = $1; }
+    |   action_ignore         { $$ = $1; }
     ;
 
 action_group: KEYWORD_GROUP group_name {
@@ -657,6 +658,21 @@ action_classify: KEYWORD_RECLASS_AFTER TOKEN_UINT {
         $$ = action;
     }
     ;
+
+
+action_classify: KEYWORD_CLASSIFY_ARGV0 {
+        cgrp_action_t *action;
+
+        action = action_classify_new(-1);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new classify-by-argv0 action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
 
 action_schedule: KEYWORD_SCHEDULE TOKEN_IDENT schedule_priority {
         cgrp_action_t *action;

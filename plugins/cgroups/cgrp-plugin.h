@@ -114,6 +114,7 @@ typedef enum {
     CGRP_ACTION_SCHEDULE,                   /* set scheduling policy */
     CGRP_ACTION_RENICE,                     /* renice process */
     CGRP_ACTION_RECLASSIFY,                 /* reclassify after a delay */
+    CGRP_ACTION_CLASSIFY_ARGV0,             /* classify by argv[0] */
     CGRP_ACTION_IGNORE,                     /* apply the default rules */
     CGRP_ACTION_MAX,
 } cgrp_action_type_t;
@@ -320,6 +321,7 @@ typedef struct {
     uid_t              euid;                /* effective user id */
     gid_t              egid;                /* effective group id */
     int                reclassify;          /* reclassification count */
+    int                byargv0;             /* classifying by argv[0] */
 } cgrp_proc_attr_t;
 
 
@@ -579,7 +581,9 @@ int  classify_init  (cgrp_context_t *);
 void classify_exit  (cgrp_context_t *);
 int  classify_config(cgrp_context_t *);
 int  classify_reconfig(cgrp_context_t *);
-int  classify_process(cgrp_context_t *, pid_t, int);
+int  classify_by_binary(cgrp_context_t *, pid_t, int);
+int  classify_by_argv0(cgrp_context_t *, cgrp_proc_attr_t *);
+
 void classify_schedule(cgrp_context_t *, pid_t, unsigned int, int);
 
 

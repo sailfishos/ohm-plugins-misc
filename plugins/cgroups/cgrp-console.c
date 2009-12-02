@@ -92,7 +92,7 @@ reclassify(char *what)
         process_scan_proc(ctx);
     else {
         pid = (pid_t)strtoul(what, NULL, 10);
-        classify_process(ctx, pid, 0);
+        classify_by_binary(ctx, pid, 0);
     }
 }
 

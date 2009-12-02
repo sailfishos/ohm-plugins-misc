@@ -493,7 +493,10 @@ action_classify_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
 {
     (void)ctx;
     
-    return fprintf(fp, "classify %d", action->classify.delay);
+    if (action->classify.delay >= 0)
+        return fprintf(fp, "reclassify-after %d", action->classify.delay);
+    else
+        return fprintf(fp, "classify-by-argv0");
 }
 
 
@@ -507,25 +510,29 @@ action_classify_exec(cgrp_context_t *ctx,
     cgrp_process_t *process;
     int             count, delay;
 
-    count = attr->reclassify;
-    delay = action->classify.delay;
+    if (action->classify.delay > 0) {
+        count = attr->reclassify;
+        delay = action->classify.delay;
 
-    if (attr->reclassify < CGRP_RECLASSIFY_MAX) {
-        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: classify #%d after %u msecs",
-                  attr->pid, attr->binary, count, delay);
+        if (attr->reclassify < CGRP_RECLASSIFY_MAX) {
+            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: classify #%d after %u msecs",
+                      attr->pid, attr->binary, count, delay);
 
-        classify_schedule(ctx, attr->pid, (unsigned int)delay, count + 1);
+            classify_schedule(ctx, attr->pid, (unsigned int)delay, count + 1);
+        }
+        else {
+            OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: too many reclassifications",
+                      attr->pid, attr->binary);
+
+            process = proc_hash_lookup(ctx, attr->pid);
+            if (process != NULL)
+                process_ignore(ctx, process);
+        }
+        
+        return TRUE;
     }
-    else {
-        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: too many reclassifications",
-                  attr->pid, attr->binary);
-
-        process = proc_hash_lookup(ctx, attr->pid);
-        if (process != NULL)
-            process_ignore(ctx, process);
-    }
-
-    return TRUE;
+    else
+        return classify_by_argv0(ctx, attr);
 }
 
 
