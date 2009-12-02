@@ -3,7 +3,6 @@
 
 static int  prop_type_check(cgrp_prop_expr_t *);
 static void free_expr(cgrp_expr_t *);
-static void command_free_all(cgrp_cmd_t *);
 
 
 /********************
@@ -335,67 +334,6 @@ value_print(cgrp_context_t *ctx, cgrp_value_t *value, FILE *fp)
     case CGRP_VALUE_TYPE_STRING: fprintf(fp, "'%s'", value->str); break;
     case CGRP_VALUE_TYPE_UINT32: fprintf(fp, "%u", value->u32);   break;
     default:                     fprintf(fp, "<invalid value>");  break;
-    }
-}
-
-
-/********************
- * command_free
- ********************/
-static inline void
-command_free(cgrp_cmd_t *command)
-{
-    FREE(command);
-}
-
-
-/********************
- * command_free_all
- ********************/
-void
-command_free_all(cgrp_cmd_t *command)
-{
-    cgrp_cmd_t *next;
-
-    while (command) {
-        next = command->any.next;
-        command_free(command);
-        command = next;
-    }
-}
-
-
-/********************
- * command_print
- ********************/
-void
-command_print(cgrp_context_t *ctx, cgrp_cmd_t *cmd, FILE *fp)
-{
-    char *t = "";
-    
-    (void)ctx;
-    
-    while (cmd != NULL) {
-        switch (cmd->any.type) {
-        case CGRP_CMD_GROUP:
-            fprintf(fp, "%sgroup %s", t, cmd->group.group->name);
-            break;
-        case CGRP_CMD_IGNORE:
-            fprintf(fp, "%signore", t);
-            break;
-        case CGRP_CMD_RECLASSIFY:
-            fprintf(fp, "%sreclassify-after %d", t, cmd->reclassify.delay);
-            break;
-        case CGRP_CMD_SCHEDULE:
-            fprintf(fp, "%sschedule %d %d", t, cmd->schedule.policy,
-                    cmd->schedule.priority);
-            break;
-        default:
-            fprintf(fp, "%s<invalid command>", t);
-        }
-        
-        cmd = cmd->any.next;
-        t = "; ";
     }
 }
 

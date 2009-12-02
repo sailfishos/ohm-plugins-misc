@@ -102,54 +102,6 @@ typedef struct {
 
 
 /*
- * classification commands
- */
-
-typedef union cgrp_cmd_u cgrp_cmd_t;
-
-typedef enum {
-    CGRP_CMD_UNKNOWN = 0,
-    CGRP_CMD_GROUP,                         /* group classification */
-    CGRP_CMD_IGNORE,                        /* ignore */
-    CGRP_CMD_RECLASSIFY,                    /* reclassify after a timeout */
-    CGRP_CMD_SCHEDULE,                      /* set scheduling policy */
-} cgrp_cmd_type_t;
-
-#define CGRP_CMD_COMMON                                         \
-    cgrp_cmd_type_t  type;                   /* command type */ \
-    cgrp_cmd_t      *next                    /* next command */
-
-typedef struct {
-    CGRP_CMD_COMMON;                        /* type, common fields */
-} cgrp_cmd_any_t;
-
-typedef struct {
-    CGRP_CMD_COMMON;                        /* type, common fields */
-    cgrp_group_t *group;                    /* classification group */
-} cgrp_cmd_group_t;
-
-typedef struct {
-    CGRP_CMD_COMMON;                        /* type, common fields */
-    unsigned int delay;                     /* after this many msecs */
-} cgrp_cmd_reclassify_t;
-
-typedef struct {
-    CGRP_CMD_COMMON;                        /* type, common fields */
-    int policy;                             /* scheduling policy */
-    int priority;                           /* policy-specific priority */
-} cgrp_cmd_schedule_t;
-
-union cgrp_cmd_u {
-    cgrp_cmd_any_t         any;             /* any command */
-    cgrp_cmd_group_t       group;           /* group classification command */
-    cgrp_cmd_any_t         ignore;          /* ignore command */
-    cgrp_cmd_reclassify_t  reclassify;      /* reclassify command */
-    cgrp_cmd_schedule_t    schedule;        /* scheduling policy command */
-};
-
-
-
-/*
  * classification actions
  */
 
@@ -705,8 +657,6 @@ void expr_print(cgrp_context_t *, cgrp_expr_t *, FILE *);
 void bool_print(cgrp_context_t *, cgrp_bool_expr_t *, FILE *);
 void prop_print(cgrp_context_t *, cgrp_prop_expr_t *, FILE *);
 void value_print(cgrp_context_t *, cgrp_value_t *, FILE *);
-void command_print(cgrp_context_t *, cgrp_cmd_t *, FILE *);
-int  command_execute(cgrp_context_t *, cgrp_proc_attr_t *, cgrp_cmd_t *);
 int  expr_eval(cgrp_context_t *, cgrp_expr_t *, cgrp_proc_attr_t *);
 
 

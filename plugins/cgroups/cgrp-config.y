@@ -35,7 +35,6 @@ extern int lexer_start_token;
     cgrp_procdef_t   *rules;
     cgrp_stmt_t      *stmt;
     cgrp_expr_t      *expr;
-    cgrp_cmd_t       *cmd;
     cgrp_action_t    *action;
     cgrp_prop_type_t  prop;
     cgrp_value_t      value;
@@ -68,12 +67,6 @@ extern int lexer_start_token;
 %type <expr>     prop_expr
 %type <prop>     prop
 %type <value>    value
-%type <cmd>      commands
-%type <cmd>      command
-%type <cmd>      command_group
-%type <cmd>      command_ignore
-%type <cmd>      command_reclassify
-%type <cmd>      command_schedule
 %type <string>   group_name
 %type <string>   string
 %type <renice>   optional_renice
@@ -614,138 +607,6 @@ value: TOKEN_STRING {
     | TOKEN_SINT {
         $$.type = CGRP_VALUE_TYPE_SINT32;
         $$.s32  = $1.value;
-    }
-    ;
-
-
-commands: command {
-        cgrp_cmd_t *cmd;
-
-        if (ALLOC_OBJ(cmd) == NULL) {
-            OHM_ERROR("cgrp: failed to allocate new command");
-	    exit(1);
-        }
-        *cmd = *$1;
-        cmd->any.next = NULL;
-
-        $$ = cmd;
-    }
-    | commands ";" command {
-        cgrp_cmd_t *cmd, *p;
-
-        if (ALLOC_OBJ(cmd) == NULL) {
-            OHM_ERROR("cgrp: failed to allocate new command");
-            exit(1);
-        }
-        *cmd = *$3;
-        cmd->any.next = NULL;
-
-        for (p = $1; p->any.next != NULL; p = p->any.next)
-            ;
-        p->any.next = cmd;     
-
-        $$ = $1;
-    }
-    ;
-
-command: command_group   { $$ = $1; }
-    | command_ignore     { $$ = $1; }
-    | command_reclassify { $$ = $1; }
-    | command_schedule   { $$ = $1; }
-    ;
-
-command_group: KEYWORD_GROUP group_name {
-	cgrp_cmd_group_t *cmd;
-        cgrp_group_t     *group;
-
-	/* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
-        if ((group = group_find(ctx, $2.value)) == NULL) {
-            OHM_ERROR("cgrp: reference to nonexisting group \"%s\"", $2.value);
-            exit(1);
-        }
-
-	if (ALLOC_OBJ(cmd) == NULL) {
-            OHM_ERROR("cgrp: failed to allocate new group command");
-	    exit(1);
-        }
-
-        cmd->type  = CGRP_CMD_GROUP;
-        cmd->group = group;
-        cmd->next  = NULL; 
-
-	$$ = (cgrp_cmd_t *)cmd;
-    }
-    ;
-
-group_name: TOKEN_STRING { $$ = $1; }
-    | TOKEN_IDENT        { $$ = $1; }
-    ;
-
-command_ignore: KEYWORD_IGNORE {
-	  cgrp_cmd_any_t *cmd;
-
-	  /* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
-          if (ALLOC_OBJ(cmd) == NULL) {
-	      OHM_ERROR("cgrp: failed to allocate new command");
-	      exit(1);
-          }
-
-          cmd->type = CGRP_CMD_IGNORE;
-
-          $$ = (cgrp_cmd_t *)cmd;
-    }
-    ;
-
-command_reclassify: KEYWORD_RECLASS_AFTER TOKEN_UINT {
-	  cgrp_cmd_reclassify_t *cmd;
-
-	  /* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
-          if (ALLOC_OBJ(cmd) == NULL) {
-	      OHM_ERROR("cgrp: failed to allocate new command");
-	      exit(1);
-          }
-
-          cmd->type  = CGRP_CMD_RECLASSIFY;
-          cmd->delay = $2.value;
-
-          $$ = (cgrp_cmd_t *)cmd;
-    }
-    ;
-
-command_schedule: KEYWORD_SCHEDULE TOKEN_IDENT TOKEN_UINT {
-	  cgrp_cmd_schedule_t *cmd;
-
-	  /* XXX TODO: we SHOULD NOT exit here (addon rule DoS) */
-          if (ALLOC_OBJ(cmd) == NULL) {
-	      OHM_ERROR("cgrp: failed to allocate new command");
-	      exit(1);
-          }
-
-          cmd->type     = CGRP_CMD_SCHEDULE;
-          cmd->priority = 0;
-
-	  if (!strcmp($2.value, "fifo")) {
-	      cmd->policy   = SCHED_FIFO;
-	      cmd->priority = (int)$3.value;
-          }
-	  else if (!strcmp($2.value, "rr") || !strcmp($2.value, "roundrobin")) {
-	      cmd->policy   = SCHED_RR;
-	      cmd->priority = (int)$3.value;
-          }
-          else if (!strcmp($2.value, "other"))
-	      cmd->policy = SCHED_OTHER;
-#ifdef SCHED_BATCH
-	  else if (!strcmp($2.value, "batch"))
-	      cmd->policy = SCHED_BATCH;
-#endif
-	  else {
-	      OHM_ERROR("cgrp: ignoring invalid scheduling policy '%s'",
-                        $2.value);
-	      cmd->policy   = SCHED_OTHER;
-	      cmd->priority = 0;
-          }
-
-          $$ = (cgrp_cmd_t *)cmd;
     }
     ;
 

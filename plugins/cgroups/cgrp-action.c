@@ -11,19 +11,31 @@
 #  define SCHED_BATCH SCHED_OTHER
 #endif
 
-#define ACTION_FUNCTIONS(a)                                             \
-    int  action_##a##_print(cgrp_context_t *, FILE *, cgrp_action_t *); \
-    int  action_##a##_exec (cgrp_context_t *, cgrp_proc_attr_t *,       \
-                            cgrp_action_t *);                           \
-    void action_##a##_del  (cgrp_action_t *)
 
-ACTION_FUNCTIONS(group);
-ACTION_FUNCTIONS(schedule);
-ACTION_FUNCTIONS(renice);
-ACTION_FUNCTIONS(classify);
-ACTION_FUNCTIONS(ignore);
 
-#undef ACTION_FUNCTIONS
+/*
+ * Notes:
+ *
+ *   Every action has 3 associated handler routines with it: print, del,
+ *   and exec. These print, delete, and execute the action respectively.
+ *
+ *   To add a new action, you have to
+ *     1) add the new action type to cgrp_action_type_t in cgrp-plugin.h
+ *     2) implement the handlers for the new action here
+ *     3) add action parsing and allocation to the configuration parser
+ *        (in cgrp-config.y/cgrp-lexer.l)
+ *
+ *   You can use the 2 macros procided below for declaring and implementing
+ *   the action handlers. ACTION_FUNCTIONS(action) simply spits out the
+ *   necessary handler prototypes for action. ACTION(type, exec, print, free)
+ *   insert the new action to the action table. Take a look at the existing
+ *   actions for reference.
+ *
+ *   Note that while executing, printing, and freeing actions is done using
+ *   common frontend functions here using action-specific handlers, parsing
+ *   and creating/allocating actions is done in/from the parser.
+ */
+
 
 typedef struct {
     int  (*exec) (cgrp_context_t *, cgrp_proc_attr_t *, cgrp_action_t *);
@@ -32,12 +44,33 @@ typedef struct {
 } action_handler_t;
 
 
+#define ACTION_FUNCTIONS(a)                                             \
+    int  action_##a##_print(cgrp_context_t *, FILE *, cgrp_action_t *); \
+    int  action_##a##_exec (cgrp_context_t *, cgrp_proc_attr_t *,       \
+                            cgrp_action_t *);                           \
+    void action_##a##_del  (cgrp_action_t *)
+
 #define ACTION(type, execcb, printcb, freecb)                 \
     [CGRP_ACTION_##type] = {                                  \
         .exec  = action_##execcb,                             \
         .print = action_##printcb,                            \
         .free  = action_##freecb,                             \
     }
+
+/*
+ * action handler declarations
+ */
+
+ACTION_FUNCTIONS(group);
+ACTION_FUNCTIONS(schedule);
+ACTION_FUNCTIONS(renice);
+ACTION_FUNCTIONS(classify);
+ACTION_FUNCTIONS(ignore);
+
+
+/*
+ * action table
+ */
 
 static action_handler_t actions[] = {
     ACTION(GROUP     , group_exec   , group_print   , group_del),
@@ -47,8 +80,16 @@ static action_handler_t actions[] = {
     ACTION(IGNORE    , ignore_exec  , ignore_print  , ignore_del)
 };
 
-#undef ACTION
 
+#undef ACTION
+#undef ACTION_FUNCTIONS
+
+
+
+
+/*****************************************************************************
+ *                        *** generic action routines ***                    *
+ *****************************************************************************/
 
 
 /********************
@@ -163,7 +204,7 @@ action_free(cgrp_action_t *action)
 
 
 /*****************************************************************************
- *                        *** classification actions ***                     *
+ *                           *** action handlers ***                         *
  *****************************************************************************/
 
 
