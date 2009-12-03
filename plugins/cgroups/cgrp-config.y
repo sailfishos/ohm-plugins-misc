@@ -20,6 +20,8 @@ int        cgrpyylex  (void);
 void       cgrpyyerror(cgrp_context_t *, const char *);
 extern int lexer_start_token;
 
+static char rule_group[256];
+
 %}
 
 %union {
@@ -109,6 +111,7 @@ extern int lexer_start_token;
 %token KEYWORD_RECLASSIFY
 %token KEYWORD_RECLASS_AFTER
 %token KEYWORD_CLASSIFY_ARGV0
+%token KEYWORD_CLASSIFY
 %token KEYWORD_EXPORT_GROUPS
 %token KEYWORD_EXPORT_PARTITIONS
 %token KEYWORD_EXPORT_FACT
@@ -146,7 +149,6 @@ configuration: START_FULL_PARSER
     | START_ADDON_PARSER
                  rule_section
     ;
-
 
 /*****************************************************************************
  *                            *** global section ***                         *
@@ -608,6 +610,58 @@ value: TOKEN_STRING {
     | TOKEN_SINT {
         $$.type = CGRP_VALUE_TYPE_SINT32;
         $$.s32  = $1.value;
+    }
+    ;
+
+
+rule: "[" KEYWORD_CLASSIFY group_name "]" { strcpy(rule_group, $3.value); } "\n"
+           simple_rule_list               { rule_group[0] = '\0'; }
+    ;
+
+simple_rule_list: simple_rule "\n"
+    | simple_rule_list simple_rule "\n"
+    | simple_rule_list error {
+          OHM_ERROR("cgrp: failed to parse simple rule section near token '%s'",
+	            cgrpyylval.any.token);
+          YYABORT;
+    }
+    ;
+
+simple_rule: path {
+        cgrp_procdef_t  rule;
+        cgrp_stmt_t    *stmt;
+	cgrp_action_t  *action;
+	cgrp_group_t   *group = group_find(ctx, rule_group);
+
+        if (group == NULL) {
+            OHM_ERROR("cgrp: reference to unknown group '%s'", rule_group);
+	    YYABORT;
+        }
+
+        action = action_group_new(group);
+	if (action == NULL) {
+	    OHM_ERROR("cgrp: failed to allocate new group action");
+	    YYABORT;
+        }
+
+        if (ALLOC_OBJ(stmt) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate statement");
+	    action_del(action);
+            YYABORT;
+        }
+        stmt->expr    = NULL;
+        stmt->actions = action;
+
+        rule.binary     = $1.value;
+	rule.renice     = 0;
+        rule.statements = stmt;
+
+        if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES))
+            addon_add(ctx, &rule);
+        else {
+            if (!procdef_add(ctx, &rule))
+                YYABORT;
+        }
     }
     ;
 
