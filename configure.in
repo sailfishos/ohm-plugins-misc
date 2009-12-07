@@ -227,6 +227,7 @@ AC_CONFIG_FILES([Makefile
                  plugins/hal/Makefile
                  plugins/hal/tests/Makefile
                  plugins/playback/Makefile
+                 plugins/resource/Makefile
                  plugins/profile/Makefile
                  plugins/profile/tests/Makefile
                  plugins/signaling/Makefile

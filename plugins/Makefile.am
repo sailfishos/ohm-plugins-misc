@@ -2,6 +2,7 @@ SUBDIRS = 	     \
 	signaling    \
 	hal          \
 	playback     \
+	resource     \
 	accessories  \
 	videoep      \
 	console      \

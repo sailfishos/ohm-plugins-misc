@@ -1,3 +1,9 @@
+ohm-plugins-misc (0.7.0) unstable; urgency=low
+
+  * Introducing 'resource' plugin
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Mon, 07 Dec 2009 12:15:10 +0200
+
 ohm-plugins-misc (0.6.65) unstable; urgency=low
 
   * Accessory plugin fix: transaction id must be an integer, not a string.
