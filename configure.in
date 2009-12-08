@@ -167,6 +167,11 @@ else
   AC_MSG_NOTICE([Telephony plugins WILL NOT be built.])
 fi
 
+# Check for libresource0 (for resource plugin)
+PKG_CHECK_MODULES(LIBRESOURCE, libresource0)
+AC_SUBST(LIBRESOURCE_CFLAGS)
+AC_SUBST(LIBRESOURCE_LIBS)
+
 # Check for sp-timestamps.
 PKG_CHECK_MODULES(SP_TIMESTAMP, sp_timestamp,
                               [has_sp_timestamp=true],

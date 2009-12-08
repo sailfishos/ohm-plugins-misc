@@ -9,6 +9,7 @@
 #include <glib-object.h>
 #include <gmodule.h>
 #include <ohm/ohm-plugin.h>
+#include <resproto.h>
 
 #include "resource.h"
 
