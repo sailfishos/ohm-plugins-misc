@@ -92,7 +92,7 @@ static void xrt_connect_to_xserver(xrt_t *xr)
         return;                 /* no connction */
 
     if (!xr->extcheck) {
-        if (check_randr(xr) == 0 && check_xvideo(xr) == 0)
+        if (check_xvideo(xr) == 0)
             xr->extok = TRUE;
         else {
             xr->extok = FALSE;
