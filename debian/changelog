@@ -1,3 +1,15 @@
+ohm-plugins-misc (1:1.3) unstable; urgency=low
+
+  * Fixes: NB#148081 - TV out doesn't work
+
+ -- Martin Wolf <ext-martin.2.wolf@nokia.com>  Mon, 07 Dec 2009 16:00:00 +0200
+
+ohm-plugins-misc (1:1.2) unstable; urgency=low
+
+  * Bumped version.
+
+ -- Wolf Bergenheim <ext-wolf.2.bergenheim@nokia.com>  Fri, 13 Nov 2009 11:34:18 +0200
+
 ohm-plugins-misc (1:1.1) unstable; urgency=low
 
   * Removed telephony/mission-control
