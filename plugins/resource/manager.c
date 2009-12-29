@@ -5,7 +5,7 @@
 #include <stdarg.h>
 #include <errno.h>
 
-#include "resource.h"
+#include "plugin.h"
 #include "manager.h"
 
 static void dump_message(resmsg_t *, resset_t *, const char *);

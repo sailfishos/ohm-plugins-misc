@@ -1,5 +1,5 @@
-#ifndef __OHM_RESOURCE_H__
-#define __OHM_RESOURCE_H__
+#ifndef __OHM_RESOURCE_PLUGIN_H__
+#define __OHM_RESOURCE_PLUGIN_H__
 
 #include <glib.h>
 #include <glib-object.h>
@@ -41,7 +41,7 @@ static void plugin_destroy(OhmPlugin *);
             timestamp_add(step);                \
     } while (0)
 
-#endif /* __OHM_RESOURCE_H__ */
+#endif /* __OHM_RESOURCE_PLUGIN_H__ */
 
 /* 
  * Local Variables:

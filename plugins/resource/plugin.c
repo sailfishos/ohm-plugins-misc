@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <errno.h>
 
-#include "resource.h"
+#include "plugin.h"
 #include "dbusif.h"
 #include "manager.h"
 

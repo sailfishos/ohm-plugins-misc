@@ -7,7 +7,7 @@
 
 #include <dbus/dbus.h>
 
-#include "resource.h"
+#include "plugin.h"
 #include "dbusif.h"
 #include "manager.h"
 
