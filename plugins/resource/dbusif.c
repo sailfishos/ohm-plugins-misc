@@ -5,15 +5,11 @@
 #include <stdarg.h>
 #include <errno.h>
 
-#include <glib.h>
-#include <glib-object.h>
-#include <gmodule.h>
-#include <ohm/ohm-plugin.h>
 #include <dbus/dbus.h>
-#include <res-conn.h>
 
 #include "resource.h"
 #include "dbusif.h"
+#include "manager.h"
 
 static DBusConnection    *sys_conn;      /* connection for D-Bus system bus */
 static DBusConnection    *sess_conn;     /* connection for D-Bus session bus */
@@ -25,11 +21,6 @@ static void session_bus_init(const char *);
 
 static DBusHandlerResult info(DBusConnection *, DBusMessage *, void *);
 
-static void register_handler(resmsg_t *, resset_t *, void *);
-static void unregister_handler(resmsg_t *, resset_t *, void *);
-static void update_handler(resmsg_t *, resset_t *, void *);
-static void acquire_handler(resmsg_t *, resset_t *, void *);
-static void release_handler(resmsg_t *, resset_t *, void *);
 
 
 /*! \addtogroup pubif
@@ -230,11 +221,11 @@ static void session_bus_init(const char *addr)
             return;
         }
 
-        resproto_set_handler(res_conn, RESMSG_REGISTER  , register_handler  );
-        resproto_set_handler(res_conn, RESMSG_UNREGISTER, unregister_handler);
-        resproto_set_handler(res_conn, RESMSG_UPDATE    , update_handler    );
-        resproto_set_handler(res_conn, RESMSG_ACQUIRE   , acquire_handler   );
-        resproto_set_handler(res_conn, RESMSG_RELEASE   , release_handler   );
+        resproto_set_handler(res_conn, RESMSG_REGISTER  , manager_register  );
+        resproto_set_handler(res_conn, RESMSG_UNREGISTER, manager_unregister);
+        resproto_set_handler(res_conn, RESMSG_UPDATE    , manager_update    );
+        resproto_set_handler(res_conn, RESMSG_ACQUIRE   , manager_acquire   );
+        resproto_set_handler(res_conn, RESMSG_RELEASE   , manager_release   );
 
         OHM_INFO("resource: successfully connected to D-Bus session bus");
     }
@@ -308,35 +299,6 @@ static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg, void *ud)
 }
 
 
-static void register_handler(resmsg_t *msg, resset_t *rset, void *proto_data)
-{
-    OHM_INFO("resource: %s()\n", __FUNCTION__);
-    resproto_reply_message(rset, msg, proto_data, 0, "OK");
-}
-
-static void unregister_handler(resmsg_t *msg, resset_t *rset, void *proto_data)
-{
-    OHM_INFO("resource: %s()\n", __FUNCTION__);
-    resproto_reply_message(rset, msg, proto_data, 0, "OK");
-}
-
-static void update_handler(resmsg_t *msg, resset_t *rset, void *proto_data)
-{
-    OHM_INFO("resource: %s()\n", __FUNCTION__);
-    resproto_reply_message(rset, msg, proto_data, 0, "OK");
-}
-
-static void acquire_handler(resmsg_t *msg, resset_t *rset, void *proto_data)
-{
-    OHM_INFO("resource: %s()\n", __FUNCTION__);
-    resproto_reply_message(rset, msg, proto_data, 0, "OK");
-}
-
-static void release_handler(resmsg_t *msg, resset_t *rset, void *proto_data)
-{
-    OHM_INFO("resource: %s()\n", __FUNCTION__);
-    resproto_reply_message(rset, msg, proto_data, 0, "OK");
-}
 
 
 /* 

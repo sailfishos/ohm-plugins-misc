@@ -5,23 +5,22 @@
 #include <ctype.h>
 #include <errno.h>
 
-#include <glib.h>
-#include <glib-object.h>
-#include <gmodule.h>
-#include <ohm/ohm-plugin.h>
-
 #include "resource.h"
 #include "dbusif.h"
+#include "manager.h"
 
-int DBG_CLIENT, DBG_MEDIA, DBG_DBUS, DBG_DRES, DBG_FS, DBG_QUE;
+int DBG_MGR, DBG_CLIENT, DBG_DBUS, DBG_INTERNAL;
+int DBG_DRES, DBG_FS, DBG_QUE, DBG_MEDIA;
 
 OHM_DEBUG_PLUGIN(resource,
-    OHM_DEBUG_FLAG("client", "resource client"    , &DBG_CLIENT),
-    OHM_DEBUG_FLAG("media" , "media"              , &DBG_MEDIA ), 
-    OHM_DEBUG_FLAG("dbusif", "D-Bus interface"    , &DBG_DBUS  ),
-    OHM_DEBUG_FLAG("dres"  , "dres interface"     , &DBG_DRES  ),
-    OHM_DEBUG_FLAG("fact"  , "factstore interface", &DBG_FS    ),
-    OHM_DEBUG_FLAG("queue" , "queued requests"    , &DBG_QUE   )
+    OHM_DEBUG_FLAG("manager" , "resource manager"   , &DBG_MGR     ),
+    OHM_DEBUG_FLAG("client"  , "resource client"    , &DBG_CLIENT  ),
+    OHM_DEBUG_FLAG("dbus"    , "D-Bus interface"    , &DBG_DBUS    ),
+    OHM_DEBUG_FLAG("internal", "internal interface" , &DBG_INTERNAL),
+    OHM_DEBUG_FLAG("dres"    , "dres interface"     , &DBG_DRES    ),
+    OHM_DEBUG_FLAG("fact"    , "factstore interface", &DBG_FS      ),
+    OHM_DEBUG_FLAG("queue"   , "queued requests"    , &DBG_QUE     ),
+    OHM_DEBUG_FLAG("media"   , "media"              , &DBG_MEDIA   )
 );
 
 
@@ -44,6 +43,7 @@ static void plugin_init(OhmPlugin *plugin)
     OHM_DEBUG_INIT(resource);
 
     dbusif_init(plugin);
+    manager_init(plugin);
 #if 0
     client_init(plugin);
     media_init(plugin);

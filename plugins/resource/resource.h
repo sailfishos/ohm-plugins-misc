@@ -1,6 +1,13 @@
 #ifndef __OHM_RESOURCE_H__
 #define __OHM_RESOURCE_H__
 
+#include <glib.h>
+#include <glib-object.h>
+#include <gmodule.h>
+#include <ohm/ohm-plugin.h>
+#include <ohm/ohm-plugin-log.h>
+#include <ohm/ohm-plugin-debug.h>
+
 #define EXPORT __attribute__ ((visibility ("default")))
 #define HIDE   __attribute__ ((visibility ("hidden")))
 
@@ -8,9 +15,6 @@
 #undef  G_MODULE_EXPORT
 #define G_MODULE_EXPORT EXPORT
 #endif
-
-#include <ohm/ohm-plugin-log.h>
-#include <ohm/ohm-plugin-debug.h>
 
 /* FactStore prefix */
 #define FACTSTORE_PREFIX                "com.nokia.policy"
@@ -24,7 +28,8 @@
 #define MEDIA_FLAG_AUDIO_RECORDING  0x4
 #define MEDIA_FLAG_VIDEO_RECORDING  0x8
 
-extern int DBG_CLIENT, DBG_MEDIA, DBG_DBUS, DBG_DRES, DBG_FS, DBG_QUE;
+extern int DBG_MGR, DBG_CLIENT, DBG_DBUS, DBG_INTERNAL;
+extern int DBG_DRES, DBG_FS, DBG_QUE, DBG_MEDIA;
 
 
 static void plugin_init(OhmPlugin *);
