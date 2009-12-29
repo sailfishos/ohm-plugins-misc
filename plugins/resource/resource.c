@@ -9,12 +9,11 @@
 #include <glib-object.h>
 #include <gmodule.h>
 #include <ohm/ohm-plugin.h>
-#include <resproto.h>
 
 #include "resource.h"
+#include "dbusif.h"
 
-static int DBG_CLIENT, DBG_MEDIA, DBG_DBUS, DBG_DRES, DBG_FS, \
-           DBG_STATE, DBG_QUE;
+int DBG_CLIENT, DBG_MEDIA, DBG_DBUS, DBG_DRES, DBG_FS, DBG_QUE;
 
 OHM_DEBUG_PLUGIN(resource,
     OHM_DEBUG_FLAG("client", "resource client"    , &DBG_CLIENT),
@@ -22,7 +21,6 @@ OHM_DEBUG_PLUGIN(resource,
     OHM_DEBUG_FLAG("dbusif", "D-Bus interface"    , &DBG_DBUS  ),
     OHM_DEBUG_FLAG("dres"  , "dres interface"     , &DBG_DRES  ),
     OHM_DEBUG_FLAG("fact"  , "factstore interface", &DBG_FS    ),
-    OHM_DEBUG_FLAG("state" , "state machine"      , &DBG_STATE ),
     OHM_DEBUG_FLAG("queue" , "queued requests"    , &DBG_QUE   )
 );
 
@@ -45,12 +43,12 @@ static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(resource);
 
+    dbusif_init(plugin);
 #if 0
     client_init(plugin);
     media_init(plugin);
     pbreq_init(plugin);
     sm_init(plugin);
-    dbusif_init(plugin);
     dresif_init(plugin);
     fsif_init(plugin);
 #endif
@@ -64,16 +62,6 @@ static void plugin_destroy(OhmPlugin *plugin)
     (void)plugin;
 }
 
-
-#if 0
-#include "client.c"
-#include "media.c"
-#include "pbreq.c"
-#include "sm.c"
-#include "dbusif.c"
-#include "dresif.c"
-#include "fsif.c"
-#endif
 
 
 #if 0
@@ -102,12 +90,10 @@ OHM_PLUGIN_PROVIDES(
     "maemo.resource"
 );
 
-#if 0
 OHM_PLUGIN_DBUS_SIGNALS(
-    { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_POLICY_NEW_SESSION, NULL,
-            dbusif_new_session, NULL }
+    { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_POLICY_NEW_SESSION_SIGNAL,
+      NULL, dbusif_session_notification, NULL }
 );
-#endif
 
 
 /* 

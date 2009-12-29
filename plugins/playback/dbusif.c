@@ -893,7 +893,11 @@ static DBusHandlerResult name_changed(DBusConnection *conn, DBusMessage *msg,
     if (!success)
         result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     else {
+#if 0
         result = DBUS_HANDLER_RESULT_HANDLED;
+#else
+        result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+#endif
 
         success = dbus_message_get_args(msg, NULL,
                                         DBUS_TYPE_STRING, &sender,
