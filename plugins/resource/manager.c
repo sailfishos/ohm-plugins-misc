@@ -7,6 +7,7 @@
 
 #include "plugin.h"
 #include "manager.h"
+#include "resource-set.h"
 
 static void dump_message(resmsg_t *, resset_t *, const char *);
 
@@ -30,6 +31,8 @@ void manager_register(resmsg_t *msg, resset_t *rset, void *proto_data)
 
     OHM_DEBUG(DBG_MGR, "message received");
 
+    resource_set_create(rset);
+
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
 
     resproto_reply_message(rset, msg, proto_data, 0, "OK");
@@ -43,6 +46,8 @@ void manager_unregister(resmsg_t *msg, resset_t *rset, void *proto_data)
     dump_message(msg, rset, "from");
 
     OHM_DEBUG(DBG_MGR, "message received");
+
+    resource_set_destroy(rset);
 
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
 

@@ -6,16 +6,17 @@
 #include <errno.h>
 
 #include "plugin.h"
+#include "timestamp.h"
 #include "dbusif.h"
 #include "manager.h"
 #include "resource-set.h"
 
-int DBG_MGR, DBG_CLIENT, DBG_DBUS, DBG_INTERNAL;
+int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
 int DBG_DRES, DBG_FS, DBG_QUE, DBG_MEDIA;
 
 OHM_DEBUG_PLUGIN(resource,
     OHM_DEBUG_FLAG("manager" , "resource manager"   , &DBG_MGR     ),
-    OHM_DEBUG_FLAG("client"  , "resource client"    , &DBG_CLIENT  ),
+    OHM_DEBUG_FLAG("set"     , "resource set"       , &DBG_SET     ),
     OHM_DEBUG_FLAG("dbus"    , "D-Bus interface"    , &DBG_DBUS    ),
     OHM_DEBUG_FLAG("internal", "internal interface" , &DBG_INTERNAL),
     OHM_DEBUG_FLAG("dres"    , "dres interface"     , &DBG_DRES    ),
@@ -25,24 +26,11 @@ OHM_DEBUG_PLUGIN(resource,
 );
 
 
-OHM_IMPORTABLE(void, timestamp_add, (const char *step));
-
-static void timestamp_init(void)
-{
-    char *signature;
-  
-    signature = (char *)timestamp_add_SIGNATURE;
-  
-    if (ohm_module_find_method("timestamp", &signature,(void *)&timestamp_add))
-        OHM_INFO("resource: timestamping is enabled.");
-    else
-        OHM_INFO("resource: timestamping is disabled.");
-}
-
 static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(resource);
 
+    timestamp_init(plugin);
     dbusif_init(plugin);
     manager_init(plugin);
     resource_set_init(plugin);
@@ -54,8 +42,6 @@ static void plugin_init(OhmPlugin *plugin)
     dresif_init(plugin);
     fsif_init(plugin);
 #endif
-
-    timestamp_init();
 }
 
 static void plugin_destroy(OhmPlugin *plugin)
