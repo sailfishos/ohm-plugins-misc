@@ -7,6 +7,7 @@
 
 #include "plugin.h"
 #include "resource-set.h"
+#include "fsif.h"
 
 #define HASH_BITS      8
 #define HASH_DIM       (1 << HASH_BITS)

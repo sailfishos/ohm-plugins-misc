@@ -10,6 +10,7 @@
 #include "dbusif.h"
 #include "manager.h"
 #include "resource-set.h"
+#include "fsif.h"
 
 int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
 int DBG_DRES, DBG_FS, DBG_QUE, DBG_MEDIA;
@@ -34,13 +35,13 @@ static void plugin_init(OhmPlugin *plugin)
     dbusif_init(plugin);
     manager_init(plugin);
     resource_set_init(plugin);
+    fsif_init(plugin);
 #if 0
     client_init(plugin);
     media_init(plugin);
     pbreq_init(plugin);
     sm_init(plugin);
     dresif_init(plugin);
-    fsif_init(plugin);
 #endif
 }
 
