@@ -14,11 +14,22 @@
 #define HASH_MASK      (HASH_DIM - 1)
 #define HASH_INDEX(i)  ((i) & HASH_MASK)
 
+#define INTEGER_FIELD(n,v) { fldtype_integer, n, .value.integer = v }
+#define STRING_FIELD(n,v)  { fldtype_string , n, .value.string  = v ? v : "" }
+#define INVALID_FIELD      { fldtype_invalid, NULL, .value.string = NULL }
+
+#define SELIST_DIM  2
+
 static resource_set_t  *hash_table[HASH_DIM];
 
 
+static int add_factstore_entry(resource_set_t *);
+static int delete_factstore_entry(resource_set_t *);
+static int update_factstore_flags(resource_set_t *);
+static int update_factstore_request(resource_set_t *);
+
 static void add_to_hash_table(resource_set_t *);
-static void remove_from_hash_table(resource_set_t *);
+static void delete_from_hash_table(resource_set_t *);
 static resource_set_t *find_in_hash_table(uint32_t);
 
 
@@ -46,6 +57,7 @@ resource_set_t *resource_set_create(resset_t *resset)
 
         resset->userdata = rs;
         add_to_hash_table(rs);
+        add_factstore_entry(rs);
     }
 
     if (rs != NULL) {
@@ -76,7 +88,8 @@ void resource_set_destroy(resset_t *resset)
         else {
             mgrid = rs->manager_id;
 
-            remove_from_hash_table(rs);
+            delete_factstore_entry(rs);
+            delete_from_hash_table(rs);
             resset->userdata = NULL;
 
             free(rs->request);
@@ -88,9 +101,119 @@ void resource_set_destroy(resset_t *resset)
     }
 }
 
+int resource_set_update(resset_t *resset, resource_set_update_t what)
+{
+    resource_set_t *rs;
+    int success = FALSE;
+
+    if (resset == NULL || (rs = resset->userdata) == NULL)
+        OHM_ERROR("resource: refuse to update sesource set: argument error");
+    else {
+        if (resset != rs->resset) {
+            OHM_ERROR("resource: refuse to update resource set %s/%u "
+                      "(manager id %u): confused with data structures",
+                      resset->peer, resset->id, rs->manager_id);
+        }
+        else {
+            switch (what) {
+            case update_flags:   success = update_factstore_flags(rs);   break;
+            case update_request: success = update_factstore_request(rs); break;
+            default:             success = FALSE;                        break;
+            }
+        }
+    }
+
+    return success;
+}
+
 /*!
  * @}
  */
+
+static int add_factstore_entry(resource_set_t *rs)
+{
+    resset_t *resset    = rs->resset;
+    uint32_t  mandatory = resset->flags.all & ~resset->flags.opt;
+    int       success;
+
+    fsif_field_t  fldlist[] = {
+        INTEGER_FIELD ("manager_id" , rs->manager_id       ),
+        STRING_FIELD  ("client_name", resset->peer         ),
+        INTEGER_FIELD ("client_id"  , resset->id           ),
+        STRING_FIELD  ("class"      , resset->class        ),
+        INTEGER_FIELD ("mandatory"  , mandatory            ),
+        INTEGER_FIELD ("optional"   , resset->flags.opt    ),
+        INTEGER_FIELD ("shared"     , resset->flags.share  ),
+        INTEGER_FIELD ("granted"    , rs->granted.factstore),
+        STRING_FIELD  ("request"    , rs->request          ),
+        INVALID_FIELD
+    };
+
+    success = fsif_add_factstore_entry(FACTSTORE_CLIENT_SET, fldlist);
+
+    return success;
+}
+
+static int delete_factstore_entry(resource_set_t *rs)
+{
+    resset_t *resset;
+    int       success;
+
+    fsif_field_t  selist[] = {
+        INTEGER_FIELD("manager_id", rs->manager_id),
+        INVALID_FIELD
+    };
+
+
+    success = fsif_delete_factstore_entry(FACTSTORE_CLIENT_SET, selist);
+
+    return success;
+}
+
+static int update_factstore_flags(resource_set_t *rs)
+{
+    resset_t *resset    = rs->resset;
+    uint32_t  mandatory = resset->flags.all & ~resset->flags.opt;
+    int       success;
+
+    fsif_field_t  selist[]  = {
+        INTEGER_FIELD("manager_id", rs->manager_id),
+        INVALID_FIELD
+    };
+    fsif_field_t  fldlist[] = {
+        INTEGER_FIELD ("mandatory"  , mandatory            ),
+        INTEGER_FIELD ("optional"   , resset->flags.opt    ),
+        INTEGER_FIELD ("shared"     , resset->flags.share  ),
+        INVALID_FIELD
+    };
+
+    success = fsif_update_factstore_entry(FACTSTORE_CLIENT_SET,selist,fldlist);
+
+    return success;
+}
+
+
+
+static int update_factstore_request(resource_set_t *rs)
+{
+    resset_t *resset    = rs->resset;
+    uint32_t  mandatory = resset->flags.all & ~resset->flags.opt;
+    int       success;
+
+    fsif_field_t  selist[]  = {
+        INTEGER_FIELD("manager_id", rs->manager_id),
+        INVALID_FIELD
+    };
+    fsif_field_t  fldlist[] = {
+        STRING_FIELD  ("request", rs->request),
+        INVALID_FIELD
+    };
+
+    success = fsif_update_factstore_entry(FACTSTORE_CLIENT_SET,selist,fldlist);
+
+    return success;
+}
+
 
 static void add_to_hash_table(resource_set_t *rs)
 {
@@ -100,7 +223,7 @@ static void add_to_hash_table(resource_set_t *rs)
     hash_table[index] = rs;
 }
 
-static void remove_from_hash_table(resource_set_t *rs)
+static void delete_from_hash_table(resource_set_t *rs)
 {
     int              index  = HASH_INDEX(rs->manager_id);
     resset_t        *resset = rs->resset;
