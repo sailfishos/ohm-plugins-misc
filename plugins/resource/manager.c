@@ -8,6 +8,7 @@
 #include "plugin.h"
 #include "manager.h"
 #include "resource-set.h"
+#include "dresif.h"
 
 static void dump_message(resmsg_t *, resset_t *, const char *);
 
@@ -66,20 +67,29 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     OHM_DEBUG(DBG_MGR, "message received");
 
-    if (strcmp(record->class, resset->class)) {
-        errcod = EINVAL;
+    if (!rs) {
+        OHM_ERROR("resource: can't update resources for %s/%u: "
+                  "confused with data structures", resset->peer, resset->id);
+        errcod = EUCLEAN;
         errmsg = strerror(errcod);
     }
     else {
-        if (resset->flags.all   != record->rset.all   ||
-            resset->flags.opt   != record->rset.opt   ||
-            resset->flags.share != record->rset.share   )
-        {
-            resset->flags.all   = record->rset.all;
-            resset->flags.opt   = record->rset.opt;
-            resset->flags.share = record->rset.share;
-            
-            resource_set_update(resset, update_flags);
+        if (strcmp(record->class, resset->class)) {
+            errcod = EINVAL;
+            errmsg = strerror(errcod);
+        }
+        else {
+            if (resset->flags.all   != record->rset.all   ||
+                resset->flags.opt   != record->rset.opt   ||
+                resset->flags.share != record->rset.share   )
+                {
+                    resset->flags.all   = record->rset.all;
+                    resset->flags.opt   = record->rset.opt;
+                    resset->flags.share = record->rset.share;
+                    
+                    resource_set_update(resset, update_flags);
+                    dresif_resource_request(rs);
+                }
         }
     }
 
@@ -111,6 +121,7 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
             rs->request = strdup("acquire");
 
             resource_set_update(resset, update_request);
+            dresif_resource_request(rs);
         }
     }
 
@@ -142,6 +153,7 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
             rs->request = strdup("release");
 
             resource_set_update(resset, update_request);
+            dresif_resource_request(rs);
         }
     }
 

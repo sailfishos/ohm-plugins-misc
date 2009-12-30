@@ -4,7 +4,7 @@ EXTRA_DIST         = $(config_DATA)
 configdir          = $(sysconfdir)/ohm/plugins.d
 config_DATA        = resource.ini
 
-libohm_resource_la_SOURCES = plugin.c timestamp.c dbusif.c fsif.c \
+libohm_resource_la_SOURCES = plugin.c timestamp.c dbusif.c fsif.c dresif.c \
                              manager.c resource-set.c
 
 libohm_resource_la_LIBADD = @OHM_PLUGIN_LIBS@ @LIBRESOURCE_LIBS@

@@ -11,6 +11,7 @@
 #include "manager.h"
 #include "resource-set.h"
 #include "fsif.h"
+#include "dresif.h"
 
 int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
 int DBG_DRES, DBG_FS, DBG_QUE, DBG_MEDIA;
@@ -36,12 +37,12 @@ static void plugin_init(OhmPlugin *plugin)
     manager_init(plugin);
     resource_set_init(plugin);
     fsif_init(plugin);
+    dresif_init(plugin);
 #if 0
     client_init(plugin);
     media_init(plugin);
     pbreq_init(plugin);
     sm_init(plugin);
-    dresif_init(plugin);
 #endif
 }
 
@@ -52,18 +53,6 @@ static void plugin_destroy(OhmPlugin *plugin)
 }
 
 
-
-#if 0
-OHM_PLUGIN_REQUIRES_METHODS(resource, 1, 
-   OHM_IMPORT("dres.resolve", resolve)
-);
-#endif
-
-#if 0
-OHM_PLUGIN_PROVIDES_METHODS(resource, 1,
-   OHM_EXPORT(completion_cb, "completion_cb")
-);
-#endif
 
 OHM_PLUGIN_DESCRIPTION(
     "OHM resource manager",           /* description */
@@ -83,6 +72,13 @@ OHM_PLUGIN_DBUS_SIGNALS(
     { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_POLICY_NEW_SESSION_SIGNAL,
       NULL, dbusif_session_notification, NULL }
 );
+
+
+#if 0
+OHM_PLUGIN_PROVIDES_METHODS(resource, 1,
+   OHM_EXPORT(completion_cb, "completion_cb")
+);
+#endif
 
 
 /* 
