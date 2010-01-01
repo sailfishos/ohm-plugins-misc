@@ -146,10 +146,11 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("shared"     , resset->flags.share  ),
         INTEGER_FIELD ("granted"    , rs->granted.factstore),
         STRING_FIELD  ("request"    , rs->request          ),
+        INTEGER_FIELD ("reqno"      , 0                    ),
         INVALID_FIELD
     };
 
-    success = fsif_add_factstore_entry(FACTSTORE_CLIENT_SET, fldlist);
+    success = fsif_add_factstore_entry(FACTSTORE_RESOURCE_SET, fldlist);
 
     return success;
 }
@@ -165,7 +166,7 @@ static int delete_factstore_entry(resource_set_t *rs)
     };
 
 
-    success = fsif_delete_factstore_entry(FACTSTORE_CLIENT_SET, selist);
+    success = fsif_delete_factstore_entry(FACTSTORE_RESOURCE_SET, selist);
 
     return success;
 }
@@ -187,7 +188,8 @@ static int update_factstore_flags(resource_set_t *rs)
         INVALID_FIELD
     };
 
-    success = fsif_update_factstore_entry(FACTSTORE_CLIENT_SET,selist,fldlist);
+    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                          selist, fldlist);
 
     return success;
 }
@@ -196,9 +198,11 @@ static int update_factstore_flags(resource_set_t *rs)
 
 static int update_factstore_request(resource_set_t *rs)
 {
-    resset_t *resset    = rs->resset;
-    uint32_t  mandatory = resset->flags.all & ~resset->flags.opt;
-    int       success;
+    static int reqno = 0;
+
+    resset_t  *resset    = rs->resset;
+    uint32_t   mandatory = resset->flags.all & ~resset->flags.opt;
+    int        success;
 
     fsif_field_t  selist[]  = {
         INTEGER_FIELD("manager_id", rs->manager_id),
@@ -206,10 +210,12 @@ static int update_factstore_request(resource_set_t *rs)
     };
     fsif_field_t  fldlist[] = {
         STRING_FIELD  ("request", rs->request),
+        INTEGER_FIELD ("reqno"  , reqno++    ),
         INVALID_FIELD
     };
 
-    success = fsif_update_factstore_entry(FACTSTORE_CLIENT_SET,selist,fldlist);
+    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                          selist, fldlist);
 
     return success;
 }

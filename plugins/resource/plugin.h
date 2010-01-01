@@ -19,7 +19,7 @@
 /* FactStore prefix */
 #define FACTSTORE_PREFIX                "com.nokia.policy"
 #define FACTSTORE_RESOURCE_PREFIX       FACTSTORE_PREFIX ".resource"
-#define FACTSTORE_CLIENT_SET            FACTSTORE_RESOURCE_PREFIX ".client_set"
+#define FACTSTORE_RESOURCE_SET          FACTSTORE_RESOURCE_PREFIX "_set"
 #define FACTSTORE_ACTIVE_POLICY_GROUP   FACTSTORE_PREFIX ".active_policy_group"
 #define FACTSTORE_ENFORCEMENT_POINT     FACTSTORE_PREFIX ".enforcement_point"
 
