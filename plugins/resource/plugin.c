@@ -34,10 +34,10 @@ static void plugin_init(OhmPlugin *plugin)
 
     timestamp_init(plugin);
     dbusif_init(plugin);
-    manager_init(plugin);
-    resource_set_init(plugin);
     fsif_init(plugin);
     dresif_init(plugin);
+    manager_init(plugin);
+    resource_set_init(plugin);
 #if 0
     client_init(plugin);
     media_init(plugin);

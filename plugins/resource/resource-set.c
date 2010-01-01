@@ -107,7 +107,7 @@ int resource_set_update(resset_t *resset, resource_set_update_t what)
     int success = FALSE;
 
     if (resset == NULL || (rs = resset->userdata) == NULL)
-        OHM_ERROR("resource: refuse to update sesource set: argument error");
+        OHM_ERROR("resource: refuse to update resource set: argument error");
     else {
         if (resset != rs->resset) {
             OHM_ERROR("resource: refuse to update resource set %s/%u "
@@ -125,6 +125,104 @@ int resource_set_update(resset_t *resset, resource_set_update_t what)
 
     return success;
 }
+
+void resource_set_send(resource_set_t          *rs,
+                       uint32_t                 reqno,
+                       resource_set_field_id_t  field)
+{
+    resset_t *resset;
+    resmsg_t  msg;
+
+    if (rs == NULL || (resset = rs->resset) == NULL) 
+        OHM_ERROR("resource: refuse to send field: argument error");
+    else {
+        memset(&msg, 0, sizeof(msg));
+        msg.any.id    = resset->id;
+        msg.any.reqno = reqno;
+
+        switch (field) {
+
+        case resource_set_granted:
+            if (rs->granted.client != rs->granted.factstore || reqno) {
+                msg.notify.type  = RESMSG_GRANT;
+                msg.notify.resrc = rs->granted.factstore;
+
+                resource_set_dump_message(&msg, resset, "to");
+
+                if (resproto_send_message(resset, &msg, NULL))
+                    rs->granted.client = rs->granted.factstore;
+                else {
+                    OHM_ERROR("resource: failed to send grant message to "
+                              "%s/%u (manager id %u)",
+                              resset->peer, resset->id, rs->manager_id);
+                }
+            }
+            break;
+
+        case resource_set_advice:
+            if (rs->advice.client != rs->advice.factstore || reqno) {
+                msg.notify.type  = RESMSG_ADVICE;
+                msg.notify.resrc = rs->advice.factstore;
+
+                resource_set_dump_message(&msg, resset, "to");
+
+                if (resproto_send_message(resset, &msg, NULL))
+                    rs->advice.client = rs->advice.factstore;
+                else {
+                    OHM_ERROR("resource: failed to send grant message to "
+                              "%s/%u (manager id %u)",
+                              resset->peer, resset->id, rs->manager_id);
+                }
+            }
+            break;
+
+        default:
+            OHM_ERROR("resource: refuse to send field: argument error");
+            break;
+        }
+    }
+}
+
+resource_set_t *resource_set_find(fsif_entry_t *entry)
+{
+    uint32_t manager_id = INVALID_MANAGER_ID;
+    resource_set_t *rs = NULL;
+    
+    fsif_get_field_by_entry(entry, fldtype_integer, "manager_id", &manager_id);
+
+    if (manager_id == INVALID_MANAGER_ID)
+        OHM_DEBUG(DBG_FS, "failed to get manager_id"); 
+    else  {
+        if ((rs = find_in_hash_table(manager_id)) == NULL) {
+            OHM_DEBUG(DBG_SET, "can't find resource set with manager_id %u",
+                      manager_id);
+        }
+    }
+
+    return rs;
+}
+
+void resource_set_dump_message(resmsg_t *msg,resset_t *resset,const char *dir)
+{
+    resconn_t *rconn = resset->resconn;
+    int        dump;
+    char      *tstr;
+    char      *mstr;
+    char       buf[2048];
+
+    switch (rconn->any.transp) {
+    case RESPROTO_TRANSPORT_DBUS:     dump=DBG_DBUS;     tstr="dbus";    break;
+    case RESPROTO_TRANSPORT_INTERNAL: dump=DBG_INTERNAL; tstr="internal";break;
+    default:                          dump=FALSE;        tstr="???";     break;
+    }
+
+    if (dump) {
+        mstr = resmsg_dump_message(msg, 3, buf,sizeof(buf));
+        OHM_DEBUG(dump, "%s message %s '%s':\n%s",
+                  tstr, dir, resset->peer, mstr);
+    }
+}
+
 
 /*!
  * @}
@@ -158,8 +256,7 @@ static int add_factstore_entry(resource_set_t *rs)
 
 static int delete_factstore_entry(resource_set_t *rs)
 {
-    resset_t *resset;
-    int       success;
+    int success;
 
     fsif_field_t  selist[] = {
         INTEGER_FIELD("manager_id", rs->manager_id),
@@ -201,8 +298,6 @@ static int update_factstore_request(resource_set_t *rs)
 {
     static int reqno = 0;
 
-    resset_t  *resset    = rs->resset;
-    uint32_t   mandatory = resset->flags.all & ~resset->flags.opt;
     int        success;
 
     fsif_field_t  selist[]  = {
