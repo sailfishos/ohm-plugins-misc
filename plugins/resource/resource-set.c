@@ -145,6 +145,7 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("optional"   , resset->flags.opt    ),
         INTEGER_FIELD ("shared"     , resset->flags.share  ),
         INTEGER_FIELD ("granted"    , rs->granted.factstore),
+        INTEGER_FIELD ("advice"     , rs->advice.factstore ),
         STRING_FIELD  ("request"    , rs->request          ),
         INTEGER_FIELD ("reqno"      , 0                    ),
         INVALID_FIELD

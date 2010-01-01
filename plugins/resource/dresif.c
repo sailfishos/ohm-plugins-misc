@@ -37,9 +37,11 @@ void dresif_init(OhmPlugin *plugin)
 }
 
 
-int dresif_resource_request(resource_set_t *rs)
+int dresif_resource_request(uint32_t  manager_id,
+                            char     *client_name,
+                            uint32_t  client_id,
+                            char     *request)
 {
-    resset_t *resset = rs->resset;
     char     *vars[48];
     int       i;
     int       status;
@@ -47,11 +49,11 @@ int dresif_resource_request(resource_set_t *rs)
 
     vars[i=0] = "manager_id";
     vars[++i] = DRESIF_VARTYPE('i');
-    vars[++i] = DRESIF_VARVALUE(rs->manager_id);
+    vars[++i] = DRESIF_VARVALUE(manager_id);
 
     vars[++i] = "request";
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = DRESIF_VARVALUE(rs->request);
+    vars[++i] = DRESIF_VARVALUE(request);
 
 #if 0
     if (transid > 0) {
@@ -73,20 +75,20 @@ int dresif_resource_request(resource_set_t *rs)
     if (status < 0) {
         OHM_DEBUG(DBG_DRES, "resolving resource_request for %s/%d "
                   "(manager id %u) failed: (%d) %s",
-                  resset->peer, resset->id, rs->manager_id,
+                  client_name, client_id, manager_id,
                   status, strerror(-status));
         success = FALSE;
     }
     else if (status == 0) {
         OHM_DEBUG(DBG_DRES, "resolving resource_request for %s/%u "
                   "(manager id %u) failed",
-                  resset->peer, resset->id, rs->manager_id);
+                  client_name, client_id, manager_id);
         success = FALSE;
     }
     else {
         OHM_DEBUG(DBG_DRES, "successfully resolved resource_request for %s/%u "
                   "(manager id %u)",
-                  resset->peer, resset->id, rs->manager_id);
+                  client_name, client_id, manager_id);
         success = TRUE;
     }
     

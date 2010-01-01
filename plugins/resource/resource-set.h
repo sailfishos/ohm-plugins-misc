@@ -8,15 +8,18 @@
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
 
+typedef struct {
+    uint32_t                client;      /* last value client knows */
+    uint32_t                factstore;   /* value what is in the factstore */
+} resource_set_output_t;
+
 typedef struct resource_set_s {
     struct resource_set_s  *next;
     uint32_t                manager_id;  /* resource-set generated unique ID */
     resset_t               *resset;      /* link to libresource */
     char                   *request;     /* either 'acquire', 'release'  */
-    struct {
-        uint32_t client;
-        uint32_t factstore;
-    }                       granted;     /* granted resources of this set */
+    resource_set_output_t   granted;     /* granted resources of this set */
+    resource_set_output_t   advice;      /* advice on this resource set */
     int                     wait_grant;  /* client is expecting a grant msg */
 } resource_set_t;
 

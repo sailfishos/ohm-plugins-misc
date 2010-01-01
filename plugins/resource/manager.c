@@ -34,6 +34,8 @@ void manager_register(resmsg_t *msg, resset_t *resset, void *proto_data)
     OHM_DEBUG(DBG_MGR, "message received");
 
     rs = resource_set_create(resset);
+    dresif_resource_request(rs->manager_id, resset->peer,
+                            resset->id, "register");
 
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
 
@@ -42,14 +44,33 @@ void manager_register(resmsg_t *msg, resset_t *resset, void *proto_data)
 
 void manager_unregister(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
-    int32_t     errcod = 0;
-    const char *errmsg = "OK";
+    resource_set_t  *rs         = resset->userdata;
+    int32_t          errcod     = 0;
+    const char      *errmsg     = "OK";
+    uint32_t         manager_id;
+    char             client_name[256];
+    uint32_t         client_id;
 
     dump_message(msg, resset, "from");
 
     OHM_DEBUG(DBG_MGR, "message received");
 
+    strncpy(client_name, resset->peer, sizeof(client_name));
+    client_name[sizeof(client_name)-1] = '\0';
+
+    client_id = resset->id;
+
+    if (rs)
+        manager_id = rs->manager_id;
+    else {
+        OHM_ERROR("resource: unregistering resources for %&s/%u: "
+                  "confused with data structures", client_name, client_id);
+        strcpy(client_name, "<??unidentified??>");
+        client_id = ~(uint32_t)0;
+    }
+
     resource_set_destroy(resset);
+    dresif_resource_request(manager_id, client_name, client_id, "unregister");
 
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
 
@@ -88,7 +109,8 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
                     resset->flags.share = record->rset.share;
                     
                     resource_set_update(resset, update_flags);
-                    dresif_resource_request(rs);
+                    dresif_resource_request(rs->manager_id, resset->peer,
+                                            resset->id, "update");
                 }
         }
     }
@@ -121,7 +143,8 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
             rs->request = strdup("acquire");
 
             resource_set_update(resset, update_request);
-            dresif_resource_request(rs);
+            dresif_resource_request(rs->manager_id, resset->peer,
+                                    resset->id, "acquire");
         }
     }
 
@@ -153,7 +176,8 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
             rs->request = strdup("release");
 
             resource_set_update(resset, update_request);
-            dresif_resource_request(rs);
+            dresif_resource_request(rs->manager_id, resset->peer,
+                                    resset->id, "release");
         }
     }
 
