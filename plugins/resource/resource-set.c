@@ -239,9 +239,11 @@ static int add_factstore_entry(resource_set_t *rs)
         STRING_FIELD  ("client_name", resset->peer         ),
         INTEGER_FIELD ("client_id"  , resset->id           ),
         STRING_FIELD  ("class"      , resset->class        ),
+        INTEGER_FIELD ("mode"       , resset->mode         ),
         INTEGER_FIELD ("mandatory"  , mandatory            ),
         INTEGER_FIELD ("optional"   , resset->flags.opt    ),
         INTEGER_FIELD ("shared"     , resset->flags.share  ),
+        INTEGER_FIELD ("mask"       , resset->flags.mask   ),
         INTEGER_FIELD ("granted"    , rs->granted.factstore),
         INTEGER_FIELD ("advice"     , rs->advice.factstore ),
         STRING_FIELD  ("request"    , rs->request          ),
@@ -283,6 +285,7 @@ static int update_factstore_flags(resource_set_t *rs)
         INTEGER_FIELD ("mandatory"  , mandatory            ),
         INTEGER_FIELD ("optional"   , resset->flags.opt    ),
         INTEGER_FIELD ("shared"     , resset->flags.share  ),
+        INTEGER_FIELD ("mask"       , resset->flags.mask   ),
         INVALID_FIELD
     };
 
