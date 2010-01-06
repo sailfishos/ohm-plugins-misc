@@ -15,6 +15,7 @@
 
 static void granted_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void advice_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+static void request_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 
 
 
@@ -32,6 +33,7 @@ void manager_init(OhmPlugin *plugin)
 
     ADD_FIELD_WATCH("granted", granted_cb);
     ADD_FIELD_WATCH("advice" , advice_cb );
+    ADD_FIELD_WATCH("request", request_cb);
 
 #undef ADD_FIELD_WATCH
 }
@@ -321,6 +323,40 @@ static void advice_cb(fsif_entry_t *entry,
 
         if (!rs->processing) {
             resource_set_send(rs, 0, resource_set_advice);
+        }
+    }
+}
+
+
+static void request_cb(fsif_entry_t *entry,
+                       char         *name,
+                       fsif_field_t *fld,
+                       void         *ud)
+{
+    char           *request;
+    resource_set_t *rs;
+    resset_t       *resset;
+    char            buf[256];
+
+    (void)name;
+    (void)ud;
+
+    if (fld->type != fldtype_string || !fld->value.string) {
+        OHM_ERROR("resource: [%s] invalid field type: not string",
+                  __FUNCTION__);
+        return;
+    }
+
+    request = fld->value.string;
+
+    if ((rs = resource_set_find(entry))  && (resset = rs->resset)) {
+        if (strcmp(request, rs->request)) {
+            OHM_DEBUG(DBG_MGR,"resource set %s/%u (manager id %u) request "
+                      "changed: %s", resset->peer, resset->id, rs->manager_id,
+                      request);
+
+            free(rs->request);
+            rs->request = strdup(request);
         }
     }
 }
