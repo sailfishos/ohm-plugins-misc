@@ -82,3 +82,11 @@ XB-GIT-ID: ${Git-Id}
 Description: Policy signaling helper library header files.
  Header files for libep.
 
+Package: ohm-plugin-call-test
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0, ohm-plugin-console
+XB-GIT-ID: ${Git-Id}
+Description: OHM plugin for testing the internal call interface
+ This package contains a trivial plaugin that implements an internal resource
+ client for 'call' class. The resource acquiring, release etc can be controlled
+ via console commands.

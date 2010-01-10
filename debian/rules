@@ -61,4 +61,6 @@ DEB_INSTALL_DOCS_ohm-plugin-timestamp-dbg := --no-act
 DEB_INSTALL_CHANGELOGS_ohm-plugin-timestamp-dbg := --no-act
 DEB_INSTALL_DOCS_libep-dbg := --no-act
 DEB_INSTALL_CHANGELOGS_libep-dbg := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-call-test := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-call-test := --no-act
 
