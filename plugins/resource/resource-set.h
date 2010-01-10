@@ -17,10 +17,25 @@ typedef enum {
     resource_set_advice
 } resource_set_field_id_t;
 
+typedef struct resource_set_queue_s {
+    struct resource_set_queue_s *next;
+    struct resource_set_queue_s *prev;
+    uint32_t                     txid;   /* transaction ID */
+    uint32_t                     reqno;  /* request number, if any */
+    uint32_t                     value;  /* value */
+} resource_set_queue_t;
+
+typedef struct {
+    resource_set_queue_t   *first;
+    resource_set_queue_t   *last;
+} resource_set_qhead_t;
+
 typedef struct {
     uint32_t                client;      /* last value client knows */
+    resource_set_qhead_t    queue;       /* values waiting for EP ack */
     uint32_t                factstore;   /* value what is in the factstore */
 } resource_set_output_t;
+
 
 typedef struct resource_set_s {
     struct resource_set_s  *next;
@@ -29,7 +44,7 @@ typedef struct resource_set_s {
     char                   *request;     /* either 'acquire', 'release'  */
     resource_set_output_t   granted;     /* granted resources of this set */
     resource_set_output_t   advice;      /* advice on this resource set */
-    int                     processing;  /* a client request is processed */
+    resource_set_qhead_t    qhead;       /* queue for delayed responses */
 } resource_set_t;
 
 typedef enum {
@@ -42,8 +57,10 @@ void resource_set_init(OhmPlugin *);
 
 resource_set_t *resource_set_create(resset_t *);
 void resource_set_destroy(resset_t *);
-int  resource_set_update(resset_t *, resource_set_update_t);
-void resource_set_send(resource_set_t *, uint32_t, resource_set_field_id_t);
+int  resource_set_update_factstore(resset_t *, resource_set_update_t);
+void resource_set_queue_change(resource_set_t *, uint32_t,
+                               uint32_t, resource_set_field_id_t);
+void resource_set_send_queued_changes(uint32_t, uint32_t);
 resource_set_t *resource_set_find(struct _OhmFact *);
 
 void resource_set_dump_message(resmsg_t *, resset_t *, const char *);

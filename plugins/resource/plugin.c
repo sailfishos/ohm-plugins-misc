@@ -10,11 +10,12 @@
 #include "dbusif.h"
 #include "manager.h"
 #include "resource-set.h"
+#include "transaction.h"
 #include "fsif.h"
 #include "dresif.h"
 
 int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
-int DBG_DRES, DBG_FS, DBG_QUE, DBG_MEDIA;
+int DBG_DRES, DBG_FS, DBG_QUE, DBG_TRANSACT, DBG_MEDIA;
 
 OHM_DEBUG_PLUGIN(resource,
     OHM_DEBUG_FLAG("manager" , "resource manager"   , &DBG_MGR     ),
@@ -24,6 +25,7 @@ OHM_DEBUG_PLUGIN(resource,
     OHM_DEBUG_FLAG("dres"    , "dres interface"     , &DBG_DRES    ),
     OHM_DEBUG_FLAG("fact"    , "factstore interface", &DBG_FS      ),
     OHM_DEBUG_FLAG("queue"   , "queued requests"    , &DBG_QUE     ),
+    OHM_DEBUG_FLAG("transact", "transactions"       , &DBG_TRANSACT),
     OHM_DEBUG_FLAG("media"   , "media"              , &DBG_MEDIA   )
 );
 
@@ -38,12 +40,7 @@ static void plugin_init(OhmPlugin *plugin)
     dresif_init(plugin);
     manager_init(plugin);
     resource_set_init(plugin);
-#if 0
-    client_init(plugin);
-    media_init(plugin);
-    pbreq_init(plugin);
-    sm_init(plugin);
-#endif
+    transaction_init(plugin);
 }
 
 static void plugin_destroy(OhmPlugin *plugin)

@@ -10,12 +10,18 @@
 #include "resource-set.h"
 #include "fsif.h"
 #include "dresif.h"
+#include "transaction.h"
 
 
+static uint32_t trans_id;
 
 static void granted_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void advice_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void request_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+
+static void transaction_start(void);
+static void transaction_end(void);
+static void transaction_complete(uint32_t *, int, uint32_t, void *);
 
 
 
@@ -48,19 +54,22 @@ void manager_register(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     OHM_DEBUG(DBG_MGR, "message received");
 
-    rs = resource_set_create(resset);
-    rs->processing = TRUE;
+    if ((rs = resource_set_create(resset)) == NULL) {
+        errcod = ENOMEM;
+        errmsg = strerror(errcod);
+    }
+    else {
+        transaction_start();
 
-    dresif_resource_request(rs->manager_id, resset->peer,
-                            resset->id, "register");
+        dresif_resource_request(rs->manager_id, resset->peer,
+                                resset->id, "register");
+    }
 
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
 
-    rs->processing = FALSE;
-
     resproto_reply_message(resset, msg, proto_data, 0, "OK");
 
-    resource_set_send(rs, 0, resource_set_advice);
+    transaction_end();
 }
 
 void manager_unregister(resmsg_t *msg, resset_t *resset, void *proto_data)
@@ -82,21 +91,19 @@ void manager_unregister(resmsg_t *msg, resset_t *resset, void *proto_data)
     client_id = resset->id;
 
     if (rs) {
-        rs->processing = TRUE;
         manager_id = rs->manager_id;
     }
     else {
         OHM_ERROR("resource: unregistering resources for %&s/%u: "
                   "confused with data structures", client_name, client_id);
         strcpy(client_name, "<unidentified>");
-        client_id = ~(uint32_t)0;
+        manager_id = 0;
+        client_id  = ~(uint32_t)0;
     }
 
     resource_set_destroy(resset);
     dresif_resource_request(manager_id, client_name, client_id, "unregister");
 
-    if (rs)
-        rs->processing = FALSE;
 
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
 
@@ -110,7 +117,6 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
     uint32_t         reqno  = record->reqno;
     int32_t          errcod = 0;
     const char      *errmsg = "OK";
-    int              send   = FALSE;
 
     resource_set_dump_message(msg, resset, "from");
 
@@ -136,15 +142,11 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
                     resset->flags.opt   = record->rset.opt;
                     resset->flags.share = record->rset.share;
                     
-                    rs->processing = TRUE;
+                    transaction_start();
 
-                    resource_set_update(resset, update_flags);
+                    resource_set_update_factstore(resset, update_flags);
                     dresif_resource_request(rs->manager_id, resset->peer,
                                             resset->id, "update");
-
-                    rs->processing = FALSE;
-
-                    send = TRUE;
                 }
         }
     }
@@ -153,10 +155,7 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
 
-    if (send) {
-        resource_set_send(rs, reqno, resource_set_granted);
-        resource_set_send(rs, 0, resource_set_advice);
-    }
+    transaction_end();
 }
 
 void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
@@ -165,7 +164,6 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
     uint32_t        reqno  = msg->any.reqno;
     int32_t         errcod = 0;
     const char     *errmsg = "OK";
-    int             send   = FALSE;
 
     resource_set_dump_message(msg, resset, "from");
 
@@ -183,15 +181,11 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
             free(rs->request);
             rs->request = strdup("acquire");
 
-            rs->processing = TRUE;
+            transaction_start();
 
-            resource_set_update(resset, update_request);
+            resource_set_update_factstore(resset, update_request);
             dresif_resource_request(rs->manager_id, resset->peer,
                                     resset->id, "acquire");
-
-            rs->processing = FALSE;
-
-            send = TRUE;
         }
     }
 
@@ -199,10 +193,7 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
 
-    if (send) {
-        resource_set_send(rs, reqno, resource_set_granted);
-        resource_set_send(rs, 0, resource_set_advice);
-    }
+    transaction_end();
 }
 
 void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
@@ -211,7 +202,6 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
     uint32_t        reqno  = msg->any.reqno;
     int32_t         errcod = 0;
     const char     *errmsg = "OK";
-    int             send   = TRUE;
 
     resource_set_dump_message(msg, resset, "from");
 
@@ -229,15 +219,11 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
             free(rs->request);
             rs->request = strdup("release");
 
-            rs->processing = TRUE;
+            transaction_start();
 
-            resource_set_update(resset, update_request);
+            resource_set_update_factstore(resset, update_request);
             dresif_resource_request(rs->manager_id, resset->peer,
                                     resset->id, "release");
-
-            rs->processing = FALSE;
-
-            send = TRUE;
         }
     }
 
@@ -245,10 +231,7 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
 
-    if (send) {
-        resource_set_send(rs, reqno, resource_set_granted);
-        resource_set_send(rs, 0, resource_set_advice);
-    }
+    transaction_end();
 }
 
 /*!
@@ -286,9 +269,7 @@ static void granted_cb(fsif_entry_t *entry,
 
         rs->granted.factstore = granted;
 
-        if (!rs->processing) {
-            resource_set_send(rs, 0, resource_set_granted);
-        }
+        resource_set_queue_change(rs, trans_id, 0, resource_set_granted);
     }
 }
 
@@ -321,9 +302,7 @@ static void advice_cb(fsif_entry_t *entry,
 
         rs->advice.factstore = advice;
 
-        if (!rs->processing) {
-            resource_set_send(rs, 0, resource_set_advice);
-        }
+        resource_set_queue_change(rs, trans_id, 0, resource_set_advice);
     }
 }
 
@@ -336,7 +315,6 @@ static void request_cb(fsif_entry_t *entry,
     char           *request;
     resource_set_t *rs;
     resset_t       *resset;
-    char            buf[256];
 
     (void)name;
     (void)ud;
@@ -359,6 +337,29 @@ static void request_cb(fsif_entry_t *entry,
             rs->request = strdup(request);
         }
     }
+}
+
+static void transaction_start(void)
+{
+    trans_id = transaction_create(transaction_complete, NULL);
+}
+
+static void transaction_end(void)
+{
+    if (trans_id != NO_TRANSACTION) {
+        transaction_unref(trans_id);
+        trans_id = NO_TRANSACTION;
+    }
+}
+
+static void transaction_complete(uint32_t *ids,int nid,uint32_t txid,void *ud)
+{
+    int i;
+
+    (void)ud;
+
+    for (i = 0;   i < nid;   i++)
+        resource_set_send_queued_changes(ids[i], txid);
 }
 
 

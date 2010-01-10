@@ -8,6 +8,7 @@
 #include "plugin.h"
 #include "dresif.h"
 #include "resource-set.h"
+#include "timestamp.h"
 
 #define DRESIF_VARTYPE(t)  (char *)(t)
 #define DRESIF_VARVALUE(v) (char *)(v)

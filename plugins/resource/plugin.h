@@ -25,11 +25,13 @@
 
 
 extern int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
-extern int DBG_DRES, DBG_FS, DBG_QUE, DBG_MEDIA;
+extern int DBG_DRES, DBG_FS, DBG_QUE, DBG_TRANSACT, DBG_MEDIA;
 
 
+/*
 static void plugin_init(OhmPlugin *);
 static void plugin_destroy(OhmPlugin *);
+*/
 
 /* (sp_)timestamping macros */
 #define TIMESTAMP_ADD(step) do {                \

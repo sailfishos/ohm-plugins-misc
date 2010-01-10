@@ -8,6 +8,7 @@
 #include "plugin.h"
 #include "resource-set.h"
 #include "fsif.h"
+#include "transaction.h"
 
 #define HASH_BITS      8
 #define HASH_DIM       (1 << HASH_BITS)
@@ -22,6 +23,10 @@
 
 static resource_set_t  *hash_table[HASH_DIM];
 
+static void enqueue_send_request(resource_set_t *, resource_set_field_id_t,
+                                 uint32_t, uint32_t);
+static void dequeue_and_send(resource_set_t*,resource_set_field_id_t,uint32_t);
+static void destroy_queue(resource_set_t *, resource_set_field_id_t);
 
 static int add_factstore_entry(resource_set_t *);
 static int delete_factstore_entry(resource_set_t *);
@@ -54,6 +59,12 @@ resource_set_t *resource_set_create(resset_t *resset)
         rs->manager_id = manager_id++;
         rs->resset     = resset;
         rs->request    = strdup("release");
+        
+        rs->granted.queue.first = (void *)&rs->granted.queue;
+        rs->granted.queue.last  = (void *)&rs->granted.queue;
+
+        rs->advice.queue.first = (void *)&rs->advice.queue;
+        rs->advice.queue.last  = (void *)&rs->advice.queue;
 
         resset->userdata = rs;
         add_to_hash_table(rs);
@@ -88,6 +99,9 @@ void resource_set_destroy(resset_t *resset)
         else {
             mgrid = rs->manager_id;
 
+            destroy_queue(rs, resource_set_granted);
+            destroy_queue(rs, resource_set_advice);
+
             delete_factstore_entry(rs);
             delete_from_hash_table(rs);
             resset->userdata = NULL;
@@ -101,7 +115,7 @@ void resource_set_destroy(resset_t *resset)
     }
 }
 
-int resource_set_update(resset_t *resset, resource_set_update_t what)
+int resource_set_update_factstore(resset_t *resset, resource_set_update_t what)
 {
     resource_set_t *rs;
     int success = FALSE;
@@ -126,62 +140,33 @@ int resource_set_update(resset_t *resset, resource_set_update_t what)
     return success;
 }
 
-void resource_set_send(resource_set_t          *rs,
-                       uint32_t                 reqno,
-                       resource_set_field_id_t  field)
+void resource_set_queue_change(resource_set_t          *rs,
+                               uint32_t                 txid,
+                               uint32_t                 reqno,
+                               resource_set_field_id_t  what)
 {
     resset_t *resset;
-    resmsg_t  msg;
+
 
     if (rs == NULL || (resset = rs->resset) == NULL) 
-        OHM_ERROR("resource: refuse to send field: argument error");
+        OHM_ERROR("resource: refuse to queue change: argument error");
     else {
-        memset(&msg, 0, sizeof(msg));
-        msg.any.id    = resset->id;
-        msg.any.reqno = reqno;
-
-        switch (field) {
-
-        case resource_set_granted:
-            if (rs->granted.client != rs->granted.factstore || reqno) {
-                msg.notify.type  = RESMSG_GRANT;
-                msg.notify.resrc = rs->granted.factstore;
-
-                resource_set_dump_message(&msg, resset, "to");
-
-                if (resproto_send_message(resset, &msg, NULL))
-                    rs->granted.client = rs->granted.factstore;
-                else {
-                    OHM_ERROR("resource: failed to send grant message to "
-                              "%s/%u (manager id %u)",
-                              resset->peer, resset->id, rs->manager_id);
-                }
-            }
-            break;
-
-        case resource_set_advice:
-            if (rs->advice.client != rs->advice.factstore || reqno) {
-                msg.notify.type  = RESMSG_ADVICE;
-                msg.notify.resrc = rs->advice.factstore;
-
-                resource_set_dump_message(&msg, resset, "to");
-
-                if (resproto_send_message(resset, &msg, NULL))
-                    rs->advice.client = rs->advice.factstore;
-                else {
-                    OHM_ERROR("resource: failed to send grant message to "
-                              "%s/%u (manager id %u)",
-                              resset->peer, resset->id, rs->manager_id);
-                }
-            }
-            break;
-
-        default:
-            OHM_ERROR("resource: refuse to send field: argument error");
-            break;
+        if (transaction_add_resource_set(txid, rs->manager_id)) {
+            enqueue_send_request(rs, what, txid, reqno);
         }
     }
 }
+
+void resource_set_send_queued_changes(uint32_t manager_id, uint32_t txid)
+{
+    resource_set_t *rs;
+    
+    if ((rs = find_in_hash_table(manager_id)) != NULL) {
+        dequeue_and_send(rs, resource_set_granted, txid);
+        dequeue_and_send(rs, resource_set_advice , txid);
+    }
+}
+
 
 resource_set_t *resource_set_find(fsif_entry_t *entry)
 {
@@ -227,6 +212,140 @@ void resource_set_dump_message(resmsg_t *msg,resset_t *resset,const char *dir)
 /*!
  * @}
  */
+
+static void enqueue_send_request(resource_set_t          *rs,
+                                 resource_set_field_id_t  what,
+                                 uint32_t                 txid,
+                                 uint32_t                 reqno)
+{
+    resource_set_output_t *value;
+    const char            *type;
+    resset_t              *resset;
+    resource_set_qhead_t  *qhead;
+    resource_set_queue_t  *qentry;
+    char                   buf[128];
+
+    if (rs == NULL || (resset = rs->resset) == NULL) {
+        OHM_ERROR("resource: refuse to deque and send field: argument error");
+        return;
+    }
+
+    switch (what) {        
+    case resource_set_granted:  value=&rs->granted;  type="granted";   break;
+    case resource_set_advice:   value=&rs->advice;   type="advice";    break;
+    default:                                                           return;
+    }
+
+    if ((qentry = malloc(sizeof(resource_set_queue_t))) == NULL)
+        OHM_ERROR("resource: [%s] memory allocation failure", __FUNCTION__);
+    else {
+        qhead = &value->queue;
+
+        memset(qentry, 0, sizeof(resource_set_queue_t));
+        qentry->next  = (void *)qhead;
+        qentry->prev  = qhead->last;
+        qentry->txid  = txid;
+        qentry->reqno = reqno;
+        qentry->value = value->factstore;
+
+        qhead->last->next = qentry;
+        qhead->last = qentry;
+
+        OHM_DEBUG(DBG_SET, "%s/%u (manager_id %u) enqued %s value %s",
+                  resset->peer, resset->id, rs->manager_id, type,
+                  resmsg_res_str(qentry->value, buf, sizeof(buf)));
+    }
+}
+
+static void dequeue_and_send(resource_set_t          *rs,
+                             resource_set_field_id_t  what,
+                             uint32_t                 txid)
+{
+    resset_t              *resset;
+    resmsg_type_t          type;
+    resource_set_output_t *value;
+    resource_set_qhead_t  *qhead;
+    resource_set_queue_t  *qentry;
+    resmsg_t               msg;
+    char                   buf[128];
+
+    if (rs == NULL || (resset = rs->resset) == NULL) {
+        OHM_ERROR("resource: refuse to deque and send field: argument error");
+        return;
+    }
+
+    switch (what) {        
+    case resource_set_granted:  type=RESMSG_GRANT;  value=&rs->granted; break;
+    case resource_set_advice:   type=RESMSG_ADVICE; value=&rs->advice;  break;
+    default:                                                            return;
+    }
+
+    qhead = &value->queue;
+
+    /*
+     * we assume that the queue contains strictly monoton increasing txid's
+     * and this function is called with strictly monoton txid's
+     */
+    while ((void *)(qentry = qhead->first) != (void *)qhead) {
+        if (qentry->txid > txid)
+            return;             /* nothing to send */
+
+        if (qentry->txid == txid) {
+            if (value->client != qentry->value) {
+                memset(&msg, 0, sizeof(msg));
+                msg.notify.type  = type;
+                msg.notify.id    = resset->id;
+                msg.notify.reqno = qentry->reqno;
+                msg.notify.resrc = qentry->value;
+                
+                if (resproto_send_message(resset, &msg, NULL)) {
+                    value->client = qentry->value;
+
+                    OHM_DEBUG(DBG_SET, "%s/%u (manager_id %u) dequed and sent "
+                              "%s value %s",  resset->peer, resset->id,
+                              rs->manager_id, resmsg_type_str(type),
+                              resmsg_res_str(value->client, buf, sizeof(buf)));
+                }
+                else {
+                    OHM_ERROR("resource: failed to send %s message to "
+                              "%s/%u (manager id %u)", resmsg_type_str(type),
+                              resset->peer, resset->id, rs->manager_id);
+                }
+            }
+        }
+        else {
+            OHM_ERROR("resource: deleting out-of-order '%s' transaction "
+                      "%u for %s/%u (manager id %u: expected transaction %u)",
+                      resmsg_type_str(type), qentry->txid,
+                      resset->peer, resset->id, rs->manager_id, txid);
+        }
+
+        qentry->prev->next = qentry->next;
+        qentry->next->prev = qentry->prev;
+        free(qentry);
+    } /* while */
+}
+
+static void destroy_queue(resource_set_t *rs, resource_set_field_id_t what)
+{
+    resource_set_qhead_t *qhead;
+    resource_set_queue_t *qentry;
+
+    switch (what) {
+    case resource_set_granted:    qhead = &rs->granted.queue;    break;
+    case resource_set_advice:     qhead = &rs->advice.queue;     break;
+    default:                                                     return;
+    }
+
+    while ((void *)(qentry = qhead->first) != (void *)qhead) {
+
+        qentry->prev->next = qentry->next;
+        qentry->next->prev = qentry->prev;
+
+        free(qentry);
+    }
+}
+
 
 static int add_factstore_entry(resource_set_t *rs)
 {
