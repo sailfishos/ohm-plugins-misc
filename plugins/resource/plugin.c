@@ -8,11 +8,20 @@
 #include "plugin.h"
 #include "timestamp.h"
 #include "dbusif.h"
+#include "internalif.h"
 #include "manager.h"
 #include "resource-set.h"
 #include "transaction.h"
 #include "fsif.h"
 #include "dresif.h"
+
+/* these are the manually set up equivalents of OHM_EXPORTABLE */
+static const char *OHM_VAR(internalif_timer_add,_SIGNATURE) =
+    "void *(uint32_t delay, resconn_timercb_t callback, void *data)";
+
+static const char *OHM_VAR(internalif_timer_del,_SIGNATURE) =
+    "void(void *timer)";
+
 
 int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
 int DBG_DRES, DBG_FS, DBG_QUE, DBG_TRANSACT, DBG_MEDIA;
@@ -36,6 +45,7 @@ static void plugin_init(OhmPlugin *plugin)
 
     timestamp_init(plugin);
     dbusif_init(plugin);
+    internalif_init(plugin);
     fsif_init(plugin);
     dresif_init(plugin);
     manager_init(plugin);
@@ -71,11 +81,10 @@ OHM_PLUGIN_DBUS_SIGNALS(
 );
 
 
-#if 0
-OHM_PLUGIN_PROVIDES_METHODS(resource, 1,
-   OHM_EXPORT(completion_cb, "completion_cb")
+OHM_PLUGIN_PROVIDES_METHODS(resource, 2,
+    OHM_EXPORT(internalif_timer_add, "restimer_add"),
+    OHM_EXPORT(internalif_timer_del, "restimer_del")
 );
-#endif
 
 
 /* 

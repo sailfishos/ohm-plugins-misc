@@ -217,7 +217,7 @@ static void session_bus_init(const char *addr)
                                  sess_conn);
 
         if (res_conn == NULL) {
-            OHM_ERROR("resource: failed to initialze resource protocol");
+            OHM_ERROR("resource: resource protocol setup over D-Bus failed");
             return;
         }
 
