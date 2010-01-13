@@ -35,6 +35,7 @@ void internalif_init(OhmPlugin *plugin)
         resproto_set_handler(res_conn, RESMSG_UPDATE    , manager_update    );
         resproto_set_handler(res_conn, RESMSG_ACQUIRE   , manager_acquire   );
         resproto_set_handler(res_conn, RESMSG_RELEASE   , manager_release   );
+        resproto_set_handler(res_conn, RESMSG_AUDIO     , manager_audio     );
 
         OHM_INFO("resource: resource loopback protocol initialized");
     }

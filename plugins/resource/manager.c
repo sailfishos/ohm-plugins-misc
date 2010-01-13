@@ -234,6 +234,33 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
     transaction_end();
 }
 
+
+void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
+{
+    resource_set_t *rs     = resset->userdata;
+    uint32_t        reqno  = msg->any.reqno;
+    int32_t         errcod = 0;
+    const char     *errmsg = "OK";
+
+    resource_set_dump_message(msg, resset, "from");
+
+    OHM_DEBUG(DBG_MGR, "message received");
+
+    if (!rs) {
+        OHM_ERROR("resource: can't set audio stream spec. for %s/%u: "
+                  "confused with data structures", resset->peer, resset->id);
+        errcod = EUCLEAN;
+        errmsg = strerror(errcod);
+    }
+    else {
+    }
+
+    OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
+
+    resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
+}
+
+
 /*!
  * @}
  */

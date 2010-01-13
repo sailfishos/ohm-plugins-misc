@@ -13,6 +13,7 @@ void manager_unregister(resmsg_t *, resset_t *, void *);
 void manager_update(resmsg_t *, resset_t *, void *);
 void manager_acquire(resmsg_t *, resset_t *, void *);
 void manager_release(resmsg_t *, resset_t *, void *);
+void manager_audio(resmsg_t *, resset_t *, void *);
 
 #endif	/* __OHM_RESOURCE_MANAGER_H__ */
 
