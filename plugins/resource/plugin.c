@@ -10,7 +10,7 @@
 #include "dbusif.h"
 #include "internalif.h"
 #include "manager.h"
-#include "resource-set.h"
+#include "resource-spec.h"
 #include "transaction.h"
 #include "fsif.h"
 #include "dresif.h"
@@ -50,6 +50,7 @@ static void plugin_init(OhmPlugin *plugin)
     dresif_init(plugin);
     manager_init(plugin);
     resource_set_init(plugin);
+    resource_spec_init(plugin);
     transaction_init(plugin);
 }
 

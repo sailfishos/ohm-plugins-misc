@@ -7,7 +7,7 @@
 
 #include "plugin.h"
 #include "manager.h"
-#include "resource-set.h"
+#include "resource-spec.h"
 #include "fsif.h"
 #include "dresif.h"
 #include "transaction.h"
@@ -237,10 +237,17 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
 
 void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
-    resource_set_t *rs     = resset->userdata;
-    uint32_t        reqno  = msg->any.reqno;
-    int32_t         errcod = 0;
-    const char     *errmsg = "OK";
+    resource_set_t        *rs      = resset->userdata;
+    uint32_t               reqno   = msg->any.reqno;
+    resmsg_audio_t        *audio   = &msg->audio;
+    char                  *group   = audio->group;
+    uint32_t               pid     = audio->pid;
+    char                  *propnam = audio->property.name;
+    resmsg_match_method_t  method  = audio->property.match.method;
+    char                  *pattern = audio->property.match.pattern;
+    int32_t                errcod = 0;
+    const char            *errmsg = "OK";
+    int                    success;
 
     resource_set_dump_message(msg, resset, "from");
 
@@ -253,6 +260,13 @@ void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
         errmsg = strerror(errcod);
     }
     else {
+        success = resource_set_add_spec(resset, resource_audio, group, pid,
+                                        propnam, method,pattern);
+
+        if (success) {
+            dresif_resource_request(rs->manager_id, resset->peer,
+                                    resset->id, "audio");
+        }
     }
 
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);

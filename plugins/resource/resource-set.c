@@ -6,7 +6,8 @@
 #include <errno.h>
 
 #include "plugin.h"
-#include "resource-set.h"
+#include "resource-spec.h"
+#include "resource.h"
 #include "fsif.h"
 #include "transaction.h"
 
@@ -32,6 +33,7 @@ static int add_factstore_entry(resource_set_t *);
 static int delete_factstore_entry(resource_set_t *);
 static int update_factstore_flags(resource_set_t *);
 static int update_factstore_request(resource_set_t *);
+static int update_factstore_audio(resource_set_t *r,resource_audio_stream_t *);
 
 static void add_to_hash_table(resource_set_t *);
 static void delete_from_hash_table(resource_set_t *);
@@ -85,8 +87,9 @@ resource_set_t *resource_set_create(resset_t *resset)
 
 void resource_set_destroy(resset_t *resset)
 {
-    resource_set_t *rs;
-    uint32_t        mgrid;
+    resource_set_t  *rs;
+    resource_spec_t *spec;
+    uint32_t         mgrid;
 
     if (resset == NULL || (rs = resset->userdata) == NULL)
         OHM_ERROR("resource: refuse to destroy sesource set: argument error");
@@ -98,6 +101,11 @@ void resource_set_destroy(resset_t *resset)
         }
         else {
             mgrid = rs->manager_id;
+
+            while ((spec = rs->specs) != NULL) {
+                rs->specs = spec->any.next;
+                resource_spec_destroy(spec);
+            }
 
             destroy_queue(rs, resource_set_granted);
             destroy_queue(rs, resource_set_advice);
@@ -114,6 +122,62 @@ void resource_set_destroy(resset_t *resset)
         }
     }
 }
+
+int resource_set_add_spec(resset_t *resset, resource_spec_type_t type, ...)
+{
+    va_list          args;
+    resource_set_t  *rs;
+    resource_spec_t *spec;
+    int              success = FALSE;
+
+    if (resset == NULL || (rs = resset->userdata) == NULL) {
+        OHM_ERROR("resource: refuse to add spec to resource set: "
+                  "argument error");
+    }
+    else {
+        if (resset != rs->resset) {
+            OHM_ERROR("resource: refuse to add spec to resource set %s/%u "
+                      "(manager id %u): confused with data structures",
+                      resset->peer, resset->id, rs->manager_id);
+        }
+        else {
+
+            va_start(args, type);
+
+            for (spec = rs->specs;   spec != NULL;   spec = spec->any.next) {
+                if (type == spec->any.type) {
+                    resource_spec_update(spec, rs, type, args);
+                    break;
+                }
+            }
+
+            if (spec == NULL)
+                spec = resource_spec_create(rs, type, args);
+
+            va_end(args);
+
+            if (spec != NULL) {
+                spec->any.next = rs->specs;
+                rs->specs  = spec;
+
+                switch (spec->any.type) {
+
+                case resource_audio: 
+                    if (update_factstore_audio(rs, &spec->audio))
+                        success = TRUE;
+                    break;
+
+                default:
+                    break;
+                }
+            }
+        }
+    }
+
+    return success;
+}
+
+
 
 int resource_set_update_factstore(resset_t *resset, resource_set_update_t what)
 {
@@ -367,6 +431,7 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("advice"     , rs->advice.factstore ),
         STRING_FIELD  ("request"    , rs->request          ),
         INTEGER_FIELD ("reqno"      , 0                    ),
+        STRING_FIELD  ("audiogr"    , resset->class        ),
         INVALID_FIELD
     };
 
@@ -429,6 +494,29 @@ static int update_factstore_request(resource_set_t *rs)
     fsif_field_t  fldlist[] = {
         STRING_FIELD  ("request", rs->request),
         INTEGER_FIELD ("reqno"  , reqno++    ),
+        INVALID_FIELD
+    };
+
+    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                          selist, fldlist);
+
+    return success;
+}
+
+
+static int update_factstore_audio(resource_set_t          *rs,
+                                  resource_audio_stream_t *audio)
+{
+    static int reqno = 0;
+
+    int        success;
+
+    fsif_field_t  selist[]  = {
+        INTEGER_FIELD("manager_id", rs->manager_id),
+        INVALID_FIELD
+    };
+    fsif_field_t  fldlist[] = {
+        STRING_FIELD  ("audiogr", audio->group),
         INVALID_FIELD
     };
 
