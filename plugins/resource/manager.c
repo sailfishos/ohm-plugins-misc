@@ -164,6 +164,7 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
     uint32_t        reqno  = msg->any.reqno;
     int32_t         errcod = 0;
     const char     *errmsg = "OK";
+    int             acquire;
 
     resource_set_dump_message(msg, resset, "from");
 
@@ -177,10 +178,19 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
     }
     else {
         if (!rs->request || strcmp(rs->request, "acquire")) {
+            acquire = TRUE;
 
             free(rs->request);
             rs->request = strdup("acquire");
+        }
+        else if ((rs->advice.client & ~(rs->granted.client)) != 0) {
+            acquire = TRUE;
+        }
+        else {
+            acquire = FALSE;
+        }
 
+        if (acquire) {
             transaction_start();
 
             resource_set_update_factstore(resset, update_request);
