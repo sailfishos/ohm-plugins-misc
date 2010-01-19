@@ -355,7 +355,7 @@ static void dequeue_and_send(resource_set_t          *rs,
             return;             /* nothing to send */
 
         if (qentry->txid == txid) {
-            if (value->client != qentry->value) {
+            if (qentry->reqno || value->client != qentry->value) {
                 memset(&msg, 0, sizeof(msg));
                 msg.notify.type  = type;
                 msg.notify.id    = resset->id;
