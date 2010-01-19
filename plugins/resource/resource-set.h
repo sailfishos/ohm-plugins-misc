@@ -53,6 +53,7 @@ typedef struct resource_set_s {
     resource_set_output_t    granted;    /* granted resources of this set */
     resource_set_output_t    advice;     /* advice on this resource set */
     resource_set_qhead_t     qhead;      /* queue for delayed responses */
+    uint32_t                 reqno;
 } resource_set_t;
 
 typedef enum {
