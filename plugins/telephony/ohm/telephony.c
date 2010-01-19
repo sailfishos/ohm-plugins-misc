@@ -11,6 +11,8 @@
 #include <ohm/ohm-plugin-log.h>
 #include <ohm/ohm-fact.h>
 
+#include <res-conn.h>
+
 #include "telephony.h"
 #include "list.h"
 
@@ -36,6 +38,10 @@ OHM_DEBUG_PLUGIN(telephony,
 
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 OHM_IMPORTABLE(void, timestamp_add, (const char *step));
+OHM_IMPORTABLE(void *, timer_add  , (uint32_t delay,
+                                     resconn_timercb_t callback,
+                                     void *data));
+OHM_IMPORTABLE(void  , timer_del  , (void *timer));
 
 
 
@@ -78,6 +84,7 @@ static int tp_stop_dtmf (call_t *call, unsigned int stream);
 
 static DBusConnection *bus;
 static OhmFact        *emergency;
+static int             emergency_on = FALSE;
 
 static void event_handler(event_t *event);
 
@@ -86,11 +93,12 @@ static void event_handler(event_t *event);
  * call bookkeeping
  */
 
-static GHashTable *calls;                        /* table of current calls */
-static int         ncscall;                      /* number of CS calls */
-static int         nipcall;                      /* number of ohter calls */
-static int         callid;                       /* call id */
-static int         holdorder;                    /* autohold order */
+static GHashTable *calls;                       /* table of current calls */
+static int         ncscall;                     /* number of CS calls */
+static int         nipcall;                     /* number of ohter calls */
+static int         nvideo;                      /* number of calls with video */
+static int         callid;                      /* call id */
+static int         holdorder;                   /* autohold order */
 
 call_t *call_register(const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
@@ -124,8 +132,6 @@ int     policy_actions(event_t *event);
 int     policy_enforce(event_t *event);
 
 int     policy_audio_update(void);
-int     policy_run_hook(char *hook_name);
-
 
 typedef struct {
     list_hook_t     hook;
@@ -166,6 +172,56 @@ int set_string_field(OhmFact *fact, const char *field, const char *value);
 
 
 static OhmFactStore *store;
+
+
+/*
+ * resolver call state hooks
+ */
+
+typedef enum {
+    HOOK_MIN = 0,
+    HOOK_FIRST_CALL,
+    HOOK_LAST_CALL,
+    HOOK_CALL_START,
+    HOOK_CALL_END,
+    HOOK_CALL_CONNECT,
+    HOOK_CALL_ACTIVE,
+    HOOK_CALL_ONHOLD,
+    HOOK_CALL_OFFHOLD,
+    HOOK_DIALSTRING_START,
+    HOOK_DIALSTRING_END,
+    HOOK_DTMF_START,
+    HOOK_DTMF_END,
+    HOOK_MAX,
+} hook_type_t;
+
+static char *resolver_hooks[] = {
+    [HOOK_FIRST_CALL]   = "telephony_first_call_hook",
+    [HOOK_LAST_CALL]    = "telephony_last_call_hook",
+    [HOOK_CALL_START]   = "telephony_call_start_hook",
+    [HOOK_CALL_END]     = "telephony_call_end_hook",
+    [HOOK_CALL_CONNECT] = "telephony_call_connect_hook",
+    [HOOK_CALL_ACTIVE]  = "telephony_call_active_hook",
+    [HOOK_CALL_ONHOLD]  = "telephony_call_onhold_hook",
+    [HOOK_CALL_OFFHOLD] = "telephony_call_offhold_hook",
+
+    [HOOK_DIALSTRING_START] = "telephony_sending_dialstring",
+    [HOOK_DIALSTRING_END]   = "telephony_stopped_dialstring",
+    [HOOK_DTMF_START]       = "telephony_start_dtmf",
+    [HOOK_DTMF_END]         = "telephony_stop_dtmf",
+};
+
+
+static void run_hook(hook_type_t);
+
+
+/*
+ * (audio/video) resource control
+ */
+
+static void resctl_realloc(void);
+static void resctl_update (int video);
+
 
 
 /********************
@@ -1051,6 +1107,10 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
             if (type == TP_STREAM_TYPE_VIDEO) {
                 call->video = id;
                 policy_call_update(call, UPDATE_VIDEO);
+
+                nvideo++;
+                if (nvideo >= 1)
+                    resctl_update(TRUE);
             }
             else
                 call->audio = id;
@@ -1089,6 +1149,10 @@ stream_removed(DBusConnection *c, DBusMessage *msg, void *data)
             else if (id == call->video) {
                 call->video = 0U;
                 policy_call_update(call, UPDATE_VIDEO);
+
+                nvideo--;
+                if (nvideo <= 0)
+                    resctl_update(FALSE);
             }
         }
         else
@@ -1429,6 +1493,7 @@ emergency_call_request(DBusConnection *c, DBusMessage *msg, void *data)
 static int
 emergency_active(int active)
 {
+    emergency_on = active;
     return set_string_field(emergency, "state", active ? "active" : "off");
 }
 
@@ -1810,22 +1875,22 @@ event_handler(event_t *event)
     case EVENT_CALL_ENDED:        event->any.state = STATE_DISCONNECTED; break;
 
     case EVENT_SENDING_DIALSTRING:
-        policy_run_hook("telephony_sending_dialstring");
+        run_hook(HOOK_DIALSTRING_START);
         return;
 
     case EVENT_STOPPED_DIALSTRING:
-        policy_run_hook("telephony_stopped_dialstring");
+        run_hook(HOOK_DIALSTRING_END);
         return;
 
     case EVENT_DTMF_START:
-        policy_run_hook("telephony_start_dtmf");
+        run_hook(HOOK_DTMF_START);
         tp_start_dtmf(event->any.call, event->dtmf.stream, event->dtmf.tone);
         dtmf_send_reply(event->dtmf.req, NULL);
         return;
         
     case EVENT_DTMF_STOP:
         tp_stop_dtmf(event->any.call, event->dtmf.stream);
-        policy_run_hook("telephony_stop_dtmf");
+        run_hook(HOOK_DTMF_END);
         dtmf_send_reply(event->dtmf.req, NULL);
         return;
         
@@ -2018,6 +2083,7 @@ call_init(void)
     
     ncscall   = 0;
     nipcall   = 0;
+    nvideo    = 0;
     callid    = 1;
     holdorder = 1;
 
@@ -2152,6 +2218,9 @@ call_register(const char *path, const char *name, const char *peer,
         ncscall++;
     else
         nipcall++;
+
+    if (call->video)
+        nvideo++;
     
     OHM_INFO("Call %s (#%d) registered.", path, ncscall + nipcall);
 
@@ -2196,12 +2265,11 @@ call_unregister(const char *path)
     else
         nipcall--;
 
-    policy_run_hook("telephony_call_end_hook");
+    run_hook(HOOK_CALL_END);
 
     if (ncscall + nipcall == 0)
-        policy_run_hook("telephony_last_call_hook");
-    
-
+        run_hook(HOOK_LAST_CALL);
+        
     return 0;
 }
 
@@ -2519,7 +2587,7 @@ call_hold(call_t *call, const char *action, event_t *event)
             call->state = (call->order == 0) ? STATE_ON_HOLD : STATE_AUTOHOLD;
         
         policy_call_update(call, UPDATE_STATE);
-        policy_run_hook("telephony_call_onhold_hook");
+        run_hook(HOOK_CALL_ONHOLD);
         return 0;
     }
     else {   /* call being held or autoheld because of some other event */
@@ -2645,11 +2713,11 @@ call_activate(call_t *call, const char *action, event_t *event)
         policy_call_update(call, UPDATE_STATE | UPDATE_ORDER | UPDATE_CONNECT);
 
         if (event->type == EVENT_CALL_ACCEPT_REQUEST)
-            policy_run_hook("telephony_call_connect_hook");
+            run_hook(HOOK_CALL_CONNECT);
         else if (event->type == EVENT_CALL_ACTIVATE_REQUEST)
-            policy_run_hook("telephony_call_offhold_hook");
+            run_hook(HOOK_CALL_OFFHOLD);
         else
-            policy_run_hook("telephony_call_active_hook");
+            run_hook(HOOK_CALL_ACTIVE);
     }
     else {
         if (tp_hold(call, FALSE) != 0) {
@@ -2677,9 +2745,9 @@ call_create(call_t *call, const char *action, event_t *event)
     policy_call_update(call, UPDATE_STATE);
 
     if (ncscall + nipcall == 1)
-        policy_run_hook("telephony_first_call_hook");
+        run_hook(HOOK_FIRST_CALL);
     
-    policy_run_hook("telephony_call_start_hook");
+    run_hook(HOOK_CALL_START);
 
     return 0;
 }
@@ -2726,15 +2794,16 @@ emergency_activate(int activate, event_t *event)
     
     if (activate) {
         if (ncscall + nipcall == 0)
-            policy_run_hook("telephony_first_call_hook");
-
-        policy_run_hook("telephony_call_active_hook");
+            run_hook(HOOK_FIRST_CALL);
+        
+        run_hook(HOOK_CALL_START);
+        run_hook(HOOK_CALL_ACTIVE);
     }
     else {
-        policy_run_hook("telephony_call_end_hook");
+        run_hook(HOOK_CALL_END);
 
         if (ncscall + nipcall == 0)
-            policy_run_hook("telephony_last_call_hook");
+            run_hook(HOOK_LAST_CALL);
     }
 
     emergency_call_reply(event->emerg.bus, event->emerg.req, NULL);
@@ -2941,24 +3010,6 @@ policy_audio_update(void)
 
 
 /********************
- * policy_run_hook
- ********************/
-int
-policy_run_hook(char *hook_name)
-{
-    int retval;
-    
-    OHM_INFO("Running resolver hook %s.", hook_name);
-    
-    TIMESTAMP_ADD("telephony: resolve hook");
-    retval = resolve(hook_name, NULL);
-    TIMESTAMP_ADD("telephony: resolved hook");
-
-    return retval;
-}
-
-
-/********************
  * dir_name
  ********************/
 static inline const char *
@@ -2978,6 +3029,43 @@ dir_name(int dir)
         return names[DIR_UNKNOWN];
     
 #undef DIR
+}
+
+
+/*****************************************************************************
+ *                            *** call state hooks ***                       *
+ *****************************************************************************/
+
+/********************
+ * run_hook
+ ********************/
+void
+run_hook(hook_type_t which)
+{
+    char *resolver_hook;
+    
+    if (!(HOOK_MIN < which && which < HOOK_MAX))
+        return;
+
+    resolver_hook = resolver_hooks[which];
+
+    switch (which) {
+    case HOOK_FIRST_CALL:                     break;
+    case HOOK_LAST_CALL:                      break;
+    case HOOK_CALL_START:   resctl_realloc(); break;
+    case HOOK_CALL_END:     resctl_realloc(); break;
+    case HOOK_CALL_CONNECT: resctl_realloc(); break;
+    case HOOK_CALL_ACTIVE:  resctl_realloc(); break;
+    case HOOK_CALL_ONHOLD:                    break;
+    case HOOK_CALL_OFFHOLD:                   break;
+    default:                                  break;
+    }
+    
+    OHM_INFO("Running resolver hook %s.", resolver_hook);
+    
+    TIMESTAMP_ADD("telephony: resolve hook");
+     resolve(resolver_hook, NULL);
+    TIMESTAMP_ADD("telephony: resolved hook");
 }
 
 
@@ -3155,6 +3243,311 @@ policy_call_delete(call_t *call)
 
 
 /*****************************************************************************
+ *                           *** resource control ***                        *
+ *****************************************************************************/
+
+#define RSET_ID 1
+
+typedef struct {
+    resconn_t *conn;
+    resset_t  *rset;
+    uint32_t   granted;
+    uint32_t   reqno;
+    int        video;
+} resctl_t;
+
+static resctl_t rctl;
+
+static void resctl_connect(void);
+static void resctl_manager_up(resconn_t *rc);
+static void resctl_unregister(resmsg_t *msg, resset_t *rset, void *data);
+static void resctl_disconnect(void);
+static void resctl_acquire(void);
+static void resctl_release(void);
+static void resctl_grant(resmsg_t *msg, resset_t *rset, void *data);
+static void resctl_status(resset_t *rset, resmsg_t *msg);
+
+
+static void
+resctl_init(void)
+{
+    rctl.conn = resproto_init(RESPROTO_ROLE_CLIENT, RESPROTO_TRANSPORT_INTERNAL,
+                              resctl_manager_up, "call", timer_add, timer_del);
+    if (rctl.conn == NULL) {
+        OHM_ERROR("Failed to initialize call resource management.");
+        exit(1);
+    }
+
+    resproto_set_handler(rctl.conn, RESMSG_UNREGISTER, resctl_unregister);
+    resproto_set_handler(rctl.conn, RESMSG_GRANT     , resctl_grant     );
+
+    resctl_connect();
+}
+
+
+static void
+resctl_exit(void)
+{
+    resctl_disconnect();
+}
+
+
+static void
+resctl_connect(void)
+{
+    resmsg_t msg;
+
+    OHM_INFO("telephony resctl: connecting...");
+
+    msg.record.type       = RESMSG_REGISTER;
+    msg.record.id         = RSET_ID;
+    msg.record.reqno      = rctl.reqno++;
+    msg.record.rset.all   = RESMSG_AUDIO_PLAYBACK;
+    msg.record.rset.opt   = 0;
+    msg.record.rset.share = 0;
+    msg.record.rset.mask  = 0;
+    msg.record.klass      = "call";
+    msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
+
+    rctl.rset = resconn_connect(rctl.conn, &msg, resctl_status);
+}
+
+
+static void
+resctl_disconnect(void)
+{
+#if 0
+    resmsg_t msg;
+
+    OHM_INFO("telephony resctl: disconnecting...");
+
+    if (rctl.rset != NULL) {
+        msg.possess.type  = RESMSG_UNREGISTER;
+        msg.possess.id    = RSET_ID;
+        msg.possess.reqno = rctl.reqno++;
+
+        resconn_disconnect(rctl.rset, &msg, /* resctl_status */NULL);
+        rctl.rset = NULL;
+    }
+#else
+    OHM_INFO("telephony resctl: disconnecting...");
+
+    rctl.conn    = 0;
+    rctl.rset    = NULL;
+    rctl.granted = 0;
+    rctl.reqno   = 0;
+    rctl.video   = FALSE;
+#endif
+}
+
+
+static void
+resctl_manager_up(resconn_t *rc)
+{
+    (void)rc;
+    
+    OHM_INFO("telephony resctl: manager up...");
+
+    resctl_connect();
+}
+
+
+static void
+resctl_unregister(resmsg_t *msg, resset_t *rset, void *data)
+{
+    OHM_INFO("telephony resctl: unregister");
+    
+    resproto_reply_message(rset, msg, data, 0, "OK");
+
+    rctl.rset = NULL;                                /* I guess... */
+}
+
+
+#if 0
+
+static inline int
+need_audio(void)
+{
+    return (nipcall + ncscall) > 0;
+}
+
+#else
+
+static void
+media_active(gpointer key, gpointer value, gpointer data)
+{
+    call_t *call   = (call_t *)value;
+    int    *active = data;
+
+    (void)key;
+
+    if (*active)
+        return;
+
+    if (call->state == STATE_ACTIVE ||
+        call->state == STATE_ON_HOLD ||
+        (call->dir == DIR_OUTGOING && call->state == STATE_CREATED) ||
+        (call->state == STATE_PEER_HUNGUP &&
+         (call->dir == DIR_OUTGOING ||
+          (call->dir == DIR_INCOMING && call->connected))) ||
+        emergency_on)
+        *active = TRUE;
+}
+
+static int
+need_audio(void)
+{
+    /*
+     * This is (supposed to be) the equivalent of the prolog predicate
+     * telephony:active_audio_groups/1 sans the flash audio fiddling.
+     */
+
+    int active = FALSE;
+
+    call_foreach(media_active, &active);
+
+    return active;
+}
+
+#endif
+
+
+static inline int
+need_video(void)
+{
+    return nvideo > 0;
+}
+
+
+static inline int
+resctl_has_audio(void)
+{
+    return rctl.granted & RESMSG_AUDIO_PLAYBACK;
+}
+
+
+static inline int
+resctl_has_video(void)
+{
+    return rctl.granted & RESMSG_VIDEO_PLAYBACK;
+}
+
+
+static void
+resctl_realloc(void)
+{
+    if (!need_audio()) {
+        if (resctl_has_audio()) {
+            resctl_release();                       /* release resources */
+            resctl_update(FALSE);                   /* audio-only */
+        }
+    }
+    else {
+        resctl_update(need_video());                /* audio/video if needed */
+
+        if (!resctl_has_audio())
+            resctl_acquire();                       /* acquire resources */
+    }
+}
+
+
+static void
+resctl_acquire(void)
+{
+    resmsg_t msg;
+
+    OHM_INFO("telephony resctl: acquiring...");
+
+    if (rctl.rset == NULL)
+        return;
+
+    msg.possess.type  = RESMSG_ACQUIRE;
+    msg.possess.id    = RSET_ID;
+    msg.possess.reqno = rctl.reqno++;
+    
+    resproto_send_message(rctl.rset, &msg, resctl_status);
+}
+
+
+static void
+resctl_release(void)
+{
+    resmsg_t msg;
+
+    OHM_INFO("telephony resctl: releasing...");
+
+    if (rctl.rset == NULL)
+        return;
+    
+    msg.possess.type  = RESMSG_RELEASE;
+    msg.possess.id    = RSET_ID;
+    msg.possess.reqno = rctl.reqno++;
+
+    resproto_send_message(rctl.rset, &msg, resctl_status);
+}
+
+
+static void
+resctl_grant(resmsg_t *msg, resset_t *rset, void *data)
+{
+    char buf[256];
+
+    (void)rset;
+    (void)data;
+    
+    rctl.granted = msg->notify.resrc;
+
+    OHM_INFO("telephony resctl: granted resources: %s",
+             resmsg_res_str(msg->notify.resrc, buf, sizeof(buf)));
+}
+
+
+static void
+resctl_update(int videocall)
+{
+    resmsg_t msg;
+    uint32_t video;
+    
+    OHM_INFO("telephony resctl: updating...");
+
+    if (rctl.rset == NULL)
+        return;
+    
+    if ((videocall && rctl.video) || (!videocall && !rctl.video))
+        return;
+    
+    video = videocall ? RESMSG_VIDEO_PLAYBACK : 0;
+    
+    msg.record.type       = RESMSG_UPDATE;
+    msg.record.id         = RSET_ID;
+    msg.record.reqno      = rctl.reqno++;
+    msg.record.rset.all   = RESMSG_AUDIO_PLAYBACK | video;
+    msg.record.rset.opt   = 0;
+    msg.record.rset.share = 0;
+    msg.record.rset.mask  = 0;
+    msg.record.klass      = "call";
+    msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
+    
+    resproto_send_message(rctl.rset, &msg, resctl_status);
+    
+    rctl.video = videocall;
+}
+
+
+static void
+resctl_status(resset_t *rset, resmsg_t *msg)
+{
+    (void)rset;
+    
+    if (msg->type == RESMSG_STATUS)
+        OHM_INFO("telephony resctl: status %d (%s)",
+                 msg->status.errcod, msg->status.errmsg);
+    else
+        OHM_ERROR("telephony resctl: status message of type 0x%x", msg->type);
+}
+
+
+/*****************************************************************************
  *                            *** OHM plugin glue ***                        *
  *****************************************************************************/
 
@@ -3190,6 +3583,8 @@ plugin_init(OhmPlugin *plugin)
     call_init();
     policy_init();
     timestamp_init();
+    resctl_init();
+
 
     return;
 }
@@ -3203,6 +3598,7 @@ plugin_exit(OhmPlugin *plugin)
 {
     (void)plugin;
  
+    resctl_exit();
     bus_exit();
     call_exit();
     policy_exit();
@@ -3213,8 +3609,10 @@ OHM_PLUGIN_DESCRIPTION("telephony", "0.0.1", "krisztian.litkey@nokia.com",
                        OHM_LICENSE_NON_FREE,
                        plugin_init, plugin_exit, NULL);
 
-OHM_PLUGIN_REQUIRES_METHODS(telephony, 1,
-   OHM_IMPORT("dres.resolve", resolve)
+OHM_PLUGIN_REQUIRES_METHODS(telephony, 3,
+   OHM_IMPORT("dres.resolve"         , resolve),
+   OHM_IMPORT("resource.restimer_add", timer_add),
+   OHM_IMPORT("resource.restimer_del", timer_del)
 );
 
 
