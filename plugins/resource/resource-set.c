@@ -421,7 +421,7 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("manager_id" , rs->manager_id       ),
         STRING_FIELD  ("client_name", resset->peer         ),
         INTEGER_FIELD ("client_id"  , resset->id           ),
-        STRING_FIELD  ("class"      , resset->class        ),
+        STRING_FIELD  ("class"      , resset->klass        ),
         INTEGER_FIELD ("mode"       , resset->mode         ),
         INTEGER_FIELD ("mandatory"  , mandatory            ),
         INTEGER_FIELD ("optional"   , resset->flags.opt    ),
@@ -431,7 +431,7 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("advice"     , rs->advice.factstore ),
         STRING_FIELD  ("request"    , rs->request          ),
         INTEGER_FIELD ("reqno"      , 0                    ),
-        STRING_FIELD  ("audiogr"    , resset->class        ),
+        STRING_FIELD  ("audiogr"    , resset->klass        ),
         INVALID_FIELD
     };
 

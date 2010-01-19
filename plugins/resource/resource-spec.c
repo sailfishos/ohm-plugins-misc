@@ -108,7 +108,7 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
     int                       success  = FALSE;
 
     if (rs->resset && (group == NULL || group[0] == '\0'))
-        group = resset->class;
+        group = resset->klass;
 
     if (group) {
 

@@ -129,7 +129,7 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
         errmsg = strerror(errcod);
     }
     else {
-        if (strcmp(record->class, resset->class)) {
+        if (strcmp(record->klass, resset->klass)) {
             errcod = EINVAL;
             errmsg = strerror(errcod);
         }

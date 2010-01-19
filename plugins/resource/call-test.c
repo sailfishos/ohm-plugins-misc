@@ -129,7 +129,7 @@ static resset_t *client_connect(resconn_t *rc)
     msg.record.rset.opt   = 0;
     msg.record.rset.share = 0;
     msg.record.rset.mask  = 0;
-    msg.record.class      = "call";
+    msg.record.klass      = "call";
     msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
 
     return resconn_connect(rc, &msg, client_status);
@@ -157,7 +157,7 @@ static void client_update(resset_t *rs, call_type_t new_type)
             msg.record.rset.opt   = video;
             msg.record.rset.share = 0;
             msg.record.rset.mask  = 0;
-            msg.record.class      = "call";
+            msg.record.klass      = "call";
             msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
             
             resproto_send_message(rs, &msg, client_status);
