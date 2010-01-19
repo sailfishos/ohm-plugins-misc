@@ -155,6 +155,10 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
 
+    if (rs && trans_id && (resset->mode & RESMSG_MODE_ALWAYS_REPLY)) {
+        resource_set_queue_change(rs,trans_id,rs->reqno,resource_set_granted);
+    }
+
     transaction_end(rs);
 }
 
@@ -177,6 +181,8 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
         errmsg = strerror(errcod);
     }
     else {
+        transaction_start(rs, msg);
+
         if (!rs->request || strcmp(rs->request, "acquire")) {
             acquire = TRUE;
 
@@ -191,8 +197,6 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
         }
 
         if (acquire) {
-            transaction_start(rs, msg);
-
             resource_set_update_factstore(resset, update_request);
             dresif_resource_request(rs->manager_id, resset->peer,
                                     resset->id, "acquire");
@@ -203,6 +207,10 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
 
+    if (rs && trans_id && (resset->mode & RESMSG_MODE_ALWAYS_REPLY)) {
+        resource_set_queue_change(rs,trans_id,rs->reqno,resource_set_granted);
+    }
+
     transaction_end(rs);
 }
 
@@ -212,6 +220,7 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
     uint32_t        reqno  = msg->any.reqno;
     int32_t         errcod = 0;
     const char     *errmsg = "OK";
+    int             release;
 
     resource_set_dump_message(msg, resset, "from");
 
@@ -224,13 +233,21 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
         errmsg = strerror(errcod);
     }
     else {
+        transaction_start(rs, msg);
+
         if (!rs->request || strcmp(rs->request, "release")) {
+            release = TRUE;
 
             free(rs->request);
             rs->request = strdup("release");
+        }
+        else if (rs->granted.client != 0)
+            release = TRUE;
+        else {
+            release = FALSE;
+        }
 
-            transaction_start(rs, msg);
-
+        if (release) {
             resource_set_update_factstore(resset, update_request);
             dresif_resource_request(rs->manager_id, resset->peer,
                                     resset->id, "release");
@@ -240,6 +257,10 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
 
     resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
+
+    if (rs && trans_id && (resset->mode & RESMSG_MODE_ALWAYS_REPLY)) {
+        resource_set_queue_change(rs,trans_id,rs->reqno,resource_set_granted);
+    }
 
     transaction_end(rs);
 }
@@ -319,9 +340,11 @@ static void granted_cb(fsif_entry_t *entry,
                   "%s", resset->peer, resset->id, rs->manager_id, granted_str);
 
         rs->granted.factstore = granted;
-
-        resource_set_queue_change(rs, trans_id, rs->reqno,
-                                  resource_set_granted);
+        
+        if (!(resset->mode & RESMSG_MODE_ALWAYS_REPLY) || !rs->reqno) {
+            resource_set_queue_change(rs, trans_id, rs->reqno, 
+                                      resource_set_granted);
+        }
     }
 }
 
