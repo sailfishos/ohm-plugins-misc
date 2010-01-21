@@ -52,6 +52,11 @@ static void plugin_init(OhmPlugin *plugin)
     resource_set_init(plugin);
     resource_spec_init(plugin);
     transaction_init(plugin);
+
+#if 0    
+    DBG_MGR = DBG_SET = DBG_DBUS = DBG_INTERNAL = DBG_DRES =
+        DBG_FS = DBG_QUE = DBG_TRANSACT = DBG_MEDIA = TRUE;
+#endif
 }
 
 static void plugin_destroy(OhmPlugin *plugin)

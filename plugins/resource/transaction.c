@@ -68,7 +68,7 @@ uint32_t transaction_create(transaction_callback_t callback, void *user_data)
         txid = NO_TRANSACTION;
     }
     else {
-        memset(tx, 0, sizeof(*tx));
+        memset(tx, 0, sizeof(transaction_t));
         tx->id     = txid;
         tx->refcnt = 1;
 
@@ -169,7 +169,7 @@ static int add_resource_set(transaction_t *tx, uint32_t rsid)
     }
     
     if ((junks = (idx + ALLOC_JUNK) / ALLOC_JUNK) > tx->resset.junks) {
-        size = junks * sizeof(uint32_t *);
+        size = junks * ALLOC_JUNK * sizeof(uint32_t *);
         mem  = realloc(tx->resset.table, size);
         
         if (mem == NULL)
