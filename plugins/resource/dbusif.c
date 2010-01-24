@@ -19,7 +19,6 @@ static resconn_t         *res_conn;      /* resource manager connection */
 static void system_bus_init(void);
 static void session_bus_init(const char *);
 
-static DBusHandlerResult info(DBusConnection *, DBusMessage *, void *);
 
 
 
@@ -123,11 +122,6 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *conn,
 
 static void system_bus_init(void)
 {
-    static char *filter =
-        "type='signal',"
-        "interface='" DBUS_POLICY_DECISION_INTERFACE "',"
-        "member='"    DBUS_INFO_SIGNAL               "'";
-
     DBusError   err;
 
     dbus_error_init(&err);
@@ -139,20 +133,6 @@ static void system_bus_init(void)
             OHM_ERROR("Can't get system D-Bus connection");
         exit(1);
     }
-
-    if (!dbus_connection_add_filter(sys_conn, info,NULL, NULL)) {
-        OHM_ERROR("Can't add filter 'info'");
-        exit(1);
-    }
-
-    dbus_bus_add_match(sys_conn, filter, &err);
-
-    if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
-        dbus_error_free(&err);
-        exit(1);
-    }
-
 }
 
 
@@ -231,75 +211,6 @@ static void session_bus_init(const char *addr)
         OHM_INFO("resource: successfully connected to D-Bus session bus");
     }
 }
-
-static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg, void *ud)
-{
-    (void)conn;
-    (void)ud;
-
-    char              *epid;
-    char              *type;
-    char              *media;
-    char              *group;
-    char              *state;
-    char              *reqstate;
-    gboolean           is_info;
-    gboolean           success;
-    DBusHandlerResult  result;
-
-    result  = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    is_info = dbus_message_is_signal(msg, DBUS_POLICY_DECISION_INTERFACE,
-                                     DBUS_INFO_SIGNAL);
-
-    if (is_info) {
-        epid = (char *)dbus_message_get_sender(msg);
-
-        success = dbus_message_get_args(msg, NULL,
-                                        DBUS_TYPE_STRING, &type,
-                                        DBUS_TYPE_STRING, &media,
-                                        DBUS_TYPE_STRING, &group,
-                                        DBUS_TYPE_STRING, &state,
-                                        DBUS_TYPE_INVALID);
-
-        if (success && !strcmp(type, "media")) {
-
-            result  = DBUS_HANDLER_RESULT_HANDLED;
-            success = TRUE;
-
-            if (strcmp(media, "audio_playback")  &&
-                strcmp(media, "audio_recording") &&
-                strcmp(media, "video_playback")  &&
-                strcmp(media, "video_recording")   )
-            {
-                OHM_ERROR("Malformed info: invalid media '%s'", media);
-                success = FALSE;
-            }  
-
-
-            if (!strcmp(state, "active"))
-                reqstate = "on";
-            else if (!strcmp(state, "inactive"))
-                reqstate = "off";
-            else {
-                OHM_ERROR("Malformed info: invalid state '%s'", state);
-                success = FALSE;
-            }
-
-            if (success) {
-                OHM_DEBUG(DBG_DBUS, "info: media '%s' of group '%s' become %s",
-                          media, group, state);
-
-#if 0
-                media_state_request(epid, media, group, reqstate);
-#endif
-            }
-        }
-    }
-
-    return result;
-}
-
-
 
 
 /* 

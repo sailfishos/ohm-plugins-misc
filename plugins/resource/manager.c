@@ -69,6 +69,12 @@ void manager_register(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     resproto_reply_message(resset, msg, proto_data, 0, "OK");
 
+#if 0
+    if (rs && trans_id && (resset->mode & RESMSG_MODE_ALWAYS_REPLY)) {
+        resource_set_queue_change(rs,trans_id,rs->reqno,resource_set_granted);
+    }
+#endif
+
     transaction_end(rs);
 }
 

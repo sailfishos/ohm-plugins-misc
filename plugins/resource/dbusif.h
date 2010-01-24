@@ -21,7 +21,6 @@
 #define DBUS_POLICY_NEW_SESSION_SIGNAL  "NewSession"
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL  "NameOwnerChanged"
 #define DBUS_NOTIFY_SIGNAL              "Notify"
-#define DBUS_INFO_SIGNAL                "info"
 
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
