@@ -21,7 +21,7 @@ typedef struct {
 } resource_spec_property_t;
 
 #define RESOURCE_COMMON             \
-    union resource_u         *next; \
+    union resource_spec_u    *next; \
     resource_spec_type_t      type
 
 typedef struct {

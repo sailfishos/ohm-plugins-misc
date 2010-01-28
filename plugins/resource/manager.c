@@ -317,7 +317,6 @@ void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
  */
 
 
-
 static void granted_cb(fsif_entry_t *entry,
                        char         *name,
                        fsif_field_t *fld,

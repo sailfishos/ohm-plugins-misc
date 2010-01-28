@@ -3,6 +3,7 @@ SUBDIRS = 	     \
 	hal          \
 	resource     \
 	media        \
+	notification \
 	accessories  \
 	videoep      \
 	console      \

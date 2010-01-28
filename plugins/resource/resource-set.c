@@ -33,7 +33,7 @@ static int add_factstore_entry(resource_set_t *);
 static int delete_factstore_entry(resource_set_t *);
 static int update_factstore_flags(resource_set_t *);
 static int update_factstore_request(resource_set_t *);
-static int update_factstore_audio(resource_set_t *r,resource_audio_stream_t *);
+static int update_factstore_audio(resource_set_t *, resource_audio_stream_t *);
 
 static void add_to_hash_table(resource_set_t *);
 static void delete_from_hash_table(resource_set_t *);
@@ -56,30 +56,37 @@ resource_set_t *resource_set_create(resset_t *resset)
 
     resource_set_t *rs;
 
-    if ((rs = malloc(sizeof(resource_set_t))) != NULL) {
-        memset(rs, 0, sizeof(resource_set_t));
-        rs->manager_id = manager_id++;
-        rs->resset     = resset;
-        rs->request    = strdup("release");
-        
-        rs->granted.queue.first = (void *)&rs->granted.queue;
-        rs->granted.queue.last  = (void *)&rs->granted.queue;
-
-        rs->advice.queue.first = (void *)&rs->advice.queue;
-        rs->advice.queue.last  = (void *)&rs->advice.queue;
-
-        resset->userdata = rs;
-        add_to_hash_table(rs);
-        add_factstore_entry(rs);
-    }
-
-    if (rs != NULL) {
-        OHM_DEBUG(DBG_SET, "created resource set %s'/%u (manager id %u)",
-                  resset->peer, resset->id, rs->manager_id);
+    if ((rs = resset->userdata) != NULL) {
+        OHM_DEBUG(DBG_SET, "don't create multiple resource set %s/%u "
+                  "(manager_id %u)", resset->peer, resset->id, rs->manager_id);
     }
     else {
-        OHM_ERROR("resource: can't create resource set %s/%u: out of memory",
-                  resset->peer, resset->id);
+
+        if ((rs = malloc(sizeof(resource_set_t))) != NULL) {
+            memset(rs, 0, sizeof(resource_set_t));
+            rs->manager_id = manager_id++;
+            rs->resset     = resset;
+            rs->request    = strdup("release");
+            
+            rs->granted.queue.first = (void *)&rs->granted.queue;
+            rs->granted.queue.last  = (void *)&rs->granted.queue;
+            
+            rs->advice.queue.first = (void *)&rs->advice.queue;
+            rs->advice.queue.last  = (void *)&rs->advice.queue;
+            
+            resset->userdata = rs;
+            add_to_hash_table(rs);
+            add_factstore_entry(rs);
+        }
+
+        if (rs != NULL) {
+            OHM_DEBUG(DBG_SET, "created resource set %s/%u (manager id %u)",
+                      resset->peer, resset->id, rs->manager_id);
+        }
+        else {
+            OHM_ERROR("resource: can't create resource set %s/%u: "
+                      "out of memory", resset->peer, resset->id);
+        }
     }
     
     return rs;
