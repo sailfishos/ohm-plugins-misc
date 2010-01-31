@@ -10,24 +10,26 @@
 #include "plugin.h"
 #include "resource.h"
 
-#define DIM(a)   (sizeof(a) / sizeof(a[0]))
-
-typedef enum {
-    rset_unknown  = -1,
-
-    rset_ringtone,
-    rset_alarm,
-    rset_event,
-    
-    rset_max
-} rset_id_t;
 
 typedef struct {
-    rset_id_t  id;               /* ID of the resource set */
-    char      *klass;            /* resource class      */
-    uint32_t   mand;             /* mandatory resources */
-    uint32_t   opt;              /* optional resources  */
+    resource_set_id_t  id;     /* ID of the resource set */
+    char              *klass;  /* resource class      */
+    uint32_t           mand;   /* mandatory resources */
+    uint32_t           opt;    /* optional resources  */
 } rset_def_t;
+
+typedef struct {
+    resource_cb_t     function;
+    void             *data;
+} callback_t;
+
+typedef struct {
+    resset_t         *resset;
+    int               busy;
+    uint32_t          reqno;
+    uint32_t          flags;
+    callback_t        grant;
+} resource_set_t;
 
 
 OHM_IMPORTABLE(void *, timer_add  , (uint32_t delay,
@@ -35,13 +37,14 @@ OHM_IMPORTABLE(void *, timer_add  , (uint32_t delay,
                                      void *data));
 OHM_IMPORTABLE(void  , timer_del  , (void *timer));
 
-static resconn_t   *conn;
-static resset_t    *rset[rset_max];
-static uint32_t     reqno;
-static int          verbose;
+static resconn_t      *conn;
+static resource_set_t  resource_set[rset_max];
+static uint32_t        reqno;
+static int             verbose;
 
 static void connect_to_manager(resconn_t *);
 static void conn_status(resset_t *, resmsg_t *);
+static void grant_handler(resmsg_t *, resset_t *, void *);
 
 
 /*! \addtogroup pubif
@@ -81,12 +84,14 @@ void resource_init(OhmPlugin *plugin)
                              connect_to_manager, "notification",
                              timer_add, timer_del);
 
-        if (conn != NULL)
-            connect_to_manager(conn);
-        else {
+        if (conn == NULL) {
             OHM_ERROR("notification: can't initialize "
                       "resource loopback protocol");
             failed = TRUE;
+        }
+        else {
+            resproto_set_handler(conn, RESMSG_GRANT, grant_handler);
+            connect_to_manager(conn);
         }
     }
 
@@ -94,6 +99,56 @@ void resource_init(OhmPlugin *plugin)
         exit(1);    
 
     verbose = TRUE;
+}
+
+int resource_set_acquire(resource_set_id_t id,
+                         resource_cb_t     function,
+                         void             *data)
+{
+    resource_set_t *rs;
+    resmsg_t        msg;
+    int             success;
+
+    if (id < 0 || id >= rset_max)
+        success = FALSE;
+    else {
+        rs = resource_set + id;
+
+        if (rs->busy) {
+            function(0, data);
+            success = TRUE;
+        }
+        else {
+            rs->busy  = TRUE;
+            rs->reqno =  ++reqno;
+            rs->grant.function = function;
+            rs->grant.data     = data;
+
+            OHM_DEBUG(DBG_RESRC, "acquiring resource set%u (reqno %u)",
+                      id, rs->reqno);
+
+            memset(&msg, 0, sizeof(msg));
+            msg.possess.type  = RESMSG_ACQUIRE;
+            msg.possess.id    = id;
+            msg.possess.reqno = rs->reqno;
+            
+            success = resproto_send_message(rs->resset, &msg, NULL);
+        }
+    }
+
+    return success;
+}
+
+void resource_flags_to_booleans(uint32_t  flags,
+                                uint32_t *audio,
+                                uint32_t *vibra,
+                                uint32_t *leds,
+                                uint32_t *blight)
+{
+    if (audio)   *audio  = (flags & RESMSG_AUDIO_PLAYBACK);
+    if (vibra)   *vibra  = (flags & RESMSG_VIBRA         );
+    if (leds)    *leds   = (flags & RESMSG_LEDS          );
+    if (blight)  *blight = (flags & RESMSG_AUDIO_PLAYBACK);
 }
 
 
@@ -133,7 +188,7 @@ static void connect_to_manager(resconn_t *rc)
         rec->rset.opt = def->opt;
         rec->klass    = def->klass;
 
-        if ((rset[def->id] = resconn_connect(rc, &msg, conn_status)) == NULL) {
+        if (resconn_connect(rc, &msg, conn_status) == NULL) {
             if (verbose) {
                 OHM_ERROR("notification: can't register '%s' "
                           "resource class", def->klass);
@@ -150,18 +205,51 @@ static void connect_to_manager(resconn_t *rc)
 #undef MANDATORY
 }
 
-static void conn_status(resset_t *rset, resmsg_t *msg)
+static void conn_status(resset_t *resset, resmsg_t *msg)
 {
+    resource_set_t *rs;
 
     if (msg->type == RESMSG_STATUS) {
         if (msg->status.errcod == 0) {
             OHM_DEBUG(DBG_RESRC, "'%s' resource set (id %u) successfully "
-                      "created", rset->klass, rset->id);
+                      "created", resset->klass, resset->id);
+
+            rs = resource_set + resset->id;
+            memset(rs, 0, sizeof(resource_set_t));
+            rs->resset = resset;
+            resset->userdata = rs;
         }
         else {
             OHM_ERROR("notification: creation of '%s' resource set (id %u) "
-                      "failed: %d %s", rset->klass,rset->id,msg->status.errcod,
-                      msg->status.errmsg ? msg->status.errmsg:"");
+                      "failed: %d %s", resset->klass, resset->id,
+                      msg->status.errcod,
+                      msg->status.errmsg ? msg->status.errmsg : "");
+        }
+    }
+}
+
+static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
+{
+    resource_set_t *rs;
+    char            buf[256];
+
+    (void)protodata;
+
+    if ((rs = resset->userdata) != NULL) {
+
+        OHM_DEBUG(DBG_RESRC, "granted resource set%u %s (reqno %u)",resset->id,
+                  resmsg_res_str(msg->notify.resrc, buf, sizeof(buf)),
+                  msg->notify.reqno);
+
+        if (rs->reqno == msg->notify.reqno) {
+            rs->reqno = 0;
+            rs->flags = msg->notify.resrc;
+            
+            if (rs->flags == 0)
+                rs->busy = FALSE;
+            
+            if (rs->grant.function != NULL)
+                rs->grant.function(rs->flags, rs->grant.data);
         }
     }
 }

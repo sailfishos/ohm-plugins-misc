@@ -6,21 +6,19 @@
 #include <errno.h>
 
 #include "plugin.h"
-/*
 #include "dbusif.h"
-#include "fsif.h"
-#include "dresif.h"
-*/
+#include "ruleif.h"
 #include "resource.h"
+#include "proxy.h"
 
 
-int DBG_RESRC, DBG_DBUS, DBG_FS, DBG_DRES;
+int DBG_PROXY, DBG_RESRC, DBG_DBUS, DBG_RULE;
 
 OHM_DEBUG_PLUGIN(notification,
+    OHM_DEBUG_FLAG("proxy"    , "proxy functions"    , &DBG_PROXY   ),
     OHM_DEBUG_FLAG("resource" , "resource client"    , &DBG_RESRC   ),
     OHM_DEBUG_FLAG("dbus"     , "D-Bus interface"    , &DBG_DBUS    ),
-    OHM_DEBUG_FLAG("fact"     , "factstore interface", &DBG_FS      ),
-    OHM_DEBUG_FLAG("dres"     , "dres interface"     , &DBG_DRES    )
+    OHM_DEBUG_FLAG("rule"     , "prolog interface"   , &DBG_RULE    )
 );
 
 
@@ -28,15 +26,13 @@ static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(notification);
 
-    /*
     dbusif_init(plugin);
-    fsif_init(plugin);
-    dresif_init(plugin);
-    */
+    ruleif_init(plugin);
     resource_init(plugin);
+    proxy_init(plugin);
 
 #if 1
-    DBG_RESRC = DBG_DBUS = DBG_FS = DBG_DRES = TRUE;
+    DBG_PROXY = DBG_RESRC = DBG_DBUS = DBG_RULE = TRUE;
 #endif
 }
 
@@ -65,14 +61,10 @@ OHM_PLUGIN_REQUIRES(
     "resource"
 );
 
-
-
-#if 0
 OHM_PLUGIN_DBUS_SIGNALS(
     { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_POLICY_NEW_SESSION_SIGNAL,
       NULL, dbusif_session_notification, NULL }
 );
-#endif
 
 
 /* 

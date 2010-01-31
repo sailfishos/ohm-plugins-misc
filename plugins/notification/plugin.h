@@ -16,12 +16,14 @@
 #define G_MODULE_EXPORT EXPORT
 #endif
 
+#define DIM(a)   (sizeof(a) / sizeof(a[0]))
+
 /* FactStore prefix */
 #define FACTSTORE_PREFIX                "com.nokia.policy"
 #define FACTSTORE_NOTIFICATION          FACTSTORE_PREFIX ".notification"
 
 
-extern int DBG_RESRC, DBG_DBUS, DBG_FS, DBG_DRES;
+extern int DBG_PROXY, DBG_RESRC, DBG_DBUS, DBG_RULE;
 
 
 /*

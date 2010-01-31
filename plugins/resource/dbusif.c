@@ -29,8 +29,6 @@ static void session_bus_init(const char *);
 
 void dbusif_init(OhmPlugin *plugin)
 {
-    (void)plugin;
-
     const char *timeout_str;
     char       *e;
 
