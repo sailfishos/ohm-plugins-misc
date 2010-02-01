@@ -66,8 +66,15 @@ DBUS_SIGNAL_HANDLER(channel_closed);
 DBUS_SIGNAL_HANDLER(members_changed);
 DBUS_SIGNAL_HANDLER(stream_added);
 DBUS_SIGNAL_HANDLER(stream_removed);
+DBUS_SIGNAL_HANDLER(content_added);
+DBUS_SIGNAL_HANDLER(content_removed);
 DBUS_SIGNAL_HANDLER(hold_state_changed);
 DBUS_SIGNAL_HANDLER(call_state_changed);
+DBUS_SIGNAL_HANDLER(call_draft_state_changed);
+DBUS_SIGNAL_HANDLER(channel_merged);
+DBUS_SIGNAL_HANDLER(channel_removed);
+DBUS_SIGNAL_HANDLER(member_channel_added);
+DBUS_SIGNAL_HANDLER(member_channel_removed);
 DBUS_SIGNAL_HANDLER(call_end);
 DBUS_SIGNAL_HANDLER(sending_dialstring);
 DBUS_SIGNAL_HANDLER(stopped_dialstring);
@@ -100,14 +107,18 @@ static int         nvideo;                      /* number of calls with video */
 static int         callid;                      /* call id */
 static int         holdorder;                   /* autohold order */
 
-call_t *call_register(const char *path, const char *name,
+call_t *call_register(call_type_t type, const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
                       int conference, int emergency,
-                      unsigned int audio, unsigned int video,
+                      char *audio, char *video,
                       char **interfaces);
 call_t *call_lookup(const char *path);
 void    call_destroy(call_t *call);
 void    call_foreach(GHFunc callback, gpointer data);
+
+static inline const char *state_name(int state);
+
+
 
 enum {
     UPDATE_NONE    = 0x00,
@@ -304,6 +315,16 @@ bus_init(const char *address)
     if (!bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL))
         exit(1);
 
+    if (!bus_add_match("signal", TP_CHANNEL_CALL_DRAFT, CALL_STATE_CHANGED,
+                       NULL))
+        exit(1);
+
+    if (!bus_add_match("signal", TP_CHANNEL_CALL_DRAFT, CONTENT_ADDED, NULL))
+        exit(1);
+
+    if (!bus_add_match("signal", TP_CHANNEL_CALL_DRAFT, CONTENT_REMOVED, NULL))
+        exit(1);
+    
     if (!bus_add_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL))
         exit(1);
 
@@ -314,6 +335,18 @@ bus_init(const char *address)
         exit(1);
 
     if (!bus_add_match("signal", TP_CHANNEL_MEDIA, STREAM_REMOVED, NULL))
+        exit(1);
+
+    if (!bus_add_match("signal", TP_CHANNEL_CONF_DRAFT, CHANNEL_MERGED, NULL))
+        exit(1);
+    
+    if (!bus_add_match("signal", TP_CHANNEL_CONF_DRAFT, CHANNEL_REMOVED, NULL))
+        exit(1);
+    
+    if (!bus_add_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_ADDED, NULL))
+        exit(1);
+    
+    if (!bus_add_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_REMOVED, NULL))
         exit(1);
     
     if (!dbus_connection_add_filter(bus, dispatch_signal, NULL, NULL)) {
@@ -381,11 +414,15 @@ bus_exit(void)
     bus_del_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL);
     bus_del_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL);
     bus_del_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
-    bus_del_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
+    bus_del_match("signal", TP_CHANNEL_CALL_DRAFT, CALL_STATE_CHANGED, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, STOPPED_DIALSTRING, NULL);
     bus_del_match("signal", TP_CHANNEL_MEDIA, STREAM_ADDED, NULL);
     bus_del_match("signal", TP_CHANNEL_MEDIA, STREAM_REMOVED, NULL);
+    bus_del_match("signal", TP_CHANNEL_CONF_DRAFT, CHANNEL_MERGED, NULL);
+    bus_add_match("signal", TP_CHANNEL_CONF_DRAFT, CHANNEL_REMOVED, NULL);
+    bus_del_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_ADDED, NULL);
+    bus_add_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_REMOVED, NULL);
     
     dbus_connection_unref(bus);
     bus = NULL;
@@ -587,8 +624,11 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
     if (MATCHES(TP_CHANNEL_MEDIA, STREAM_REMOVED))
         return stream_removed(c, msg, data);
 
-    if (MATCHES(TP_CHANNEL_MEDIA, STREAM_REMOVED))
-        return stream_removed(c, msg, data);
+    if (MATCHES(TP_CHANNEL_CALL_DRAFT, CONTENT_ADDED))
+        return content_added(c, msg, data);
+
+    if (MATCHES(TP_CHANNEL_CALL_DRAFT, CONTENT_REMOVED))
+        return content_removed(c, msg, data);
     
     if (MATCHES(TP_CHANNEL_HOLD, HOLD_STATE_CHANGED))
         return hold_state_changed(c, msg, data);
@@ -596,6 +636,21 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
     if (MATCHES(TP_CHANNEL_STATE, CALL_STATE_CHANGED))
         return call_state_changed(c, msg, data);
 
+    if (MATCHES(TP_CHANNEL_CALL_DRAFT, CALL_STATE_CHANGED))
+        return call_draft_state_changed(c, msg, data);
+
+    if (MATCHES(TP_CHANNEL_CONF_DRAFT, CHANNEL_MERGED))
+        return channel_merged(c, msg, data);
+
+    if (MATCHES(TP_CHANNEL_CONF_DRAFT, CHANNEL_REMOVED))
+        return channel_removed(c, msg, data);
+
+    if (MATCHES(TP_CONFERENCE, MEMBER_CHANNEL_ADDED))
+        return member_channel_added(c, msg, data);
+
+    if (MATCHES(TP_CONFERENCE, MEMBER_CHANNEL_REMOVED))
+        return member_channel_removed(c, msg, data);
+    
     if (MATCHES(TELEPHONY_INTERFACE, CALL_ENDED))
         return call_end(c, msg, data);
 
@@ -811,7 +866,13 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                 if (!strcmp(name, PROP_CHANNEL_TYPE)) {
                     ITER_NEXT(&idict);
                     VARIANT_STRING(&idict, type);
-                    if (type == NULL || strcmp(type, TP_CHANNEL_MEDIA))
+                    if (type == NULL)
+                        return DBUS_HANDLER_RESULT_HANDLED;
+                    if (!strcmp(type, TP_CHANNEL_MEDIA))
+                        event.call_type = CALL_TYPE_SM;
+                    else if (!strcmp(type, TP_CHANNEL_CALL_DRAFT))
+                        event.call_type = CALL_TYPE_DRAFT;
+                    else
                         return DBUS_HANDLER_RESULT_HANDLED;
                 }
                 else if (!strcmp(name, PROP_TARGET_ID)) {
@@ -836,6 +897,11 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                     VARIANT_STRING(&idict, initiator);
                 }
                 else if (!strcmp(name, PROP_INITIAL_MEMBERS)) {
+                    ITER_NEXT(&idict);
+                    VARIANT_PATH_ARRAY(&idict, members);
+                    event.members = &members[0];
+                }
+                else if (!strcmp(name, PROP_INITIAL_CHANNELS)) {
                     ITER_NEXT(&idict);
                     VARIANT_PATH_ARRAY(&idict, members);
                     event.members = &members[0];
@@ -946,7 +1012,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     
     
     /*
-     * skip the 'reason' argument
+     * skip the 'message' argument
      */
     
     dbus_message_iter_init(msg, &imsg);
@@ -1000,9 +1066,11 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
 
     OHM_INFO("call %s has now %d members", event.path, event.call->nmember);
 
-    if (IS_CONF_MEMBER(event.call) && IS_CONF_PARENT(event.call))
+#if 0
+    if (IS_CONF_MEMBER(event.call) /*|| IS_CONF_PARENT(event.call)*/)
         return DBUS_HANDLER_RESULT_HANDLED;
-    
+#endif    
+
     
     /*
      * generate an event if it looks appropriate
@@ -1105,7 +1173,7 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
             }
             
             if (type == TP_STREAM_TYPE_VIDEO) {
-                call->video = id;
+                call->video = (char *)id;
                 policy_call_update(call, UPDATE_VIDEO);
 
                 nvideo++;
@@ -1113,7 +1181,7 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
                     resctl_update(TRUE);
             }
             else
-                call->audio = id;
+                call->audio = (char *)id;
         }
         else
             event_enqueue(path, c, msg, data);
@@ -1141,19 +1209,113 @@ stream_removed(DBusConnection *c, DBusMessage *msg, void *data)
     if ((path = dbus_message_get_path(msg)) != NULL) {
         
         id = 0U;
-        dbus_message_get_args(msg, NULL, DBUS_TYPE_UINT32, &id);
+        dbus_message_get_args(msg, NULL, DBUS_TYPE_UINT32, &id,
+                              DBUS_TYPE_INVALID);
         
         if ((call = call_lookup(path)) != NULL) {
-            if (id == call->audio)
-                call->audio = 0U;
-            else if (id == call->video) {
-                call->video = 0U;
+            if ((char *)id == call->audio)
+                call->audio = NULL;
+            else if ((char *)id == call->video) {
+                call->video = NULL;
+                policy_call_update(call, UPDATE_VIDEO);
+            }
+        }
+        else
+            event_enqueue(path, c, msg, data);
+        
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+
+/********************
+ * content_added
+ ********************/
+static DBusHandlerResult
+content_added(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char   *path, *content;
+    call_t       *call;
+    unsigned int  type;
+
+    (void)c;
+    (void)data;
+
+    if ((path = dbus_message_get_path(msg)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    type = 0U;
+    if (dbus_message_get_args(msg, NULL,
+                              DBUS_TYPE_OBJECT_PATH, &content,
+                              DBUS_TYPE_UINT32     , &type,
+                              DBUS_TYPE_INVALID)) {
+        if ((call = call_lookup(path)) != NULL) {
+            OHM_INFO("Content %s added to Call.DRAFT %s", content,
+                     short_path(path));
+
+            if (call->timeout != 0) {
+                g_source_remove(call->timeout);
+                call->timeout = 0;
+            }
+            
+            if (type == TP_STREAM_TYPE_VIDEO) {
+                call->video = g_strdup(content);
+                policy_call_update(call, UPDATE_VIDEO);
+            }
+            else
+                call->audio = g_strdup(content);
+        }
+        else
+            event_enqueue(path, c, msg, data);
+        
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    else
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+
+/********************
+ * content_removed
+ ********************/
+static DBusHandlerResult
+content_removed(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char   *path, *content;
+    call_t       *call;
+    
+    (void)c;
+    (void)data;
+
+    if ((path = dbus_message_get_path(msg)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+        
+    if (dbus_message_get_args(msg, NULL,
+                              DBUS_TYPE_OBJECT_PATH, &content,
+                              DBUS_TYPE_INVALID)) {
+        if ((call = call_lookup(path)) != NULL) {
+            
+            if (call->audio != NULL && !strcmp(content, call->audio)) {
+                OHM_INFO("Audio content %s removed from Call.DRAFT %s", content,
+                         short_path(path));
+                g_free(call->audio);
+                call->audio = NULL;
+            }
+            else if (call->video != NULL && !strcmp(content, call->video)) {
+                OHM_INFO("Video content %s removed from Call.DRAFT %s", content,
+                         short_path(path));
+                g_free(call->video);
+                call->video = NULL;
                 policy_call_update(call, UPDATE_VIDEO);
 
                 nvideo--;
                 if (nvideo <= 0)
                     resctl_update(FALSE);
             }
+            else OHM_INFO("Unknown content %s removed from Call.DRAFT %s",
+                          content, short_path(path));
         }
         else
             event_enqueue(path, c, msg, data);
@@ -1211,6 +1373,18 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    
+    /*
+     * for conference members, just administer the state
+     */
+    
+    if (IS_CONF_MEMBER(event.call)) {
+        event.call->conf_state =
+            (state == TP_HELD ? STATE_ON_HOLD : STATE_ACTIVE);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    
+
     /* Notes: as of week 24 telepathy-gabble puts the channel on hold
      * before emitting closed. Ignore it as it makes no sense and it
      * screws up our autounhold logic.
@@ -1264,13 +1438,13 @@ call_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
-    if (state & TP_CALLSTATE_RINGING)
+    if (state & TP_CALL_FLAG_RINGING)
         OHM_INFO("Call %s is remotely ringing.", short_path(event.call->path));
-    if (state & TP_CALLSTATE_QUEUED)
+    if (state & TP_CALL_FLAG_QUEUED)
         OHM_INFO("Call %s is remotely queued.", short_path(event.call->path));
-    if (state & TP_CALLSTATE_HELD)
+    if (state & TP_CALL_FLAG_HELD)
         OHM_INFO("Call %s is remotely held.", short_path(event.call->path));
-    if (state & TP_CALLSTATE_FORWARDED)
+    if (state & TP_CALL_FLAG_FORWARDED)
         OHM_INFO("Call %s is forwarded.", short_path(event.call->path));
 
 #if 0
@@ -1278,9 +1452,9 @@ call_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
      * These are remote events and we do not generate events for them ATM.
      */
     
-    if (!(state & TP_CALLSTATE_HELD) && event.call->state == STATE_ON_HOLD)
+    if (!(state & TP_CALL_FLAG_HELD) && event.call->state == STATE_ON_HOLD)
         event.type = EVENT_CALL_ACTIVATED;
-    else if ((state & TP_CALLSTATE_HELD) && event.call->state == STATE_ACTIVE)
+    else if ((state & TP_CALL_FLAG_HELD) && event.call->state == STATE_ACTIVE)
         event.type = EVENT_CALL_HELD;
     else
         return DBUS_HANDLER_RESULT_HANDLED;
@@ -1288,6 +1462,253 @@ call_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
     event_handler((event_t *)&event);
 #endif
 
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * call_draft_state_changed
+ ********************/
+static DBusHandlerResult
+call_draft_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    status_event_t  event;
+    unsigned int    state, flags, actor, reason;
+    DBusMessageIter imsg, istr;
+    
+    
+    if ((event.path = dbus_message_get_path(msg)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    if ((event.call = call_lookup(event.path)) == NULL) {
+        OHM_INFO("DRAFT CallStateChanged for unknown call %s.", event.path);
+        event_enqueue(event.path, c, msg, data);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    
+    if (!dbus_message_iter_init(msg, &imsg)) {
+        OHM_ERROR("Failed to get message iterator for DBUS signal %s.",
+                  CALL_STATE_CHANGED);
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    if (dbus_message_iter_get_arg_type(&imsg) == DBUS_TYPE_UINT32)
+        dbus_message_iter_get_basic(&imsg, &state);
+    else
+        goto parse_error;
+
+    if (!dbus_message_iter_next(&imsg))
+        goto parse_error;
+    
+    if (dbus_message_iter_get_arg_type(&imsg) == DBUS_TYPE_UINT32)
+        dbus_message_iter_get_basic(&imsg, &flags);
+    else
+        goto parse_error;
+    
+    if (!dbus_message_iter_next(&imsg))
+        goto parse_error;
+    
+    if (dbus_message_iter_get_arg_type(&imsg) != DBUS_TYPE_STRUCT)
+        goto parse_error;
+        
+    dbus_message_iter_recurse(&imsg, &istr);
+    
+    if (dbus_message_iter_get_arg_type(&istr) == DBUS_TYPE_UINT32)
+        dbus_message_iter_get_basic(&istr, &actor);
+    else
+        goto parse_error;
+
+    if (!dbus_message_iter_next(&imsg))
+        goto parse_error;
+
+    if (dbus_message_iter_get_arg_type(&istr) == DBUS_TYPE_UINT32)
+        dbus_message_iter_get_basic(&istr, &reason);
+    else {
+    parse_error:
+        OHM_ERROR("Failed to parse CallStateChanged signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;        
+    }
+    
+    
+    switch (state) {
+    case TP_CALLDRAFT_PENDING_INITIATOR:
+        OHM_INFO("Call.DRAFT %s is now in PENDING_INITIATOR state.",
+                 short_path(event.call->path));
+        return DBUS_HANDLER_RESULT_HANDLED;
+        
+    case TP_CALLDRAFT_PENDING_RECEIVER:
+        OHM_INFO("Call.DRAFT %s is now in PENDING_RECEIVER state.",
+                 short_path(event.call->path));
+        return DBUS_HANDLER_RESULT_HANDLED;
+
+    case TP_CALLDRAFT_ACCEPTED:
+        OHM_INFO("Call.DRAFT %s has been accepted.",
+                 short_path(event.call->path));
+        if (event.call->state != STATE_ACTIVE)
+            event.type = EVENT_CALL_ACCEPTED;
+        break;
+
+#define SELF_HANDLE 1
+    case TP_CALLDRAFT_ENDED:
+        OHM_INFO("Call.DRAFT %s has been accepted.",
+                 short_path(event.call->path));
+        if (actor == event.call->local_handle || actor == SELF_HANDLE)
+            event.type = EVENT_CALL_LOCAL_HUNGUP;
+        else
+            event.type = EVENT_CALL_PEER_HUNGUP;
+        break;
+#undef SELF_HANDLE
+    }
+    
+    event_handler((event_t *)&event);
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * channel_merged
+ ********************/
+static DBusHandlerResult
+channel_merged(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char *path, *channel;
+    call_t     *parent, *member;
+    
+    
+    if ((path = dbus_message_get_path(msg)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_OBJECT_PATH, &channel,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse ChannelMerged signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    
+    if ((parent = call_lookup(path))    == NULL ||
+        (member = call_lookup(channel)) == NULL) {
+        event_enqueue(path, c, msg, data);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    
+    member->conf_state = member->state;
+    member->state      = STATE_CONFERENCE;
+    member->parent     = parent;
+
+    OHM_INFO("Call %s is now in conference %s.",
+             short_path(member->path), short_path(parent->path));
+    policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
+
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * channel_removed
+ ********************/
+static DBusHandlerResult
+channel_removed(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char *path, *channel;
+    call_t     *parent, *member;
+    
+    
+    if ((path = dbus_message_get_path(msg)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_OBJECT_PATH, &channel,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse ChannelRemoved signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    
+    if ((parent = call_lookup(path))    == NULL ||
+        (member = call_lookup(channel)) == NULL) {
+        event_enqueue(path, c, msg, data);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    
+    member->state  = STATE_POST_CONFERENCE;
+    member->parent = NULL;
+    OHM_INFO("Call %s has left conference %s.",
+             short_path(member->path), short_path(parent->path));
+    policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * member_channel_added
+ ********************/
+static DBusHandlerResult
+member_channel_added(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char *path, *channel;
+    call_t     *parent, *member;
+    
+    
+    if ((path = dbus_message_get_path(msg)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_OBJECT_PATH, &channel,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse MemberChannelAdded signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    
+    if ((parent = call_lookup(path))    == NULL ||
+        (member = call_lookup(channel)) == NULL) {
+        event_enqueue(path, c, msg, data);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    
+    member->conf_state = member->state;
+    member->state      = STATE_CONFERENCE;
+    member->parent     = parent;
+
+    OHM_INFO("Call %s is now in conference %s.",
+             short_path(member->path), short_path(parent->path));
+    policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
+
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * member_channel_removed
+ ********************/
+static DBusHandlerResult
+member_channel_removed(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char *path, *channel;
+    call_t     *parent, *member;
+    
+    
+    if ((path = dbus_message_get_path(msg)) == NULL)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_OBJECT_PATH, &channel,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse MemberChannelRemoved signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    
+    if ((parent = call_lookup(path))    == NULL ||
+        (member = call_lookup(channel)) == NULL) {
+        event_enqueue(path, c, msg, data);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    
+    member->state  = STATE_POST_CONFERENCE;
+    member->parent = NULL;
+    OHM_INFO("Call %s has left conference %s.",
+             short_path(member->path), short_path(parent->path));
+    policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
+    
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
@@ -1760,12 +2181,13 @@ event_handler(event_t *event)
     switch (event->type) {
     case EVENT_NEW_CHANNEL:
         if (call == NULL) {
-            call = call_register(event->channel.path, event->channel.name,
+            call = call_register(event->channel.call_type,
+                                 event->channel.path, event->channel.name,
                                  event->channel.peer,
                                  event->channel.peer_handle,
                                  event->channel.members != NULL,
                                  event->channel.emergency,
-                                 event->channel.audio, event->channel.video,
+                                 NULL, NULL,
                                  event->channel.interfaces);
             call->dir = event->channel.dir;
 
@@ -1793,11 +2215,13 @@ event_handler(event_t *event)
             policy_call_update(call, UPDATE_DIR);
         }
         if (event->channel.members != NULL) {
+#if 0
             int     i;
             call_t *member;
+#endif
 
             OHM_INFO("%s is a conference call.", call->path);
-
+#if 0
             for (i = 0; event->channel.members[i] != NULL; i++) {
                 if ((member = call_lookup(event->channel.members[i])) == NULL) {
                     OHM_WARNING("Unknown member call %s for conference %s.",
@@ -1810,6 +2234,7 @@ event_handler(event_t *event)
                          member->path, call->path);
                 policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
             }
+#endif
         }
         else
             OHM_INFO("%s is not a conference call.", call->path);
@@ -2169,9 +2594,10 @@ has_interface(char **interfaces, char *interface)
  * call_register
  ********************/
 call_t *
-call_register(const char *path, const char *name, const char *peer,
-              unsigned int peer_handle, int conference, int emergency,
-              unsigned int audio, unsigned int video,
+call_register(call_type_t type, const char *path, const char *name,
+              const char *peer, unsigned int peer_handle,
+              int conference, int emergency,
+              char *audio, char *video,
               char **interfaces)
 {
     call_t *call;
@@ -2186,6 +2612,8 @@ call_register(const char *path, const char *name, const char *peer,
         return NULL;
     }
 
+    call->type = type;
+
     if ((call->path = g_strdup(path)) == NULL) {
         OHM_ERROR("Failed to initialize new call %s.", path);
         g_free(call);
@@ -2195,6 +2623,9 @@ call_register(const char *path, const char *name, const char *peer,
     call->peer        = g_strdup(peer);
     call->peer_handle = peer_handle;
 
+    if (has_interface(interfaces, TP_CONFERENCE))
+        conference = TRUE;
+    
     if (conference)
         call->parent = call;
 
@@ -2219,9 +2650,12 @@ call_register(const char *path, const char *name, const char *peer,
     else
         nipcall++;
 
+    call->audio = audio;
+    call->video = video;
+
     if (call->video)
         nvideo++;
-    
+
     OHM_INFO("Call %s (#%d) registered.", path, ncscall + nipcall);
 
     if (has_interface(interfaces, TP_CHANNEL_HOLD))
@@ -2336,49 +2770,124 @@ call_destroy(call_t *call)
             g_object_unref(call->fact);
             call->fact = NULL;
         }
+        if (call->type == CALL_TYPE_DRAFT) {
+            if (call->audio != NULL)
+                g_free(call->audio);
+            if (call->video != NULL)
+                g_free(call->video);
+        }
         g_free(call);
     }
 }
 
 
 /********************
- * tp_disconnect
+ * tp_call_disconnect
  ********************/
 static int
-tp_disconnect(call_t *call, const char *action)
+tp_call_disconnect(call_t *call, unsigned int why)
+{
+    DBusMessage   *msg;
+    const char    *name, *path, *detail, *expl;
+    dbus_uint32_t  reason;
+    int            status;
+    
+    name   = call->name;
+    path   = call->path;
+
+    reason = TP_CALLDRAFT_REASON_REQUESTED;
+    detail = "";
+    expl   = (why == TP_CHANGE_REASON_BUSY) ? "Busy" : "";
+    
+    msg = dbus_message_new_method_call(name, path,
+                                       TP_CHANNEL_CALL_DRAFT, HANGUP);
+    
+    if (msg == NULL) {
+        OHM_ERROR("Failed to allocate D-BUS request for disconnect.");
+        return ENOMEM;
+    }
+    
+    if (dbus_message_append_args(msg,
+                                 DBUS_TYPE_UINT32, &reason,
+                                 DBUS_TYPE_STRING, &detail,
+                                 DBUS_TYPE_STRING, &expl,
+                                 DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to allocate D-BUS request for disconnect.");
+        status = ENOMEM;
+    }
+    else {
+        TIMESTAMP_ADD("telephony: request telepathy to disconnect");
+        status = bus_send(msg, NULL);
+    }
+
+    dbus_message_unref(msg);
+    
+    return status;
+}
+
+
+/********************
+ * tp_sm_disconnect
+ ********************/
+static int
+tp_sm_disconnect(call_t *call, unsigned int why)
+{
+    DBusMessage   *msg;
+    const char    *name, *path;
+    int            status;
+    dbus_uint32_t  handle[1], *handles, reason;
+    const char    *errstr;
+    
+    
+    name      = call->name;
+    path      = call->path;
+    handle[1] = call->local_handle ? call->local_handle : 1;
+    handles   = handle;
+    reason    = why;
+    errstr    = "";
+    
+    msg = dbus_message_new_method_call(name, path,
+                                       TP_CHANNEL_GROUP, REMOVE_MEMBERS);
+    
+    if (msg == NULL) {
+        OHM_ERROR("Failed to allocate D-BUS request for disconnect.");
+        return ENOMEM;
+    }
+    
+    if (dbus_message_append_args(msg,
+                                 DBUS_TYPE_ARRAY,
+                                 DBUS_TYPE_UINT32, &handles, 1,
+                                 DBUS_TYPE_STRING, &errstr,
+                                 DBUS_TYPE_UINT32, &reason,
+                                 DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to allocate D-BUS request for disconnect.");
+        status = ENOMEM;
+    }
+    else {
+        TIMESTAMP_ADD("telephony: request telepathy to disconnect");
+        status = bus_send(msg, NULL);
+    }
+
+    dbus_message_unref(msg);
+    
+    return status;
+}
+
+
+
+/********************
+ * tp_channel_close
+ ********************/
+static int
+tp_channel_close(call_t *call)
 {
     DBusMessage *msg;
     const char  *name, *path;
     int          status;
 
-    name   = call->name;
-    path   = call->path;
-
-
-    if (!strcmp(action, "busy")) {
-        msg = dbus_message_new_method_call(name, path,
-                                           TP_CHANNEL_GROUP, REMOVE_MEMBERS);
-        if (msg != NULL) {
-            dbus_uint32_t  handle[1] = { call->local_handle ?: 1 };
-            dbus_uint32_t *handles = handle;
-            dbus_uint32_t  reason  = TP_REMOVE_REASON_BUSY;
-            const char    *message = "";
-
-            if (!dbus_message_append_args(msg,
-                                          DBUS_TYPE_ARRAY,
-                                          DBUS_TYPE_UINT32, &handles, 1,
-                                          DBUS_TYPE_STRING, &message,
-                                          DBUS_TYPE_UINT32, &reason,
-                                          DBUS_TYPE_INVALID)) {
-                dbus_message_unref(msg);
-                msg = NULL;
-            }
-        }
-        else
-            status = ENOMEM;
-    }
-    else
-        msg = dbus_message_new_method_call(name, path, TP_CHANNEL, CLOSE);
+    name = call->name;
+    path = call->path;
+    msg  = dbus_message_new_method_call(name, path, TP_CHANNEL, CLOSE);
     
     if (msg != NULL) {
         TIMESTAMP_ADD("telephony: request telepathy to disconnect");
@@ -2395,6 +2904,27 @@ tp_disconnect(call_t *call, const char *action)
 
 
 /********************
+ * tp_disconnect
+ ********************/
+static int
+tp_disconnect(call_t *call, const char *action)
+{
+    int status;
+
+    if (!strcmp(action, "busy")) {
+        if (call->type == CALL_TYPE_DRAFT)
+            status = tp_call_disconnect(call, TP_CHANGE_REASON_BUSY);
+        else
+            status = tp_sm_disconnect(call, TP_CHANGE_REASON_BUSY);
+    }
+    else
+        status = tp_channel_close(call);
+    
+    return status;
+}
+
+
+/********************
  * remove_parent
  ********************/
 static gboolean
@@ -2402,22 +2932,28 @@ remove_parent(gpointer key, gpointer value, gpointer data)
 {
     call_t *parent = (call_t *)data;
     call_t *call   = (call_t *)value;
+    int     update = UPDATE_NONE;
 
     (void)key;
 
-    if (call->parent == parent) {
-        OHM_INFO("Clearing parent of conference member %s.", call->path);
+    if (call->parent == parent && call->parent != call) {
+        OHM_INFO("Clearing parent of conference member %s.",
+                 short_path(call->path));
         call->parent = NULL;
-        /*
-         * Notes:
-         *   Splitting a conference involves disconnecting the conference
-         *   call and holding all calls except the one that remains active.
-         *   Hence we need to unconditionally set all members here to active
-         *   and will update their state as we receive the hold indications.
-         */
-        call->state = STATE_ACTIVE;
-        policy_call_update(call, UPDATE_PARENT | UPDATE_STATE);
+        update |= UPDATE_PARENT;
     }
+
+    if (IS_CONF_PARENT(parent)) {
+        if (call->state == STATE_POST_CONFERENCE) {
+            OHM_INFO("Restoring post-conference state of %s to %s.",
+                     short_path(call->path), state_name(call->state));
+            call->state = call->conf_state;
+            update |= UPDATE_STATE;
+        }
+    }
+
+    if (update)
+        policy_call_update(call, update);
     
     return TRUE;
 }
@@ -2435,6 +2971,7 @@ call_hungup(call_t *call, const char *action, event_t *event)
              event->any.state == STATE_PEER_HUNGUP ? "REMOTELY" : "LOCALLY");
     
     call->state = event->any.state;
+    call->conf_state = call->state;
     policy_call_update(call, UPDATE_STATE);
     return 0;
 }
@@ -2455,6 +2992,10 @@ call_disconnect(call_t *call, const char *action, event_t *event)
             OHM_ERROR("Failed to disconnect call %s.", call->path);
     
     if (call == event->any.call) {
+        
+        if (IS_CONF_PARENT(call))
+            call_foreach((GHFunc)remove_parent, call);
+
         switch (event->any.state) {
         case STATE_CREATED:
         case STATE_CALLOUT:
@@ -2467,7 +3008,6 @@ call_disconnect(call_t *call, const char *action, event_t *event)
         case STATE_LOCAL_HUNGUP:
             policy_call_delete(call);
             call_unregister(call->path);
-            call_foreach((GHFunc)remove_parent, call);
             return 0;
         default:                 
             break;
@@ -2488,11 +3028,12 @@ call_disconnect(call_t *call, const char *action, event_t *event)
 }
 
 
+
 /********************
- * tp_accept
+ * tp_sm_accept
  ********************/
 static int
-tp_accept(call_t *call)
+tp_sm_accept(call_t *call)
 {
     DBusMessage         *msg;
     dbus_uint32_t        handles[1];
@@ -2526,6 +3067,46 @@ tp_accept(call_t *call)
         status = ENOMEM;
     
     return status;
+}
+
+
+/********************
+ * tp_call_accept
+ ********************/
+static int
+tp_call_accept(call_t *call)
+{
+    DBusMessage *msg;
+    const char  *name, *path;
+    int          status;
+    
+    name = call->name;
+    path = call->path;
+
+    msg = dbus_message_new_method_call(name, path,
+                                       TP_CHANNEL_CALL_DRAFT, ACCEPT);
+    
+    if (msg != NULL) {
+        TIMESTAMP_ADD("telephony: request telepathy to disconnect");
+        status = bus_send(msg, NULL);
+    }
+    else
+        status = ENOMEM;
+
+    return status;
+}
+
+
+/********************
+ * tp_accept
+ ********************/
+static int
+tp_accept(call_t *call)
+{
+    if (call->type == CALL_TYPE_DRAFT)
+        return tp_call_accept(call);
+    else
+        return tp_sm_accept(call);
 }
 
 
@@ -2856,16 +3437,17 @@ state_name(int state)
 #define STATE(s, n) [STATE_##s] = n
 
     static char *names[] = {
-        STATE(UNKNOWN     , "unknown"),
-        STATE(DISCONNECTED, "disconnected"),
-        STATE(PEER_HUNGUP , "peerhungup"),
-        STATE(LOCAL_HUNGUP, "localhungup"),
-        STATE(CREATED     , "created"),
-        STATE(CALLOUT     , "callout"),
-        STATE(ACTIVE      , "active"),
-        STATE(ON_HOLD     , "onhold"),
-        STATE(AUTOHOLD    , "autohold"),
-        STATE(CONFERENCE  , "conference"),
+        STATE(UNKNOWN        , "unknown"),
+        STATE(DISCONNECTED   , "disconnected"),
+        STATE(PEER_HUNGUP    , "peerhungup"),
+        STATE(LOCAL_HUNGUP   , "localhungup"),
+        STATE(CREATED        , "created"),
+        STATE(CALLOUT        , "callout"),
+        STATE(ACTIVE         , "active"),
+        STATE(ON_HOLD        , "onhold"),
+        STATE(AUTOHOLD       , "autohold"),
+        STATE(CONFERENCE     , "conference"),
+        STATE(POST_CONFERENCE, "post_conference"),
     };
     
     if (STATE_UNKNOWN < state && state < STATE_MAX)

@@ -17,6 +17,9 @@
 #define TP_CHANNEL_DTMF   TP_CHANNEL".Interface.DTMF"
 #define TP_CHANNEL_MEDIA  TP_CHANNEL".Type.StreamedMedia"
 
+#define TP_CHANNEL_CALL_DRAFT TP_CHANNEL".Type.Call.DRAFT"
+#define TP_CHANNEL_CONF_DRAFT TP_CHANNEL".Interface.Conference.DRAFT"
+
 #define TP_CONN_PATH      "/org/freedesktop/Telepathy/Connection"
 #define TP_RING           "/org/freedesktop/Telepathy/Connection/ring/tel/ring"
 
@@ -44,6 +47,8 @@
 #define PROP_EMERGENCY        TP_EMERGENCY".InitialEmergencyService"
 #define PROP_INTERFACES       TP_CHANNEL".Interfaces"
 
+#define PROP_INITIAL_CHANNELS TP_CHANNEL_CONF_DRAFT".InitialChannels"
+
 #define NEW_CHANNEL        "NewChannel"
 #define NEW_CHANNELS       "NewChannels"
 #define CHANNEL_CLOSED     "Closed"
@@ -56,6 +61,15 @@
 #define ADD_MEMBERS        "AddMembers"
 #define STREAM_ADDED       "StreamAdded"
 #define STREAM_REMOVED     "StreamRemoved"
+#define CONTENT_ADDED      "ContentAdded"
+#define CONTENT_REMOVED    "ContentRemoved"
+#define HANGUP             "Hangup"
+#define ACCEPT             "Accept"
+#define CHANNEL_MERGED     "ChannelMerged"
+#define CHANNEL_REMOVED    "ChannelRemoved"
+#define MEMBER_CHANNEL_ADDED      "MemberChannelAdded"
+#define MEMBER_CHANNEL_REMOVED    "MemberChannelRemoved"
+
 
 #define POLICY_INTERFACE    "com.nokia.policy"
 #define POLICY_PATH         "/com/nokia/policy"
@@ -100,6 +114,7 @@ typedef enum {
     STATE_ON_HOLD,                             /* call on hold */
     STATE_AUTOHOLD,                            /* call autoheld by us */
     STATE_CONFERENCE,                          /* call member in a conference */
+    STATE_POST_CONFERENCE,                     /* post conference-split */
     STATE_MAX
 } call_state_t;
 
@@ -118,9 +133,15 @@ enum {
 };
 
 
+typedef enum {
+    CALL_TYPE_SM    = 0,                       /* StreamedMedia */
+    CALL_TYPE_DRAFT = 1,                       /* Call.DRAFT */
+} call_type_t;
+
 typedef struct call_s call_t;
 
 struct call_s {
+    call_type_t   type;                        /* CALL_TYPE_* */
     int           id;                          /* our call ID */
     char         *name;                        /* channel D-BUS name */
     char         *path;                        /* channel object path */
@@ -131,12 +152,13 @@ struct call_s {
     call_dir_t    dir;                         /* incoming/outgoing */
     int           emergency;                   /* emergency call */
     call_state_t  state;                       /* current state */
+    call_state_t  conf_state;                  /* state while in conference */
     int           order;                       /* autohold order */
     call_t       *parent;                      /* hosting conference if any */
     int           connected;                   /* whether has been connected */
     OhmFact      *fact;                        /* this call in fact store */
-    unsigned int  audio;                       /* audio stream ID or 0 */
-    unsigned int  video;                       /* video stream ID or 0 */
+    char         *audio;                       /* audio stream/content or 0 */
+    char         *video;                       /* video stream/content or 0 */
     guint         timeout;                     /* stream add timeout */
     int           holdable;                    /* whether call supports hold */
 };
@@ -184,6 +206,7 @@ typedef struct {
 
 typedef struct {
     EVENT_COMMON;
+    call_type_t     call_type;                 /* CALL_TYPE_* */
     const char     *peer;                      /* our peer (number/uri) */
     char          **members;                   /* for conference call */
     call_dir_t      dir;                       /* incoming/outgoing */
@@ -192,8 +215,6 @@ typedef struct {
     int             localpend;                 /* pre-collected handle */
     int             remotepend;                /* pre-collected handle */
     int             nmember;                   /* number of members */
-    unsigned int    audio;                     /* audio stream ID or 0 */
-    unsigned int    video;                     /* video stream ID or 0 */
     char          **interfaces;                /* supported interfaces */
 } channel_event_t;
 
@@ -255,12 +276,34 @@ enum {
  */
 
 enum {
-    TP_CALLSTATE_NONE      = 0x00,
-    TP_CALLSTATE_RINGING   = 0x01,
-    TP_CALLSTATE_QUEUED    = 0x02,
-    TP_CALLSTATE_HELD      = 0x04,
-    TP_CALLSTATE_FORWARDED = 0x10
+    TP_CALL_FLAG_NONE        = 0x00,
+    TP_CALL_FLAG_RINGING     = 0x01,
+    TP_CALL_FLAG_QUEUED      = 0x02,
+    TP_CALL_FLAG_HELD        = 0x04,
+    TP_CALL_FLAG_FORWARDED   = 0x10,
+    TP_CALL_FLAG_IN_PROGRESS = 0x20,
+    TP_CALL_FLAG_CLEARING    = 0x40
 };
+
+
+/*
+ * Call.DRAFT call states and change reasons
+ */
+
+enum {
+    TP_CALLDRAFT_UNKNOWN = 0,
+    TP_CALLDRAFT_PENDING_INITIATOR,
+    TP_CALLDRAFT_PENDING_RECEIVER,
+    TP_CALLDRAFT_ACCEPTED,
+    TP_CALLDRAFT_ENDED
+};
+
+
+enum {
+    TP_CALLDRAFT_REASON_UNKNOWN = 0,
+    TP_CALLDRAFT_REASON_REQUESTED
+};
+
 
 
 /*
@@ -268,8 +311,18 @@ enum {
  */
 
 enum {
-    TP_REMOVE_REASON_NONE = 0,
-    TP_REMOVE_REASON_BUSY = 3
+    TP_CHANGE_REASON_NONE = 0,
+    TP_CHANGE_REASON_OFFLINE,
+    TP_CHANGE_REASON_KICKED,
+    TP_CHANGE_REASON_BUSY,
+    TP_CHANGE_REASON_INVITED,
+    TP_CHANGE_REASON_BANNED,
+    TP_CHANGE_REASON_ERROR,
+    TP_CHANGE_REASON_INVALID,
+    TP_CHANGE_REASON_NO_ANSWER,
+    TP_CHANGE_REASON_RENAMED,
+    TP_CHANGE_REASON_DENIED,
+    TP_CHANGE_REASON_SEPARATED
 };
 
 
