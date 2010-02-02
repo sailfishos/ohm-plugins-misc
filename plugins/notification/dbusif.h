@@ -13,6 +13,7 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUS_NGF_ERROR_INTERNAL        DBUS_NGF_ERROR_PREFIX ".Failed"
 #define DBUS_NGF_ERROR_DENIED          DBUS_NGF_ERROR_PREFIX ".RequestDenied"
 #define DBUS_NGF_ERROR_NO_BACKEND      DBUS_NGF_ERROR_PREFIX ".ServiceUnknown"
+#define DBUS_NGF_ERROR_BACKEND_METHOD  DBUS_NGF_ERROR_PREFIX ".BackendMethod"
 
 
 /* D-Bus service names */
@@ -33,11 +34,10 @@ typedef struct _OhmPlugin OhmPlugin;
 /* D-Bus signal & method names */
 #define DBUS_PLAY_METHOD               "Play"
 #define DBUS_STOP_METHOD               "Stop"
+#define DBUS_STATUS_METHOD             "Status"
 
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL "NameOwnerChanged"
 #define DBUS_POLICY_NEW_SESSION_SIGNAL "NewSession"
-#define DBUS_COMPLETED_SIGNAL          "Completed"
-#define DBUS_FAILED_SIGNAL             "Failed"
 
 /*
  * error buffer sizes
@@ -60,7 +60,10 @@ typedef struct _OhmPlugin OhmPlugin;
 void dbusif_init(OhmPlugin *);
 DBusHandlerResult dbusif_session_notification(DBusConnection *,
                                               DBusMessage *, void *);
-void *dbusif_append_to_data(void *, ...);
+void *dbusif_append_to_play_data(void *, ...);
+void *dbusif_copy_status_data(const char *, void *);
+void *dbusif_create_status_data(char *, uint32_t, uint32_t);
+void *dbusif_create_stop_data(uint32_t);
 void  dbusif_forward_data(void *);
 void  dbusif_free_data(void *);
 

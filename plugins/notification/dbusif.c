@@ -11,21 +11,28 @@
 #include "dbusif.h"
 #include "proxy.h"
 
+typedef enum {
+    unknown_handler = 0,
+    client_handler,
+    backend_handler,
+} handler_type_t;
 
 typedef struct {
-    char       *member;
-    uint32_t  (*function)(DBusMessage *, char *, char *);
+    handler_type_t  type;
+    char           *member;
+    uint32_t      (*function)(DBusMessage *, char *, char *);
 } handler_t;
 
 static DBusConnection   *conn;      /* connection to D-Bus session bus */
 static int               timeout;   /* message timeoutin msec */
-static int               backend = TRUE; /* FIXME: remove the initialization */
+static char             *backend;   /* backend's D-Bus address or NULL */
 
 static void get_parameters(OhmPlugin *);
 static void session_bus_init(const char *);
 
 static void reply_with_error(DBusMessage *, const char *, const char *);
 static void reply_with_id(DBusMessage *, uint32_t);
+static void reply(DBusMessage *);
 
 static int copy_string(DBusMessageIter *, DBusMessageIter *);
 static int append_string(DBusMessageIter *, char *);
@@ -42,9 +49,10 @@ static int close_array(DBusMessageIter *, DBusMessageIter *);
 
 static DBusHandlerResult name_changed(DBusConnection *, DBusMessage *, void *);
 
-static DBusHandlerResult ngf_method(DBusConnection *, DBusMessage *, void *);
+static DBusHandlerResult proxy_method(DBusConnection *, DBusMessage *, void *);
 static uint32_t play_handler(DBusMessage *, char *, char *);
 static uint32_t stop_handler(DBusMessage *, char *, char *);
+static uint32_t status_handler(DBusMessage *, char *, char *);
 
 
 /*! \addtogroup pubif
@@ -112,7 +120,8 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *syscon,
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-void *dbusif_append_to_data(void *data, ...)
+
+void *dbusif_append_to_play_data(void *data, ...)
 {
     DBusMessage    *src = data;
     DBusMessage    *dst = NULL;
@@ -122,30 +131,32 @@ void *dbusif_append_to_data(void *data, ...)
     DBusMessageIter darr;
     va_list         ap;
 
-#if 0
-    dst = dbus_message_new_method_call(DBUS_NGF_BACKEND_SERVICE, DBUS_NGF_PATH,
-                                       DBUS_NGF_INTERFACE, DBUS_PLAY_METHOD);
-#else
-    dst = dbus_message_new_signal(DBUS_NGF_PATH, DBUS_NGF_INTERFACE,
-                                  DBUS_PLAY_METHOD);
-#endif
+    if (src != NULL) {
 
-    if (src != NULL && dst != NULL) {
+        dst = dbus_message_new_method_call(DBUS_NGF_BACKEND_SERVICE,
+                                           DBUS_NGF_PATH,
+                                           DBUS_NGF_INTERFACE,
+                                           DBUS_PLAY_METHOD);
 
-        va_start(ap, data);
+        if (dst != NULL) {
 
-        dbus_message_iter_init(src, &sit);
-        dbus_message_iter_init_append(dst, &dit);
+            dbus_message_set_no_reply(dst, TRUE);
 
-        if (copy_string(&sit, &dit)       &&
-            copy_array(&sit, &dit, &darr) &&
-            extend_array(&darr, ap)       &&
-            close_array(&dit, &darr)        )
-        {
-            success = TRUE;
+            va_start(ap, data);
+            
+            dbus_message_iter_init(src, &sit);
+            dbus_message_iter_init_append(dst, &dit);
+                
+            if (copy_string(&sit, &dit)       &&
+                copy_array(&sit, &dit, &darr) &&
+                extend_array(&darr, ap)       &&
+                close_array(&dit, &darr)        )
+            {
+                success = TRUE;
+            }
+
+            va_end(ap);
         }
-
-        va_end(ap);
     }
 
     if (success)
@@ -153,11 +164,78 @@ void *dbusif_append_to_data(void *data, ...)
     else {
         OHM_DEBUG(DBG_DBUS, "append to data failed");
 
-        dbus_message_unref(dst);
-        dst = NULL;
+        if (dst) {
+            dbus_message_unref(dst);
+            dst = NULL;
+        }
     }
 
     return (void *)dst;
+}
+
+void *dbusif_copy_status_data(const char *addr, void *data)
+{
+    DBusMessage *src = data;
+    DBusMessage *dst = NULL;
+
+    if (src != NULL && (dst = dbus_message_copy(src)) != NULL) {
+        dbus_message_set_destination(dst, addr);
+        dbus_message_set_no_reply(dst, TRUE);
+    }
+
+    return dst;
+}
+
+void *dbusif_create_status_data(char *addr, uint32_t id, uint32_t status)
+{
+    DBusMessage *msg;
+    int          success;
+
+    msg = dbus_message_new_method_call(addr,
+                                       DBUS_NGF_PATH,
+                                       DBUS_NGF_INTERFACE,
+                                       DBUS_STATUS_METHOD);
+
+    if (msg != NULL) {
+        dbus_message_set_no_reply(msg, TRUE);
+
+        success = dbus_message_append_args(msg,
+                                           DBUS_TYPE_UINT32, &id,
+                                           DBUS_TYPE_UINT32, &status,
+                                           DBUS_TYPE_INVALID);
+        if (!success) {
+            dbus_message_unref(msg);
+            msg = NULL;
+        }
+    }
+
+
+    return (void *)msg;
+}
+
+void *dbusif_create_stop_data(uint32_t id)
+{
+    DBusMessage *msg;
+    int          success;
+
+    msg = dbus_message_new_method_call(DBUS_NGF_BACKEND_SERVICE,
+                                       DBUS_NGF_PATH,
+                                       DBUS_NGF_INTERFACE,
+                                       DBUS_STOP_METHOD);
+
+    if (msg != NULL) {
+        dbus_message_set_no_reply(msg, TRUE);
+
+        success = dbus_message_append_args(msg,
+                                           DBUS_TYPE_UINT32, &id,
+                                           DBUS_TYPE_INVALID);
+        if (!success) {
+            dbus_message_unref(msg);
+            msg = NULL;
+        }
+    }
+
+    return (void *)msg;
 }
 
 void dbusif_forward_data(void *data)
@@ -220,7 +298,7 @@ static void session_bus_init(const char *addr)
         "arg0='"      DBUS_NGF_BACKEND_SERVICE       "'";
 
     static struct DBusObjectPathVTable method = {
-        .message_function = ngf_method
+        .message_function = proxy_method
     };
 
     DBusError err;
@@ -365,13 +443,39 @@ static void reply_with_id(DBusMessage *msg, uint32_t id)
     if (!success)
         OHM_ERROR("notification: failed to build D-Bus reply message");
     else {
-        OHM_DEBUG(DBG_DBUS, "replying to %s request with id %u", member, id);
-
+        OHM_DEBUG(DBG_DBUS, "replying to %s request with id %u",member,id);
+        
         dbus_connection_send(conn, reply, &serial);
     }
-
+    
     dbus_message_unref(reply); 
 }
+
+static void reply(DBusMessage *msg)
+{
+    dbus_uint32_t   serial;
+    const char     *member;
+    DBusMessage    *reply;
+
+    member = dbus_message_get_member(msg);
+
+    if (dbus_message_get_no_reply(msg)) {
+        OHM_DEBUG(DBG_DBUS, "not replying to %s request: "
+                  "sender is not interested", member);
+    }
+    else {
+        serial = dbus_message_get_serial(msg);
+        reply  = dbus_message_new_method_return(msg);
+
+        OHM_DEBUG(DBG_DBUS, "replying to %s request", member);
+
+        dbus_connection_send(conn, reply, &serial);
+
+        dbus_message_unref(reply); 
+    }
+}
+
+
 
 static int copy_string(DBusMessageIter *sit, DBusMessageIter *dit)
 {
@@ -570,13 +674,14 @@ static DBusHandlerResult name_changed(DBusConnection *conn,
         if (success && sender && !strcmp(sender, DBUS_NGF_BACKEND_SERVICE)) {
 
             if (after && strcmp(after, "")) {
-                OHM_DEBUG(DBG_DBUS, "backend is up");
-                backend = TRUE;
+                OHM_DEBUG(DBG_DBUS, "notification backend is up (%s)", after);
+                backend = strdup(after);
             }
             else if (before != NULL && (!after || !strcmp(after, ""))) {
-                OHM_DEBUG(DBG_DBUS, "backend is gone");
-                backend = FALSE;
-                /* proxy_backend_is_down(); */
+                OHM_DEBUG(DBG_DBUS, "notification backend is gone");
+                free(backend);
+                backend = NULL;
+                proxy_backend_is_down();
             }
         }
     }
@@ -585,16 +690,18 @@ static DBusHandlerResult name_changed(DBusConnection *conn,
 }
 
 
-static DBusHandlerResult ngf_method(DBusConnection *conn,
-                                    DBusMessage    *msg,
-                                    void           *ud)
+static DBusHandlerResult proxy_method(DBusConnection *conn,
+                                      DBusMessage    *msg,
+                                      void           *ud)
 {
     static handler_t  handlers[] = {
-        { DBUS_PLAY_METHOD, play_handler },
-        { DBUS_STOP_METHOD, stop_handler },
-        {       NULL      ,     NULL     }
+        { client_handler,  DBUS_PLAY_METHOD  , play_handler   },
+        { client_handler,  DBUS_STOP_METHOD  , stop_handler   },
+        { backend_handler, DBUS_STATUS_METHOD, status_handler },
+        { unknown_handler,        NULL       ,      NULL      }
     };
 
+    const char        *sender;
     int                type;
     const char        *interface;
     const char        *member;
@@ -607,6 +714,7 @@ static DBusHandlerResult ngf_method(DBusConnection *conn,
     (void)conn;
     (void)ud;
 
+    sender    = dbus_message_get_sender(msg);
     type      = dbus_message_get_type(msg);
     interface = dbus_message_get_interface(msg);
     member    = dbus_message_get_member(msg);
@@ -617,28 +725,46 @@ static DBusHandlerResult ngf_method(DBusConnection *conn,
     if (type == DBUS_MESSAGE_TYPE_METHOD_CALL &&
         !strcmp(interface,DBUS_NGF_INTERFACE)   )
     {
-        for (hlr = handlers;    hlr->member != NULL;    hlr++) {
+        for (hlr = handlers;    hlr->type != unknown_handler;    hlr++) {
             if (!strcmp(member, hlr->member)) {
 
-                if (!backend) {
-                    reply_with_error(msg, DBUS_NGF_ERROR_NO_BACKEND,
-                                     "backend is not running");
-                }
-                else {
-                    err[0] = desc[0] = '\0';
-
-                    if (!(id = hlr->function(msg, err, desc)))
-                        reply_with_error(msg, err, desc);
-                    else
-                        reply_with_id(msg, id);
-                }
+                switch (hlr->type) {
+ 
+                case client_handler:
+                    if (!backend) {
+                        reply_with_error(msg, DBUS_NGF_ERROR_NO_BACKEND,
+                                         "backend is not running");
+                    }
+                    else {
+                        err[0] = desc[0] = '\0';                        
+                        if (!(id = hlr->function(msg, err, desc)))
+                            reply_with_error(msg, err, desc);
+                        else
+                            reply_with_id(msg, id);
+                    }
+                    result = DBUS_HANDLER_RESULT_HANDLED;
+                    break;
                     
+                case backend_handler:
+                    if (!backend || strcmp(sender, backend)) {
+                        reply_with_error(msg, DBUS_NGF_ERROR_BACKEND_METHOD,
+                                         "only backend can send this message");
+                    }
+                    else {
+                        hlr->function(msg, err, desc);
+                        reply(msg);
+                    }
+                    result = DBUS_HANDLER_RESULT_HANDLED;
+                    break;
 
-                result = DBUS_HANDLER_RESULT_HANDLED;
-                
+                default:
+                    result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+                    break;
+                } /* switch */
+                 
                 break;
             }
-        }
+        } /* for */
     }
 
     return result;
@@ -646,10 +772,12 @@ static DBusHandlerResult ngf_method(DBusConnection *conn,
 
 static uint32_t play_handler(DBusMessage *msg, char *err, char *desc)
 {
-    int       success;
-    char     *what;
-    uint32_t  id;
+    int         success;
+    const char *what;
+    const char *client;
+    uint32_t    id;
 
+    client  = dbus_message_get_sender(msg);
     success = dbus_message_get_args(msg, NULL,
                                     DBUS_TYPE_STRING, &what,
                                     DBUS_TYPE_INVALID);
@@ -663,13 +791,12 @@ static uint32_t play_handler(DBusMessage *msg, char *err, char *desc)
         id = 0;
     }
     else {
-        OHM_DEBUG(DBG_DBUS, "requested to play '%s'", what); 
+        OHM_DEBUG(DBG_DBUS, "%s requested to play '%s'", client, what); 
 
-        id = proxy_playback_request(what, msg, desc);
+        id = proxy_playback_request(what, client, msg, desc);
 
         if (id == 0) {
-            strncpy(err, DBUS_NGF_ERROR_DENIED, DBUS_ERRBUF_LEN);
-            err[DBUS_ERRBUF_LEN-1] = '\0';
+            snprintf(err, DBUS_ERRBUF_LEN, "%s", DBUS_NGF_ERROR_DENIED);
         }
     }
 
@@ -678,7 +805,27 @@ static uint32_t play_handler(DBusMessage *msg, char *err, char *desc)
 
 static uint32_t stop_handler(DBusMessage *msg, char *err, char *desc)
 {
-    return 0;
+    return TRUE;
+}
+
+static uint32_t status_handler(DBusMessage *msg, char *err, char *desc)
+{
+    uint32_t id;
+    int      success;
+
+    (void)err;
+    (void)desc;
+
+    success = dbus_message_get_args(msg, NULL,
+                                    DBUS_TYPE_UINT32, &id,
+                                    DBUS_TYPE_INVALID);
+
+    if (!success)
+        OHM_DEBUG(DBG_DBUS, "malformed status request");
+    else
+        success = proxy_status_request(id, msg);
+
+    return success;
 }
 
 /* 

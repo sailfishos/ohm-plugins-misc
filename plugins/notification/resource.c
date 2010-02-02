@@ -139,6 +139,36 @@ int resource_set_acquire(resource_set_id_t id,
     return success;
 }
 
+int resource_set_release(resource_set_id_t id)
+{
+    resource_set_t *rs;
+    resmsg_t        msg;
+    int             success;
+
+    if (id < 0 || id >= rset_max)
+        success = FALSE;
+    else {
+        rs = resource_set + id;
+
+        rs->reqno = ++reqno;
+        rs->grant.function = NULL;
+        rs->grant.data     = NULL;
+
+        OHM_DEBUG(DBG_RESRC, "releasing resource set%u (reqno %u)",
+                  id, rs->reqno);
+
+        memset(&msg, 0, sizeof(msg));
+        msg.possess.type  = RESMSG_RELEASE;
+        msg.possess.id    = id;
+        msg.possess.reqno = rs->reqno;
+            
+        success = resproto_send_message(rs->resset, &msg, NULL);
+    }
+
+    return success;
+}
+
+
 void resource_flags_to_booleans(uint32_t  flags,
                                 uint32_t *audio,
                                 uint32_t *vibra,
@@ -231,6 +261,7 @@ static void conn_status(resset_t *resset, resmsg_t *msg)
 static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
 {
     resource_set_t *rs;
+    callback_t      grant;
     char            buf[256];
 
     (void)protodata;
@@ -242,14 +273,19 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
                   msg->notify.reqno);
 
         if (rs->reqno == msg->notify.reqno) {
+            grant = rs->grant;
+
             rs->reqno = 0;
             rs->flags = msg->notify.resrc;
             
-            if (rs->flags == 0)
-                rs->busy = FALSE;
+            if (rs->flags == 0) {
+                rs->busy = FALSE; /* resource set was auto released */
+                rs->grant.function = NULL;
+                rs->grant.data     = NULL;
+            }
             
-            if (rs->grant.function != NULL)
-                rs->grant.function(rs->flags, rs->grant.data);
+            if (grant.function != NULL)
+                grant.function(rs->flags, grant.data);
         }
     }
 }
