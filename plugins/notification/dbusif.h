@@ -32,6 +32,7 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUS_NGF_INTERFACE             "com.nokia.NonGraphicFeedback1"
 
 /* D-Bus signal & method names */
+#define DBUS_GET_NAME_OWNER_METHOD     "GetNameOwner"
 #define DBUS_PLAY_METHOD               "Play"
 #define DBUS_STOP_METHOD               "Stop"
 #define DBUS_STATUS_METHOD             "Status"

@@ -26,6 +26,7 @@ typedef struct {
 static DBusConnection   *conn;      /* connection to D-Bus session bus */
 static int               timeout;   /* message timeoutin msec */
 static char             *backend;   /* backend's D-Bus address or NULL */
+static int               namesig;   /* wheter we ever got a NameOwnerChanged */
 
 static void get_parameters(OhmPlugin *);
 static void session_bus_init(const char *);
@@ -46,7 +47,8 @@ static int extend_array(DBusMessageIter *, va_list);
 static int close_array(DBusMessageIter *, DBusMessageIter *);
 
 
-
+static int get_name_owner(const char *);
+static void name_queried(DBusPendingCall *, void *);
 static DBusHandlerResult name_changed(DBusConnection *, DBusMessage *, void *);
 
 static DBusHandlerResult proxy_method(DBusConnection *, DBusMessage *, void *);
@@ -390,6 +392,8 @@ static void session_bus_init(const char *addr)
     OHM_INFO("notification: got name '%s' on session D-BUS",
              DBUS_NGF_PROXY_SERVICE);
 
+    get_name_owner(DBUS_NGF_BACKEND_SERVICE);
+
     OHM_INFO("notification: successfully connected to D-Bus session bus");
 }
 
@@ -645,6 +649,75 @@ static int close_array(DBusMessageIter *dit, DBusMessageIter *darr)
     return dbus_message_iter_close_container(dit, darr);
 }
 
+static int get_name_owner(const char *name)
+{
+    DBusMessage     *msg;
+    DBusPendingCall *pend;
+    int              success;
+
+    do { /* not a loop */
+        msg = dbus_message_new_method_call(DBUS_ADMIN_SERVICE,
+                                       DBUS_ADMIN_PATH,
+                                       DBUS_ADMIN_INTERFACE,
+                                       DBUS_GET_NAME_OWNER_METHOD);
+        if (msg == NULL)
+            break;
+
+        success = dbus_message_append_args(msg,
+                                           DBUS_TYPE_STRING, &name,
+                                           DBUS_TYPE_INVALID);
+        if (!success)
+            break;
+
+        if (!dbus_connection_send_with_reply(conn, msg, &pend, -1)      ||
+            !dbus_pending_call_set_notify(pend, name_queried, NULL,NULL)  )
+            break;
+
+        dbus_message_unref(msg);    
+
+        return TRUE;
+
+    } while(0);
+
+
+    OHM_ERROR("notification: failed to get name owner of '%s'", name);
+
+    if (msg != NULL)
+        dbus_message_unref(msg);    
+
+    return FALSE;
+}
+
+
+static void name_queried(DBusPendingCall *pend, void *data)
+{
+    DBusMessage *reply;
+    char        *owner;
+    int          success;
+
+    (void)data;
+
+    do { /* not a loop */
+        if ((reply = dbus_pending_call_steal_reply(pend)) == NULL)
+            break;
+
+        if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR)
+            break;
+
+        success = dbus_message_get_args(reply, NULL,
+                                        DBUS_TYPE_STRING, &owner,
+                                        DBUS_TYPE_INVALID);
+        if (success && !namesig) {
+            OHM_DEBUG(DBG_DBUS, "notification backend is up (%s)", owner);
+            backend = strdup(owner);
+        }
+    } while(0);
+
+    if (reply)
+        dbus_message_unref(reply);
+
+    dbus_pending_call_unref(pend);
+}
 
 static DBusHandlerResult name_changed(DBusConnection *conn,
                                       DBusMessage    *msg,
@@ -672,6 +745,8 @@ static DBusHandlerResult name_changed(DBusConnection *conn,
                                         DBUS_TYPE_INVALID);
 
         if (success && sender && !strcmp(sender, DBUS_NGF_BACKEND_SERVICE)) {
+
+            namesig = TRUE;  /* supress the possible result of GetNameOwner */
 
             if (after && strcmp(after, "")) {
                 OHM_DEBUG(DBG_DBUS, "notification backend is up (%s)", after);
