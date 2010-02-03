@@ -188,7 +188,7 @@ void *dbusif_copy_status_data(const char *addr, void *data)
     return dst;
 }
 
-void *dbusif_create_status_data(char *addr, uint32_t id, uint32_t status)
+void *dbusif_create_status_data(const char *addr, uint32_t id, uint32_t status)
 {
     DBusMessage *msg;
     int          success;
@@ -213,6 +213,19 @@ void *dbusif_create_status_data(char *addr, uint32_t id, uint32_t status)
 
 
     return (void *)msg;
+}
+
+void *dbusif_copy_stop_data(void *data)
+{
+    DBusMessage *src = data;
+    DBusMessage *dst = NULL;
+
+    if (src != NULL && (dst = dbus_message_copy(src)) != NULL) {
+        dbus_message_set_destination(dst, DBUS_NGF_BACKEND_SERVICE);
+        dbus_message_set_no_reply(dst, TRUE);
+    }
+
+    return (void *)dst;
 }
 
 void *dbusif_create_stop_data(uint32_t id)
@@ -250,6 +263,16 @@ void dbusif_forward_data(void *data)
         dbus_connection_send(conn, msg, NULL);
         dbus_message_unref(msg);
     }
+}
+
+void *dbusif_engage_data(void *data)
+{
+    DBusMessage *msg = data;
+
+    if (msg != NULL)
+        dbus_message_ref(msg);
+
+    return data;
 }
 
 void dbusif_free_data(void *data)
@@ -858,7 +881,7 @@ static uint32_t play_handler(DBusMessage *msg, char *err, char *desc)
                                     DBUS_TYPE_INVALID);
 
     if (!success) {
-        OHM_DEBUG(DBG_DBUS, "malformed play request for '%s'", what);
+        OHM_DEBUG(DBG_DBUS, "malformed play request from '&s'", client);
         
         snprintf(err , DBUS_ERRBUF_LEN , "%s", DBUS_NGF_ERROR_FORMAT);
         snprintf(desc, DBUS_DESCBUF_LEN, "can't obtain event from request");
@@ -880,7 +903,32 @@ static uint32_t play_handler(DBusMessage *msg, char *err, char *desc)
 
 static uint32_t stop_handler(DBusMessage *msg, char *err, char *desc)
 {
-    return TRUE;
+    uint32_t    success;
+    const char *client;
+    uint32_t    id;
+
+    client  = dbus_message_get_sender(msg);
+    success = dbus_message_get_args(msg, NULL,
+                                    DBUS_TYPE_UINT32, &id,
+                                    DBUS_TYPE_INVALID);
+
+    if (!success) {
+        OHM_DEBUG(DBG_DBUS, "malformed stop request from '%s'", client);
+        
+        snprintf(err , DBUS_ERRBUF_LEN , "%s", DBUS_NGF_ERROR_FORMAT);
+        snprintf(desc, DBUS_DESCBUF_LEN, "can't obtain id from request");
+    }
+    else {
+        OHM_DEBUG(DBG_DBUS, "%s requested to stop %u", client, id); 
+
+        success = proxy_stop_request(id, client, msg, desc);
+
+        if (!success) {
+            snprintf(err, DBUS_ERRBUF_LEN, "%s", DBUS_NGF_ERROR_DENIED);
+        }
+    }
+
+    return success;
 }
 
 static uint32_t status_handler(DBusMessage *msg, char *err, char *desc)

@@ -25,7 +25,7 @@ typedef struct {
 
 typedef struct {
     resset_t         *resset;
-    int               busy;
+    int               acquire;
     uint32_t          reqno;
     uint32_t          flags;
     callback_t        grant;
@@ -114,13 +114,13 @@ int resource_set_acquire(resource_set_id_t id,
     else {
         rs = resource_set + id;
 
-        if (rs->busy) {
+        if (rs->acquire) {
             function(0, data);
             success = TRUE;
         }
         else {
-            rs->busy  = TRUE;
-            rs->reqno =  ++reqno;
+            rs->acquire = TRUE;
+            rs->reqno   =  ++reqno;
             rs->grant.function = function;
             rs->grant.data     = data;
 
@@ -279,7 +279,7 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
             rs->flags = msg->notify.resrc;
             
             if (rs->flags == 0) {
-                rs->busy = FALSE; /* resource set was auto released */
+                rs->acquire        = FALSE; /* auto released */
                 rs->grant.function = NULL;
                 rs->grant.data     = NULL;
             }

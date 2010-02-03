@@ -63,9 +63,11 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *,
                                               DBusMessage *, void *);
 void *dbusif_append_to_play_data(void *, ...);
 void *dbusif_copy_status_data(const char *, void *);
-void *dbusif_create_status_data(char *, uint32_t, uint32_t);
+void *dbusif_create_status_data(const char *, uint32_t, uint32_t);
+void *dbusif_copy_stop_data(void *);
 void *dbusif_create_stop_data(uint32_t);
 void  dbusif_forward_data(void *);
+void *dbusif_engage_data(void *);
 void  dbusif_free_data(void *);
 
 #endif	/* __OHM_NOTIFICATION_DBUSIF_H__ */

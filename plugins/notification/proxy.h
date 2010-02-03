@@ -16,7 +16,7 @@ typedef struct _OhmPlugin OhmPlugin;
 
 void proxy_init(OhmPlugin *);
 int  proxy_playback_request(const char *, const char *, void *, char *);
-int  proxy_stop_request(uint32_t, void *, char *);
+int  proxy_stop_request(uint32_t, const char *, void *, char *);
 int  proxy_status_request(uint32_t, void *);
 void proxy_backend_is_down(void);
 
