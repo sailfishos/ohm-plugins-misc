@@ -7,7 +7,6 @@
 
 #include "plugin.h"
 #include "resource-spec.h"
-#include "resource.h"
 #include "fsif.h"
 #include "transaction.h"
 
