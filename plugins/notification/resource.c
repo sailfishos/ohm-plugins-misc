@@ -207,7 +207,7 @@ static void connect_to_manager(resconn_t *rc)
     rec = &msg.record;
 
     rec->type = RESMSG_REGISTER;
-    rec->mode = RESMSG_MODE_AUTO_RELEASE;
+    rec->mode = RESMSG_MODE_ALWAYS_REPLY | RESMSG_MODE_AUTO_RELEASE;
 
     for (i = 0, success = TRUE;   i < DIM(defs);   i++) {
         def = defs + i;
@@ -287,6 +287,10 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
             if (grant.function != NULL)
                 grant.function(rs->flags, grant.data);
         }
+
+        OHM_DEBUG(DBG_RESRC, "resource set%u acquire=%s reqno=%u %s",
+                  resset->id, rs->acquire ? "True":"False", rs->reqno,
+                  rs->grant.function ? "grantcb present":"no grantcb");
     }
 }
 
