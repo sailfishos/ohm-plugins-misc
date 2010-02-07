@@ -102,27 +102,55 @@ void resource_init(OhmPlugin *plugin)
 }
 
 int resource_set_acquire(resource_set_id_t id,
+                         uint32_t          mand,
+                         uint32_t          opt,
                          resource_cb_t     function,
                          void             *data)
 {
     resource_set_t *rs;
+    resset_t       *resset;
+    uint32_t        all;
     resmsg_t        msg;
+    char            mbuf[256];
+    char            obuf[256];
     int             success;
 
     if (id < 0 || id >= rset_max)
         success = FALSE;
     else {
-        rs = resource_set + id;
+        all = mand | opt;
+        rs  = resource_set + id;
+        resset = rs->resset;
 
-        if (rs->acquire) {
+        if (!all || !resset || rs->acquire) {
             function(0, data);
             success = TRUE;
         }
         else {
             rs->acquire = TRUE;
-            rs->reqno   =  ++reqno;
             rs->grant.function = function;
             rs->grant.data     = data;
+
+            if ((all ^ resset->flags.all) || (opt ^ resset->flags.opt)) {
+
+                OHM_DEBUG(DBG_RESRC, "updating resource_set%u (reqno %u) "
+                          "mandatory='%s' optional='%s'", id, rs->reqno,
+                          resmsg_res_str(mand, mbuf, sizeof(mbuf)),
+                          resmsg_res_str(opt , obuf, sizeof(obuf)));
+
+                memset(&msg, 0, sizeof(msg));
+                msg.record.type  = RESMSG_UPDATE;
+                msg.record.id    = id;
+                msg.record.reqno = ++reqno;
+                msg.record.rset.all = all;
+                msg.record.rset.opt = opt;
+                msg.record.klass = resset->klass;
+                msg.record.mode  = resset->mode;
+                
+                resproto_send_message(rs->resset, &msg, NULL);
+            }
+
+            rs->reqno = ++reqno;
 
             OHM_DEBUG(DBG_RESRC, "acquiring resource set%u (reqno %u)",
                       id, rs->reqno);

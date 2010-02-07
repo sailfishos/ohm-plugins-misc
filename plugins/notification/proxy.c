@@ -75,7 +75,8 @@ static uint32_t timeout_handler(proxy_t *);
 
 static void     grant_handler(uint32_t, void *);
 
-static int evaluate_notification_request_rules(const char *, char *);
+static int evaluate_notification_request_rules(const char *, uint32_t *,
+                                               uint32_t *, char *);
 
 static int state_machine(proxy_t *, proxy_event_t, void *);
 
@@ -122,12 +123,16 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
                            void       *data,    /* incoming message */
                            char       *err)     /* ptr to a error msg buffer */
 {
-    int      type;
-    proxy_t *proxy = NULL;
+    uint32_t  mand  = 0;
+    uint32_t  opt   = 0;
+    proxy_t  *proxy = NULL;
+    int       type;
 
     do { /* not a loop */
 
-        if ((type = evaluate_notification_request_rules(event, err)) < 0)
+        type = evaluate_notification_request_rules(event, &mand, &opt, err);
+
+        if (type < 0)
             break;
 
         if ((proxy = proxy_create(proxid, client, data)) == NULL) {
@@ -139,7 +144,7 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
         proxy->type  = type;
         proxy->state = state_acquiring;
 
-        if (!resource_set_acquire(type, grant_handler, proxy)) {
+        if (!resource_set_acquire(type, mand, opt, grant_handler, proxy)) {
             strncpy(err, "recource acquisition failed", DBUS_DESCBUF_LEN);
             err[DBUS_DESCBUF_LEN-1] = '\0';
             break;
@@ -350,16 +355,23 @@ static void grant_handler(uint32_t granted, void *void_proxy)
     state_machine(proxy, resource_grant, (void *)granted);
 }
 
-static int evaluate_notification_request_rules(const char *event, char *errbuf)
+static int evaluate_notification_request_rules(const char *event,
+                                               uint32_t   *mand_ret,
+                                               uint32_t   *opt_ret,
+                                               char       *errbuf)
 {
     int   success;
     int   type;
+    int   mand;
+    int   opt;
     char *error = NULL;
 
     success = ruleif_notification_request(event,
-                     RULEIF_INTEGER_ARG ("type" , type ),
-                     RULEIF_STRING_ARG  ("error", error),
-                     RULEIF_ARGLIST_END                 );
+                     RULEIF_INTEGER_ARG ("type"     , type ),
+                     RULEIF_STRING_ARG  ("error"    , error),
+                     RULEIF_INTEGER_ARG ("mandatory", mand ),
+                     RULEIF_INTEGER_ARG ("optional" , opt  ),
+                     RULEIF_ARGLIST_END                    );
 
     if (!success || type < 0) {
         type = -1;
@@ -380,8 +392,15 @@ static int evaluate_notification_request_rules(const char *event, char *errbuf)
     else {
         errbuf[0] = '\0';
 
+        if (mand_ret != NULL)
+            *mand_ret = (uint32_t)mand;
+
+        if (opt_ret != NULL)
+            *opt_ret = (uint32_t)opt;
+
         OHM_DEBUG(DBG_PROXY, "notification request rules returned: "
-                  "type=%d, err='%s'", type, error);
+                  "type=%d, mandatory=%d optional=%d err='%s'",
+                  type, mand, opt, error);
     }
 
     free(error);
@@ -612,11 +631,15 @@ static int premature_stop(proxy_t *proxy)
      * moving to completed state
      */
     proxy->state = state_completed;
+
+    return TRUE;
 }
 
 static int fake_backend_timeout(proxy_t *proxy)
 {
     timeout_create(proxy, 0);
+
+    return TRUE;
 }
 
 
