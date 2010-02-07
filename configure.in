@@ -224,6 +224,27 @@ fi
 AC_SUBST(HAVE_OSSO_SWAP_PRESSURE)
 AM_CONDITIONAL([HAVE_OSSO_SWAP_PRESSURE], [test "x$swappressure" = xyes])
 
+# Check for MCE.
+PKG_CHECK_MODULES(MCE, mce, [has_mce=yes], [mas_mce=no])
+AC_SUBST(MCE_CFLAGS)
+AC_SUBST(MCE_LIBS)
+
+AM_CONDITIONAL(HAVE_MCE, test "x$has_mce" = "xyes")
+AC_SUBST(HAVE_MCE)
+
+# Check for Immersion TouchSense
+AC_MSG_CHECKING([for Immersion TouchSense library])
+if test -f /usr/include/ImmVibe.h;
+then
+  has_immts=yes
+else
+  has_immts=no
+fi
+AC_MSG_RESULT($has_immts)
+
+AM_CONDITIONAL(HAVE_IMMTS, test "x$has_immts" = "xyes")
+AC_SUBST(HAVE_IMMTS)
+
 AC_CONFIG_FILES([Makefile
                  plugins/Makefile
                  plugins/accessories/Makefile
@@ -247,6 +268,7 @@ AC_CONFIG_FILES([Makefile
 		 plugins/sensors/Makefile
 		 plugins/timestamp/Makefile
 		 plugins/cgroups/Makefile
+		 plugins/vibra/Makefile
 		 plugins/delay/Makefile
 		 plugins/buttons/Makefile
 		 ohm-session-agent/Makefile
