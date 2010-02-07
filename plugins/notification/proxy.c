@@ -144,10 +144,14 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
         proxy->type  = type;
         proxy->state = state_acquiring;
 
-        if (!resource_set_acquire(type, mand, opt, grant_handler, proxy)) {
-            strncpy(err, "recource acquisition failed", DBUS_DESCBUF_LEN);
-            err[DBUS_DESCBUF_LEN-1] = '\0';
-            break;
+        if (!(mand | opt))
+            timeout_create(proxy, 0);
+        else {
+            if (!resource_set_acquire(type, mand, opt, grant_handler, proxy)) {
+                strncpy(err, "recource acquisition failed", DBUS_DESCBUF_LEN);
+                err[DBUS_DESCBUF_LEN-1] = '\0';
+                break;
+            }
         }
         
         return proxid++;
@@ -421,6 +425,10 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         case resource_grant:
             forward_play_request_to_backend(proxy, granted);
             break;
+        case backend_timeout:
+            create_and_send_status_to_client(proxy, 0);
+            proxy_destroy(proxy);
+            break;
         case client_stop:
             premature_stop(proxy);
             break;
@@ -471,11 +479,6 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
 
     case state_stopped:
         switch (ev) {
-#if 0
-        case resource_grant: /* this probably never happens ... */
-            premature_stop(proxy); 
-            break;
-#endif
         case backend_status:
             forward_status_to_client(proxy, data);
             proxy_destroy(proxy);
@@ -514,7 +517,6 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
         resource_flags_to_booleans(granted, &audio, &vibra, &leds, &blight);
     }
     else {
-        /* TODO: checks for the 'no-play' */
         mode  = "short";
         audio = TRUE;
         vibra = leds = blight = FALSE;
