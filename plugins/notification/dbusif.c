@@ -596,7 +596,21 @@ static int copy_array(DBusMessageIter *sit,
     DBusMessageIter *sarr = &iter;
     int              success = FALSE;
 
+    if (!dbus_message_iter_next(sit)) {
+        /*
+         * play request wo. properties is OK;
+         * output array is still needed to hold our own stuff
+         */
+
+        success = TRUE;
+
+        dbus_message_iter_open_container(dit, DBUS_TYPE_ARRAY, "{sv}", darr);
+    } else
+
     if (dbus_message_iter_get_arg_type(sit) == DBUS_TYPE_ARRAY) {
+        /* 
+         * we seem to have a property list, so let's parse it
+         */
 
         dbus_message_iter_recurse(sit, sarr);
         dbus_message_iter_open_container(dit, DBUS_TYPE_ARRAY, "{sv}", darr);

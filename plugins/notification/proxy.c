@@ -84,7 +84,8 @@ static int forward_stop_request_to_backend(proxy_t *, void *);
 static int forward_status_to_client(proxy_t *, void *);
 static int create_and_send_status_to_client(proxy_t *, uint32_t);
 static int stop_if_loose_resources(proxy_t *, uint32_t);
-static int premature_stop_release_resources(proxy_t *);
+static int premature_stop(proxy_t *);
+static int fake_backend_timeout(proxy_t *);
 
 
 /*! \addtogroup pubif
@@ -402,7 +403,7 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             forward_play_request_to_backend(proxy, granted);
             break;
         case client_stop:
-            premature_stop_release_resources(proxy);
+            premature_stop(proxy);
             break;
         default:
             success = FALSE;
@@ -451,9 +452,11 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
 
     case state_stopped:
         switch (ev) {
-        case resource_grant:
-            premature_stop_release_resources(proxy);
+#if 0
+        case resource_grant: /* this probably never happens ... */
+            premature_stop(proxy); 
             break;
+#endif
         case backend_status:
             forward_status_to_client(proxy, data);
             proxy_destroy(proxy);
@@ -485,6 +488,7 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
     uint32_t  vibra;
     uint32_t  leds;
     uint32_t  blight;
+    int       success = FALSE;
 
     if (granted) {
         mode = "long";
@@ -507,20 +511,33 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
                       DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_BLIGHT, blight     ),
                       DBUSIF_ARGLIST_END                                     );
 
-    dbusif_forward_data(data);
+    if (data == NULL) {
+        OHM_DEBUG(DBG_PROXY, "extended play request creation "
+                   "failed (id %u) ", proxy->id);
 
-    OHM_DEBUG(DBG_PROXY, "extended play request (id %u) "
-              "forwarded to backend", proxy->id);
+        create_and_send_status_to_client(proxy, 1);
+        proxy_destroy(proxy);
 
-    dbusif_free_data(proxy->data);
+        success = FALSE;
+    }
+    else {
+        dbusif_forward_data(data);
 
-    proxy->resources = granted;
-    proxy->state     = state_forwarded; 
-    proxy->data      = NULL;
+        OHM_DEBUG(DBG_PROXY, "extended play request (id %u) "
+                  "forwarded to backend", proxy->id);
 
-    timeout_create(proxy, play_timeout);
+        dbusif_free_data(proxy->data);
+        
+        proxy->resources = granted;
+        proxy->state     = state_forwarded; 
+        proxy->data      = NULL;
+        
+        timeout_create(proxy, play_timeout);
 
-    return TRUE;
+        success = TRUE;
+    }
+
+    return success;
 }
 
 static int forward_stop_request_to_backend(proxy_t *proxy, void *data)
@@ -588,13 +605,18 @@ static int stop_if_loose_resources(proxy_t *proxy, uint32_t granted)
     return success;
 }
 
-static int premature_stop_release_resources(proxy_t *proxy)
+static int premature_stop(proxy_t *proxy)
 {
     /*
-     * backend is unaware the play request, so no backend operation;
-     * however we need to undo the resource acquisition
+     * backend is unaware the play request, so no backend operation
+     * moving to completed state
      */
     proxy->state = state_completed;
+}
+
+static int fake_backend_timeout(proxy_t *proxy)
+{
+    timeout_create(proxy, 0);
 }
 
 
