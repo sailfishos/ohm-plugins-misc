@@ -15,6 +15,7 @@ typedef enum {
     unknown_handler = 0,
     client_handler,
     backend_handler,
+    subscr_handler,
 } handler_type_t;
 
 typedef struct {
@@ -54,6 +55,8 @@ static DBusHandlerResult name_changed(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult proxy_method(DBusConnection *, DBusMessage *, void *);
 static uint32_t play_handler(DBusMessage *, char *, char *);
 static uint32_t stop_handler(DBusMessage *, char *, char *);
+static uint32_t subscribe_handler(DBusMessage *, char *, char *);
+static uint32_t unsubscribe_handler(DBusMessage *, char *, char *);
 static uint32_t status_handler(DBusMessage *, char *, char *);
 
 
@@ -253,6 +256,40 @@ void *dbusif_create_stop_data(uint32_t id)
     return (void *)msg;
 }
 
+void *dbusif_create_update_data(const char **evlist, int evcnt)
+{
+    DBusMessage  *msg = NULL;
+    int           success;
+
+    do { /* not a loop */
+
+        if (!evlist || evcnt < 1)
+            break;
+
+        msg = dbus_message_new_method_call(NULL,
+                                           DBUS_NGF_PATH,
+                                           DBUS_NGF_INTERFACE,
+                                           DBUS_UPDATE_METHOD);
+        if (msg == NULL)
+            break;
+
+        success = dbus_message_append_args(msg,
+                                           DBUS_TYPE_ARRAY,
+                                           DBUS_TYPE_STRING, &evlist, evcnt,
+                                           DBUS_TYPE_INVALID);
+        if (!success)
+            break;
+
+        return (void *)msg;
+
+    } while (0);
+
+    if (msg != NULL)
+        dbus_message_unref(msg);
+
+    return (void *)NULL;
+}
+
 void dbusif_forward_data(void *data)
 {
     DBusMessage *msg = data;
@@ -262,6 +299,21 @@ void dbusif_forward_data(void *data)
 
         dbus_connection_send(conn, msg, NULL);
         dbus_message_unref(msg);
+    }
+}
+
+void dbusif_send_data_to(void *data, const char *addr)
+{
+    DBusMessage *msg = data;
+    DBusMessage *copy;
+
+    if (msg != NULL && (copy = dbus_message_copy(msg)) != NULL) {
+
+        dbus_message_set_destination(copy, addr);
+        dbus_message_set_no_reply(copy, TRUE);
+
+        dbus_connection_send(conn, copy, NULL);
+        dbus_message_unref(copy);
     }
 }
 
@@ -807,10 +859,12 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
                                       void           *ud)
 {
     static handler_t  handlers[] = {
-        { client_handler,  DBUS_PLAY_METHOD  , play_handler   },
-        { client_handler,  DBUS_STOP_METHOD  , stop_handler   },
-        { backend_handler, DBUS_STATUS_METHOD, status_handler },
-        { unknown_handler,        NULL       ,      NULL      }
+        { client_handler,  DBUS_PLAY_METHOD       , play_handler        },
+        { client_handler,  DBUS_STOP_METHOD       , stop_handler        },
+        { backend_handler, DBUS_STATUS_METHOD     , status_handler      },
+        { subscr_handler,  DBUS_SUBSCRIBE_METHOD  , subscribe_handler   },
+        { subscr_handler,  DBUS_UNSUBSCRIBE_METHOD, unsubscribe_handler },
+        { unknown_handler,        NULL            ,      NULL           }
     };
 
     const char        *sender;
@@ -866,6 +920,13 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
                         hlr->function(msg, err, desc);
                         reply(msg);
                     }
+                    result = DBUS_HANDLER_RESULT_HANDLED;
+                    break;
+
+                case subscr_handler:
+                    err[0] = desc[0] = '\0';                        
+                    hlr->function(msg, err, desc);
+                    reply(msg);
                     result = DBUS_HANDLER_RESULT_HANDLED;
                     break;
 
@@ -943,6 +1004,28 @@ static uint32_t stop_handler(DBusMessage *msg, char *err, char *desc)
     }
 
     return success;
+}
+
+static uint32_t subscribe_handler(DBusMessage *msg, char *err, char *desc)
+{
+    const char *client = dbus_message_get_sender(msg);
+
+    OHM_DEBUG(DBG_DBUS, "susbscription request for %s", client);
+
+    subscription_create(client);
+
+    return TRUE;
+}
+
+static uint32_t unsubscribe_handler(DBusMessage *msg, char *err, char *desc)
+{
+    const char *client = dbus_message_get_sender(msg);
+
+    OHM_DEBUG(DBG_DBUS, "unsusbscription request for %s", client);
+
+    subscription_destroy(client);
+
+    return TRUE;
 }
 
 static uint32_t status_handler(DBusMessage *msg, char *err, char *desc)

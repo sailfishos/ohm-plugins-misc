@@ -30,7 +30,8 @@ OHM_IMPORTABLE(int , rule_find        , (char *name, int arity));
 OHM_IMPORTABLE(int , rule_eval        , (int rule, void *retval,
                                          void **args, int narg));
 
-static int    notreq = -1;           /* 'notification_request' rule */
+static int    notreq  = -1;          /* 'notification_request' rule */
+static int    notevnt = -1;          /* 'notification_events' rule  */
 
 static int copy_value(char *, int, void *, char **);
 
@@ -51,7 +52,8 @@ void ruleif_init(OhmPlugin *plugin)
     };
 
     static rule_def_t  ruldefs[] = {
-        {"notification_request", 2, &notreq },
+        {"notification_request", 2, &notreq  },
+        {"notification_events" , 2, &notevnt },
     };
 
     import_t     *imp;
@@ -109,6 +111,8 @@ int ruleif_notification_request(const char *what, ...)
 
         status = rule_eval(notreq, &retval, (void **)argv, (i+1)/2);
 
+        OHM_DEBUG(DBG_RULE, "rule_eval returned %d (retval %p)",status,retval);
+
         if (status <= 0) {
             if (retval && status < 0)
                 rules_dump_result(retval);
@@ -140,6 +144,86 @@ int ruleif_notification_request(const char *what, ...)
         if (retval)
             rules_free_result(retval);
     }
+
+    OHM_DEBUG(DBG_RULE, "%s", success ? "succeeded" : "failed");
+
+    return success;
+}
+
+
+int ruleif_notification_events(int    id,
+                               char **class_ret,
+                               char ***events_ret,
+                               int    *length_ret)
+{
+    va_list  ap;
+    char    *argv[16];
+    char  ***retval;
+    char   **entry;
+    char   **events;
+    int      i, j, n, m;
+    int      status;
+    int      success = FALSE;
+
+    if (notreq >= 0) {
+        retval = NULL;
+
+        argv[i=0] = (char *)'i';
+        argv[++i] = (char *)id;
+
+        status = rule_eval(notevnt, &retval, (void **)argv, (i+1)/2);
+
+        OHM_DEBUG(DBG_RULE, "rule_eval returned %d (retval %p)",status,retval);
+
+        if (status <= 0) {
+            if (retval && status < 0)
+                rules_dump_result(retval);
+        }
+        else {
+            if (OHM_LOGGED(INFO))
+                rules_dump_result(retval);
+
+            if (retval && retval[0] != NULL && retval[1] == NULL) {
+                entry = retval[0];
+
+                if (entry[0] && !strcmp(entry[0], "name") &&
+                    (int)entry[1] == 's' && entry[2] )
+                {
+                    *class_ret = strdup(entry[2]);
+
+                    for (m = 3, n = 0;    entry[m];   m += 3, n++)
+                        ;
+
+                    if ((events = malloc(sizeof(char *) * (n+1))) == NULL) {
+                        *events_ret = NULL;
+                        *length_ret = 0;
+                    }
+                    else {
+                        *events_ret = events;
+                        *length_ret = n;
+
+                        for (i = 3, j = 0;   i < m;   i += 3) {
+                            if (!strcmp(entry[i], "value") && 
+                                (int)entry[i+1] == 's')
+                            {
+                                events[j++] = strdup(entry[i+2]);
+                            }
+                        }
+
+                        events[j] = NULL;
+                        
+                        success = TRUE;
+                    }
+                }
+            }
+        }
+
+        if (retval)
+            rules_free_result(retval);
+    }
+
+    OHM_DEBUG(DBG_RULE, "%s", success ? "succeeded" : "failed");
+
     return success;
 }
 

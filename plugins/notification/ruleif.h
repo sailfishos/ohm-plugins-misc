@@ -12,6 +12,7 @@ typedef struct _OhmPlugin OhmPlugin;
 
 void ruleif_init(OhmPlugin *);
 int  ruleif_notification_request(const char *, ...);
+int  ruleif_notification_events(int, char **, char ***, int *);
 
 #endif	/* __OHM_NOTIFICATION_RULEIF_H__ */
 

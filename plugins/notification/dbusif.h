@@ -35,7 +35,10 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUS_GET_NAME_OWNER_METHOD     "GetNameOwner"
 #define DBUS_PLAY_METHOD               "Play"
 #define DBUS_STOP_METHOD               "Stop"
+#define DBUS_SUBSCRIBE_METHOD          "Subscribe"
+#define DBUS_UNSUBSCRIBE_METHOD        "Unsubscribe"
 #define DBUS_STATUS_METHOD             "Status"
+#define DBUS_UPDATE_METHOD             "Update"
 
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL "NameOwnerChanged"
 #define DBUS_POLICY_NEW_SESSION_SIGNAL "NewSession"
@@ -66,7 +69,9 @@ void *dbusif_copy_status_data(const char *, void *);
 void *dbusif_create_status_data(const char *, uint32_t, uint32_t);
 void *dbusif_copy_stop_data(void *);
 void *dbusif_create_stop_data(uint32_t);
+void *dbusif_create_update_data(const char **, int);
 void  dbusif_forward_data(void *);
+void  dbusif_send_data_to(void *, const char *);
 void *dbusif_engage_data(void *);
 void  dbusif_free_data(void *);
 
