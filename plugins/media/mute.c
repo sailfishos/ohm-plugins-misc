@@ -73,7 +73,6 @@ static void mute_changed_cb(fsif_entry_t *entry,
     (void)usrdata;
 
     int  mute;
-    int  value;
     int  forced = TRUE;
 
     if (fld->type == fldtype_integer)
@@ -93,7 +92,7 @@ static void mute_changed_cb(fsif_entry_t *entry,
 
     OHM_DEBUG(DBG_MUTE, "mute changed to '%s'", mute_str(mute));
 
-    dbusif_signal_mute(value, DBUSIF_SEND_NOW);
+    dbusif_signal_mute(mute, DBUSIF_SEND_NOW);
 }
 
 static char *mute_str(int value)
