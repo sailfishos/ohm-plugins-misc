@@ -646,28 +646,41 @@ static int copy_array(DBusMessageIter *sit,
     DBusMessageIter  sdict;
     DBusMessageIter  ddict;
     DBusMessageIter *sarr = &iter;
-    int              success = FALSE;
+    int              type;
+    int              success;
 
-    if (!dbus_message_iter_next(sit)) {
+    type = dbus_message_iter_get_arg_type(sit);
+
+    switch (type) {
+
+    default:
+        /*
+         * we have something else than an array -> message is broken
+         *
+         */
+        success = FALSE;
+        break;
+
+    case DBUS_TYPE_INVALID:
         /*
          * play request wo. properties is OK;
          * output array is still needed to hold our own stuff
          */
-
-        success = TRUE;
-
         dbus_message_iter_open_container(dit, DBUS_TYPE_ARRAY, "{sv}", darr);
-    } else
+        success = TRUE;
+        break;
 
-    if (dbus_message_iter_get_arg_type(sit) == DBUS_TYPE_ARRAY) {
+    case DBUS_TYPE_ARRAY:
         /* 
          * we seem to have a property list, so let's parse it
          */
-
         dbus_message_iter_recurse(sit, sarr);
         dbus_message_iter_open_container(dit, DBUS_TYPE_ARRAY, "{sv}", darr);
 
         success = TRUE;
+
+        if (dbus_message_iter_get_arg_type(sarr) == DBUS_TYPE_INVALID)
+            break;              /* empty array is OK, ie. no proplist */
 
         do {
             if (dbus_message_iter_get_arg_type(sarr) != DBUS_TYPE_DICT_ENTRY) {
@@ -682,6 +695,8 @@ static int copy_array(DBusMessageIter *sit,
             close_dict_entry(darr, &ddict);
 
         } while (dbus_message_iter_next(sarr) && success);
+
+        break;
     }
 
     return success;
