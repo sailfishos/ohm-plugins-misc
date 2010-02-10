@@ -126,7 +126,8 @@ immts_enforce(vibra_context_t *ctx)
     
 #ifdef VIB_DEVPROPTYPE_PRIORITY_MASK
     status = ImmVibeSetDevicePropertyInt32(dev,
-                                           VIB_DEVPROPTYPE_PRIORITY_MASK, mask);
+                                           VIB_DEVPROPTYPE_ENABLE_PRIORITIES,
+                                           mask);
     
     status = disabled || !VIBE_FAILED(status)
 #else

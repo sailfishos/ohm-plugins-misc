@@ -11,7 +11,9 @@ SUBDIRS = 	     \
 	dvfs         \
 	cgroups      \
 	delay        \
-	buttons
+	buttons      \
+        vibra        \
+        backlight
 #	sensor
 #	dbus
 
