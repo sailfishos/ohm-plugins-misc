@@ -10,15 +10,17 @@
 #include "ruleif.h"
 #include "resource.h"
 #include "proxy.h"
+#include "subscription.h"
 
 
-int DBG_PROXY, DBG_RESRC, DBG_DBUS, DBG_RULE;
+int DBG_PROXY, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
 
 OHM_DEBUG_PLUGIN(notification,
-    OHM_DEBUG_FLAG("proxy"    , "proxy functions"    , &DBG_PROXY   ),
-    OHM_DEBUG_FLAG("resource" , "resource client"    , &DBG_RESRC   ),
-    OHM_DEBUG_FLAG("dbus"     , "D-Bus interface"    , &DBG_DBUS    ),
-    OHM_DEBUG_FLAG("rule"     , "prolog interface"   , &DBG_RULE    )
+    OHM_DEBUG_FLAG("proxy"       , "proxy functions"       , &DBG_PROXY  ),
+    OHM_DEBUG_FLAG("subscription", "subscription functions", &DBG_SUBSCR ),
+    OHM_DEBUG_FLAG("resource"    , "resource client"       , &DBG_RESRC  ),
+    OHM_DEBUG_FLAG("dbus"        , "D-Bus interface"       , &DBG_DBUS   ),
+    OHM_DEBUG_FLAG("rule"        , "prolog interface"      , &DBG_RULE   )
 );
 
 
@@ -30,6 +32,7 @@ static void plugin_init(OhmPlugin *plugin)
     ruleif_init(plugin);
     resource_init(plugin);
     proxy_init(plugin);
+    subscription_init(plugin);
 
 #if 1
     DBG_PROXY = DBG_RESRC = DBG_DBUS = DBG_RULE = TRUE;

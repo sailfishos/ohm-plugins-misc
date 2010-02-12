@@ -75,7 +75,8 @@ static uint32_t timeout_handler(proxy_t *);
 
 static void     grant_handler(uint32_t, void *);
 
-static int evaluate_notification_request_rules(const char *, char *);
+static int evaluate_notification_request_rules(const char *, uint32_t *,
+                                               uint32_t *, char *);
 
 static int state_machine(proxy_t *, proxy_event_t, void *);
 
@@ -84,7 +85,8 @@ static int forward_stop_request_to_backend(proxy_t *, void *);
 static int forward_status_to_client(proxy_t *, void *);
 static int create_and_send_status_to_client(proxy_t *, uint32_t);
 static int stop_if_loose_resources(proxy_t *, uint32_t);
-static int premature_stop_release_resources(proxy_t *);
+static int premature_stop(proxy_t *);
+static int fake_backend_timeout(proxy_t *);
 
 
 /*! \addtogroup pubif
@@ -121,12 +123,16 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
                            void       *data,    /* incoming message */
                            char       *err)     /* ptr to a error msg buffer */
 {
-    int      type;
-    proxy_t *proxy = NULL;
+    uint32_t  mand  = 0;
+    uint32_t  opt   = 0;
+    proxy_t  *proxy = NULL;
+    int       type;
 
     do { /* not a loop */
 
-        if ((type = evaluate_notification_request_rules(event, err)) < 0)
+        type = evaluate_notification_request_rules(event, &mand, &opt, err);
+
+        if (type < 0)
             break;
 
         if ((proxy = proxy_create(proxid, client, data)) == NULL) {
@@ -138,10 +144,14 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
         proxy->type  = type;
         proxy->state = state_acquiring;
 
-        if (!resource_set_acquire(type, grant_handler, proxy)) {
-            strncpy(err, "recource acquisition failed", DBUS_DESCBUF_LEN);
-            err[DBUS_DESCBUF_LEN-1] = '\0';
-            break;
+        if (!(mand | opt))
+            timeout_create(proxy, 0);
+        else {
+            if (!resource_set_acquire(type, mand, opt, grant_handler, proxy)) {
+                strncpy(err, "recource acquisition failed", DBUS_DESCBUF_LEN);
+                err[DBUS_DESCBUF_LEN-1] = '\0';
+                break;
+            }
         }
         
         return proxid++;
@@ -349,16 +359,23 @@ static void grant_handler(uint32_t granted, void *void_proxy)
     state_machine(proxy, resource_grant, (void *)granted);
 }
 
-static int evaluate_notification_request_rules(const char *event, char *errbuf)
+static int evaluate_notification_request_rules(const char *event,
+                                               uint32_t   *mand_ret,
+                                               uint32_t   *opt_ret,
+                                               char       *errbuf)
 {
     int   success;
     int   type;
+    int   mand;
+    int   opt;
     char *error = NULL;
 
     success = ruleif_notification_request(event,
-                     RULEIF_INTEGER_ARG ("type" , type ),
-                     RULEIF_STRING_ARG  ("error", error),
-                     RULEIF_ARGLIST_END                 );
+                     RULEIF_INTEGER_ARG ("type"     , type ),
+                     RULEIF_STRING_ARG  ("error"    , error),
+                     RULEIF_INTEGER_ARG ("mandatory", mand ),
+                     RULEIF_INTEGER_ARG ("optional" , opt  ),
+                     RULEIF_ARGLIST_END                    );
 
     if (!success || type < 0) {
         type = -1;
@@ -379,8 +396,15 @@ static int evaluate_notification_request_rules(const char *event, char *errbuf)
     else {
         errbuf[0] = '\0';
 
+        if (mand_ret != NULL)
+            *mand_ret = (uint32_t)mand;
+
+        if (opt_ret != NULL)
+            *opt_ret = (uint32_t)opt;
+
         OHM_DEBUG(DBG_PROXY, "notification request rules returned: "
-                  "type=%d, err='%s'", type, error);
+                  "type=%d, mandatory=%d optional=%d err='%s'",
+                  type, mand, opt, error);
     }
 
     free(error);
@@ -401,8 +425,12 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         case resource_grant:
             forward_play_request_to_backend(proxy, granted);
             break;
+        case backend_timeout:
+            create_and_send_status_to_client(proxy, 0);
+            proxy_destroy(proxy);
+            break;
         case client_stop:
-            premature_stop_release_resources(proxy);
+            premature_stop(proxy);
             break;
         default:
             success = FALSE;
@@ -451,9 +479,6 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
 
     case state_stopped:
         switch (ev) {
-        case resource_grant:
-            premature_stop_release_resources(proxy);
-            break;
         case backend_status:
             forward_status_to_client(proxy, data);
             proxy_destroy(proxy);
@@ -485,13 +510,13 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
     uint32_t  vibra;
     uint32_t  leds;
     uint32_t  blight;
+    int       success = FALSE;
 
     if (granted) {
         mode = "long";
         resource_flags_to_booleans(granted, &audio, &vibra, &leds, &blight);
     }
     else {
-        /* TODO: checks for the 'no-play' */
         mode  = "short";
         audio = TRUE;
         vibra = leds = blight = FALSE;
@@ -507,20 +532,33 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
                       DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_BLIGHT, blight     ),
                       DBUSIF_ARGLIST_END                                     );
 
-    dbusif_forward_data(data);
+    if (data == NULL) {
+        OHM_DEBUG(DBG_PROXY, "extended play request creation "
+                   "failed (id %u) ", proxy->id);
 
-    OHM_DEBUG(DBG_PROXY, "extended play request (id %u) "
-              "forwarded to backend", proxy->id);
+        create_and_send_status_to_client(proxy, 1);
+        proxy_destroy(proxy);
 
-    dbusif_free_data(proxy->data);
+        success = FALSE;
+    }
+    else {
+        dbusif_forward_data(data);
 
-    proxy->resources = granted;
-    proxy->state     = state_forwarded; 
-    proxy->data      = NULL;
+        OHM_DEBUG(DBG_PROXY, "extended play request (id %u) "
+                  "forwarded to backend", proxy->id);
 
-    timeout_create(proxy, play_timeout);
+        dbusif_free_data(proxy->data);
+        
+        proxy->resources = granted;
+        proxy->state     = state_forwarded; 
+        proxy->data      = NULL;
+        
+        timeout_create(proxy, play_timeout);
 
-    return TRUE;
+        success = TRUE;
+    }
+
+    return success;
 }
 
 static int forward_stop_request_to_backend(proxy_t *proxy, void *data)
@@ -588,13 +626,22 @@ static int stop_if_loose_resources(proxy_t *proxy, uint32_t granted)
     return success;
 }
 
-static int premature_stop_release_resources(proxy_t *proxy)
+static int premature_stop(proxy_t *proxy)
 {
     /*
-     * backend is unaware the play request, so no backend operation;
-     * however we need to undo the resource acquisition
+     * backend is unaware the play request, so no backend operation
+     * moving to completed state
      */
     proxy->state = state_completed;
+
+    return TRUE;
+}
+
+static int fake_backend_timeout(proxy_t *proxy)
+{
+    timeout_create(proxy, 0);
+
+    return TRUE;
 }
 
 

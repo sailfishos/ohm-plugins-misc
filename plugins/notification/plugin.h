@@ -23,7 +23,7 @@
 #define FACTSTORE_NOTIFICATION          FACTSTORE_PREFIX ".notification"
 
 
-extern int DBG_PROXY, DBG_RESRC, DBG_DBUS, DBG_RULE;
+extern int DBG_PROXY, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
 
 
 /*

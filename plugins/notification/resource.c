@@ -9,6 +9,8 @@
 
 #include "plugin.h"
 #include "resource.h"
+#include "ruleif.h"
+#include "subscription.h"
 
 
 typedef struct {
@@ -29,6 +31,10 @@ typedef struct {
     uint32_t          reqno;
     uint32_t          flags;
     callback_t        grant;
+    struct {
+        int    count;
+        char **list;
+    }                 event;
 } resource_set_t;
 
 
@@ -42,9 +48,12 @@ static resource_set_t  resource_set[rset_max];
 static uint32_t        reqno;
 static int             verbose;
 
-static void connect_to_manager(resconn_t *);
-static void conn_status(resset_t *, resmsg_t *);
-static void grant_handler(resmsg_t *, resset_t *, void *);
+static void  connect_to_manager(resconn_t *);
+static void  conn_status(resset_t *, resmsg_t *);
+static void  grant_handler(resmsg_t *, resset_t *, void *);
+static void  update_event_list(void);
+static void  free_event_list(char **);
+static char *strlist(char **, char *, int);
 
 
 /*! \addtogroup pubif
@@ -102,27 +111,55 @@ void resource_init(OhmPlugin *plugin)
 }
 
 int resource_set_acquire(resource_set_id_t id,
+                         uint32_t          mand,
+                         uint32_t          opt,
                          resource_cb_t     function,
                          void             *data)
 {
     resource_set_t *rs;
+    resset_t       *resset;
+    uint32_t        all;
     resmsg_t        msg;
+    char            mbuf[256];
+    char            obuf[256];
     int             success;
 
     if (id < 0 || id >= rset_max)
         success = FALSE;
     else {
-        rs = resource_set + id;
+        all = mand | opt;
+        rs  = resource_set + id;
+        resset = rs->resset;
 
-        if (rs->acquire) {
+        if (!all || !resset || rs->acquire) {
             function(0, data);
             success = TRUE;
         }
         else {
             rs->acquire = TRUE;
-            rs->reqno   =  ++reqno;
             rs->grant.function = function;
             rs->grant.data     = data;
+
+            if ((all ^ resset->flags.all) || (opt ^ resset->flags.opt)) {
+
+                OHM_DEBUG(DBG_RESRC, "updating resource_set%u (reqno %u) "
+                          "mandatory='%s' optional='%s'", id, rs->reqno,
+                          resmsg_res_str(mand, mbuf, sizeof(mbuf)),
+                          resmsg_res_str(opt , obuf, sizeof(obuf)));
+
+                memset(&msg, 0, sizeof(msg));
+                msg.record.type  = RESMSG_UPDATE;
+                msg.record.id    = id;
+                msg.record.reqno = ++reqno;
+                msg.record.rset.all = all;
+                msg.record.rset.opt = opt;
+                msg.record.klass = resset->klass;
+                msg.record.mode  = resset->mode;
+                
+                resproto_send_message(rs->resset, &msg, NULL);
+            }
+
+            rs->reqno = ++reqno;
 
             OHM_DEBUG(DBG_RESRC, "acquiring resource set%u (reqno %u)",
                       id, rs->reqno);
@@ -133,6 +170,9 @@ int resource_set_acquire(resource_set_id_t id,
             msg.possess.reqno = rs->reqno;
             
             success = resproto_send_message(rs->resset, &msg, NULL);
+
+            if (success)
+                update_event_list();
         }
     }
 
@@ -207,7 +247,7 @@ static void connect_to_manager(resconn_t *rc)
     rec = &msg.record;
 
     rec->type = RESMSG_REGISTER;
-    rec->mode = RESMSG_MODE_AUTO_RELEASE;
+    rec->mode = RESMSG_MODE_ALWAYS_REPLY | RESMSG_MODE_AUTO_RELEASE;
 
     for (i = 0, success = TRUE;   i < DIM(defs);   i++) {
         def = defs + i;
@@ -229,6 +269,7 @@ static void connect_to_manager(resconn_t *rc)
 
     if (success) {
         OHM_DEBUG(DBG_RESRC, "successfully registered all resource classes");
+        update_event_list();
     }
 
 #undef OPTIONAL
@@ -238,16 +279,32 @@ static void connect_to_manager(resconn_t *rc)
 static void conn_status(resset_t *resset, resmsg_t *msg)
 {
     resource_set_t *rs;
+    char           *kl;
+    char          **evs;
+    int             len;
+    char            buf[256];
 
     if (msg->type == RESMSG_STATUS) {
         if (msg->status.errcod == 0) {
-            OHM_DEBUG(DBG_RESRC, "'%s' resource set (id %u) successfully "
-                      "created", resset->klass, resset->id);
+            if (!ruleif_notification_events(resset->id, &kl, &evs, &len)) {
+                OHM_ERROR("notification: creation of '%s' resource set (id %u)"
+                          " failed: querying event list failed",
+                          resset->klass, resset->id);
+            }
+            else {
+                OHM_DEBUG(DBG_RESRC, "'%s' resource set (id %u) successfully "
+                          "created (event list = %d %s)", resset->klass,
+                          resset->id, len, strlist(evs, buf, sizeof(buf)));
 
-            rs = resource_set + resset->id;
-            memset(rs, 0, sizeof(resource_set_t));
-            rs->resset = resset;
-            resset->userdata = rs;
+                rs = resource_set + resset->id;
+
+                memset(rs, 0, sizeof(resource_set_t));
+                rs->resset = resset;
+                rs->event.count = len;
+                rs->event.list  = evs;
+
+                resset->userdata = rs;
+            }
         }
         else {
             OHM_ERROR("notification: creation of '%s' resource set (id %u) "
@@ -262,11 +319,13 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
 {
     resource_set_t *rs;
     callback_t      grant;
+    int             update;
     char            buf[256];
 
     (void)protodata;
 
     if ((rs = resset->userdata) != NULL) {
+        update = FALSE;
 
         OHM_DEBUG(DBG_RESRC, "granted resource set%u %s (reqno %u)",resset->id,
                   resmsg_res_str(msg->notify.resrc, buf, sizeof(buf)),
@@ -279,6 +338,9 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
             rs->flags = msg->notify.resrc;
             
             if (rs->flags == 0) {
+
+                update  = rs->acquire;
+
                 rs->acquire        = FALSE; /* auto released */
                 rs->grant.function = NULL;
                 rs->grant.data     = NULL;
@@ -287,7 +349,79 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
             if (grant.function != NULL)
                 grant.function(rs->flags, grant.data);
         }
+
+        OHM_DEBUG(DBG_RESRC, "resource set%u acquire=%s reqno=%u %s",
+                  resset->id, rs->acquire ? "True":"False", rs->reqno,
+                  rs->grant.function ? "grantcb present":"no grantcb");
+
+        if (update)
+            update_event_list();
     }
+}
+
+static void update_event_list(void)
+{
+    resource_set_t *rs;
+    char           *evls[256];
+    int             evcnt;
+    uint32_t        sign;
+    char           *ev;
+    int             i, k;
+    char            buf[256*10];
+
+    sign = 0;
+
+    for (i = evcnt = 0;   i < rset_max && evcnt < DIM(evls)-1;    i++) {
+        rs = resource_set + i;
+
+        if (!rs->acquire) {
+            sign |= (((uint32_t)1) << i);
+
+            for (k = 0;  k < rs->event.count;  k++)
+                evls[evcnt++] = rs->event.list[k];
+        }
+    }
+
+    evls[evcnt] = NULL;
+
+    OHM_DEBUG(DBG_RESRC, "signature %u event list %d '%s'",
+              sign, evcnt, strlist(evls, buf, sizeof(buf)));
+
+    subscription_update_event_list(sign, evls, evcnt);
+}
+
+
+static void free_event_list(char **list)
+{
+    int i;
+
+    if (list != NULL) {
+        for (i = 0;  list[i]; i++)
+            free(list[i]);
+
+        free(list);
+    }
+}
+
+static char *strlist(char **arr, char *buf, int len)
+{
+    int   i;
+    char *p;
+    char *sep;
+    int   l;
+
+    if (arr[0] == NULL)
+        snprintf(buf, len, "<empty-list>");
+    else {
+        for (i=0, sep="", p=buf;    arr[i] && len > 0;    i++, sep=",") {
+            l = snprintf(p, len, "%s%s", sep, arr[i]);
+
+            p   += l;
+            len -= l;
+        }
+    }
+
+    return buf;
 }
 
 /* 
