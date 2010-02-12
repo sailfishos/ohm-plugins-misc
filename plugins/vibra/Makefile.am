@@ -21,4 +21,11 @@ if HAVE_IMMTS
 libohm_vibra_la_SOURCES += vibra-driver-immts.c
 libohm_vibra_la_CFLAGS  += -DHAVE_IMMTS
 libohm_vibra_la_LDFLAGS += -limmvibe
+
+#noinst_PROGRAMS = imts-test
+#
+#imts_test_SOURCES = imts-test.c
+#imts_test_CFLAGS  = -DHAVE_IMMTS
+#imts_test_LDFLAGS = -limmvibe
 endif
+
