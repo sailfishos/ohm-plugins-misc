@@ -22,6 +22,16 @@
 
 #define BACKLIGHT_ACTIONS  "backlight_actions"
 
+#ifdef HAVE_MCE
+#  define MCE_DISPLAY_ON_REQ    "req_display_state_on"
+#  define MCE_DISPLAY_DIM_REQ   "req_display_state_dim"
+#  define MCE_DISPLAY_OFF_REQ   "req_display_state_off"
+#  define MCE_PREVENT_BLANK_REQ "req_display_blanking_pause"
+#endif
+
+#define POLICY_INTERFACE "com.nokia.policy"
+#define POLICY_PATH      "/com/nokia/policy"
+
 /*
  * debug flags
  */
@@ -60,12 +70,23 @@ struct backlight_context_s {
     gulong              sigkey;                /* policy keychange id */
     char               *action;                /* last actions */
     backlight_driver_t *driver;                /* active backlight driver */
+    OhmFact            *fact;                  /* backlight factstore entry */
+    char               *state;                 /* current backlight state */
+    int               (*resolve)(char *, char **);
 };
+
+
+#define BACKLIGHT_SAVE_STATE(ctx, _state) do {  \
+        FREE((ctx)->state);                     \
+        (ctx)->state = STRDUP(_state);          \
+    } while (0)
 
 
 /* backlight-ep.c */
 void ep_init(backlight_context_t *, GObject *(*)(gchar *, gchar **));
 void ep_exit(backlight_context_t *, gboolean (*)(GObject *));
+void ep_disable(void);
+void ep_enable(void);
 
 /* backlight-driver-null.c */
 void null_init(backlight_context_t *, OhmPlugin *);
@@ -77,6 +98,7 @@ int  null_enforce(backlight_context_t *);
 void mce_init(backlight_context_t *, OhmPlugin *);
 void mce_exit(backlight_context_t *);
 int  mce_enforce(backlight_context_t *);
+DBusHandlerResult mce_display_req(DBusConnection *, DBusMessage *, void *);
 #endif
 
 #endif /* __OHM_PLUGIN_BACKLIGHT_H__ */

@@ -15,6 +15,8 @@ static void     policy_decision (GObject *, GObject *, ep_cb_t, gpointer);
 static void     policy_keychange(GObject *, GObject *, gpointer);
 static gboolean txparser        (GObject *, GObject *, gpointer);
 
+static int disabled;
+
 
 /********************
  * ep_init
@@ -42,6 +44,8 @@ ep_init(backlight_context_t *ctx,
                                    G_CALLBACK(policy_decision),  (gpointer)ctx);
     ctx->sigkey = g_signal_connect(ctx->sigconn, "on-key-change",
                                    G_CALLBACK(policy_keychange), (gpointer)ctx);
+
+    disabled = FALSE;
 }
 
 
@@ -69,6 +73,26 @@ ep_exit(backlight_context_t *ctx,
 
 
 /********************
+ * ep_disable
+ ********************/
+void
+ep_disable(void)
+{
+    disabled = TRUE;
+}
+
+
+/********************
+ * ep_enable
+ ********************/
+void
+ep_enable(void)
+{
+    disabled = FALSE;
+}
+
+
+/********************
  * policy_decision
  ********************/
 static void
@@ -77,10 +101,14 @@ policy_decision(GObject *ep, GObject *tx, ep_cb_t callback, gpointer data)
     backlight_context_t *ctx = (backlight_context_t *)data;
     gboolean             success;
     
-    if (txparser(ep, tx, data))
-        success = ctx->driver->enforce(ctx);
+    if (!disabled) {
+        if (txparser(ep, tx, data))
+            success = ctx->driver->enforce(ctx);
+        else
+            success = FALSE;
+    }
     else
-        success = FALSE;
+        success = TRUE;
     
     callback(ep, tx, success);
 }
@@ -93,9 +121,11 @@ static void
 policy_keychange(GObject *ep, GObject *tx, gpointer data)
 {
     backlight_context_t *ctx = (backlight_context_t *)data;
-
-    if (txparser(ep, tx, data))
-        ctx->driver->enforce(ctx);
+    
+    if (!disabled) {
+        if (txparser(ep, tx, data))
+            ctx->driver->enforce(ctx);
+    }
 }
 
 

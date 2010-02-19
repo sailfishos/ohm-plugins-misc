@@ -16,7 +16,7 @@ OHM_DEBUG_PLUGIN(backlight,
 
 OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri, gchar **interested));
 OHM_IMPORTABLE(gboolean , signaling_unregister, (GObject *ep));
-
+OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 static void select_driver(backlight_context_t *, OhmPlugin *);
 
 
@@ -56,9 +56,12 @@ plugin_init(OhmPlugin *plugin)
         exit(1);
     }
 
-    select_driver(&context, plugin);
-    
+    context.resolve = resolve;
+    BACKLIGHT_SAVE_STATE(&context, "off");
+
     ep_init(&context, signaling_register);
+
+    select_driver(&context, plugin);
     context.driver->init(&context, plugin);
     
     OHM_INFO("backlight: plugin ready...");
@@ -78,6 +81,8 @@ plugin_exit(OhmPlugin *plugin)
 
     context.driver->exit(&context);
     ep_exit(&context, signaling_unregister);
+
+    FREE(context.state);
 }
 
 
@@ -125,10 +130,21 @@ EXPORT OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        plugin_init, plugin_exit, NULL);
 
 
-EXPORT OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 2, 
+EXPORT OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 3, 
     OHM_IMPORT("signaling.register_enforcement_point"  , signaling_register),
-    OHM_IMPORT("signaling.unregister_enforcement_point", signaling_unregister));
+    OHM_IMPORT("signaling.unregister_enforcement_point", signaling_unregister),
+    OHM_IMPORT("dres.resolve"                          , resolve)
+);
 
+EXPORT OHM_PLUGIN_DBUS_METHODS(
+    { POLICY_INTERFACE, POLICY_PATH, MCE_DISPLAY_ON_REQ,
+            mce_display_req, &context },
+    { POLICY_INTERFACE, POLICY_PATH, MCE_DISPLAY_OFF_REQ,
+            mce_display_req, &context },
+    { POLICY_INTERFACE, POLICY_PATH, MCE_DISPLAY_DIM_REQ,
+            mce_display_req, &context },
+    { POLICY_INTERFACE, POLICY_PATH, MCE_PREVENT_BLANK_REQ,
+            mce_display_req, &context });
 
 /* 
  * Local Variables:
