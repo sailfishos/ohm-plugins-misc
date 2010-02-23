@@ -126,6 +126,30 @@ plugin_exit(OhmPlugin *plugin)
  *                           *** public plugin API ***                       *
  *****************************************************************************/
 
+/********************
+ * cgrp_process_info
+ ********************/
+OHM_EXPORTABLE(int, cgrp_process_info, (pid_t pid, char **group, char **binary))
+{
+    cgrp_process_t *process;
+
+    if (ctx == NULL)
+        return FALSE;
+
+    process = proc_hash_lookup(ctx, pid);
+    
+    if (process != NULL) {
+        *group  = process->group ? process->group->name : "<unknown>";
+        *binary = process->binary;
+
+        return TRUE;
+    }
+    else
+        return FALSE;
+
+}
+
+
 
 /*****************************************************************************
  *                            *** OHM plugin glue ***                        *
@@ -142,6 +166,10 @@ OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 3,
    OHM_IMPORT("signaling.register_enforcement_point"  , signaling_register),
    OHM_IMPORT("signaling.unregister_enforcement_point", signaling_unregister),
    OHM_IMPORT("dres.resolve", resolve));
+
+OHM_PLUGIN_PROVIDES_METHODS(cgroups, 1,
+    OHM_EXPORT(cgrp_process_info, "process_info")
+);
 
 
 /* 
