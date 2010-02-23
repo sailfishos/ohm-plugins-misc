@@ -8,15 +8,18 @@
 
 
 /* debug flags */
-int DBG_ACTION;
+int DBG_ACTION, DBG_REQUEST;
 
 OHM_DEBUG_PLUGIN(backlight,
-    OHM_DEBUG_FLAG("action", "policy actions", &DBG_ACTION)
+    OHM_DEBUG_FLAG("action" , "policy actions", &DBG_ACTION),
+    OHM_DEBUG_FLAG("request", "request"       , &DBG_REQUEST)
 );
 
 OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri, gchar **interested));
 OHM_IMPORTABLE(gboolean , signaling_unregister, (GObject *ep));
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
+OHM_IMPORTABLE(int, process_info, (pid_t pid, char **group, char **binary));
+
 static void select_driver(backlight_context_t *, OhmPlugin *);
 
 
@@ -56,7 +59,9 @@ plugin_init(OhmPlugin *plugin)
         exit(1);
     }
 
-    context.resolve = resolve;
+    context.resolve      = resolve;
+    context.process_info = process_info;
+    
     BACKLIGHT_SAVE_STATE(&context, "off");
 
     ep_init(&context, signaling_register);
@@ -130,10 +135,11 @@ EXPORT OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        plugin_init, plugin_exit, NULL);
 
 
-EXPORT OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 3, 
+EXPORT OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 4, 
     OHM_IMPORT("signaling.register_enforcement_point"  , signaling_register),
     OHM_IMPORT("signaling.unregister_enforcement_point", signaling_unregister),
-    OHM_IMPORT("dres.resolve"                          , resolve)
+    OHM_IMPORT("dres.resolve"                          , resolve),
+    OHM_IMPORT("cgroups.process_info"                  , process_info)
 );
 
 EXPORT OHM_PLUGIN_DBUS_METHODS(

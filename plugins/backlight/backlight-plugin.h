@@ -30,13 +30,13 @@
 #endif
 
 #define POLICY_INTERFACE "com.nokia.policy"
-#define POLICY_PATH      "/com/nokia/policy"
+#define POLICY_PATH      "/com/nokia/policy/display"
 
 /*
  * debug flags
  */
 
-extern int DBG_ACTION;
+extern int DBG_ACTION, DBG_REQUEST;
 
 
 /*
@@ -73,6 +73,7 @@ struct backlight_context_s {
     OhmFact            *fact;                  /* backlight factstore entry */
     char               *state;                 /* current backlight state */
     int               (*resolve)(char *, char **);
+    int               (*process_info)(pid_t, char **, char **);
 };
 
 
