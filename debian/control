@@ -57,27 +57,3 @@ Depends: ohm-plugin-timestamp (= ${binary:Version})
 XB-GIT-ID: ${Git-Id}
 Description: Debug symbols for OHM timestamping plugin.
  Debug symbols for OHM timestamping plugin.
-
-Package: libep
-Architecture: any
-Depends: ${shlibs:Depends}
-XB-GIT-ID: ${Git-Id}
-Description: Policy signaling helper library.
- A helper library for parsing D-Bus signals sent by OHM signaling plugin.
-
-Package: libep-dbg
-Priority: extra
-Section: utils
-Architecture: any
-Depends: libep (= ${binary:Version})
-XB-GIT-ID: ${Git-Id}
-Description: Debug symbols for policy signaling helper library.
- Debug symbols for policy signaling helper library.
-
-Package: libep-dev
-Architecture: any
-Section: libdevel
-Depends: ${shlibs:Depends} libep (= ${binary:Version})
-XB-GIT-ID: ${Git-Id}
-Description: Policy signaling helper library header files.
- Header files for libep.
