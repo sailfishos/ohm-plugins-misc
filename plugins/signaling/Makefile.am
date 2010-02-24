@@ -19,4 +19,4 @@ signaling_marshal.h: signaling-marshal.list
 
 CLEANFILES = $(BUILT_SOURCES)
 
-SUBDIRS = . tests libep
+SUBDIRS = . tests
