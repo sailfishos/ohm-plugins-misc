@@ -21,8 +21,9 @@
 #define DEFAULT_CONFIG "/etc/ohm/plugins.d/syspart.conf"
 #define DEFAULT_NOTIFY 3001
 
-#define CGRP_FACT_GROUP "com.nokia.cgroups.group"
-#define CGRP_FACT_PART  "com.nokia.cgroups.partition"
+#define CGRP_FACT_GROUP      "com.nokia.cgroups.group"
+#define CGRP_FACT_PART       "com.nokia.cgroups.partition"
+#define CGRP_FACT_APPCHANGES "com.nokia.cgroups.application_changes"
 
 #define APP_ACTIVE   "active"
 #define APP_INACTIVE "standby"
@@ -470,6 +471,8 @@ typedef struct {
     GIOChannel       *notifchnl;            /* g I/O channel and */
     guint             notifsrc;             /*   event source */
     list_hook_t       notifsubscr;          /* event subscribers */
+    OhmFact          *app_changes;          /* $application_changes */
+    guint             app_update;           /* scheduled change update */
 
     int             (*resolve)(char *, char **);
 

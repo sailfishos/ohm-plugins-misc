@@ -10,6 +10,8 @@ static gboolean notify_cb  (GIOChannel *, GIOCondition, gpointer);
 static void     subscr_init(cgrp_context_t *);
 static void     subscr_exit(cgrp_context_t *);
 
+static void schedule_app_change(gpointer, gpointer, gpointer, gpointer);
+
 
 typedef struct {
     list_hook_t   hook;
@@ -25,25 +27,43 @@ typedef struct {
 int
 notify_init(cgrp_context_t *ctx, int port)
 {
-    struct sockaddr_in addr;
+    struct sockaddr_in  addr;
+    GSList             *facts;
 
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    facts = ohm_fact_store_get_facts_by_name(ctx->store, CGRP_FACT_APPCHANGES);
     
-    if ((ctx->notifsock = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ||
-        bind(ctx->notifsock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        OHM_ERROR("cgrp: failed to initialize notification socket");
-        goto fail;
+    if (facts != NULL) {
+        if (g_slist_length(facts) >= 1)
+            OHM_WARNING("cgrp: too many %s facts", CGRP_FACT_APPCHANGES);
+
+        ctx->app_changes = (OhmFact *)facts->data;
+        
+        g_signal_connect(G_OBJECT(ctx->store),
+                         "updated", G_CALLBACK(schedule_app_change), ctx);
+        
+        OHM_INFO("cgrp: using factstore-based application notifications");
+    }
+    else {
+        addr.sin_family = AF_INET;
+        addr.sin_port   = htons(port);
+        inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    
+        if ((ctx->notifsock = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ||
+            bind(ctx->notifsock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+            OHM_ERROR("cgrp: failed to initialize notification socket");
+            goto fail;
+        }
+    
+        if ((ctx->notifchnl = g_io_channel_unix_new(ctx->notifsock)) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate watch for notification socket");
+            goto fail;
+        }
+    
+        ctx->notifsrc = g_io_add_watch(ctx->notifchnl, G_IO_IN, notify_cb, ctx);
+
+        OHM_INFO("cgrp: using socket-based application notifications");
     }
     
-    if ((ctx->notifchnl = g_io_channel_unix_new(ctx->notifsock)) == NULL) {
-        OHM_ERROR("cgrp: failed to allocate watch for notification socket");
-        goto fail;
-    }
-    
-    ctx->notifsrc = g_io_add_watch(ctx->notifchnl, G_IO_IN, notify_cb, ctx);
-
     subscr_init(ctx);
     
     return TRUE;
@@ -64,17 +84,28 @@ notify_init(cgrp_context_t *ctx, int port)
 void
 notify_exit(cgrp_context_t *ctx)
 {
-    
-    if (ctx->notifsrc) {
-        g_source_remove(ctx->notifsrc);
-        g_io_channel_unref(ctx->notifchnl);
-        close(ctx->notifsock);
+    if (ctx->app_changes) {
+        g_signal_handlers_disconnect_by_func(G_OBJECT(ctx->store),
+                                             schedule_app_change, ctx);
+        if (ctx->app_update != 0) {
+            g_source_remove(ctx->app_update);
+            ctx->app_update = 0;
+        }
+
+        ctx->app_changes = NULL;
     }
-
-    ctx->notifsrc  = 0;
-    ctx->notifchnl = NULL;
-    ctx->notifsock = -1;
-
+    else {
+        if (ctx->notifsrc) {
+            g_source_remove(ctx->notifsrc);
+            g_io_channel_unref(ctx->notifchnl);
+            close(ctx->notifsock);
+        }
+    
+        ctx->notifsrc  = 0;
+        ctx->notifchnl = NULL;
+        ctx->notifsock = -1;
+    }
+    
     subscr_exit(ctx);
 }
 
@@ -141,6 +172,79 @@ notify_subscribers(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
         handler = list_entry(p, notif_handler_t, hook);
         handler->cb(ctx, process, state, handler->data);
     }
+}
+
+
+/********************
+ * app_change_cb
+ ********************/
+static gboolean
+app_change_cb(gpointer data)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)data;
+    cgrp_group_t   *prev_active, *curr_active;
+    cgrp_process_t *process;
+    pid_t           active, standby;
+    GValue         *gactive, *gstandby;
+    char           *state;
+
+    prev_active = ctx->active_group;
+    
+    active   = 0;
+    gactive  = ohm_fact_get(ctx->app_changes, APP_ACTIVE);
+    standby  = 0;
+    gstandby = ohm_fact_get(ctx->app_changes, APP_INACTIVE);
+    
+    if (gactive != NULL && G_VALUE_TYPE(gactive) == G_TYPE_INT)
+        active = g_value_get_int(gactive);
+
+    if (gstandby != NULL && G_VALUE_TYPE(gstandby) == G_TYPE_INT)
+        standby = g_value_get_int(gstandby);
+
+    if (standby != 0 && (process = proc_hash_lookup(ctx, standby)) != NULL) {
+        state = APP_INACTIVE;
+        
+        OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
+                  standby, process ? process->binary : "unknown", state);
+        
+        process_update_state(ctx, process, state);
+    }
+    
+    if (active != 0 && (process = proc_hash_lookup(ctx, active)) != NULL) {
+        state = APP_ACTIVE;
+        
+        OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
+                  active, process ? process->binary : "unknown", state);
+        
+        process_update_state(ctx, process, state);
+    }
+
+    curr_active = ctx->active_group;
+    notify_group_change(ctx, prev_active, curr_active);
+    
+    notify_subscribers(ctx, process, state);
+    
+    return FALSE;
+}
+
+
+/********************
+ * schedule_app_change
+ ********************/
+static void
+schedule_app_change(gpointer fact, gpointer name, gpointer value,
+                    gpointer user_data)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)user_data;
+
+    (void)name;
+    (void)value;
+
+    if (fact != ctx->app_changes)
+        return;
+    
+    if (ctx->app_update == 0)
+        ctx->app_update = g_idle_add(app_change_cb, ctx);
 }
 
 
