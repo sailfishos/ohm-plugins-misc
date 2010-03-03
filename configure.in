@@ -167,10 +167,46 @@ else
   AC_MSG_NOTICE([Telephony plugins WILL NOT be built.])
 fi
 
+# Check if libresource support is enabled, disabled, or autoselected
+AC_ARG_ENABLE(libresource,
+              [  --enable-libresource     enable libresource support],
+              enable_libresource=$enableval,enable_libresource=auto)
+
+if test x$enable_libresource = xyes;
+then
+  AC_MSG_NOTICE([libresource support required])
+else
+  AC_MSG_NOTICE([libresource support not required])
+fi
+
 # Check for libresource0 (for resource plugin)
-PKG_CHECK_MODULES(LIBRESOURCE, libresource0)
+PKG_CHECK_MODULES(LIBRESOURCE, libresource0,
+			       [has_libresource=yes],
+			       [has_libresource=no])
+
+if test x$enable_libresource = xyes -a \
+        x$has_libresource = xno;
+then
+  AC_MSG_ERROR([libresource required but not available])
+fi
+
 AC_SUBST(LIBRESOURCE_CFLAGS)
 AC_SUBST(LIBRESOURCE_LIBS)
+
+AM_CONDITIONAL(HAVE_LIBRESOURCE, test x$has_libresource = xyes -a \
+                                      x$enable_libresource != xno)
+if test x$has_libresource = xyes -a \
+        x$enable_libresource != xno;
+then
+  AC_DEFINE([HAVE_LIBRESOURCE], 1, [Have libresource support ?])
+  AC_MSG_NOTICE([libresource support WILL BE built])
+else
+  AC_MSG_NOTICE([libresource support WILL NOT be built])
+fi
+
+AC_SUBST(HAVE_LIBRESOURCE)
+
+
 
 # Check for sp-timestamps.
 PKG_CHECK_MODULES(SP_TIMESTAMP, sp_timestamp,

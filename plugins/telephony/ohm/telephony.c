@@ -13,6 +13,7 @@
 
 #include <res-conn.h>
 
+#include "config.h"
 #include "telephony.h"
 #include "list.h"
 
@@ -178,6 +179,7 @@ static GHashTable *deferred;                     /* deferred events */
 #define FACT_FIELD_HOLD      "holdable"
 
 #define FACT_ACTIONS     "com.nokia.policy.call_action"
+#define FACT_PLAYBACK    "com.nokia.policy.playback"
 
 int set_string_field(OhmFact *fact, const char *field, const char *value);
 
@@ -233,6 +235,27 @@ static void run_hook(hook_type_t);
 static void resctl_realloc(void);
 static void resctl_update (int video);
 
+static int resctl_disabled;
+
+#define RESCTL_INIT() do {                      \
+        if (!resctl_disabled)                   \
+            resctl_init();                      \
+    } while (0)
+
+#define RESCTL_EXIT() do {                      \
+        if (!resctl_disabled)                   \
+            resctl_exit();                      \
+    } while (0)
+
+#define RESCTL_REALLOC() do {                   \
+        if (!resctl_disabled)                   \
+            resctl_realloc();                   \
+    } while (0)
+
+#define RESCTL_UPDATE(video) do {               \
+        if (!resctl_disabled)                   \
+            resctl_update(video);               \
+    } while (0)
 
 
 /********************
@@ -1178,7 +1201,7 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
 
                 nvideo++;
                 if (nvideo >= 1)
-                    resctl_update(TRUE);
+                    RESCTL_UPDATE(TRUE);
             }
             else
                 call->audio = (char *)id;
@@ -1312,7 +1335,7 @@ content_removed(DBusConnection *c, DBusMessage *msg, void *data)
 
                 nvideo--;
                 if (nvideo <= 0)
-                    resctl_update(FALSE);
+                    RESCTL_UPDATE(FALSE);
             }
             else OHM_INFO("Unknown content %s removed from Call.DRAFT %s",
                           content, short_path(path));
@@ -3634,10 +3657,10 @@ run_hook(hook_type_t which)
     switch (which) {
     case HOOK_FIRST_CALL:                     break;
     case HOOK_LAST_CALL:                      break;
-    case HOOK_CALL_START:   resctl_realloc(); break;
-    case HOOK_CALL_END:     resctl_realloc(); break;
-    case HOOK_CALL_CONNECT: resctl_realloc(); break;
-    case HOOK_CALL_ACTIVE:  resctl_realloc(); break;
+    case HOOK_CALL_START:   RESCTL_REALLOC(); break;
+    case HOOK_CALL_END:     RESCTL_REALLOC(); break;
+    case HOOK_CALL_CONNECT: RESCTL_REALLOC(); break;
+    case HOOK_CALL_ACTIVE:  RESCTL_REALLOC(); break;
     case HOOK_CALL_ONHOLD:                    break;
     case HOOK_CALL_OFFHOLD:                   break;
     default:                                  break;
@@ -3827,6 +3850,8 @@ policy_call_delete(call_t *call)
 /*****************************************************************************
  *                           *** resource control ***                        *
  *****************************************************************************/
+
+#ifdef HAVE_LIBRESOURCE
 
 #define RSET_ID 1
 
@@ -4129,6 +4154,47 @@ resctl_status(resset_t *rset, resmsg_t *msg)
 }
 
 
+#else /* !defined(HAVE_LIBRESOURCE) */
+
+
+static void
+resctl_init(void)
+{
+    OHM_ERROR("telephony: compiled without resource control support");
+    exit(1);
+}
+
+
+static void
+resctl_exit(void)
+{
+    OHM_ERROR("telephony: compiled without resource control support");
+    exit(1);
+}
+
+
+static void
+resctl_realloc(void)
+{
+    OHM_ERROR("telephony: compiled without resource control support");
+    exit(1);
+}
+
+
+static void
+resctl_update(int video)
+{
+    (void)video;
+    
+    OHM_ERROR("telephony: compiled without resource control support");
+    exit(1);
+}
+
+
+#endif /* !defined(HAVE_LIBRESOURCE) */
+
+
+
 /*****************************************************************************
  *                            *** OHM plugin glue ***                        *
  *****************************************************************************/
@@ -4165,9 +4231,14 @@ plugin_init(OhmPlugin *plugin)
     call_init();
     policy_init();
     timestamp_init();
-    resctl_init();
 
-
+    if (ohm_fact_store_get_facts_by_name(store, FACT_PLAYBACK) != NULL)
+        resctl_disabled = TRUE;
+    else
+        resctl_disabled = FALSE;
+    
+    RESCTL_INIT();
+    
     return;
 }
 
@@ -4180,7 +4251,7 @@ plugin_exit(OhmPlugin *plugin)
 {
     (void)plugin;
  
-    resctl_exit();
+    RESCTL_EXIT();
     bus_exit();
     call_exit();
     policy_exit();
