@@ -1,0 +1,92 @@
+Source: ohm-plugins-misc
+Section: utils
+Priority: optional
+Maintainer: Krisztian Litkey <krisztian.litkey@nokia.com>
+Standards-Version: 3.7.2
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 0.1.2-0maemo22), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 0.0.7), libtrace-dev, libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libsp-timestamp-dev, flex, libosso-dev
+
+Package: ohm-plugins-misc
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0, osso-mission-control, libdres0 (>= 0.0.7), libprofile0 (>= 0.0.10), policy-settings
+Conflicts: policy-settings-rx51 (<< 0.4.6), policy-settings-rx51-text (<< 0.4.6)
+XB-GIT-ID: ${Git-Id}
+Description: Nokia policy OHM plugins.
+ Nokia policy plugins for OHM.
+ .
+ Nokia policy plugins for OHM.
+
+Package: ohm-plugins-misc-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: ohm-plugins-misc (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for OHM miscallaneous plugins.
+ Debug symbols for OHM miscallaneous plugins.
+
+Package: ohm-plugin-console
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0
+XB-GIT-ID: ${Git-Id}
+Description: OHM debug console plugin.
+ This package contains a very simple interactive debug console for OHM.
+ .
+ This package contains a very simple interactive debug console for OHM.
+
+Package: ohm-plugin-console-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: ohm-plugin-console (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for OHM console plugin.
+ Debug symbols for OHM console plugin.
+
+Package: ohm-plugin-timestamp
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0, libsp-timestamp1
+XB-GIT-ID: ${Git-Id}
+Description: OHM plugin for sp-timestamp.
+ This package contains a trivial plugin that simply wraps sp-timestamp.
+
+Package: ohm-plugin-timestamp-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: ohm-plugin-timestamp (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for OHM timestamping plugin.
+ Debug symbols for OHM timestamping plugin.
+
+Package: libep
+Architecture: any
+Depends: ${shlibs:Depends}
+XB-GIT-ID: ${Git-Id}
+Description: Policy signaling helper library.
+ A helper library for parsing D-Bus signals sent by OHM signaling plugin.
+
+Package: libep-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: libep (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for policy signaling helper library.
+ Debug symbols for policy signaling helper library.
+
+Package: libep-dev
+Architecture: any
+Section: libdevel
+Depends: ${shlibs:Depends}
+XB-GIT-ID: ${Git-Id}
+Description: Policy signaling helper library header files.
+ Header files for libep.
+
+Package: ohm-plugin-call-test
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0, ohm-plugin-console
+XB-GIT-ID: ${Git-Id}
+Description: OHM plugin for testing the internal call interface
+ This package contains a trivial plaugin that implements an internal resource
+ client for 'call' class. The resource acquiring, release etc can be controlled
+ via console commands.

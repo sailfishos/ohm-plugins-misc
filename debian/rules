@@ -1,0 +1,66 @@
+#!/usr/bin/make -f
+SHELL+= -e
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+GIT_VERSION := $(strip $(shell [ -x ./git-version.sh ] && \
+                                   ./git-version.sh || echo "unknown"))
+
+DEB_DH_GENCONTROL_ARGS += -u-VGit-Id=$(GIT_VERSION)
+
+# for dbg package
+CFLAGS += -g -O2
+DEB_DH_STRIP_ARGS += --dbg-package=ohm-plugins-misc \
+                     --dbg-package=ohm-plugin-console \
+                     --dbg-package=ohm-plugin-timestamp \
+                     --dbg-package=libep
+
+DEB_TAR_SRCDIR = ${DEB_SOURCE_PACKAGE}-${DEB_UPSTREAM_VERSION}
+DEB_DH_INSTALL_SOURCEDIR = debian/tmp
+
+DEB_CONFIGURE_USER_FLAGS = --disable-static
+
+
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+
+# Omit *.la files but warn about other missing things.
+binary-post-install/%::
+	rm -f debian/*/usr/lib/*/*.la
+
+common-binary-post-install-arch:: list-missing
+
+post-patches:: debian/stamp-autogen
+
+debian/stamp-autogen:
+	cd $(DEB_BUILDDIR) && ./autogen.sh
+	touch $@
+
+clean::
+	-rm -rf debian/stamp-autogen
+
+# do not include docs and changelogs in these packages
+DEB_INSTALL_DOCS_ohm-plugins-misc := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugins-misc := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-console := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-console := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-timestamp := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-timestamp := --no-act
+DEB_INSTALL_DOCS_libep := --no-act
+DEB_INSTALL_CHANGELOGS_libep := --no-act
+DEB_INSTALL_DOCS_ohm-plugins-misc-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugins-misc-dbg := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-console-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-console-dbg := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-timestamp-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-timestamp-dbg := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-timestamp-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-timestamp-dbg := --no-act
+DEB_INSTALL_DOCS_libep-dbg := --no-act
+DEB_INSTALL_CHANGELOGS_libep-dbg := --no-act
+DEB_INSTALL_DOCS_ohm-plugin-call-test := --no-act
+DEB_INSTALL_CHANGELOGS_ohm-plugin-call-test := --no-act
+
