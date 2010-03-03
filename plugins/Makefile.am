@@ -1,8 +1,6 @@
 SUBDIRS = 	     \
 	signaling    \
 	hal          \
-	resource     \
-	media        \
 	notification \
 	accessories  \
 	videoep      \
@@ -11,11 +9,22 @@ SUBDIRS = 	     \
 	dvfs         \
 	cgroups      \
 	delay        \
-	buttons      \
-        vibra        \
-        backlight
+	buttons
+
+#       vibra        
+#       backlight
 #	sensor
 #	dbus
+
+if HAVE_LIBPLAYBACK
+SUBDIRS += playback
+endif
+
+if HAVE_LIBRESOURCE
+SUBDIRS +=           \
+	resource     \
+	media
+endif
 
 if HAVE_LIBPROFILE
 SUBDIRS += profile

@@ -167,6 +167,22 @@ else
   AC_MSG_NOTICE([Telephony plugins WILL NOT be built.])
 fi
 
+# Check if libplayback support is enabled, or disabled
+AC_ARG_ENABLE(libplayback,
+              [  --enable-libplayback     enable libplayback support],
+              enable_libplayback=$enableval,enable_libplayback=no)
+
+AM_CONDITIONAL(HAVE_LIBPLAYBACK, test x$enable_libplayback = xyes)
+
+if test x$enable_libplayback = xyes;
+then
+  AC_DEFINE([HAVE_LIBPLAYBACK], 1, [Have playback plugin built ?])
+  AC_MSG_NOTICE([playback plugin WILL BE built])
+else
+  AC_MSG_NOTICE([playback plugin WILL NOT be built])
+fi
+
+
 # Check if libresource support is enabled, disabled, or autoselected
 AC_ARG_ENABLE(libresource,
               [  --enable-libresource     enable libresource support],
@@ -264,6 +280,11 @@ AM_CONDITIONAL([HAVE_OSSO_SWAP_PRESSURE], [test "x$swappressure" = xyes])
 PKG_CHECK_MODULES(MCE, mce, [has_mce=yes], [mas_mce=no])
 AC_SUBST(MCE_CFLAGS)
 AC_SUBST(MCE_LIBS)
+
+if test x$has_mce = xyes;
+then
+  AC_DEFINE([HAVE_MCE], 1, [Have MCE support ?])
+fi
 
 AM_CONDITIONAL(HAVE_MCE, test "x$has_mce" = "xyes")
 AC_SUBST(HAVE_MCE)
