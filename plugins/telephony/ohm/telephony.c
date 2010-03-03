@@ -3851,7 +3851,7 @@ policy_call_delete(call_t *call)
  *                           *** resource control ***                        *
  *****************************************************************************/
 
-#ifdef HAVE_LIBRESOURCE
+#ifdef BUILD_RESOURCE
 
 #define RSET_ID 1
 
@@ -4154,7 +4154,7 @@ resctl_status(resset_t *rset, resmsg_t *msg)
 }
 
 
-#else /* !defined(HAVE_LIBRESOURCE) */
+#else /* !defined(BUILD_RESOURCE) */
 
 
 static void
@@ -4191,7 +4191,7 @@ resctl_update(int video)
 }
 
 
-#endif /* !defined(HAVE_LIBRESOURCE) */
+#endif /* !defined(BUILD_RESOURCE) */
 
 
 
