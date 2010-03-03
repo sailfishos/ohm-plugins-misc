@@ -8,6 +8,7 @@ SUBDIRS = plugins ohm-session-agent $(DOCSUBDIR)
 
 MAINTAINTERCLEANFILES = Makefile.in
 
+SUBDIRS += debian
 
 clean-local:
 	find . -name \*~ -exec rm -f {} \;

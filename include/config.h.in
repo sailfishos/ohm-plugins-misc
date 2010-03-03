@@ -1,5 +1,14 @@
 /* include/config.h.in.  Generated from configure.in by autoheader.  */
 
+/* Build notification plugin ? */
+#undef BUILD_NOTIFICATION
+
+/* Build playback plugin ? */
+#undef BUILD_PLAYBACK
+
+/* Build resource plugin ? */
+#undef BUILD_RESOURCE
+
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H
 
@@ -11,12 +20,6 @@
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
-
-/* Have playback plugin built ? */
-#undef HAVE_LIBPLAYBACK
-
-/* Have libresource support ? */
-#undef HAVE_LIBRESOURCE
 
 /* Define to 1 if you have the `localtime_r' function. */
 #undef HAVE_LOCALTIME_R
