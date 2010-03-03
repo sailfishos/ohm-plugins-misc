@@ -1,7 +1,6 @@
 SUBDIRS = 	     \
 	signaling    \
 	hal          \
-	notification \
 	accessories  \
 	videoep      \
 	console      \
@@ -11,19 +10,25 @@ SUBDIRS = 	     \
 	delay        \
 	buttons
 
+#	notification
 #       vibra        
 #       backlight
 #	sensor
 #	dbus
 
-if HAVE_LIBPLAYBACK
+if BUILD_PLAYBACK
 SUBDIRS += playback
 endif
 
-if HAVE_LIBRESOURCE
+if BUILD_RESOURCE
 SUBDIRS +=           \
 	resource     \
 	media
+endif
+
+if BUILD_NOTIFICATION
+SUBDIRS +=           \
+        notification
 endif
 
 if HAVE_LIBPROFILE
