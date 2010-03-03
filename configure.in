@@ -319,7 +319,8 @@ AC_MSG_RESULT($has_immts)
 AM_CONDITIONAL(HAVE_IMMTS, test "x$has_immts" = "xyes")
 AC_SUBST(HAVE_IMMTS)
 
-AC_CONFIG_FILES([Makefile
+AC_CONFIG_FILES([debian/Makefile
+                 Makefile
                  plugins/Makefile
                  plugins/accessories/Makefile
                  plugins/console/Makefile
