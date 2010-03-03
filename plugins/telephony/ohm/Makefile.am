@@ -6,7 +6,7 @@ libohm_telephony_la_LIBADD = @OHM_PLUGIN_LIBS@ @LIBRESOURCE_LIBS@
 libohm_telephony_la_LDFLAGS = -module -avoid-version
 libohm_telephony_la_CFLAGS = @OHM_PLUGIN_CFLAGS@ @LIBRESOURCE_CFLAGS@
 
-if HAVE_LIBRESOURCE
+if BUILD_RESOURCE
 libohm_telephony_la_LIBADD += @LIBRESOURCE_LIBS@
 libohm_telephony_la_CFLAGS += @LIBRESOURCE_CFLAGS@
 endif
