@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.7) unstable; urgency=low
+
+  * Bumped version.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 09 Mar 2010 16:42:04 +0200
+
 ohm-plugins-misc (1:1.6) unstable; urgency=low
 
   * Bumped version.
