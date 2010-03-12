@@ -43,5 +43,9 @@ if HAVE_SP_TIMESTAMP
 SUBDIRS += timestamp
 endif
 
+if HAVE_CONTEXTPROVIDER
+SUBDIRS += context
+endif
+
 clean-local:
 	rm -f *~
