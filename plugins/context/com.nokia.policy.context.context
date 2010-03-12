@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<provider bus="session"
+          service="com.nokia.policy.context">
+  <key name="com.nokia.policy.audio_route">
+    <type>string</type>
+    <doc>
+      A simple string which indicates where audio is routed. Possibilites
+      are: ihf, headset, earpiece, bthsp, bta2dp
+    </doc>
+  </key>
+  <key name="com.nokia.policy.audio_source">
+    <type>string</type>
+    <doc>
+      A simple string which indicates how the audio source (mic) is routed.
+      Possibilites are: microphone, headset
+    </doc>
+  </key>
+  <key name="com.nokia.policy.mode">
+    <type>string</type>
+    <doc>
+      com.nokia.policy.context{variable:'mode' value}
+    </doc>
+  </key>
+  <key name="com.nokia.policy.call">
+    <type>string</type>
+    <doc>
+      com.nokia.policy.context{variable:'call' value}
+    </doc>
+  </key>
+  <key name="com.nokia.policy.call_audio_type">
+    <type>string</type>
+    <doc>
+      com.nokia.policy.context{variable:'call_audio_type' value}
+    </doc>
+  </key>
+</provider>
