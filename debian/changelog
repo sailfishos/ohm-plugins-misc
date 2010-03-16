@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.8) unstable; urgency=low
+
+  * Implemented: SWP#Plicy-136
+
+ -- Wolf Bergenheim <ext-wolf.2.bergenheim@nokia.com>  Tue, 16 Mar 2010 13:16:09 +0200
+
 ohm-plugins-misc (1:1.7) unstable; urgency=low
 
   * Bumped version.

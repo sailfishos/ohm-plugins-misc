@@ -12,5 +12,11 @@ endif
 if BUILD_NOTIFICATION
 	echo "${libdir}/ohm/libohm_notification.so" >> $@
 endif
+if BUILD_NOTIFICATION
+	echo "${libdir}/ohm/libohm_notification.so" >> $@
+endif
+if HAVE_CONTEXTPROVIDER
+	echo "${libdir}/ohm/libohm_context.so" >> $@
+endif
 
 .PHONY: ohm-plugins-misc.install
