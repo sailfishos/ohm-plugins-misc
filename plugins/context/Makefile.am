@@ -1,6 +1,8 @@
 plugindir = @OHM_PLUGIN_DIR@
 plugin_LTLIBRARIES = libohm_context.la
 EXTRA_DIST         = $(config_DATA)
+dbusdir            = $(sysconfdir)/ohm/plugins.d
+dbus_DATA          = context.dbus
 cfdir              = /usr/share/contextkit/providers
 cf_DATA            = com.nokia.policy.context.context
 
