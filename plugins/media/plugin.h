@@ -20,12 +20,13 @@
 #define FACTSTORE_PREFIX                "com.nokia.policy"
 #define FACTSTORE_PRIVACY               FACTSTORE_PREFIX ".privacy_override"
 #define FACTSTORE_BLUETOOTH             FACTSTORE_PREFIX ".bluetooth_override"
+#define FACTSTORE_AUDIO_STREAM          FACTSTORE_PREFIX ".audio_stream"
 #define FACTSTORE_MUTE                  FACTSTORE_PREFIX ".mute"
 #define FACTSTORE_ACTIVE_POLICY_GROUP   FACTSTORE_PREFIX ".active_policy_group"
 #define FACTSTORE_ENFORCEMENT_POINT     FACTSTORE_PREFIX ".enforcement_point"
 
 
-extern int DBG_PRIVACY, DBG_MUTE, DBG_BT, DBG_DBUS, DBG_FS, DBG_DRES;
+extern int DBG_PRIVACY, DBG_MUTE, DBG_BT, DBG_AUDIO, DBG_DBUS, DBG_FS,DBG_DRES;
 
 
 /*

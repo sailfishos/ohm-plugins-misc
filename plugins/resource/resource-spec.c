@@ -9,6 +9,12 @@
 
 #include "plugin.h"
 #include "resource-spec.h"
+#include "fsif.h"
+
+
+#define INTEGER_FIELD(n,v) { fldtype_integer, n, .value.integer = v }
+#define STRING_FIELD(n,v)  { fldtype_string , n, .value.string  = v ? v : "" }
+#define INVALID_FIELD      { fldtype_invalid, NULL, .value.string = NULL }
 
 
 static int  create_audio_stream_spec(resource_audio_stream_t *,
@@ -107,11 +113,19 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
     resource_spec_match_t    *match    = &property->match;
     int                       success  = FALSE;
 
+    fsif_field_t fldlist[] = {
+        INTEGER_FIELD ("pid"     , pid                             ),
+        STRING_FIELD  ("group"   , group                           ),
+        STRING_FIELD  ("property", propnam                         ),
+        STRING_FIELD  ("method"  , resmsg_match_method_str(method) ),
+        STRING_FIELD  ("pattern" , pattern                         ),
+        INVALID_FIELD
+    };
+
     if (rs->resset && (group == NULL || group[0] == '\0'))
         group = resset->klass;
 
     if (group) {
-
         audio->type    = resource_audio;
         audio->group   = strdup(group);
         audio->pid     = pid;
@@ -119,7 +133,7 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
         match->method  = method;
         match->pattern = strdup(pattern ? pattern : "");
 
-        success = TRUE;
+        success = fsif_add_factstore_entry(FACTSTORE_AUDIO_STREAM, fldlist);
     }
 
     return success;
@@ -127,6 +141,21 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
 
 static void destroy_audio_stream_spec(resource_audio_stream_t *audio)
 {
+    uint32_t  pid      = audio->pid;
+    char     *property = audio->property.name;
+    char     *method   = resmsg_match_method_str(audio->property.match.method);
+    char     *pattern  = audio->property.match.pattern;
+
+    fsif_field_t selist[] = {
+        INTEGER_FIELD ("pid"     , pid     ),
+        STRING_FIELD  ("property", property),
+        STRING_FIELD  ("method"  , method  ),
+        STRING_FIELD  ("pattern" , pattern ),
+        INVALID_FIELD
+    };
+
+    fsif_delete_factstore_entry(FACTSTORE_AUDIO_STREAM, selist);
+
     free(audio->group);
     free(audio->property.name);
     free(audio->property.match.pattern);
@@ -135,6 +164,7 @@ static void destroy_audio_stream_spec(resource_audio_stream_t *audio)
     audio->property.name = NULL;
     audio->property.match.pattern = NULL;
 }
+
 
 
 /* 
