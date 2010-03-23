@@ -32,6 +32,7 @@
 #define DBUS_PRIVACY_SIGNAL                "PrivacyOverride"
 #define DBUS_BLUETOOTH_SIGNAL              "BluetoothOverride"
 #define DBUS_MUTE_SIGNAL                   "Mute"
+#define DBUS_STREAM_INFO_SIGNAL            "stream_info"
 
 #define DBUS_MEDIA_REQ_PRIVACY_METHOD      "RequestPrivacyOverride"
 #define DBUS_MEDIA_REQ_BLUETOOTH_METHOD    "RequestBluetoothOverride"
@@ -54,6 +55,8 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *, DBusMessage *,
 void dbusif_signal_privacy_override(int, int);
 void dbusif_signal_bluetooth_override(int, int);
 void dbusif_signal_mute(int, int);
+
+void dbusif_send_audio_stream_info(char *,  char *, dbus_uint32_t, char *);
 
 #endif /*  __OHM_MEDIA_DBUSIF_H__ */
 

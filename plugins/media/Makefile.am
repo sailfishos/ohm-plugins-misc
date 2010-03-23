@@ -5,7 +5,7 @@ configdir          = $(sysconfdir)/ohm/plugins.d
 config_DATA        = media.ini
 
 libohm_media_la_SOURCES = plugin.c dbusif.c fsif.c dresif.c \
-                          privacy.c mute.c bluetooth.c
+                          privacy.c mute.c bluetooth.c audio.c
 
 libohm_media_la_LIBADD = @OHM_PLUGIN_LIBS@
 libohm_media_la_LDFLAGS = -module -avoid-version

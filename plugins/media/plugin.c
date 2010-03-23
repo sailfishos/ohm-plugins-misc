@@ -12,13 +12,15 @@
 #include "privacy.h"
 #include "mute.h"
 #include "bluetooth.h"
+#include "audio.h"
 
-int DBG_PRIVACY, DBG_MUTE, DBG_BT, DBG_DBUS, DBG_FS, DBG_DRES;
+int DBG_PRIVACY, DBG_MUTE, DBG_BT, DBG_AUDIO, DBG_DBUS, DBG_FS, DBG_DRES;
 
 OHM_DEBUG_PLUGIN(media,
     OHM_DEBUG_FLAG("privacy"  , "privacy override"   , &DBG_PRIVACY ),
     OHM_DEBUG_FLAG("mute"     , "mute"               , &DBG_MUTE    ),
     OHM_DEBUG_FLAG("bluetooth", "bluetooth override" , &DBG_BT      ),
+    OHM_DEBUG_FLAG("audio"    , "audio streams"      , &DBG_AUDIO   ),
     OHM_DEBUG_FLAG("dbus"     , "D-Bus interface"    , &DBG_DBUS    ),
     OHM_DEBUG_FLAG("fact"     , "factstore interface", &DBG_FS      ),
     OHM_DEBUG_FLAG("dres"     , "dres interface"     , &DBG_DRES    )
@@ -35,9 +37,11 @@ static void plugin_init(OhmPlugin *plugin)
     privacy_init(plugin);
     mute_init(plugin);
     bluetooth_init(plugin);
+    audio_init(plugin);
 
 #if 1
-    DBG_PRIVACY = DBG_MUTE = DBG_BT = DBG_DBUS = DBG_FS = DBG_DRES = TRUE;
+    DBG_PRIVACY = DBG_MUTE = DBG_BT = DBG_AUDIO = TRUE;
+    DBG_DBUS = DBG_FS = DBG_DRES = TRUE;
 #endif
 }
 

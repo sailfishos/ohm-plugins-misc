@@ -222,6 +222,56 @@ void dbusif_signal_mute(int value, int send_now)
     }
 }
 
+void dbusif_send_audio_stream_info(char          *oper,
+                                   char          *group,
+                                   dbus_uint32_t  pid,
+                                   char          *stream)
+{
+    static dbus_uint32_t  txid = 1;
+
+    DBusMessage          *msg;
+    int                   success;
+
+    if (!oper || !group || !pid)
+        return;
+
+    if (!stream || !stream[0])
+        stream = "<unknown>";
+
+    msg = dbus_message_new_signal(DBUS_POLICY_DECISION_PATH,
+                                  DBUS_POLICY_DECISION_INTERFACE,
+                                  DBUS_STREAM_INFO_SIGNAL);
+
+    if (msg == NULL) {
+        OHM_ERROR("media: failed to create stream info signal");
+        return;
+    }
+
+    success = dbus_message_append_args(msg,
+                                       DBUS_TYPE_UINT32, &txid,
+                                       DBUS_TYPE_STRING, &oper,
+                                       DBUS_TYPE_STRING, &group,
+                                       DBUS_TYPE_UINT32, &pid,
+                                       DBUS_TYPE_STRING, &stream,
+                                       DBUS_TYPE_INVALID);
+    if (!success) {
+        OHM_ERROR("media: failed to build stream info message");
+        return;
+    }
+
+    success = dbus_connection_send(sys_conn, msg, NULL);
+
+    if (!success)
+        OHM_ERROR("media: failed to send stream info message");
+    else {
+        OHM_DEBUG(DBG_DBUS, "operation='%s' group='%s' pid=%u stream='%s'",
+                  oper, group, pid, stream);
+        txid++;
+    }
+
+    dbus_message_unref(msg);
+}
+
 
 /*!
  * @}
