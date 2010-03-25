@@ -168,7 +168,7 @@ int resource_set_add_spec(resset_t *resset, resource_spec_type_t type, ...)
 
                 switch (spec->any.type) {
 
-                case resource_audio: 
+                case resource_audio:
                     if (update_factstore_audio(rs, &spec->audio))
                         success = TRUE;
                     break;

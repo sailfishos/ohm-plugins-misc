@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.9) unstable; urgency=low
+
+  * Fixes: NB#161198 - Unable to hear audio from any other MAFW player process except for the qmafw-dbus-wrapper
+
+ -- Wolf Bergenheim <ext-wolf.2.bergenheim@nokia.com>  Thu, 25 Mar 2010 13:43:48 +0200
+
 ohm-plugins-misc (1:1.8) unstable; urgency=low
 
   * Implemented: SWP#Plicy-136
