@@ -24,6 +24,7 @@ typedef struct dres_arg {
 
 /* common services */
 int dres_accessory_request(const char *, int, int);
+int dres_update_accessory_mode(const char *, const char *);
 int dres_all(void);
 gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[]);
 gboolean local_set_observer(gchar *capability, hal_cb cb, void *userdata);
