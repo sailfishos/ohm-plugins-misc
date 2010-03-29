@@ -1,15 +1,18 @@
 #include "accessories.h"
+#include "wired.h"
 
 #define FACT_DEVICE_ACCESSIBLE "com.nokia.policy.audio_device_accessible"
 
-static int DBG_HEADSET, DBG_BT, DBG_INFO;
+static int DBG_HEADSET, DBG_BT, DBG_INFO, DBG_WIRED;
 
 static gboolean plugin_is_real;
 
 OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("headset", "Wired headset events" , &DBG_HEADSET),
     OHM_DEBUG_FLAG("info", "Info signal events" , &DBG_INFO),
-    OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT));
+    OHM_DEBUG_FLAG("wired", "wired accessory events", &DBG_WIRED),
+    OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT)
+);
 
 
 #ifndef __NO_HAL__
@@ -68,15 +71,6 @@ static gboolean bluetooth_init_later(gpointer data)
     return FALSE;
 }
 
-static gboolean headset_init_later(gpointer data)
-{
-    OhmPlugin *plugin = data;
-
-    if (plugin_is_real)
-        headset_init(plugin, DBG_HEADSET);
-    return FALSE;
-}
-
 static void plugin_init(OhmPlugin *plugin)
 {
     plugin_is_real = TRUE;
@@ -84,18 +78,16 @@ static void plugin_init(OhmPlugin *plugin)
     if (!OHM_DEBUG_INIT(accessories))
         g_warning("Failed to initialize accessories plugin debugging.");
 
-    /* headset */
-    g_idle_add(headset_init_later, plugin);
+    wired_init(plugin, DBG_WIRED);
 
     /* bluetooth*/
     g_idle_add(bluetooth_init_later, plugin);
+
 }
 
 
 static void plugin_exit(OhmPlugin *plugin)
 {
-    /* headset */
-    headset_deinit(plugin);
     /* bluetooth*/
     bluetooth_deinit(plugin);
 
@@ -341,6 +333,39 @@ int dres_accessory_request(const char *name, int driver, int connected)
                   __FILE__, __FUNCTION__, goal);
 
     return status <= 0 ? FALSE : TRUE;
+}
+
+
+int dres_update_accessory_mode(const char *device, const char *mode)
+{
+#define NUM_DRES_VARS 2               /* &accessory_name, &accessory_mode */
+    static int  warn = 1;
+    char       *goal = "update_accessory_mode";
+    char       *vars[NUM_DRES_VARS * 3 + 1];
+    int         i, status;
+
+    vars[i=0] = "accessory_name";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(device);
+    vars[++i] = "accessory_mode";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(mode);
+    vars[++i] = NULL;
+            
+    status = resolve(goal, vars);
+
+    if (status < 0) {
+        if (!warn) {
+            OHM_WARNING("accessory: resolve('%s', '%s', '%s') failed",
+                        goal, device, mode);
+            warn = FALSE;
+        }
+    }
+    else if (!status)
+        OHM_ERROR("accessory: resolving '%s' failed", goal);
+    
+    return status;
+#undef NUM_DRES_VARS
 }
 
 

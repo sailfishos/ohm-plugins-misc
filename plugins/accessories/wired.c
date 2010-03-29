@@ -1,0 +1,797 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <string.h>
+#include <errno.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#include <linux/input.h>
+
+#include <glib.h>
+
+#include <ohm/ohm-plugin.h>
+#include <ohm/ohm-plugin-log.h>
+#include <ohm/ohm-plugin-debug.h>
+#include <ohm/ohm-fact.h>
+
+#include "wired.h"
+#include "accessories.h"
+
+#define REARM_TIMER TRUE
+#define CLEAR_TIMER FALSE
+
+
+/*
+ * non-ECI: ENXIO
+ * ECI:     0 (OK), or EAGAIN
+ *
+ * cat /sys/devices/platform/ECI_accessory.0/memory | od -tx1 -Ax
+ * 000000 b3 08 00 3c 00 01 00 79 b4 03 11 02 0e 01 08 01
+ * 000010 07 0b 0c 0e 0d 0f 10 08 00 03 16 00 1d 01 e1 c0
+ * 000020 00 53 19 f1 40 2d f2 4f 94 7c c3 e6 3f 00 1f 05
+ * 000030 0d c0 00 01 68 03 85 b2 44 69 5f ff ff ff ff ff
+ * 000040 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+ * *
+ * 000060
+ */
+
+
+#define NBITS(x) ((((x)-1)/BITS_PER_U32)+1)
+#define BITS_PER_U32 (sizeof(uint32_t) * 8)
+#define U32_IDX(n)  ((n) / BITS_PER_U32)
+
+#define test_bit(n, bits) (((bits)[(n) / BITS_PER_U32]) &       \
+                           (0x1 << ((n) % BITS_PER_U32)))
+
+
+/*
+ * input device descriptors
+ */
+
+struct input_dev_s;
+typedef struct input_dev_s input_dev_t;
+
+typedef int (*dev_init_t)(OhmPlugin *, input_dev_t *);
+typedef int (*dev_exit_t)(input_dev_t *);
+typedef int (*dev_event_cb_t)(struct input_event *, void *);
+
+typedef struct {
+    dev_init_t     init;                 /* discover, open and init device */
+    dev_exit_t     exit;                 /* clean up and close device */
+    dev_event_cb_t event;                /* handle event from device */
+} input_dev_ops_t;
+
+
+struct input_dev_s {
+    const char      *name;               /* device name */
+    int              fd;                 /* event file descriptor */
+    input_dev_ops_t  ops;                /* device operations */
+    void            *user_data;          /* callback user data */
+    GIOChannel      *gioc;               /* GMainLoop I/O channel */
+    gulong           gsrc;               /*       and I/O source */
+};
+
+
+/*
+ * device states
+ */
+
+enum {
+    DEV_HEADSET = 0,
+    DEV_HEADPHONE,
+    DEV_HEADMIKE,
+    DEV_VIDEOOUT,
+    DEV_LINEOUT,
+    NUM_DEVS,
+    DEV_NONE
+};
+
+typedef struct {
+    const char *name;                    /* name field in factstore */
+    OhmFact    *fact;                    /* fact in factstore */
+    int         connected;               /* current state */
+} device_state_t;
+
+
+
+/*
+ * private prototypes
+ */
+
+static int  jack_init (OhmPlugin *plugin, input_dev_t *dev);
+static int  jack_exit (input_dev_t *dev);
+static int  jack_event(struct input_event *event, void *user_data);
+static void jack_update_facts(void);
+
+static int   eci_init  (OhmPlugin *plugin, input_dev_t *dev);
+static int   eci_exit  (input_dev_t *dev);
+static int   eci_event (struct input_event *event, void *user_data);
+static int   eci_read  (char *buf, size_t size);
+static int   eci_update_mode(device_state_t *device, int resolve_all);
+static void  eci_schedule_update(device_state_t *device);
+static void  eci_cancel_update(void);
+
+static void find_device(const char *, input_dev_t *);
+
+static int fact_set_int   (OhmFact *fact, const char *name, int value);
+
+
+/*
+ * devices of interest
+ */
+
+static input_dev_t devices[] = {
+    { "jack", -1, { jack_init, jack_exit, jack_event }, NULL, NULL, 0 },
+    { "eci" , -1, { eci_init , eci_exit , eci_event  }, NULL, NULL, 0 },
+    { NULL, -1, { NULL, NULL, NULL }, NULL, NULL, 0 }
+};
+
+
+/*
+ * facts of interest 
+ */
+
+static device_state_t states[] = {
+    [DEV_HEADSET]   = { "headset"  , NULL, 0 },
+    [DEV_HEADPHONE] = { "headphone", NULL, 0 },
+    [DEV_HEADMIKE]  = { "headmike" , NULL, 0 },
+    [DEV_VIDEOOUT]  = { "tvout"    , NULL, 0 },
+    [DEV_LINEOUT]   = { /* "line-out" */ NULL, NULL, 0 },
+    [DEV_NONE]      = { NULL, NULL, 0 }
+};
+
+
+
+static OhmFactStore *store;
+
+/*
+ * debug flags
+ */
+
+static int DBG_WIRED;
+
+
+/*
+ * accessory state
+ */
+
+static int headphone;
+static int microphone;
+static int lineout;
+static int videoout;
+static int physical;
+
+/*
+ * timers
+ */
+
+static gulong eci_timer;                          /* eci detection timer */
+
+/*****************************************************************************
+ *                             *** jack insertion ***                        *
+ *****************************************************************************/
+
+/********************
+ * jack_query
+ ********************/
+static int
+jack_query(int fd)
+{
+    uint32_t bitmask[NBITS(KEY_MAX)];
+    
+    memset(bitmask, 0, sizeof(bitmask));
+
+    if (ioctl(fd, EVIOCGSW(sizeof(bitmask)), &bitmask) < 0) {
+        OHM_ERROR("accessories: failed to query current jack state (%d: %s)",
+                  errno, strerror(errno));
+        return FALSE;
+    }
+
+    headphone =  test_bit(SW_HEADPHONE_INSERT    , bitmask);
+    microphone = test_bit(SW_MICROPHONE_INSERT   , bitmask);
+    lineout    = test_bit(SW_LINEOUT_INSERT      , bitmask);
+    videoout   = test_bit(SW_VIDEOOUT_INSERT     , bitmask);
+    physical   = test_bit(SW_JACK_PHYSICAL_INSERT, bitmask);
+
+    OHM_INFO("accessories: headphone is %sconnected" , headphone  ? "" : "dis");
+    OHM_INFO("accessories: microphone is %sconnected", microphone ? "" : "dis");
+    OHM_INFO("accessories: lineout is %sconnected"   , lineout    ? "" : "dis");
+    OHM_INFO("accessories: videoout is %sconnected"  , videoout   ? "" : "dis");
+    OHM_INFO("accessories: physicallly %sconnected"  , physical   ? "" : "dis");
+    
+    jack_update_facts();
+    
+    return TRUE;
+}
+
+
+/********************
+ * jack_init
+ ********************/
+static int
+jack_init(OhmPlugin *plugin, input_dev_t *dev)
+{
+    const char *device;
+    const char *pattern;
+
+    device = ohm_plugin_get_param(plugin, "jack-device");
+
+    if (device != NULL) {
+        OHM_INFO("accessories: using device %s for jack detection", device);
+
+        dev->fd = open(device, O_RDONLY);
+        if (dev->fd < 0)
+            OHM_ERROR("accessories: failed to open device '%s'", device);
+    }
+
+    if (dev->fd < 0) {
+        pattern = ohm_plugin_get_param(plugin, "jack-match");
+
+        if (pattern == NULL)
+            pattern = " Jack";
+
+        OHM_INFO("accessories: discover jack device by matching '%s'", pattern);
+        find_device(pattern, dev);
+    }
+    
+    if (dev->fd >= 0) {
+        jack_query(dev->fd);
+        return TRUE;
+    }
+    else {
+        OHM_INFO("accessories: failed to open jack detection device");
+        return FALSE;
+    }
+}
+
+
+/********************
+ * jack_exit
+ ********************/
+static int
+jack_exit(input_dev_t *dev)
+{
+    if (dev->fd >= 0) {
+        close(dev->fd);
+        dev->fd = -1;
+    }
+    
+    return TRUE;
+}
+
+
+/********************
+ * jack_event
+ ********************/
+static int
+jack_event(struct input_event *event, void *user_data)
+{
+    (void)user_data;
+
+    if (event->type != EV_SW) {
+        OHM_DEBUG(DBG_WIRED, "ignoring jack event type %d", event->type);
+        return TRUE;
+    }
+
+    OHM_DEBUG(DBG_WIRED, "jack detection event (%d, %d)",
+              event->code, event->value);
+
+    switch (event->code) {
+    case SW_HEADPHONE_INSERT:
+        headphone = (event->value != 0);
+        break;
+
+    case SW_MICROPHONE_INSERT:
+        microphone = (event->value != 0);
+        break;
+
+    case SW_LINEOUT_INSERT:
+        lineout = (event->value != 0);
+        break;
+
+    case SW_VIDEOOUT_INSERT:
+        videoout = (event->value != 0);
+        break;
+
+    case SW_JACK_PHYSICAL_INSERT:
+        physical = (event->value != 0);
+        jack_update_facts();
+        break;
+
+    default:
+        OHM_WARNING("accessories: unknown event code 0x%x", event->code);
+        break;
+    }
+    
+    return TRUE;
+}
+
+
+/********************
+ * jack_update_facts
+ ********************/
+static void
+jack_update_facts(void)
+{
+    device_state_t *state, *current;
+
+    if      (headphone && microphone) current = states + DEV_HEADSET;
+    else if (headphone)               current = states + DEV_HEADPHONE;
+    else if (microphone)              current = states + DEV_HEADMIKE;
+    else if (videoout)                current = states + DEV_VIDEOOUT;
+    else if (lineout)                 current = states + DEV_LINEOUT;
+    else                              current = NULL;
+    
+    for (state = states; state->name != NULL; state++) {
+        if (state != current && state->connected) {
+            state->connected = 0;
+            fact_set_int(state->fact, "connected", 0);
+            dres_accessory_request(state->name, -1, 0);
+        }
+    }
+
+    if (current != NULL) {
+        current->connected = 1;
+        fact_set_int(current->fact, "connected", 1);
+        
+        if (!eci_update_mode(current, FALSE))
+            eci_schedule_update(current);
+        dres_accessory_request(current->name, -1, 1);
+    }
+
+}
+
+
+/*****************************************************************************
+ *                              *** ECI headsets ***                         *
+ *****************************************************************************/
+
+
+/********************
+ * eci_init
+ ********************/
+static int
+eci_init(OhmPlugin *plugin, input_dev_t *dev)
+{
+    const char *device;
+    const char *pattern;
+
+    device = ohm_plugin_get_param(plugin, "eci-device");
+
+    if (device != NULL) {
+        OHM_INFO("accessories: using device %s for ECI events", device);
+        dev->fd = open(device, O_RDONLY);
+
+        if (dev->fd <= 0)
+            OHM_ERROR("accessories: failed to open device %s", device);
+    }
+
+    if (dev->fd < 0) {
+        pattern = ohm_plugin_get_param(plugin, "eci-match");
+
+        if (pattern == NULL)
+            pattern = "ECI ";
+        
+        OHM_INFO("accessories: discover ECI device by matching '%s'", pattern);
+        find_device(pattern, dev);
+    }
+    
+    if (dev->fd >= 0)
+        return TRUE;
+    else {
+        OHM_ERROR("accessories: failed to open ECI detection device");
+        return FALSE;
+    }
+}
+
+
+/********************
+ * eci_exit
+ ********************/
+static int
+eci_exit(input_dev_t *dev)
+{
+    if (dev->fd >= 0) {
+        close(dev->fd);
+        dev->fd = -1;
+    }
+    
+    return TRUE;
+}
+
+
+/********************
+ * eci_event
+ ********************/
+static int
+eci_event(struct input_event *event, void *user_data)
+{
+    (void)user_data;
+    (void)event;
+
+    return TRUE;
+}
+
+
+/********************
+ * eci_read
+ ********************/
+static int
+eci_read(char *buf, size_t size)
+{
+    int fd, status;
+
+    if ((fd = open(ECI_MEMORY_PATH, O_RDONLY)) < 0)
+        status = errno;
+    else {
+        if (read(fd, buf, size) < 0)
+            status = errno;
+        else
+            status = 0;
+
+        close(fd);
+    }
+
+    return status;
+}
+
+
+/********************
+ * eci_timer_cb
+ ********************/
+static gboolean
+eci_timer_cb(gpointer data)
+{
+    device_state_t *device = (device_state_t *)data;
+    
+    if (eci_update_mode(device, TRUE))
+        return CLEAR_TIMER;
+    else
+        return REARM_TIMER;
+}
+
+
+/********************
+ * eci_schedule_update
+ ********************/
+static void
+eci_schedule_update(device_state_t *device)
+{
+    eci_cancel_update();
+    eci_timer = g_timeout_add_full(G_PRIORITY_DEFAULT, 1 * 1000,
+                                   eci_timer_cb, device, NULL);
+}
+
+
+/********************
+ * eci_cancel_update
+ ********************/
+static void
+eci_cancel_update(void)
+{
+    if (eci_timer != 0) {
+        g_source_remove(eci_timer);
+        eci_timer = 0;
+    }
+}
+
+
+/********************
+ * eci_update_mode
+ ********************/
+static int
+eci_update_mode(device_state_t *device, int resolve_all)
+{
+    const char *mode;
+    char        data[4096];
+    int         status;
+
+    switch ((status = eci_read(data, sizeof(data)))) {
+    case ENXIO:
+    case 0:
+        mode = (status == ENXIO ? DEVICE_MODE_DEFAULT : DEVICE_MODE_ECI);
+        OHM_INFO("accessories: mode for %s is now %s", device->name, mode);
+        
+        dres_update_accessory_mode(device->name, mode);
+        
+        if (resolve_all)
+            dres_all();
+        
+        return TRUE;
+        
+    case EAGAIN:
+        OHM_INFO("accessories: deferring ECI detection for %s", device->name);
+        return FALSE;
+
+    default:
+        OHM_ERROR("accessories: ECI detection failed with errno %d (%s)", errno,
+                  strerror(errno));
+        return TRUE;
+    }
+}
+
+
+/*****************************************************************************
+ *                           *** factstore interface ***                     *
+ *****************************************************************************/
+static int
+lookup_facts(void)
+{
+    device_state_t  *state;
+    GSList          *list;
+    OhmFact         *fact;
+    GValue          *gnam;
+    const char      *name;
+    int              success;
+
+
+    /*
+     * find device availability
+     */
+
+    store = ohm_fact_store_get_fact_store();
+    list  = ohm_fact_store_get_facts_by_name(store, FACT_NAME_DEV_ACCESSIBLE);
+    
+    while (list != NULL) {
+        fact = (OhmFact *)list->data;
+        gnam = ohm_fact_get(fact, "name");
+        
+        if (gnam == NULL || G_VALUE_TYPE(gnam) != G_TYPE_STRING) {
+            OHM_WARNING("accessories: ignoring malformed fact %s",
+                        FACT_NAME_DEV_ACCESSIBLE);
+            continue;
+        }
+        
+        name = g_value_get_string(gnam);
+
+        for (state = states; state->name != NULL; state++) {
+            if (!strcmp(state->name, name)) {
+                state->fact = g_object_ref(fact);
+                break;
+            }
+        }
+        
+        list = list->next;
+    }
+
+    success = TRUE;
+
+    for (state = states; state->name != NULL; state++) {
+        if (state->fact == NULL) {
+            OHM_ERROR("accessories: could not find fact '%s'", state->name);
+            success = FALSE;
+        }
+    }
+
+    return success;
+}
+
+
+/********************
+ * release_facts
+ ********************/
+static void
+release_facts(void)
+{
+    device_state_t *state;
+    
+    for (state = states; state->name != NULL; state++) {
+        if (state->fact != NULL) {
+            g_object_unref(state->fact);
+            state->fact = NULL;
+        }
+    }
+}
+
+
+/********************
+ * fact_set_int
+ ********************/
+static int
+fact_set_int(OhmFact *fact, const char *name, int value)
+{
+    GValue *gval;
+
+    if (fact == NULL)
+        return FALSE;
+
+    if ((gval = ohm_value_from_int(value)) != NULL) {
+        ohm_fact_set(fact, name, gval);
+        return TRUE;
+    }
+    else
+        return FALSE;
+}
+
+
+/*****************************************************************************
+ *                            *** device discovery ***                       *
+ *****************************************************************************/
+
+
+static int
+check_device(const char *pattern, int fd, char *name, size_t name_size)
+{
+    int version;
+
+    if (ioctl(fd, EVIOCGVERSION, &version) < 0)
+        return FALSE;
+        
+    if (ioctl(fd, EVIOCGNAME(name_size), name) < 0)
+        return FALSE;
+
+    if (!strstr(name, pattern))
+        return FALSE;
+    
+    return TRUE;
+}
+
+
+/********************
+ * find_device
+ ********************/
+static void
+find_device(const char *pattern, input_dev_t *dev)
+{
+    DIR           *dir;
+    struct dirent *de;
+    char           path[PATH_MAX];
+    char           name[64];
+    int            fd, status;
+    
+    if ((dir = opendir("/dev/input")) == NULL) {
+        OHM_ERROR("accessories: failed to open directory /dev/input");
+        return;
+    }
+
+    status = FALSE;
+
+    while ((de = readdir(dir)) != NULL) {
+        if (de->d_type != DT_CHR && de->d_type != DT_LNK)
+            continue;
+        
+        snprintf(path, sizeof(path), "/dev/input/%s", de->d_name);
+        
+        if ((fd = open(path, O_RDONLY)) < 0) {
+            OHM_WARNING("accessories: failed to open %s for reading", path);
+            continue;
+        }
+
+        if (check_device(pattern, fd, name, sizeof(name))) {
+            OHM_INFO("accessories: %s found at %s (%s)", dev->name, path, name);
+            dev->fd = fd;
+            break;
+        }
+        else
+            close(fd);
+    }
+    
+    closedir(dir);
+}
+
+
+/********************
+ * event_handler
+ ********************/
+static gboolean
+event_handler(GIOChannel *gioc, GIOCondition mask, gpointer data)
+{
+    input_dev_t        *dev = (input_dev_t *)data;
+    struct input_event  event;
+
+    (void)gioc;
+
+    if (mask & G_IO_IN) {
+        if (read(dev->fd, &event, sizeof(event)) != sizeof(event)) {
+            OHM_ERROR("accessories: failed to read %s event", dev->name);
+            return FALSE;
+        }
+
+        dev->ops.event(&event, dev->user_data);
+    }
+
+    if (mask & G_IO_HUP) {
+        OHM_ERROR("accessories: %s device closed unexpectedly", dev->name);
+        return FALSE;
+    }
+
+    if (mask & G_IO_ERR) {
+        OHM_ERROR("accessories: %s device had an I/O error", dev->name);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+
+/********************
+ * add_event_handler
+ ********************/
+static int
+add_event_handler(input_dev_t *dev)
+{
+    GIOCondition mask;
+
+    mask = G_IO_IN | G_IO_HUP | G_IO_ERR;
+
+    dev->gioc = g_io_channel_unix_new(dev->fd);
+    dev->gsrc = g_io_add_watch(dev->gioc, mask, event_handler, dev);
+
+    return dev->gsrc != 0;
+}
+
+
+/********************
+ * del_event_handler
+ ********************/
+static void
+del_event_handler(input_dev_t *dev)
+{
+    if (dev->gsrc != 0) {
+        g_source_remove(dev->gsrc);
+        dev->gsrc = 0;
+    }
+
+    if (dev->gioc != NULL) {
+        g_io_channel_unref(dev->gioc);
+        dev->gioc = NULL;
+    }
+}
+
+
+/********************
+ * wired_init
+ ********************/
+void
+wired_init(OhmPlugin *plugin, int dbg_wired)
+{
+    input_dev_t *dev;
+
+    (void)plugin;
+
+    DBG_WIRED = dbg_wired;
+
+    lookup_facts();
+
+    for (dev = devices; dev->name != NULL; dev++) {
+        if (!dev->ops.init(plugin, dev))
+            OHM_WARNING("accessories: could not initialize '%s'", dev->name); 
+        else
+            add_event_handler(dev);
+    }
+}
+
+
+
+/********************
+ * wired_exit
+ ********************/
+void
+wired_exit(void)
+{
+    input_dev_t *dev;
+
+    eci_cancel_update();
+
+    for (dev = devices; dev->name != NULL; dev++) {
+        del_event_handler(dev);
+        dev->ops.exit(dev);
+    }
+
+    release_facts();
+}
+
+
+
+
+/*
+ * Local Variables:
+ * c-basic-offset: 4
+ * indent-tabs-mode: nil
+ * End:
+ * vim:set expandtab shiftwidth=4:
+ */
+
