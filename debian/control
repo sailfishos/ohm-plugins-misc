@@ -8,7 +8,7 @@ Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, l
 Package: ohm-plugins-misc
 Architecture: any
 Depends: ${shlibs:Depends}, ohm (>= 1:1.0), libohm-plugin-core0 (>= 1:1.0), osso-mission-control, libdres0 (>= 1:1.0), libprofile0 (>= 0.0.10), policy-settings, libcontextprovider0 (>= 0.5.8)
-Conflicts: policy-settings-rx51, policy-settings-rx51-text (<< 0.4.6), policy-settings (<< 1:1.0)
+Conflicts: policy-settings-rx51, policy-settings-rx51-text (<< 0.4.6), policy-settings (<< 1:1.12)
 XB-GIT-ID: ${Git-Id}
 Description: Nokia policy OHM plugins.
  Nokia policy plugins for OHM.

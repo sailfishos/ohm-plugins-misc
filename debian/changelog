@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.10) unstable; urgency=low
+
+  * Initial input-layer based wired headset detection with ECI support.
+  * Implemented: SWP#Plicy-207
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 30 Mar 2010 01:18:23 +0300
+
 ohm-plugins-misc (1:1.9) unstable; urgency=low
 
   * Fixes: NB#161198 - Unable to hear audio from any other MAFW player process except for the qmafw-dbus-wrapper
