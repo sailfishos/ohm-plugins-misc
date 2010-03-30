@@ -104,7 +104,7 @@ typedef struct {
 static int  jack_init (OhmPlugin *plugin, input_dev_t *dev);
 static int  jack_exit (input_dev_t *dev);
 static int  jack_event(struct input_event *event, void *user_data);
-static void jack_update_facts(void);
+static void jack_update_facts(int run_accessory_request);
 
 static int   eci_init  (OhmPlugin *plugin, input_dev_t *dev);
 static int   eci_exit  (input_dev_t *dev);
@@ -202,7 +202,16 @@ jack_query(int fd)
     OHM_INFO("accessories: videoout is %sconnected"  , videoout   ? "" : "dis");
     OHM_INFO("accessories: physicallly %sconnected"  , physical   ? "" : "dis");
     
-    jack_update_facts();
+    /*
+     * Notes: Some of the plugins and facts might not be fully initialized
+     *     at this point. If we tried to resolve 'accessory_request' (which
+     *     resolves 'all'), predicates that are not taking this into account
+     *     might fail (for instance the resource handling predicates). Hence
+     *     we suppress resolving here as a resolve('all') is anyway run when
+     *     all the plugins mark themselves ready.
+     */
+    
+    jack_update_facts(FALSE);
     
     return TRUE;
 }
@@ -302,7 +311,7 @@ jack_event(struct input_event *event, void *user_data)
     case SW_JACK_PHYSICAL_INSERT:
         physical = (event->value != 0);
     SYN_EVENT:
-        jack_update_facts();
+        jack_update_facts(TRUE);
         break;
 
     default:
@@ -318,7 +327,7 @@ jack_event(struct input_event *event, void *user_data)
  * jack_update_facts
  ********************/
 static void
-jack_update_facts(void)
+jack_update_facts(int run_accessory_request)
 {
     device_state_t *state, *current;
 
@@ -333,7 +342,8 @@ jack_update_facts(void)
         if (state != current && state->connected) {
             state->connected = 0;
             fact_set_int(state->fact, "connected", 0);
-            dres_accessory_request(state->name, -1, 0);
+            if (run_accessory_request)
+                dres_accessory_request(state->name, -1, 0);
         }
     }
 
@@ -342,7 +352,8 @@ jack_update_facts(void)
         fact_set_int(current->fact, "connected", 1);
         
         eci_update_mode(current, FALSE);
-        dres_accessory_request(current->name, -1, 1);
+        if (run_accessory_request)
+            dres_accessory_request(current->name, -1, 1);
 
         /*
          * Currently on { 0x44, 0x61, 0x6c, 0x69 } ECI support is in a
