@@ -13,5 +13,4 @@ usr/lib/ohm/libohm_cgroups.so
 etc/ohm/plugins.d/*
 usr/bin/ohm-session-agent
 usr/share/ohm-session-agent/*
-etc/X11/Xsession.*/*ohm-session-agent
 usr/share/dbus-1/services/*.service

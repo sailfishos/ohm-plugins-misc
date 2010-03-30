@@ -1,5 +1,5 @@
 bin_PROGRAMS  = ohm-session-agent
-EXTRA_DIST    = $(xsession_DATA) $(dbus_DATA) $(launcher_DATA)
+EXTRA_DIST    = $(dbus_DATA) $(launcher_DATA) # $(xsession_DATA) 
 xsessiondir   = $(sysconfdir)/X11/Xsession.post
 xsession_DATA = 55ohm-session-agent
 dbusdir       = $(datadir)/dbus-1/services
