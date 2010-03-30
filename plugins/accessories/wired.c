@@ -104,13 +104,13 @@ typedef struct {
 static int  jack_init (OhmPlugin *plugin, input_dev_t *dev);
 static int  jack_exit (input_dev_t *dev);
 static int  jack_event(struct input_event *event, void *user_data);
-static void jack_update_facts(int run_accessory_request);
+static void jack_update_facts(int initial_query);
 
 static int   eci_init  (OhmPlugin *plugin, input_dev_t *dev);
 static int   eci_exit  (input_dev_t *dev);
 static int   eci_event (struct input_event *event, void *user_data);
 static int   eci_read  (char *buf, size_t size);
-static int   eci_update_mode(device_state_t *device, int resolve_all);
+static int   eci_update_mode(device_state_t *device);
 static void  eci_schedule_update(device_state_t *device, int msecs);
 static void  eci_cancel_update(void);
 
@@ -207,11 +207,10 @@ jack_query(int fd)
      *     at this point. If we tried to resolve 'accessory_request' (which
      *     resolves 'all'), predicates that are not taking this into account
      *     might fail (for instance the resource handling predicates). Hence
-     *     we suppress resolving here as a resolve('all') is anyway run when
-     *     all the plugins mark themselves ready.
+     *     we suppress resolving during initial query.
      */
     
-    jack_update_facts(FALSE);
+    jack_update_facts(TRUE);
     
     return TRUE;
 }
@@ -311,7 +310,7 @@ jack_event(struct input_event *event, void *user_data)
     case SW_JACK_PHYSICAL_INSERT:
         physical = (event->value != 0);
     SYN_EVENT:
-        jack_update_facts(TRUE);
+        jack_update_facts(FALSE);
         break;
 
     default:
@@ -324,12 +323,38 @@ jack_event(struct input_event *event, void *user_data)
 
 
 /********************
+ * jack_connect
+ ********************/
+static void
+jack_connect(device_state_t *device)
+{
+    if (!device->connected) {
+        device->connected = 1;
+        fact_set_int(device->fact, "connected", 1);
+    }
+}
+
+
+/********************
+ * jack_disconnect
+ ********************/
+static void
+jack_disconnect(device_state_t *device)
+{
+    if (device->connected) {
+        device->connected = 0;
+        fact_set_int(device->fact, "connected", 0);
+    }
+}
+
+
+/********************
  * jack_update_facts
  ********************/
 static void
-jack_update_facts(int run_accessory_request)
+jack_update_facts(int initial_query)
 {
-    device_state_t *state, *current;
+    device_state_t *device, *current;
 
     if      (headphone && microphone) current = states + DEV_HEADSET;
     else if (headphone)               current = states + DEV_HEADPHONE;
@@ -338,23 +363,17 @@ jack_update_facts(int run_accessory_request)
     else if (lineout)                 current = states + DEV_LINEOUT;
     else                              current = NULL;
     
-    for (state = states; state->name != NULL; state++) {
-        if (state != current && state->connected) {
-            state->connected = 0;
-            fact_set_int(state->fact, "connected", 0);
-            if (run_accessory_request)
-                dres_accessory_request(state->name, -1, 0);
+    for (device = states; device->name != NULL; device++) {
+        if (device != current && device->connected) {
+            jack_disconnect(device);
+            if (!initial_query)
+                dres_accessory_request(device->name, -1, 0);
         }
     }
 
     if (current != NULL) {
-        current->connected = 1;
-        fact_set_int(current->fact, "connected", 1);
+        jack_connect(current);
         
-        eci_update_mode(current, FALSE);
-        if (run_accessory_request)
-            dres_accessory_request(current->name, -1, 1);
-
         /*
          * Currently on { 0x44, 0x61, 0x6c, 0x69 } ECI support is in a
          * pretty bad shape. Accessory memory is not read and cached
@@ -365,10 +384,15 @@ jack_update_facts(int run_accessory_request)
          * with ENXIO, which normally indicates non-ECI accessory.
          *
          * Therefore, regardless of the result of the initial ECI read,
-         * we always schedule a new update after 2 seconds.
+         * we always schedule a deferred update.
          */
+
+        if (!initial_query) {
+            eci_update_mode(current);
+            dres_accessory_request(current->name, -1, 1);
+        }
         
-        eci_schedule_update(current, 2 * 1000);
+        eci_schedule_update(current, 1000);
     }
 }
 
@@ -480,8 +504,12 @@ static gboolean
 eci_timer_cb(gpointer data)
 {
     device_state_t *device = (device_state_t *)data;
+    int             success;
     
-    if (eci_update_mode(device, TRUE))
+    success = eci_update_mode(device);
+    dres_accessory_request(device->name, -1, device->connected);
+    
+    if (success)
         return CLEAR_TIMER;
     else
         return REARM_TIMER;
@@ -517,31 +545,29 @@ eci_cancel_update(void)
  * eci_update_mode
  ********************/
 static int
-eci_update_mode(device_state_t *device, int resolve_all)
+eci_update_mode(device_state_t *device)
 {
     const char *mode;
     char        data[4096];
     int         status;
 
-    switch ((status = eci_read(data, sizeof(data)))) {
-    case EAGAIN:
-    case 0:
-    case ENXIO:
-        mode = (status == ENXIO ? DEVICE_MODE_DEFAULT : DEVICE_MODE_ECI );
-        OHM_INFO("accessories: mode for %s is now %s", device->name, mode);
-        
-        dres_update_accessory_mode(device->name, mode);
-        
-        if (resolve_all)
-            dres_all();
-        
-        return TRUE;
-        
-    default:
-        OHM_ERROR("accessories: ECI detection failed with errno %d (%s)", errno,
-                  strerror(errno));
-        return TRUE;
+    status = eci_read(data, sizeof(data));
+
+    if (status == EAGAIN || status == 0)
+        mode = DEVICE_MODE_ECI;
+    else if (status == ENXIO)
+        mode = DEVICE_MODE_DEFAULT;
+    else {
+        OHM_ERROR("accessories: ECI detection failed with errno %d (%s)",
+                  errno, strerror(errno));
+        return TRUE;                             /* don't retry */
     }
+    
+    OHM_INFO("accessories: accessory %s is in %s mode", device->name, mode);
+    dres_update_accessory_mode(device->name, mode);
+    
+
+    return TRUE;                                 /* don't retry */
 }
 
 
