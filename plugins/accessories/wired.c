@@ -111,7 +111,7 @@ static int   eci_exit  (input_dev_t *dev);
 static int   eci_event (struct input_event *event, void *user_data);
 static int   eci_read  (char *buf, size_t size);
 static int   eci_update_mode(device_state_t *device, int resolve_all);
-static void  eci_schedule_update(device_state_t *device);
+static void  eci_schedule_update(device_state_t *device, int msecs);
 static void  eci_cancel_update(void);
 
 static void find_device(const char *, input_dev_t *);
@@ -271,13 +271,16 @@ jack_event(struct input_event *event, void *user_data)
 {
     (void)user_data;
 
-    if (event->type != EV_SW) {
+    if (event->type != EV_SW && event->type != EV_SYN) {
         OHM_DEBUG(DBG_WIRED, "ignoring jack event type %d", event->type);
         return TRUE;
     }
 
     OHM_DEBUG(DBG_WIRED, "jack detection event (%d, %d)",
               event->code, event->value);
+
+    if (event->type == EV_SYN)
+        goto SYN_EVENT;
 
     switch (event->code) {
     case SW_HEADPHONE_INSERT:
@@ -298,6 +301,7 @@ jack_event(struct input_event *event, void *user_data)
 
     case SW_JACK_PHYSICAL_INSERT:
         physical = (event->value != 0);
+    SYN_EVENT:
         jack_update_facts();
         break;
 
@@ -337,11 +341,24 @@ jack_update_facts(void)
         current->connected = 1;
         fact_set_int(current->fact, "connected", 1);
         
-        if (!eci_update_mode(current, FALSE))
-            eci_schedule_update(current);
+        eci_update_mode(current, FALSE);
         dres_accessory_request(current->name, -1, 1);
-    }
 
+        /*
+         * Currently on { 0x44, 0x61, 0x6c, 0x69 } ECI support is in a
+         * pretty bad shape. Accessory memory is not read and cached
+         * upon detection on the driver side. Instead every single time
+         * userspace tries to access it a read attempt is made. Reads
+         * fail very often (depending on CPU load) with EAGAIN. However,
+         * as initial detection is slowish the first read attempt fails
+         * with ENXIO, which normally indicates non-ECI accessory.
+         *
+         * Therefore, regardless of the result of the initial ECI read,
+         * we always schedule a new update after 2 seconds.
+         */
+        
+        eci_schedule_update(current, 2 * 1000);
+    }
 }
 
 
@@ -424,8 +441,12 @@ eci_read(char *buf, size_t size)
 {
     int fd, status;
 
-    if ((fd = open(ECI_MEMORY_PATH, O_RDONLY)) < 0)
-        status = errno;
+    if ((fd = open(ECI_MEMORY_PATH, O_RDONLY)) < 0) {
+        if (errno == ENOENT)
+            status = ENXIO;
+        else
+            status = errno;
+    }
     else {
         if (read(fd, buf, size) < 0)
             status = errno;
@@ -434,6 +455,8 @@ eci_read(char *buf, size_t size)
 
         close(fd);
     }
+
+    OHM_DEBUG(DBG_WIRED, "eci_read status: %d (%s)", status, strerror(status));
 
     return status;
 }
@@ -458,10 +481,10 @@ eci_timer_cb(gpointer data)
  * eci_schedule_update
  ********************/
 static void
-eci_schedule_update(device_state_t *device)
+eci_schedule_update(device_state_t *device, int delay_msecs)
 {
     eci_cancel_update();
-    eci_timer = g_timeout_add_full(G_PRIORITY_DEFAULT, 1 * 1000,
+    eci_timer = g_timeout_add_full(G_PRIORITY_DEFAULT, delay_msecs,
                                    eci_timer_cb, device, NULL);
 }
 
@@ -490,9 +513,10 @@ eci_update_mode(device_state_t *device, int resolve_all)
     int         status;
 
     switch ((status = eci_read(data, sizeof(data)))) {
-    case ENXIO:
+    case EAGAIN:
     case 0:
-        mode = (status == ENXIO ? DEVICE_MODE_DEFAULT : DEVICE_MODE_ECI);
+    case ENXIO:
+        mode = (status == ENXIO ? DEVICE_MODE_DEFAULT : DEVICE_MODE_ECI );
         OHM_INFO("accessories: mode for %s is now %s", device->name, mode);
         
         dres_update_accessory_mode(device->name, mode);
@@ -502,10 +526,6 @@ eci_update_mode(device_state_t *device, int resolve_all)
         
         return TRUE;
         
-    case EAGAIN:
-        OHM_INFO("accessories: deferring ECI detection for %s", device->name);
-        return FALSE;
-
     default:
         OHM_ERROR("accessories: ECI detection failed with errno %d (%s)", errno,
                   strerror(errno));
