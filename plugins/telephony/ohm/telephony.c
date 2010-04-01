@@ -1094,6 +1094,8 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
 #endif    
 
+    if (nremoved != 0 && IS_CONF_PARENT(event.call))
+        return DBUS_HANDLER_RESULT_HANDLED;
     
     /*
      * generate an event if it looks appropriate
