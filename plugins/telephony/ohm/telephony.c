@@ -1094,6 +1094,8 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
 #endif    
 
+    if (nremoved != 0 && IS_CONF_PARENT(event.call))
+        return DBUS_HANDLER_RESULT_HANDLED;
     
     /*
      * generate an event if it looks appropriate
@@ -3022,10 +3024,14 @@ call_disconnect(call_t *call, const char *action, event_t *event)
         switch (event->any.state) {
         case STATE_CREATED:
         case STATE_CALLOUT:
-#if 0
-            call_reply(event->call.req, FALSE);
-#endif
-            /* fall through */
+            if (tp_disconnect(call, action) != 0) {
+                OHM_ERROR("Failed to disconnect call %s.", call->path);
+                return EIO;
+            }
+            policy_call_delete(call);
+            call_unregister(call->path);
+            return 0;
+
         case STATE_DISCONNECTED:
         case STATE_PEER_HUNGUP:
         case STATE_LOCAL_HUNGUP:
