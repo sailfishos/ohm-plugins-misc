@@ -1,5 +1,7 @@
 ohm-plugins-misc (1:1.10) unstable; urgency=low
 
+  * Don't put conference calls to localhungup state.
+  * Honour disconnect decision for new incoming and outgoing calls.
   * Initial input-layer based wired headset detection with ECI support.
   * Implemented: SWP#Plicy-207
   * Don't install ohm-session-agents xsession script (Fixes: NB#162526).
