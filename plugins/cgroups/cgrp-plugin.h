@@ -23,7 +23,7 @@
 
 #define CGRP_FACT_GROUP      "com.nokia.cgroups.group"
 #define CGRP_FACT_PART       "com.nokia.cgroups.partition"
-#define CGRP_FACT_APPCHANGES "com.nokia.cgroups.application_changes"
+#define CGRP_FACT_APPCHANGES "com.nokia.policy.application_changes"
 
 #define APP_ACTIVE   "active"
 #define APP_INACTIVE "standby"
