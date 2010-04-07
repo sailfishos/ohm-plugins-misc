@@ -10,7 +10,7 @@ static gboolean notify_cb  (GIOChannel *, GIOCondition, gpointer);
 static void     subscr_init(cgrp_context_t *);
 static void     subscr_exit(cgrp_context_t *);
 
-static void schedule_app_change(gpointer, gpointer, gpointer, gpointer);
+static void schedule_app_change(void *, OhmFact *, GQuark, gpointer, gpointer);
 
 
 typedef struct {
@@ -33,15 +33,24 @@ notify_init(cgrp_context_t *ctx, int port)
     facts = ohm_fact_store_get_facts_by_name(ctx->store, CGRP_FACT_APPCHANGES);
     
     if (facts != NULL) {
-        if (g_slist_length(facts) >= 1)
+        if (g_slist_length(facts) > 1)
             OHM_WARNING("cgrp: too many %s facts", CGRP_FACT_APPCHANGES);
 
         ctx->app_changes = (OhmFact *)facts->data;
         
+        {
+            char *tmp = ohm_structure_to_string(OHM_STRUCTURE(facts->data));
+            printf("*** fact: %p, '%s' *** \n", facts->data, tmp);
+            g_free(tmp);
+        }
+
         g_signal_connect(G_OBJECT(ctx->store),
                          "updated", G_CALLBACK(schedule_app_change), ctx);
         
         OHM_INFO("cgrp: using factstore-based application notifications");
+        
+        printf("*** ctx: %p, ctx->store: %p, fact: %p ***\n",
+               ctx, ctx->store, facts->data);
     }
     else {
         addr.sin_family = AF_INET;
@@ -224,6 +233,7 @@ app_change_cb(gpointer data)
     
     notify_subscribers(ctx, process, state);
     
+    ctx->app_update = 0;
     return FALSE;
 }
 
@@ -232,15 +242,32 @@ app_change_cb(gpointer data)
  * schedule_app_change
  ********************/
 static void
-schedule_app_change(gpointer fact, gpointer name, gpointer value,
+schedule_app_change(void *whatever,
+                    OhmFact *fact, GQuark field_quark, gpointer value,
                     gpointer user_data)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)user_data;
+    const char     *fact_name;
 
-    (void)name;
+    (void)whatever;
+    (void)field_quark;
     (void)value;
 
-    if (fact != ctx->app_changes)
+#if 0
+    {
+        const char *field = g_quark_to_string(field_quark);
+        const char *name  = ohm_structure_get_name(OHM_STRUCTURE(fact));
+        const char *dump  = ohm_structure_to_string(OHM_STRUCTURE(fact));
+
+        OHM_INFO("field '%s' of '%s' has changed: '%s'", field, name, dump);
+        
+        g_free(dump);
+    }
+#endif
+
+    fact_name = ohm_structure_get_name(OHM_STRUCTURE(fact));
+    
+    if (fact_name == NULL || strcmp(fact_name, CGRP_FACT_APPCHANGES))
         return;
     
     if (ctx->app_update == 0)
