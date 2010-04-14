@@ -3,6 +3,9 @@
 /* Build notification plugin ? */
 #undef BUILD_NOTIFICATION
 
+/* Build old videoep ? */
+#undef BUILD_OLD_VIDEOEP
+
 /* Build playback plugin ? */
 #undef BUILD_PLAYBACK
 
