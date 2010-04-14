@@ -253,9 +253,9 @@ AM_CONDITIONAL(BUILD_OLD_VIDEOEP, test x$enable_oldvideoep = xyes)
 if test x$enable_oldvideoep = xyes;
 then
   AC_DEFINE([BUILD_OLD_VIDEOEP], 1, [Build old videoep ?])
-  AC_MSG_NOTICE([Old videoep WILL BE BUILT])
+  AC_MSG_NOTICE([Old videoep implementation will be built])
 else
-  AC_MSG_NOTICE([Old videoep WILL NOT be built])
+  AC_MSG_NOTICE([New videoep implementation will be built])
 fi
 
 AC_SUBST(BUILD_OLD_VIDEOEP)
