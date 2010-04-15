@@ -9,6 +9,32 @@
 #include <check.h>
 #include "../signaling.h"
 
+/**
+ * ohm_log:
+ **/
+void
+ohm_log(OhmLogLevel level, const gchar *format, ...)
+{
+    va_list     ap;
+    FILE       *out;
+    const char *prefix;
+    
+    switch (level) {
+    case OHM_LOG_ERROR:   prefix = "E: "; out = stderr; break;
+    case OHM_LOG_WARNING: prefix = "W: "; out = stderr; break;
+    case OHM_LOG_INFO:    prefix = "I: "; out = stdout; break;
+    default:                                           return;
+    }
+
+    va_start(ap, format);
+
+    fputs(prefix, out);
+    vfprintf(out, format, ap);
+    fputs("\n", out);
+
+    va_end(ap);
+}
+
 typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
 
 extern int DBG_SIGNALING, DBG_FACTS;
@@ -161,7 +187,18 @@ START_TEST (test_signaling_internal_ep_1)
     ret = init_signaling(c, 0, 0);
     fail_unless(ret == TRUE, "Init failed");
     
-    EnforcementPoint *ep = register_enforcement_point("internal", TRUE);
+    GSList *capabilities = NULL;
+
+    gchar *arr[] = {"actions", NULL};
+    gchar **interested = arr;
+
+    while (*interested != NULL) {
+        capabilities = g_slist_prepend(capabilities, g_strdup(*interested));
+        interested++;
+    }
+
+    EnforcementPoint *ep = register_enforcement_point("internal", NULL, TRUE, capabilities);
+    g_object_ref(ep);
     
     g_signal_connect(ep, "on-decision", G_CALLBACK(test_internal_decision), NULL);
     g_signal_connect(ep, "on-key-change", G_CALLBACK(test_internal_key_change), NULL);
@@ -198,7 +235,17 @@ START_TEST (test_signaling_internal_ep_gobject)
     ret = init_signaling(c, 0, 0);
     fail_unless(ret == TRUE, "Init failed");
     
-    ep = G_OBJECT(register_enforcement_point("internal", TRUE));
+    GSList *capabilities = NULL;
+    gchar *arr[] = {"actions", "interactions", NULL};
+    gchar **interested = arr;
+
+    while (*interested != NULL) {
+        capabilities = g_slist_prepend(capabilities, g_strdup(*interested));
+        interested++;
+    }
+
+    ep = G_OBJECT(register_enforcement_point("internal", NULL, TRUE, capabilities));
+    g_object_ref(ep);
 
     facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_1"));
     facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_2"));
@@ -295,7 +342,17 @@ START_TEST (test_signaling_internal_ep_2)
     ret = init_signaling(c, 0, 0);
     fail_unless(ret == TRUE, "Init failed");
     
-    EnforcementPoint *ep = register_enforcement_point("internal", TRUE);
+    GSList *capabilities = NULL;
+    gchar *arr[] = {"actions", "interactions", NULL};
+    gchar **interested = arr;
+
+    while (*interested != NULL) {
+        capabilities = g_slist_prepend(capabilities, g_strdup(*interested));
+        interested++;
+    }
+
+    EnforcementPoint *ep = register_enforcement_point("internal", NULL, TRUE, capabilities);
+    g_object_ref(ep);
     
     g_signal_connect(ep, "on-decision", G_CALLBACK(test_internal_2_decision), NULL);
     
@@ -456,10 +513,22 @@ START_TEST (test_signaling_register_unregister)
     acked_count = 0;
     nacked_count = 0;
 
-    register_enforcement_point("external", FALSE);
-    register_enforcement_point("external-2", FALSE);
-    register_enforcement_point("internal", TRUE);
-    register_enforcement_point("internal-2", TRUE);
+    GSList *capabilities = NULL;
+    gchar *arr[] = {"actions", "interactions", NULL};
+    gchar **interested = arr;
+
+    while (*interested != NULL) {
+        capabilities = g_slist_prepend(capabilities, g_strdup(*interested));
+        interested++;
+    }
+
+
+
+    g_object_ref(register_enforcement_point("external",   NULL, FALSE, capabilities));
+    g_object_ref(register_enforcement_point("external-2", NULL, FALSE, capabilities));
+    g_object_ref(register_enforcement_point("internal",   NULL, TRUE,  capabilities));
+    g_object_ref(register_enforcement_point("internal-2", NULL, TRUE,  capabilities));
+
 
     queue_decision("actions", NULL, 0, FALSE, 0);
     test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
@@ -570,8 +639,17 @@ START_TEST (test_signaling_timeout)
     
     init_signaling(c, 0, 0);
 
-    register_enforcement_point("external", FALSE);
-    register_enforcement_point("external-2", FALSE);
+    GSList *capabilities = NULL;
+    gchar *arr[] = {"actions", "interactions", NULL};
+    gchar **interested = arr;
+
+    while (*interested != NULL) {
+        capabilities = g_slist_prepend(capabilities, g_strdup(*interested));
+        interested++;
+    }
+
+    g_object_ref(register_enforcement_point("external",   NULL, FALSE,  capabilities));
+    g_object_ref(register_enforcement_point("external-2", NULL, FALSE,  capabilities));
 
     test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
 

@@ -1,6 +1,6 @@
 checkdir = /usr/lib/tests/ohm-signaling-tests
 
-check_PROGRAMS = check_signaling
+noinst_PROGRAMS = check_signaling
 
 # unit tests 
 
@@ -22,5 +22,4 @@ libohm_test_internal_ep_la_LIBADD = @OHM_PLUGIN_LIBS@
 libohm_test_internal_ep_la_LDFLAGS = -module -avoid-version
 libohm_test_internal_ep_la_CFLAGS = @OHM_PLUGIN_CFLAGS@
 
-TESTS = check_signaling
 
