@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: Martin Wolf <ext-martin.2.wolf@nokia.com>
 Standards-Version: 3.7.2
-Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libxcb-render0-dev, libsp-timestamp-dev, flex, libosso-dev, libcontextprovider-dev
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libxcb-render0-dev, libsp-timestamp-dev, flex, libosso-dev, libcontextprovider-dev, check
 
 Package: ohm-plugins-misc
 Architecture: any
@@ -57,3 +57,13 @@ Depends: ohm-plugin-timestamp (= ${binary:Version})
 XB-GIT-ID: ${Git-Id}
 Description: Debug symbols for OHM timestamping plugin.
  Debug symbols for OHM timestamping plugin.
+
+Package: ohm-plugins-tests
+Section: misc
+Depends: testrunner, ${shlibs:Depends}
+XB-Maemo-CI-Packages: ohm-plugins-misc
+XB-Maemo-CI-Stage: fast, staging, acceptance, validation
+Architecture: any
+Description: ohm-plugins-misc tests package
+ This package contains tests which can be used in CI environment
+

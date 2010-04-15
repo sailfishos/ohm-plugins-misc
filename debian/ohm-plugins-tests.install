@@ -1,0 +1,6 @@
+../../plugins/hal/tests/check_hal /usr/lib/ohm-plugins-tests/
+../../plugins/profile/tests/check_profile /usr/lib/ohm-plugins-tests/
+../../plugins/profile/tests/check_profile.sh /usr/lib/ohm-plugins-tests/
+../../plugins/signaling/tests/check_signaling /usr/lib/ohm-plugins-tests/
+../../tests/*.xml /usr/share/ohm-plugins-tests/
+
