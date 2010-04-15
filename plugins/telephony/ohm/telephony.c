@@ -1378,12 +1378,14 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
 
     switch (state) {
     case TP_HELD:
+        OHM_INFO("Call %s is on hold.", short_path(event.path));
         if (event.call->state == STATE_ON_HOLD)
             return DBUS_HANDLER_RESULT_HANDLED;
         else
             event.type = EVENT_CALL_HELD;
         break;
     case TP_UNHELD:
+        OHM_INFO("Call %s is unheld.", short_path(event.path));
         if (event.call->state == STATE_ACTIVE)
             return DBUS_HANDLER_RESULT_HANDLED;
         else
@@ -1406,6 +1408,8 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
     if (IS_CONF_MEMBER(event.call)) {
         event.call->conf_state =
             (state == TP_HELD ? STATE_ON_HOLD : STATE_ACTIVE);
+        OHM_INFO("Updated state of conference member %s to %s.",
+                 short_path(event.path), state_name(event.call->conf_state));
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     
@@ -1653,11 +1657,12 @@ channel_removed(DBusConnection *c, DBusMessage *msg, void *data)
         event_enqueue(path, c, msg, data);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
-    
-    member->state  = STATE_POST_CONFERENCE;
+
+    member->state = member->conf_state;
     member->parent = NULL;
-    OHM_INFO("Call %s has left conference %s.",
-             short_path(member->path), short_path(parent->path));
+    OHM_INFO("Call %s has left conference %s, restoring state to %s.",
+             short_path(member->path), short_path(parent->path),
+             state_name(member->state));
     policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
     
     return DBUS_HANDLER_RESULT_HANDLED;
@@ -2971,7 +2976,7 @@ remove_parent(gpointer key, gpointer value, gpointer data)
     if (IS_CONF_PARENT(parent)) {
         if (call->state == STATE_POST_CONFERENCE) {
             OHM_INFO("Restoring post-conference state of %s to %s.",
-                     short_path(call->path), state_name(call->state));
+                     short_path(call->path), state_name(call->conf_state));
             call->state = call->conf_state;
             update |= UPDATE_STATE;
         }
