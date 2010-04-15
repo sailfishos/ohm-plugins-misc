@@ -3998,7 +3998,7 @@ media_active(gpointer key, gpointer value, gpointer data)
         return;
 
     if (call->state == STATE_ACTIVE ||
-        call->state == STATE_ON_HOLD ||
+        call->state == STATE_ON_HOLD || STATE_AUTOHOLD ||
         (call->dir == DIR_OUTGOING && call->state == STATE_CREATED) ||
         (call->state == STATE_PEER_HUNGUP &&
          (call->dir == DIR_OUTGOING ||
