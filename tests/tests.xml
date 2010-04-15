@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<testdefinition version="0.1">
+  <suite name="ohm-plugins-misc-tests" domain="Multimedia Middleware"> 
+    <set name="ohm-plugins-misc-tests" feature="Resource policy">
+
+      <case name="hal-tests" type="Functional" level="Component" subfeature="Ohm plugins" description="HAL tests" timeout="15"><step expected_result="0">/usr/lib/ohm-plugins-tests/check_hal</step></case>
+      <case name="profile-tests" type="Functional" level="Component" subfeature="Ohm plugins" description="Profile tests" timeout="15"><step expected_result="0">/usr/lib/ohm-plugins-tests/check_profile</step></case>
+      <case name="signaling-tests" type="Functional" level="Component" subfeature="Ohm plugins" description="Signaling tests" timeout="15"><step expected_result="0">/usr/lib/ohm-plugins-tests/check_signaling</step></case>
+
+      <environments>
+        <scratchbox>false</scratchbox>
+        <hardware>true</hardware>    
+      </environments>
+
+    </set>
+  </suite>
+</testdefinition>
