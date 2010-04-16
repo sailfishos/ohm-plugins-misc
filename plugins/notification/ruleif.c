@@ -9,12 +9,12 @@
 #include "plugin.h"
 #include "ruleif.h"
 
-#define IMPORT(name, func) {name, (char **)&func##_SIGNATURE, (char **)&func} 
+#define IMPORT(name, func) {name, (char **)&func##_SIGNATURE, (void **)&func} 
 
 typedef struct {
     char  *name;
     char **sigptr;
-    char **methptr;
+    void **methptr;
 } import_t;
 
 typedef struct {
@@ -36,13 +36,7 @@ static int    notevnt = -1;          /* 'notification_events' rule  */
 static int copy_value(char *, int, void *, char **);
 
 
-
-/*! \addtogroup pubif
- *  Functions
- *  @{
- */
-
-void ruleif_init(OhmPlugin *plugin)
+static int lookup_rules(void)
 {
     static import_t   imports[] = {
         IMPORT("rule_engine.free", rules_free_result),
@@ -60,21 +54,22 @@ void ruleif_init(OhmPlugin *plugin)
     rule_def_t   *rd;
     unsigned int  i;
     unsigned int  n;
-    int           failed;
+    int           success;
 
-    (void)plugin;
-
-    for (i = 0, failed = FALSE;   i < DIM(imports);   i++) {
+    for (i = 0, success = TRUE;   i < DIM(imports);   i++) {
         imp = imports + i;
 
+        if (*imp->methptr != NULL)
+            continue;
+        
         if (!ohm_module_find_method(imp->name, imp->sigptr, imp->methptr)) {
             OHM_ERROR("notification: can't find method '%s'", imp->name);
-            failed = TRUE;
+            success = FALSE;
         }
     }
 
-    if (failed)
-        exit(1);
+    if (!success)
+        return FALSE;
 
     for (i = n = 0;  i < DIM(ruldefs);  i++) {
         rd = ruldefs + i;
@@ -84,11 +79,28 @@ void ruleif_init(OhmPlugin *plugin)
         else {
             OHM_ERROR("notification can't find rule '%s/%d'",
                       rd->name, rd->arity);
+            success = FALSE;
         }
     }
 
     if (n == DIM(ruldefs))
         OHM_INFO("notification: found all rules");
+
+    return success;
+}
+
+
+
+/*! \addtogroup pubif
+ *  Functions
+ *  @{
+ */
+
+void ruleif_init(OhmPlugin *plugin)
+{
+    (void)plugin;
+    
+    lookup_rules();
 }
 
 int ruleif_notification_request(const char *what, ...)
@@ -102,6 +114,9 @@ int ruleif_notification_request(const char *what, ...)
     int      i;
     int      status;
     int      success = FALSE;
+
+    if (notreq < 0)
+        lookup_rules();
 
     if (notreq >= 0) {
         retval = NULL;
@@ -156,7 +171,6 @@ int ruleif_notification_events(int    id,
                                char ***events_ret,
                                int    *length_ret)
 {
-    va_list  ap;
     char    *argv[16];
     char  ***retval;
     char   **entry;
@@ -165,7 +179,10 @@ int ruleif_notification_events(int    id,
     int      status;
     int      success = FALSE;
 
-    if (notreq >= 0) {
+    if (notreq < 0 || notevnt < 0)
+        lookup_rules();
+
+    if (notreq >= 0 && notevnt >= 0) {
         retval = NULL;
 
         argv[i=0] = (char *)'i';

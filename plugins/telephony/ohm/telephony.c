@@ -1733,10 +1733,11 @@ member_channel_removed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     
-    member->state  = STATE_POST_CONFERENCE;
+    member->state  = member->conf_state;
     member->parent = NULL;
-    OHM_INFO("Call %s has left conference %s.",
-             short_path(member->path), short_path(parent->path));
+    OHM_INFO("Call %s has left conference %s, restoring state to %s.",
+             short_path(member->path), short_path(parent->path),
+             state_name(member->state));
     policy_call_update(member, UPDATE_STATE | UPDATE_PARENT);
     
     return DBUS_HANDLER_RESULT_HANDLED;
