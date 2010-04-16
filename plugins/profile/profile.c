@@ -8,8 +8,9 @@
 
 #include "profile.h"
 
-static int profile_load_state(void);
-static int profile_save_state(OhmFact *fact);
+static int  profile_load_state(void);
+static int  profile_save_state(OhmFact *fact);
+static void reconnect_profile(void);
 
 static int DBG_PROFILE, DBG_FACTS;
 
@@ -83,8 +84,15 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
         
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
+
     
-    OHM_INFO("Received session bus notification with address \"%s\".", address);
+    if (bus_conn != NULL) {
+        OHM_INFO("profile: received new session bus address \"%s\".", address);
+        dbus_connection_unref(bus_conn);
+        bus_conn = NULL;
+    }
+    else
+        OHM_INFO("profile: received session bus address \"%s\".", address);
     
     if ((bus_conn = dbus_connection_open(address, &error)) == NULL ||
         !dbus_bus_register(bus_conn, &error)) {
@@ -99,7 +107,19 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
 
-    profile_plugin_p = init_profile();
+    if (profile_plugin_p == NULL) {
+        profile_plugin_p = init_profile();
+
+        if (profile_plugin_p != NULL)
+            OHM_INFO("profile: initialized with session bus.");
+        else
+            OHM_ERROR("profile: failed to initialize with session bus.");
+    }
+    else {
+        reconnect_profile();
+        OHM_INFO("profile: reinitialized with new session bus.");
+    }
+    
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
@@ -494,6 +514,14 @@ end:
 
     return plugin;
 }
+
+
+static void reconnect_profile(void)
+{
+    profile_connection_set(bus_conn);
+}
+
+
 
 /* non-static for testing purposes */
 
