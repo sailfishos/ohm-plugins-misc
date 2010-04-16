@@ -96,6 +96,7 @@ static int             emergency_on = FALSE;
 
 static void event_handler(event_t *event);
 
+static void plugin_reconnect(char *address);
 
 /*
  * call bookkeeping
@@ -465,35 +466,37 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
     (void)data;
 
 
-    if (bus != NULL) {
-        OHM_ERROR("Received session bus notification but already has a bus.");
-        OHM_ERROR("Ignoring session bus notification.");
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    }
-
     dbus_error_init(&error);
     
     if (!dbus_message_get_args(msg, &error,
                                DBUS_TYPE_STRING, &address,
                                DBUS_TYPE_INVALID)) {
         if (dbus_error_is_set(&error)) {
-            OHM_ERROR("Failed to parse session bus notification: %s.",
+            OHM_ERROR("telephony: "
+                      "failed to parse session bus notification: %s.",
                       error.message);
             dbus_error_free(&error);
         }
         else
-            OHM_ERROR("Failed to parse session bus notification.");
+            OHM_ERROR("telephony: failed to parse session bus notification.");
         
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
+
+
+    if (bus != NULL) {
+        OHM_INFO("telephony: received new session bus address '%s'.", address);
+        plugin_reconnect(address);
+
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
     
-    
-    OHM_INFO("Received session bus notification with address \"%s\".", address);
+    OHM_INFO("telephony: received session bus address \"%s\".", address);
     
     if (!bus_init(address))
-        OHM_ERROR("Delayed session bus initialization failed.");
+        OHM_ERROR("telephony: failed to connect to session bus.");
     else
-        OHM_INFO("Connected to session DBUS.");
+        OHM_INFO("telephony: connected to session bus.");
     
     /* we need to give others a chance to notice the session bus */
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -2807,6 +2810,12 @@ call_destroy(call_t *call)
             if (call->video != NULL)
                 g_free(call->video);
         }
+
+        if (call->timeout != 0) {
+            g_source_remove(call->timeout);
+            call->timeout = 0;
+        }
+        
         g_free(call);
     }
 }
@@ -4267,6 +4276,23 @@ plugin_exit(OhmPlugin *plugin)
     bus_exit();
     call_exit();
     policy_exit();
+}
+
+
+/********************
+ * plugin_reconnect
+ ********************/
+static void
+plugin_reconnect(char *address)
+{
+    bus_exit();
+    call_exit();
+    
+    call_init();
+    if (!bus_init(address))
+        OHM_ERROR("telephony: failed to reconnect to D-BUS.");
+    else
+        OHM_INFO("telephony: successfully reconnected to D-BUS.");
 }
 
 
