@@ -1,3 +1,15 @@
+ohm-plugins-misc (1:1.13) unstable; urgency=low
+
+  [Krisztian Litkey]
+  * Don't assume initial lookup of notification rules succeeds (Fixes: NB#164529).
+  * Conference member hold state tracking fixes.
+  * Autoheld calls also need the audio resource.
+
+  [Vsevolod Buzinov]
+  * Added automatic tests for hal, profile, signaling plugins.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 16 Apr 2010 12:10:59 +0300
+
 ohm-plugins-misc (1:1.12) unstable; urgency=low
 
   * Added automatic tests for hal, profile and signaling plugins.
