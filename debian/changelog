@@ -2,7 +2,7 @@ ohm-plugins-misc (1:1.13) unstable; urgency=low
 
   [Krisztian Litkey]
   * Don't assume initial lookup of notification rules succeeds (Fixes: NB#164529).
-  * Conference member hold state tracking fixes.
+  * Conference member hold state tracking fixes (Fixes: NB#151043).
   * Autoheld calls also need the audio resource.
 
   [Vsevolod Buzinov]
