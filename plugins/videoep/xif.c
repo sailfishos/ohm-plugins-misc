@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
@@ -134,6 +135,8 @@ static int  rque_poll_reply(xcb_connection_t *, rque_t *,
 static gboolean xio_cb(GIOChannel *, GIOCondition, gpointer);
 static void xevent_cb(xif_t *, xcb_generic_event_t *);
 
+static void sigpipe_init();
+static void sigpipe_exit();
 
 /*! \addtogroup pubif
  *  Functions
@@ -145,6 +148,7 @@ void xif_init(OhmPlugin *plugin)
     (void)plugin;
 
     xiface = xif_create(":0");
+    sigpipe_init();
 }
 
 void xif_exit(OhmPlugin *plugin)
@@ -152,6 +156,7 @@ void xif_exit(OhmPlugin *plugin)
     (void)plugin;
 
     xif_destroy(xiface);
+    sigpipe_exit();
 }
 
 int xif_add_connection_callback(xif_connectioncb_t conncb, void *usrdata)
@@ -974,6 +979,41 @@ static void xevent_cb(xif_t *xif, xcb_generic_event_t *ev)
         OHM_DEBUG(DBG_XCB, "got event %d", ev->response_type);
         break;
     }
+}
+
+
+/*
+ * Notes:
+ *
+ *    If the X server crashes/exits we get a SIGPIPE if xcb tries to send
+ *    a request before realizing the server is gone. This does happen in
+ *    practice with a very much non-zero probability. If noone has installed
+ *    a signal handler for SIGPIPE, ohm will get terminated. To prevent this
+ *    we always install a signal handler ourselves.
+ *
+ *    In principle, we could also just ignore SIGPIPE.
+ */
+
+static void (*orig_handler)(int);
+
+static void sigpipe_handler(int signum)
+{
+    OHM_ERROR("videoep: got SIGPIPE");
+    
+    if (orig_handler != NULL)
+        orig_handler(signum);
+}
+
+static void sigpipe_init(void)
+{
+    orig_handler = signal(SIGPIPE, sigpipe_handler);
+}
+
+
+static void sigpipe_exit(void)
+{
+    signal(SIGPIPE, SIG_IGN);
+    orig_handler = NULL;
 }
 
 
