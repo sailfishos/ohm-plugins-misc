@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.15) unstable; urgency=low
+
+  * Fix destroy_window leaving pointers to freed memory (Fixes: NB#165310).
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 22 Apr 2010 20:50:18 +0300
+
 ohm-plugins-misc (1:1.14) unstable; urgency=low
 
   * Don't take audio for incoming calls prematurely (Fixes: NB#164780).
