@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<provider bus="session"
+<provider bus="system"
           service="com.nokia.policy.context">
   <key name="com.nokia.policy.audio_route">
     <type>string</type>
