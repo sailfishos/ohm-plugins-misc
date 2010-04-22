@@ -249,7 +249,7 @@ static void destroy_window(win_def_t *win)
     int         idx;
 
     if (win != NULL) {
-        idx = WINDOW_HASH_INDEX(win->id);
+        idx = WINDOW_HASH_INDEX(win->xid);
 
         for (prev = (win_def_t*)&winhash[idx]; prev->next; prev = prev->next) {
             if (win == prev->next) {
