@@ -2,7 +2,7 @@ Source: ohm-plugins-misc
 Section: utils
 Priority: optional
 Maintainer: Martin Wolf <ext-martin.2.wolf@nokia.com>
-Standards-Version: 3.7.2
+Standards-Version: 3.8.0
 Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libxcb-render0-dev, libsp-timestamp-dev, flex, libosso-dev, libcontextprovider-dev, check
 
 Package: ohm-plugins-misc
