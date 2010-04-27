@@ -1,3 +1,11 @@
+ohm-plugins-misc (1:1.16) unstable; urgency=low
+
+  * Fix dependency problems with context plugin. Now it loads after dres,
+    so the factstore is pre-populated.
+  * Implemented: SWP#Plicy-309
+
+ -- Wolf Bergenheim <ext-wolf.2.bergenheim@nokia.com>  Tue, 27 Apr 2010 10:22:43 +0300
+
 ohm-plugins-misc (1:1.15) unstable; urgency=low
 
   * Fix destroy_window leaving pointers to freed memory (Fixes: NB#165310).
