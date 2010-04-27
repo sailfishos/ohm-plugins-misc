@@ -10,6 +10,7 @@ public:
 private slots:
     void audioRouteChanged();
     void audioSourceChanged();
+    void videoRouteChanged();
 //    onCall();
 //    onCallAudioType();
 //    modeChanged();
@@ -17,6 +18,8 @@ private slots:
 private:
     ContextProperty *cpAudioRoute;
     ContextProperty *cpAudioSource;
+    ContextProperty *cpVideoRoute;
+
 //    ContextProperty *cpCall;
 //    ContextProperty *cpCallAudioType;
 //    ContextProperty *cpMode;

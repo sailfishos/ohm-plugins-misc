@@ -46,27 +46,29 @@ plugin_init(OhmPlugin *plugin)
     context_info = parse_value(facts_csv);
     {
 	context_info_t *info;
+	if (context_info == NULL) {
+	    OHM_ERROR("No context variables!!!");
+	}
 	for (info = context_info; info != NULL; info = info->next) {
 	    context_key_value_pair_t *kvp;
-	    OHM_DEBUG(DBG_CONTEXT, "context provider: fact: %s", info->fact);
-	    OHM_DEBUG(DBG_CONTEXT, "context provider: field: %s", info->field);
-	    OHM_DEBUG(DBG_CONTEXT, "context provider: cf-key: %s", info->cf_key);
-	    OHM_DEBUG(DBG_CONTEXT, "context provider: next: %p", info->next);
+	    OHM_INFO("context provider: fact: %s", info->fact);
+	    OHM_INFO("context provider: field: %s", info->field);
+	    OHM_INFO("context provider: cf-key: %s", info->cf_key);
+	    OHM_INFO("context provider: next: %p", info->next);
 
 	    for (kvp = info->kvp; kvp != NULL; kvp = kvp->next) {
 		switch (kvp->type) {
 		case 's':
-		    OHM_DEBUG(DBG_CONTEXT, "context provider: \t%s: '%s'", kvp->key, kvp->value.s);
+		    OHM_INFO("context provider: \t%s: '%s'", kvp->key, kvp->value.s);
 		    break;
 		case 'i':
-		    OHM_DEBUG(DBG_CONTEXT, "context provider: \t%s: %d", kvp->key, kvp->value.i);
+		    OHM_INFO("context provider: \t%s: %d", kvp->key, kvp->value.i);
 		    break;
 		default:
 		    OHM_ERROR("context provider: \tUNUPPORTED TYPE %c: %s: 0x%x", kvp->type, kvp->key, kvp->value.i);
 		    break;
 		}
 	    }
-	    OHM_DEBUG(DBG_CONTEXT, "context_provider_install_key(%s, %d, %p, %p);", info->cf_key, 0, cf_subscription_changed_cb, info);
 	    register_fact(info, fact_store);
 	}
     }
@@ -78,6 +80,8 @@ static void register_fact(context_info_t *info, OhmFactStore *fact_store)
     GSList  *list;
     OhmFact *fact;
 
+    OHM_INFO("%s:%d %s(): registering fact '%s'", __FILE__, __LINE__, __FUNCTION__, info->fact);
+
     list = ohm_fact_store_get_facts_by_name(fact_store, info->fact);
     for (;list != NULL; list  = g_slist_next(list)) {
 	GValue *value;
@@ -85,12 +89,14 @@ static void register_fact(context_info_t *info, OhmFactStore *fact_store)
 	value = ohm_fact_get(fact, info->field);
 	if(value == NULL) {
 	    /* fact doesn't have given field, mismatch! */
-	    OHM_ERROR("context provider: fact %s contain a field %s, ignoring it", info->fact, info->field);
+	    OHM_ERROR("context provider: fact %s doesn't contain a field %s, ignoring it", info->fact, info->field);
 	    return;
 	}
 
 	if(check_if_fact_matches_kvp(info->kvp, fact)) {
 	    context_match_t match;
+
+	    OHM_INFO("%s:%d %s(): We have a match for %s!", __FILE__, __LINE__, __FUNCTION__, info->fact);
 
 	    match.info = info;
 	    match.have_value=1;
@@ -98,6 +104,7 @@ static void register_fact(context_info_t *info, OhmFactStore *fact_store)
 	    save_field_value(value, &match);
 	    info->has_subscribers=1;
 
+	    OHM_INFO("context_provider_install_key(%s, %d, %p, %p);", info->cf_key, 0, cf_subscription_changed_cb, info);
 	    context_provider_install_key(info->cf_key, 0, cf_subscription_changed_cb, info);
 	    export_fact_to_cf(&match);
 	    /* subscribe to all facts given by the context_info list */
@@ -311,6 +318,11 @@ OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        OHM_LICENSE_NON_FREE, /* OHM_LICENSE_LGPL */
                        plugin_init, plugin_exit, NULL);
 
+OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
+
+OHM_PLUGIN_REQUIRES_METHODS(context, 1, 
+   OHM_IMPORT("dres.resolve", resolve)
+);
 
 /*
 OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 1,

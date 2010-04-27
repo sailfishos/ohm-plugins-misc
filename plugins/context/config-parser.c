@@ -1,7 +1,3 @@
-#ifdef TEST
-#include <stdio.h>
-#define OHM_ERROR  printf
-#endif
 #include <stdlib.h>
 #include <string.h>
 #include "context-provider.h"
@@ -26,7 +22,7 @@ context_info_t * parse_value(const char *s)
 	token = strtok_r(fkc, ",", &p);
 	if (token == NULL)
 	    break;
-
+	OHM_INFO("found token %s", token);
 	part = token;
 	info = calloc(1, sizeof(struct context_info_s));
 	if(info == NULL) {
@@ -40,11 +36,10 @@ context_info_t * parse_value(const char *s)
 	    char *subtoken;
 
 	    subtoken = strtok_r(part, ";", &q);
+	    OHM_INFO("\tfound subtoken %d %s", j+1, subtoken);
 	    if (subtoken == NULL) {
-#ifndef TEST
-		OHM_ERROR("context provider: Invalid configuration file!");
-#endif
-		break;
+		OHM_ERROR("context provider: Invalid configuration file!\n");
+		return NULL;
 	    }
 
 	    switch(j) {
@@ -83,6 +78,8 @@ static context_key_value_pair_t * parse_key_values(const char *s)
     char *pairs=NULL, *p=NULL, *q=NULL, *copy=NULL;
     if (s == NULL)
 	return NULL;
+    if (strlen(s) < 3) /* Ignore kvp strings of length < 3 */
+	return NULL;
 
     copy = strdup(s);
     pairs = copy;
@@ -108,8 +105,8 @@ static context_key_value_pair_t * parse_key_values(const char *s)
 	    char *subtoken;
 	    subtoken = strtok_r(kvp, "=:", &q);
 	    if (subtoken == NULL) {
-		OHM_ERROR("context provider: Invalid configuration file!");
-		exit(1);
+		OHM_ERROR("context provider: Invalid configuration file!!");
+		return NULL;
 	    }
 	    switch (j) {
 	    case 0:
@@ -140,36 +137,3 @@ static context_key_value_pair_t * parse_key_values(const char *s)
     free(copy);
     return ret;
 }
-
-#ifdef TEST
-int main(int argc, char *argv[])
-{
-    int i;
-    for (i=1; i < argc; i++) {
-	context_info_t *values;
-	
-	for(values = parse_value(argv[i]); values != NULL; values = values->next) {
-	    context_key_value_pair_t *kvp;
-	    printf("%s: { ", values->fact);
-	    printf("/%c:%s/ ", values->field_type, values->field);
-
-	    for(kvp = values->kvp; kvp != NULL; kvp = kvp->next) {
-		switch(kvp->type) {
-		case 's':
-		    printf("%s: '%s' ",kvp->key, kvp->value.s);
-		    break;
-		case 'i':
-		    printf("%s: %d ",kvp->key, kvp->value.i);
-		    break;
-		default:
-		    printf("%s: 0x%x ",kvp->key, kvp->value.i);
-		    break;
-		}
-		
-	    }
-	    printf("} => %s\n", values->cf_key);
-	}
-    }
-    return 0;
-}
-#endif
