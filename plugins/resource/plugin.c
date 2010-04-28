@@ -81,6 +81,9 @@ OHM_PLUGIN_PROVIDES(
     "maemo.resource"
 );
 
+OHM_PLUGIN_REQUIRES("dres");
+
+
 OHM_PLUGIN_DBUS_SIGNALS(
     { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_POLICY_NEW_SESSION_SIGNAL,
       NULL, dbusif_session_notification, NULL }
