@@ -95,6 +95,8 @@ OHM_PLUGIN_DESCRIPTION("videoep",
                        NULL);
 
 
+OHM_PLUGIN_REQUIRES("dres");
+
 /* 
  * Local Variables:
  * c-basic-offset: 4
