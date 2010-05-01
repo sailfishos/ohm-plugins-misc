@@ -16,7 +16,8 @@ libohm_videoep_la_SOURCES = plugin.c mem.c config-parser.y config-scanner.l \
                             atom.c window.c property.c \
                             argument.c exec.c \
                             function.c sequence.c resolver.c \
-                            tracker.c
+                            tracker.c \
+                            randr.c router.c action.c
 
 libohm_videoep_la_LIBADD = @OHM_PLUGIN_LIBS@ @XCB_LIBS@ \
                            @XCBXV_LIBS@ @XCBRANDR_LIBS@
