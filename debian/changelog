@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.18) unstable; urgency=low
+
+  * Initial support for XRandr and TV-out routing
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sat, 01 May 2010 20:12:41 +0300
+
 ohm-plugins-misc (1:1.17) unstable; urgency=low
 
   * Declare missing dependencies for the resource and notification plugins.
