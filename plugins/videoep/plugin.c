@@ -100,7 +100,7 @@ static void plugin_exit(OhmPlugin *plugin)
     xif_exit(plugin);
 }
 
-OHM_PLUGIN_REQUIRES("signaling");
+OHM_PLUGIN_REQUIRES("signaling", "dres");
 
 OHM_PLUGIN_DESCRIPTION("videoep",
                        "0.0.1",
@@ -109,9 +109,6 @@ OHM_PLUGIN_DESCRIPTION("videoep",
                        plugin_init,
                        plugin_exit,
                        NULL);
-
-
-OHM_PLUGIN_REQUIRES("dres");
 
 /* 
  * Local Variables:
