@@ -5,7 +5,7 @@
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
 
-void acrion_init(OhmPlugin *);
+void action_init(OhmPlugin *);
 void action_exit(OhmPlugin *);
 
 
