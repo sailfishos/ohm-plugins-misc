@@ -1,6 +1,7 @@
 ohm-plugins-misc (1:1.18) unstable; urgency=low
 
   * Initial support for XRandr and TV-out routing
+  * Implemented: SWP#Plicy-114
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sat, 01 May 2010 20:12:41 +0300
 
