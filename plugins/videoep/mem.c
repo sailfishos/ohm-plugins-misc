@@ -38,7 +38,8 @@ void mem_exit(OhmPlugin *plugin)
 {
     (void)plugin;
 
-    fclose(mfile);
+    if (mfile != NULL)
+        fclose(mfile);
 }
 
 void *__malloc(const char *file, int line, size_t size)

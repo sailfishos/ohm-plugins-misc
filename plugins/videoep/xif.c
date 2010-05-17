@@ -34,6 +34,8 @@
 #define PROPERTY_QUERY_DIM       QUEUE_DIM
 #define PROPERTY_QUERY_INDEX(i)  QUEUE_INDEX(i)
 
+#define RANDR_QUERY_DIM          QUEUE_DIM
+#define RANDR_QUERY_INDEX(i)     QUEUE_INDEX(i)
 
 struct xif_s;
 
@@ -68,6 +70,18 @@ typedef struct propcb_s {
     void               *usrdata;
 } propcb_t;
 
+typedef struct crtccb_s {
+    struct crtccb_s     *next;
+    xif_crtc_notifycb_t  callback;
+    void                *usrdata;
+} crtccb_t;
+
+typedef struct outpcb_s {
+    struct outpcb_s       *next;
+    xif_output_notifycb_t  callback;
+    void                  *usrdata;
+} outpcb_t;
+
 typedef struct xif_s {
     char               *display;
     xcb_connection_t   *xconn;
@@ -80,6 +94,8 @@ typedef struct xif_s {
     conncb_t           *conncb;    /* connection callbacks */
     structcb_t         *destcb;    /* window destroy callbacks */
     propcb_t           *propcb;    /* property change callbacks */
+    crtccb_t           *crtccb;    /* RandR crtc change callbacks */
+    outpcb_t           *outpcb;    /* RandR output change callbacks */
 } xif_t;
 
 typedef struct {
@@ -98,19 +114,74 @@ typedef struct {
     void                 *usrdata;
 } prop_query_t;
 
+
+typedef enum {
+    query_unknown = 0,
+    query_screen,
+    query_crtc,
+    query_output,
+} randr_query_type_t;
+
+#define RANDR_QUERY_COMMON      \
+    int                   busy; \
+    randr_query_type_t    type
+
+typedef struct {
+    RANDR_QUERY_COMMON;
+} randr_query_any_t;
+
+typedef struct {
+    RANDR_QUERY_COMMON;
+    uint32_t              window;
+    xif_screen_replycb_t  replycb;
+    void                 *usrdata;
+} randr_query_screen_t;
+
+typedef struct {
+    RANDR_QUERY_COMMON;
+    uint32_t              window;
+    uint32_t              xid;
+    xif_crtc_replycb_t    replycb;
+    void                 *usrdata;
+} randr_query_crtc_t;
+
+typedef struct {
+    RANDR_QUERY_COMMON;
+    uint32_t              window;
+    uint32_t              xid;
+    xif_output_replycb_t  replycb;
+    void                 *usrdata;
+} randr_query_output_t;
+
+typedef union {
+    randr_query_any_t     any;
+    randr_query_screen_t  screen;
+    randr_query_crtc_t    crtc;
+    randr_query_output_t  output;
+} randr_query_t;
+
 typedef enum {
     eevent_unknown = 0,
     event_property,
     event_window,
 } event_t;
 
+typedef struct {
+    int               present;
+    uint32_t          evbase;
+    uint32_t          errbase;
+} extension_t;
+
 
 static uint32_t       polltime = 1000; /* 1 sec */
 static xif_t         *xiface;
+static extension_t    randr;
 static atom_query_t   atom_qry[ATOM_QUERY_DIM];
 static uint32_t       atom_idx;
 static prop_query_t   prop_qry[PROPERTY_QUERY_DIM];
 static uint32_t       prop_idx;
+static randr_query_t  randr_qry[RANDR_QUERY_DIM];
+static uint32_t       randr_idx;
 
 static xif_t   *xif_create(const char *);
 static void     xif_destroy(xif_t *);
@@ -126,6 +197,22 @@ static void atom_query_finish(xif_t *, void *, void *);
 static int  property_query(xif_t *, uint32_t, uint32_t, videoep_value_type_t,
                            uint32_t, xif_prop_replycb_t, void *);
 static void property_query_finish(xif_t *, void *, void *);
+
+static int  randr_check(xif_t *, extension_t *);
+static int  randr_query_screen(xif_t *, xcb_window_t,
+                               xif_screen_replycb_t, void *);
+static void randr_query_screen_finish(xif_t *, void *, void *);
+static int  randr_query_crtc(xif_t *, uint32_t, uint32_t, uint32_t,
+                             xif_crtc_replycb_t, void *);
+static void randr_query_crtc_finish(xif_t *, void *, void *);
+static int  randr_config_crtc(xif_t *, uint32_t, xif_crtc_t *);
+static int  randr_query_output(xif_t *, uint32_t, uint32_t, uint32_t,
+                               xif_output_replycb_t, void *);
+static void randr_query_output_finish(xif_t *, void *, void *);
+static int  randr_event_handler(xif_t *, xcb_generic_event_t *);
+static xif_connstate_t randr_connection_to_state(uint8_t);
+
+static int  check_version(uint32_t, uint32_t, uint32_t, uint32_t);
 
 static int  rque_is_full(rque_t *);
 static int  rque_append_request(rque_t *, unsigned int, reply_handler_t,void*);
@@ -228,6 +315,13 @@ int xif_connect_to_xserver(void)
     }
 
     return status;
+}
+
+int xif_is_connected_to_xserver(void)
+{
+    int connected = (xiface && xiface->xconn) ? TRUE : FALSE;
+
+    return connected;
 }
 
 int xif_add_property_change_callback(xif_propertycb_t propcb, void *usrdata)
@@ -416,6 +510,159 @@ int xif_track_destruction_on_window(uint32_t window, int track)
     return status;
 }
 
+int xif_add_randr_crtc_change_callback(xif_crtc_notifycb_t  crtccb,
+                                       void                *usrdata)
+{
+    crtccb_t  *ccb;
+    crtccb_t  *cur;
+    crtccb_t  *last;
+
+    if (!crtccb || !xiface)
+        return -1;
+
+    for (last = (crtccb_t*)&xiface->crtccb;  last->next;  last = last->next) {
+        cur = last->next;
+
+        if (crtccb == cur->callback && usrdata == cur->usrdata)
+            return 0;
+    }
+
+    if ((ccb = malloc(sizeof(crtccb_t))) != NULL) {
+        memset(ccb, 0, sizeof(crtccb_t));
+        ccb->callback = crtccb;
+        ccb->usrdata  = usrdata;
+    
+        last->next = ccb;
+
+        OHM_DEBUG(DBG_XCB, "added RandR crtc change callback %p/%p",
+                  crtccb,usrdata);
+
+        return 0;
+    }
+
+    return -1;
+}
+
+int xif_add_randr_output_change_callback(xif_output_notifycb_t  outpcb,
+                                         void                  *usrdata)
+{
+    outpcb_t  *ocb;
+    outpcb_t  *cur;
+    outpcb_t  *last;
+
+    if (!outpcb || !xiface)
+        return -1;
+
+    for (last = (outpcb_t*)&xiface->outpcb;  last->next;  last = last->next) {
+        cur = last->next;
+
+        if (outpcb == cur->callback && usrdata == cur->usrdata)
+            return 0;
+    }
+
+    if ((ocb = malloc(sizeof(outpcb_t))) != NULL) {
+        memset(ocb, 0, sizeof(outpcb_t));
+        ocb->callback = outpcb;
+        ocb->usrdata  = usrdata;
+    
+        last->next = ocb;
+
+        OHM_DEBUG(DBG_XCB, "added RandR output change callback %p/%p",
+                  outpcb,usrdata);
+
+        return 0;
+    }
+
+    return -1;
+}
+
+int xif_remove_randr_crtc_change_callback(xif_crtc_notifycb_t  crtccb,
+                                          void                *usrdata)
+{
+    crtccb_t *ccb;
+    crtccb_t *prev;
+
+    for (prev = (crtccb_t *)&xiface->crtccb;  prev->next;  prev = prev->next) {
+        ccb = prev->next;
+
+        if (crtccb == ccb->callback && usrdata == ccb->usrdata) {
+
+            OHM_DEBUG(DBG_XCB, "removed RandR crtc change callback %p/%p",
+                      crtccb, usrdata);
+
+            prev->next = ccb->next;
+            free(ccb);
+            
+            return 0;
+        }
+    }
+
+    OHM_DEBUG(DBG_XCB, "can't remove RandR crtc change callback %p/%p: "
+              "no matching callback registration", crtccb, usrdata);
+
+    return -1;
+}
+
+int xif_remove_randr_output_change_callback(xif_output_notifycb_t  outpcb,
+                                            void                  *usrdata)
+{
+    outpcb_t *ocb;
+    outpcb_t *prev;
+
+    for (prev = (outpcb_t *)&xiface->outpcb;  prev->next;  prev = prev->next) {
+        ocb = prev->next;
+
+        if (outpcb == ocb->callback && usrdata == ocb->usrdata) {
+
+            OHM_DEBUG(DBG_XCB, "removed RandR output change callback %p/%p",
+                      outpcb, usrdata);
+
+            prev->next = ocb->next;
+            free(ocb);
+
+            return 0;
+        }
+    }
+
+    OHM_DEBUG(DBG_XCB, "can't remove RandR output change callback %p/%p: "
+              "no matching callback registration", outpcb, usrdata);
+
+    return -1;
+}
+
+int xif_track_randr_changes_on_window(uint32_t window, int track)
+{
+    static int        mask = XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE  |
+                             XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE    |
+                             XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE  |
+                             XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY;
+
+    const char       *track_str = track ? "start" : "stop";
+    int               status    = -1;
+    xcb_void_cookie_t ckie;
+
+    if (window && xiface) {
+        if (xiface->xconn && !xcb_connection_has_error(xiface->xconn)) {
+
+            ckie = xcb_randr_select_input(xiface->xconn, window,
+                                          track ? mask : 0);
+
+            if (xcb_connection_has_error(xiface->xconn)) {
+                OHM_DEBUG(DBG_XCB, "can't %s tracking RandR changes on "
+                          "window 0x%x", track_str, window);
+            }
+            else {
+                status = 0;
+
+                OHM_DEBUG(DBG_XCB, "%s tracking RandR changes on "
+                          "window 0x%x", track_str, window);
+            }
+        }
+    }
+
+    return status;
+}
+
 
 uint32_t xif_root_window_query(uint32_t *winlist, uint32_t len)
 {
@@ -458,6 +705,62 @@ int xif_property_query(uint32_t              window,
     else
         status = property_query(xiface, window,property,type,
                                 length, replycb,usrdata);
+
+    return status;
+}
+
+int xif_screen_query(uint32_t win, xif_screen_replycb_t replycb, void *usrdata)
+{
+    int status;
+
+    if (!win || !replycb || !xiface || !randr.present)
+        status = -1;
+    else
+        status = randr_query_screen(xiface, win, replycb,usrdata);
+
+    return status;
+}
+
+int xif_crtc_query(uint32_t            win,
+                   uint32_t            crtc,
+                   uint32_t            tstamp,
+                   xif_crtc_replycb_t  replycb,
+                   void               *usrdata)
+{
+    int status;
+
+    if (!win || !crtc || !replycb || !xiface || !randr.present)
+        status = -1;
+    else
+        status = randr_query_crtc(xiface, win, crtc, tstamp, replycb,usrdata);
+
+    return status;
+}
+
+int xif_output_query(uint32_t              win,
+                     uint32_t              output,
+                     uint32_t              tstamp,
+                     xif_output_replycb_t  replycb,
+                     void                 *usrdata)
+{
+    int status;
+
+    if (!win || !output || !replycb || !xiface || !randr.present)
+        status = -1;
+    else
+        status = randr_query_output(xiface, win, output, tstamp,
+                                    replycb,usrdata);
+    return status;
+}
+
+int xif_crtc_config(uint32_t cfgtime, xif_crtc_t *crtc)
+{
+    int status;
+
+    if (!crtc || !xiface || !randr.present)
+        status = -1;
+    else
+        status = randr_config_crtc(xiface, cfgtime, crtc);
 
     return status;
 }
@@ -561,6 +864,8 @@ static int connect_to_xserver(xif_t *xif)
 
         xif->root[xif->nscreen++] = scrn->root;
     }
+
+    randr_check(xif, &randr);
 
     for (ccb = xif->conncb;   ccb;   ccb = ccb->next) {
         ccb->callback(XIF_CONNECTION_IS_UP, ccb->usrdata);
@@ -832,6 +1137,543 @@ static void property_query_finish(xif_t *xif, void *reply_data, void *data)
 }
 
 
+static int randr_check(xif_t *xif, extension_t *ext)
+{
+    static uint32_t required_major_version = 1;
+    static uint32_t required_minor_version = 2;
+
+    const xcb_query_extension_reply_t *rext;
+    xcb_randr_query_version_cookie_t ckie;
+    xcb_randr_query_version_reply_t *vrpl;
+    xcb_generic_error_t *gerr;
+    int server_ok;
+    int xcb_ok;
+
+    memset(ext, 0, sizeof(extension_t));
+
+    /*
+     * first see whether the X server
+     * has the RandR extension or not
+     */
+    if (xif->xconn == NULL ||
+        (rext = xcb_get_extension_data(xif->xconn, &xcb_randr_id)) == NULL) {
+        OHM_ERROR("videoep: failed to query RandR extensions");
+        return -1;
+    }
+
+    if (!rext->present) {
+        OHM_ERROR("videoep: X server does not have RandR extension (not OK)");
+        return -1;
+    }
+
+    /*
+     * next check if we have suitable versions of RandR
+     * both in server and libxcb side
+     */
+    if (xcb_connection_has_error(xif->xconn))
+        return -1;
+
+    ckie = xcb_randr_query_version(xif->xconn, -1,-1);
+
+    if (xcb_connection_has_error(xif->xconn)) {
+        OHM_ERROR("videoep: failed to query RandR version (send request)");
+        return -1;
+    }
+
+    vrpl = xcb_randr_query_version_reply(xif->xconn, ckie, &gerr);
+
+    if (gerr != NULL) {
+        OHM_ERROR("videoep: failed to query RandR version (receive reply)");
+        return -1;
+    }
+
+    server_ok = check_version(required_major_version, required_minor_version,
+                              vrpl->major_version, vrpl->minor_version);
+
+    OHM_INFO("videoep: required minimum version of RandR is %d.%d",
+             required_major_version, required_minor_version);
+
+    OHM_INFO("videoep: X server has RandR extension version %d.%d (%s)",
+             vrpl->major_version, vrpl->minor_version,
+             server_ok ? "OK" : "not OK");
+
+    xcb_ok  = check_version(required_major_version, required_minor_version,
+                            XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
+    xcb_ok &= check_version(XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION,
+                            vrpl->major_version, vrpl->minor_version);
+
+    free(vrpl);
+
+    OHM_INFO("videoep: libxcb RandR version is %d.%d (%s)",
+             XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION,
+             xcb_ok ? "OK" : "not OK");
+
+    if (server_ok && xcb_ok) {
+        ext->present = TRUE;
+        ext->evbase  = rext->first_event;
+        ext->errbase = rext->first_error;
+
+        OHM_DEBUG(DBG_XCB, "RandR event base %u error base %u",
+                  ext->evbase, ext->errbase);
+    }
+  
+    return 0;
+}
+
+static int randr_query_screen(xif_t                *xif,
+                              xcb_window_t          window,
+                              xif_screen_replycb_t  replycb,
+                              void                 *usrdata)
+{
+    randr_query_t                           *rq = randr_qry + randr_idx;
+    xcb_randr_get_screen_resources_cookie_t  ckie;
+
+    (void)xif;
+
+    if (xif->xconn == NULL || xcb_connection_has_error(xif->xconn))
+        return -1;
+
+    if (rque_is_full(&xif->rque)) {
+        OHM_ERROR("videoep: xif request queue is full");
+        return -1;
+    }
+
+    if (rq->any.busy) {
+        OHM_ERROR("videoep: maximum number of pending RandR queries reached");
+        return -1;
+    }
+
+    ckie = xcb_randr_get_screen_resources(xif->xconn, window);
+
+    if (xcb_connection_has_error(xif->xconn)) {
+        OHM_ERROR("videoep: failed to query RandR screen resources");
+        return -1;
+    }
+
+    OHM_DEBUG(DBG_XCB, "querying RandR screen resources");
+
+    rq->screen.busy    = TRUE;
+    rq->screen.type    = query_screen;
+    rq->screen.window  = window;
+    rq->screen.replycb = replycb;
+    rq->screen.usrdata = usrdata;
+
+    randr_idx = RANDR_QUERY_INDEX(randr_idx + 1);
+
+    rque_append_request(&xif->rque, ckie.sequence,
+                        randr_query_screen_finish, rq);
+    xcb_flush(xif->xconn);
+
+    return 0;
+}
+
+static void randr_query_screen_finish(xif_t *xif, void *reply_data, void *data)
+{
+#define NAME_LENGTH 64
+#define MAX_MODES   16
+
+    xcb_randr_get_screen_resources_reply_t *reply = reply_data;
+    randr_query_t                          *rq    = data;
+    randr_query_screen_t                   *sq    = &rq->screen;
+    xif_screen_t                            st;
+    xcb_randr_mode_info_t                  *minfs;
+    xcb_randr_mode_info_t                  *minf;
+    char                                    names[NAME_LENGTH];
+    xif_mode_t                              modes[MAX_MODES];
+    xif_mode_t                             *mode;
+    int                                     nmode;
+    char                                   *name;
+    uint8_t                                *nbuf;
+    int                                     namlen;
+    int                                     i;
+
+    (void)xif;
+
+    if (!reply)
+        OHM_ERROR("videoep: could not get RandR screen resources");
+    else if (sq->type != query_screen)
+        OHM_ERROR("videoep: %s() confused with type", __FUNCTION__);
+    else {
+        nmode = xcb_randr_get_screen_resources_modes_length(reply);
+        minfs = xcb_randr_get_screen_resources_modes(reply);
+        nbuf  = xcb_randr_get_screen_resources_names(reply);
+
+        if (nmode > MAX_MODES)
+            nmode = MAX_MODES;
+
+        for (i = 0, name = names;   i < nmode;   i++, nbuf += minf->name_len) {
+            minf = minfs + i;
+            mode = modes + i;
+
+            namlen = minf->name_len;
+
+            if (namlen <= 0 || name + namlen >= names + NAME_LENGTH)
+                mode->name = NULL;
+            else {
+                mode->name = name;
+
+                strncpy(name, nbuf, namlen);
+                name[namlen] = '\0';
+                
+                name += namlen + 1;
+            }
+
+            mode->xid    = minf->id;
+            mode->width  = minf->width; 
+            mode->height = minf->height;
+            mode->clock  = minf->dot_clock;
+            mode->hstart = minf->hsync_start;
+            mode->hend   = minf->hsync_end;
+            mode->htotal = minf->htotal;
+            mode->vstart = minf->vsync_start;
+            mode->vend   = minf->vsync_end;
+            mode->vtotal = minf->vtotal;
+            mode->hskew  = minf->hskew;
+            mode->flags  = minf->mode_flags;
+        }
+
+        memset(&st, 0, sizeof(st));
+        st.window  = sq->window;
+        st.tstamp  = reply->config_timestamp;
+        st.ncrtc   = xcb_randr_get_screen_resources_crtcs_length(reply);
+        st.crtcs   = xcb_randr_get_screen_resources_crtcs(reply);
+        st.noutput = xcb_randr_get_screen_resources_outputs_length(reply);
+        st.outputs = xcb_randr_get_screen_resources_outputs(reply);
+        st.nmode   = nmode;
+        st.modes   = modes;
+
+        sq->replycb(&st, sq->usrdata);
+
+        memset(rq, 0, sizeof(randr_query_t));
+    }
+
+#undef MAX_MODES
+#undef NAME_LENGTH
+}
+
+static int randr_query_crtc(xif_t              *xif,
+                            uint32_t            window,
+                            uint32_t            crtc,
+                            uint32_t            tstamp,
+                            xif_crtc_replycb_t  replycb,
+                            void               *usrdata)
+{
+    randr_query_t                    *rq = randr_qry + randr_idx;
+    xcb_randr_get_crtc_info_cookie_t  ckie;
+
+    if (xif->xconn == NULL || xcb_connection_has_error(xif->xconn))
+        return -1;
+
+    if (rque_is_full(&xif->rque)) {
+        OHM_ERROR("videoep: xif request queue is full");
+        return -1;
+    }
+
+    if (rq->any.busy) {
+        OHM_ERROR("videoep: maximum number of pending RandR queries reached");
+        return -1;
+    }
+
+    ckie = xcb_randr_get_crtc_info(xif->xconn, crtc, tstamp);
+
+    if (xcb_connection_has_error(xif->xconn)) {
+        OHM_ERROR("videoep: failed to query RandR crtc");
+        return -1;
+    }
+
+    OHM_DEBUG(DBG_XCB, "querying RandR crtc 0x%x", crtc);
+
+    rq->crtc.busy    = TRUE;
+    rq->crtc.type    = query_crtc;
+    rq->crtc.window  = window;
+    rq->crtc.xid     = crtc;
+    rq->crtc.replycb = replycb;
+    rq->crtc.usrdata = usrdata;
+
+    randr_idx = RANDR_QUERY_INDEX(randr_idx + 1);
+
+    rque_append_request(&xif->rque, ckie.sequence,
+                        randr_query_crtc_finish, rq);
+    xcb_flush(xif->xconn);
+
+    return 0;
+}
+
+static void randr_query_crtc_finish(xif_t *xif, void *reply_data, void *data)
+{
+    xcb_randr_get_crtc_info_reply_t *reply = reply_data;
+    randr_query_t                   *rq    = data;
+    randr_query_crtc_t              *cq    = &rq->crtc;
+    xif_crtc_t                       ct;
+
+    (void)xif;
+
+    if (!reply)
+        OHM_ERROR("videoep: could not get RandR crtc info");
+    else if (cq->type != query_crtc)
+        OHM_ERROR("videoep: %s() confused with type", __FUNCTION__);
+    else {
+        memset(&ct, 0, sizeof(ct));
+        ct.window    = cq->window;
+        ct.xid       = cq->xid;
+        ct.x         = reply->x;
+        ct.y         = reply->y;
+        ct.width     = reply->width;
+        ct.height    = reply->height;
+        ct.mode      = reply->mode;
+        ct.rotation  = reply->rotation;
+        ct.noutput   = xcb_randr_get_crtc_info_outputs_length(reply);
+        ct.outputs   = xcb_randr_get_crtc_info_outputs(reply);
+        ct.npossible = xcb_randr_get_crtc_info_possible_length(reply);
+        ct.possibles = xcb_randr_get_crtc_info_possible(reply);
+
+        cq->replycb(&ct, cq->usrdata);
+
+        memset(rq, 0, sizeof(randr_query_t));
+    }
+}
+
+static int randr_config_crtc(xif_t      *xif,
+                             uint32_t    cfgtime,
+                             xif_crtc_t *crtc)
+{
+    xcb_randr_set_crtc_config_cookie_t ckie;
+
+    if (xif->xconn == NULL || xcb_connection_has_error(xif->xconn))
+        return -1;
+
+    ckie = xcb_randr_set_crtc_config(xif->xconn,         /* c */
+                                     crtc->xid,          /* crtc */
+                                     XCB_CURRENT_TIME,   /* timestamp */
+                                     cfgtime,            /* config_timestamp */
+                                     crtc->x,            /* x */
+                                     crtc->y,            /* y */
+                                     crtc->mode,         /* mode */
+                                     crtc->rotation,     /* rotation */
+                                     crtc->noutput,      /* outputs_len */
+                                     crtc->outputs);     /* outputs */
+
+    if (xcb_connection_has_error(xif->xconn)) {
+        OHM_ERROR("videoep: failed to config RandR crtc");
+        return -1;
+    }
+
+    OHM_DEBUG(DBG_XCB, "configuring RandR crtc 0x%x", crtc->xid);
+
+    xcb_flush(xif->xconn);
+
+    return 0;    
+}
+
+
+static int randr_query_output(xif_t                *xif,
+                              uint32_t              window,
+                              uint32_t              output,
+                              uint32_t              tstamp,
+                              xif_output_replycb_t  replycb,
+                              void                 *usrdata)
+{
+    randr_query_t                      *rq = randr_qry + randr_idx;
+    xcb_randr_get_output_info_cookie_t  ckie;
+
+    if (xif->xconn == NULL || xcb_connection_has_error(xif->xconn))
+        return -1;
+
+    if (rque_is_full(&xif->rque)) {
+        OHM_ERROR("videoep: xif request queue is full");
+        return -1;
+    }
+
+    if (rq->any.busy) {
+        OHM_ERROR("videoep: maximum number of pending RandR queries reached");
+        return -1;
+    }
+
+    ckie = xcb_randr_get_output_info(xif->xconn, output, tstamp);
+
+    if (xcb_connection_has_error(xif->xconn)) {
+        OHM_ERROR("videoep: failed to query RandR output");
+        return -1;
+    }
+
+    OHM_DEBUG(DBG_XCB, "querying RandR output 0x%x", output);
+
+    rq->output.busy    = TRUE;
+    rq->output.type    = query_output;
+    rq->output.window  = window;
+    rq->output.xid     = output;
+    rq->output.replycb = replycb;
+    rq->output.usrdata = usrdata;
+
+    randr_idx = RANDR_QUERY_INDEX(randr_idx + 1);
+
+    rque_append_request(&xif->rque, ckie.sequence,
+                        randr_query_output_finish, rq);
+    xcb_flush(xif->xconn);
+
+    return 0;
+}
+
+static void randr_query_output_finish(xif_t *xif, void *reply_data, void *data)
+{
+#define NAME_MAX_LENGTH 64
+
+    xcb_randr_get_output_info_reply_t *reply = reply_data;
+    randr_query_t                     *rq    = data;
+    randr_query_output_t              *oq    = &rq->output;
+    xif_output_t                       ot;
+    char                               name[NAME_MAX_LENGTH + 1];
+    int                                length;
+
+    (void)xif;
+
+    if (!reply)
+        OHM_ERROR("videoep: could not get RandR output info");
+    else if (oq->type != query_output)
+        OHM_ERROR("videoep: %s() confused with type", __FUNCTION__);
+    else {
+        /* name */
+        length = xcb_randr_get_output_info_name_length(reply);
+
+        if (length > NAME_MAX_LENGTH)
+            length = NAME_MAX_LENGTH;
+        
+        memcpy(name, xcb_randr_get_output_info_name(reply), length);
+        name[length] = '\0';
+
+        
+        memset(&ot, 0, sizeof(ot));
+        ot.window = oq->window;
+        ot.xid    = oq->xid;
+        ot.name   = name;
+        ot.state  = randr_connection_to_state(reply->connection);
+        ot.crtc   = reply->crtc;
+        ot.nclone = xcb_randr_get_output_info_clones_length(reply);
+        ot.clones = xcb_randr_get_output_info_clones(reply);
+        ot.nmode  = xcb_randr_get_output_info_modes_length(reply);
+        ot.modes  = xcb_randr_get_output_info_modes(reply);
+
+        oq->replycb(&ot, oq->usrdata);
+
+        memset(rq, 0, sizeof(randr_query_t));
+    }
+
+#undef NAME_MAX_LENGTH
+}
+
+
+
+
+static int  randr_event_handler(xif_t *xif, xcb_generic_event_t *ev)
+{
+    xcb_randr_screen_change_notify_event_t *scrnev;
+    xcb_randr_notify_event_t               *rndrev;
+    xcb_randr_crtc_change_t                *crtcev;
+    xcb_randr_output_change_t              *outpev;
+    xcb_randr_output_property_t            *oproev;
+    xif_output_t                            output;
+    xif_crtc_t                              crtc;
+    crtccb_t                               *ccb;
+    outpcb_t                               *ocb;
+    int                                     handled = FALSE;
+
+
+    if (ev->response_type == randr.evbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
+        handled = TRUE; 
+        scrnev  = (xcb_randr_screen_change_notify_event_t *)ev;
+
+        OHM_DEBUG(DBG_XCB, "RandR screen change event on window ");
+    }
+    else if(ev->response_type == randr.evbase + XCB_RANDR_NOTIFY) {
+        handled = TRUE;
+        rndrev  = (xcb_randr_notify_event_t *)ev;
+
+        switch (rndrev->subCode) {
+
+        case XCB_RANDR_NOTIFY_CRTC_CHANGE:
+            crtcev = &rndrev->u.cc;
+            
+            memset(&crtc, 0, sizeof(xif_crtc_t));
+            crtc.window   = crtcev->window;
+            crtc.xid      = crtcev->crtc;
+            crtc.x        = crtcev->x;
+            crtc.y        = crtcev->y;
+            crtc.width    = crtcev->width;
+            crtc.height   = crtcev->height;
+            crtc.mode     = crtcev->mode;
+            crtc.rotation = crtcev->rotation;
+
+            OHM_DEBUG(DBG_XCB, "RandR crtc 0x%x change event on window 0x%x",
+                      crtcev->crtc, crtcev->window);
+
+            for (ccb = xif->crtccb;   ccb;   ccb = ccb->next) {
+                ccb->callback(&crtc, ccb->usrdata);
+            }
+
+            break;
+
+        case XCB_RANDR_NOTIFY_OUTPUT_CHANGE:
+            outpev = &rndrev->u.oc;
+            
+            memset(&output, 0, sizeof(xif_output_t));
+            output.window = outpev->window;
+            output.xid    = outpev->output;
+            output.state  = randr_connection_to_state(outpev->connection);
+            output.crtc   = outpev->crtc;
+            output.mode   = outpev->mode;
+
+            OHM_DEBUG(DBG_XCB, "RandR output 0x%x change event on window 0x%x",
+                      outpev->output, outpev->window);
+
+            for (ocb = xif->outpcb;   ocb;   ocb = ocb->next) {
+                ocb->callback(&output, ocb->usrdata);
+            }
+
+            break;
+
+        case XCB_RANDR_NOTIFY_OUTPUT_PROPERTY:
+            oproev = &rndrev->u.op;
+            OHM_DEBUG(DBG_XCB, "RandR output property change event");
+            break;
+            
+        default:
+            OHM_DEBUG(DBG_XCB, "RandR unknown notify event %d",
+                      rndrev->subCode);
+            break;
+        }
+    }
+
+    return handled;
+}
+
+static xif_connstate_t randr_connection_to_state(uint8_t connection)
+{
+    switch (connection) {
+    default:
+    case XCB_RANDR_CONNECTION_UNKNOWN:        return xif_unknown;
+    case XCB_RANDR_CONNECTION_CONNECTED:      return xif_connected;
+    case XCB_RANDR_CONNECTION_DISCONNECTED:   return xif_disconnected;
+    }
+}
+
+static int check_version(uint32_t required_major_version,
+                         uint32_t required_minor_version,
+                         uint32_t major_version,
+                         uint32_t minor_version)
+{
+    if (major_version > required_major_version)
+        return TRUE;
+
+    if (major_version < required_major_version)
+        return FALSE;
+
+    if (minor_version < required_minor_version)
+        return FALSE;
+    
+    return TRUE;
+}
+
+
 static int rque_is_full(rque_t *rque)
 {
     return (rque->length >= QUEUE_DIM);
@@ -942,8 +1784,8 @@ static gboolean xio_cb(GIOChannel *ch, GIOCondition cond, gpointer data)
 
 static void xevent_cb(xif_t *xif, xcb_generic_event_t *ev)
 {
-    xcb_destroy_notify_event_t  *destev;
-    xcb_property_notify_event_t *propev;
+    xcb_destroy_notify_event_t             *destev;
+    xcb_property_notify_event_t            *propev;
     uint32_t    window;
     uint32_t    id;
     propcb_t   *pcb;
@@ -975,8 +1817,11 @@ static void xevent_cb(xif_t *xif, xcb_generic_event_t *ev)
         }
         break;
 
+
     default:
-        OHM_DEBUG(DBG_XCB, "got event %d", ev->response_type);
+        if (!randr_event_handler(xif, ev)) {
+            OHM_DEBUG(DBG_XCB, "got event %d", ev->response_type);
+        }
         break;
     }
 }
