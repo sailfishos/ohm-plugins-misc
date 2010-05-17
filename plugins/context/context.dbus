@@ -1,3 +1,0 @@
-allow own com.nokia.policy.context
-allow send_destination com.nokia.policy.context
-allow send_interface com.nokia.policy.context
