@@ -120,7 +120,13 @@ void action_exit(OhmPlugin *plugin)
     g_signal_handler_disconnect(conn, decision_id);
     g_signal_handler_disconnect(conn, keychange_id);
 
+    /*
+     * Notes: signaling.unregister_enforcement_point is known to crash for
+     *        internal enforcement points, so let's not even try...
+     */
+#if 0
     unregister_ep(conn);
+#endif
 }
 
 

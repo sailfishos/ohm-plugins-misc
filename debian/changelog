@@ -1,13 +1,20 @@
-ohm-plugins-misc (1:1.19) unstable; urgency=low
+ohm-plugins-misc (1:1.20) unstable; urgency=low
 
   * Removed context plugin
   * Implemented: SWP#Plicy-247
 
  -- Wolf Bergenheim <ext-wolf.2.bergenheim@nokia.com>  Mon, 17 May 2010 17:02:12 +0300
 
+ohm-plugins-misc (1:1.19) unstable; urgency=low
+
+  * Avoid crashing on videoep plugin cleanup.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 12 May 2010 21:08:03 +0300
+
 ohm-plugins-misc (1:1.18) unstable; urgency=low
 
   * Initial support for XRandr and TV-out routing
+  * Implemented: SWP#Plicy-114
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sat, 01 May 2010 20:12:41 +0300
 
