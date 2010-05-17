@@ -339,20 +339,6 @@ AC_MSG_RESULT($has_immts)
 AM_CONDITIONAL(HAVE_IMMTS, test "x$has_immts" = "xyes")
 AC_SUBST(HAVE_IMMTS)
 
-#Check for Context Framework
-# context provider
-PKG_CHECK_MODULES(CONTEXTPROVIDER, contextprovider-1.0, [has_ctxp=yes], [mas_ctxp=no])
-AC_SUBST(CONTEXTPROVIDER_CFLAGS)
-AC_SUBST(CONTEXT_PROVIDER_LIBS)
-
-if test x$has_ctxp = xyes;
-then
-  AC_DEFINE([HAVE_CONTEXTPROVIDER], 1, [Have Context Provider support ?])
-fi
-
-AM_CONDITIONAL(HAVE_CONTEXTPROVIDER, test "x$has_ctxp" = "xyes")
-AC_SUBST(HAVE_CONTEXTPROVIDER)
-
 AC_CONFIG_FILES([Makefile
                  plugins/Makefile
                  plugins/accessories/Makefile
@@ -382,7 +368,6 @@ AC_CONFIG_FILES([Makefile
 		 plugins/backlight/Makefile
 		 plugins/delay/Makefile
 		 plugins/buttons/Makefile
-		 plugins/context/Makefile
 		 ohm-session-agent/Makefile
  		 doc/Makefile])
 AC_OUTPUT
