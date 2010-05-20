@@ -1,5 +1,9 @@
 ohm-plugins-misc (1:1.20) unstable; urgency=low
 
+  [Krisztian Litkey]
+  * Addon rule reload fix: just purge hash table entries.
+
+  [Wolf Bergenheim]
   * Removed context plugin
   * Implemented: SWP#Plicy-247
 
