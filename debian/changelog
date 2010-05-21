@@ -1,7 +1,10 @@
-ohm-plugins-misc (1:1.20) unstable; urgency=low
+ohm-plugins-misc (1:1.21) unstable; urgency=low
 
-  [Krisztian Litkey]
-  * Addon rule reload fix: just purge hash table entries.
+  * Addon rule reload fix: just purge hash table entries (Fixes: NB#166334).
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 20 May 2010 18:00:00 +0300
+
+ohm-plugins-misc (1:1.20) unstable; urgency=low
 
   [Wolf Bergenheim]
   * Removed context plugin
