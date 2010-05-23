@@ -8,6 +8,7 @@ typedef enum {
     rset_unknown  = -1,
 
     rset_ringtone,
+    rset_missedcall,
     rset_alarm,
     rset_event,
     

@@ -228,13 +228,17 @@ void resource_flags_to_booleans(uint32_t  flags,
 
 static void connect_to_manager(resconn_t *rc)
 {
-#define MANDATORY   RESMSG_AUDIO_PLAYBACK | RESMSG_VIBRA
-#define OPTIONAL    RESMSG_BACKLIGHT
+#define MANDATORY_DEFAULT   RESMSG_AUDIO_PLAYBACK | RESMSG_VIBRA
+#define MANDATORY_MISCALL   RESMSG_LEDS
+#define OPTIONAL_DEFAULT    RESMSG_BACKLIGHT
+#define OPTIONAL_MISCALL    0
 
+   
     static rset_def_t   defs[] = {
-        { rset_ringtone, "ringtone", MANDATORY, OPTIONAL },
-        { rset_alarm   , "alarm"   , MANDATORY, OPTIONAL },
-        { rset_event   , "event"   , MANDATORY, OPTIONAL },
+        { rset_ringtone  , "ringtone", MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
+        { rset_missedcall, "ringtone", MANDATORY_MISCALL  , OPTIONAL_MISCALL },
+        { rset_alarm     , "alarm"   , MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
+        { rset_event     , "event"   , MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
     };
 
     rset_def_t      *def;
@@ -272,8 +276,10 @@ static void connect_to_manager(resconn_t *rc)
         update_event_list();
     }
 
-#undef OPTIONAL
-#undef MANDATORY
+#undef OPTIONAL_MISCALL
+#undef OPTIONAL_DEFAULT
+#undef MANDATORY_MISCALL
+#undef MANDATORY_DEFAULT
 }
 
 static void conn_status(resset_t *resset, resmsg_t *msg)

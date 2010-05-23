@@ -15,6 +15,16 @@
 #include "ruleif.h"
 #include "resource.h"
 
+/*
+ * these should match their counterpart
+ * in duirealngfclient_p.h
+ */
+#define NGF_COMPLETED        0
+#define NGF_FAILED           1
+#define NGF_BUSY             (1 << 1)
+#define NGF_LONG             (1 << 2)
+#define NGF_SHORT            (1 << 3)
+
 #define MSEC                 1
 #define SECOND               1000
 #define MINUTE               (60 * SECOND)
@@ -53,6 +63,7 @@ typedef struct proxy_s {
     uint32_t         resources; /* bitmap of resources we own */
     uint32_t         timeout;   /* timer ID or zero if no timer is set */
     void            *data;      /* play data */
+    uint32_t         status;    /* status to reply */
 } proxy_t;
 
 
@@ -123,17 +134,32 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
                            void       *data,    /* incoming message */
                            char       *err)     /* ptr to a error msg buffer */
 {
-    uint32_t  mand  = 0;
-    uint32_t  opt   = 0;
-    proxy_t  *proxy = NULL;
-    int       type;
+    uint32_t       mand   = 0;
+    uint32_t       opt    = 0;
+    proxy_t       *proxy  = NULL;
+    uint32_t       status = NGF_COMPLETED;
+    proxy_state_t  state;
+    int            type;
 
     do { /* not a loop */
 
         type = evaluate_notification_request_rules(event, &mand, &opt, err);
 
-        if (type < 0)
-            break;
+        if (type >= 0)
+            state  = state_acquiring;
+        else {
+            state = state_created;
+            mand  = opt = 0;
+
+            if (!strcmp(err, "Busy")) {
+                /* reply with status 'busy' */
+                status = NGF_BUSY;
+            }
+            else {
+                /* reply with error */
+                break;
+            }
+        }
 
         if ((proxy = proxy_create(proxid, client, data)) == NULL) {
             strncpy(err, "internal proxy error", DBUS_DESCBUF_LEN);
@@ -141,8 +167,9 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
             break;
         }
 
-        proxy->type  = type;
-        proxy->state = state_acquiring;
+        proxy->type   = type;
+        proxy->state  = state;
+        proxy->status = status;
 
         if (!(mand | opt))
             timeout_create(proxy, 0);
@@ -417,16 +444,31 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
     uint32_t  granted = (uint32_t)evdata;
     void     *data    = evdata;
     int       success = TRUE;
+    uint32_t  status;
 
     switch (proxy->state) {
+
+    case state_created:
+        switch (ev) {
+        case backend_timeout:
+            create_and_send_status_to_client(proxy, proxy->status);
+            proxy_destroy(proxy);            
+            break;
+        default:
+            success = FALSE;
+            break;
+        }
+        break;
 
     case state_acquiring:
         switch (ev) {
         case resource_grant:
+            status = granted ? NGF_LONG : NGF_SHORT;
+            create_and_send_status_to_client(proxy, status);
             forward_play_request_to_backend(proxy, granted);
             break;
         case backend_timeout:
-            create_and_send_status_to_client(proxy, 0);
+            create_and_send_status_to_client(proxy, NGF_COMPLETED);
             proxy_destroy(proxy);
             break;
         case client_stop:
@@ -449,7 +491,7 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             proxy_destroy(proxy);
             break;
         case backend_timeout:
-            create_and_send_status_to_client(proxy, 1);
+            create_and_send_status_to_client(proxy, NGF_FAILED);
             proxy_destroy(proxy);
             break;
         case client_stop:
@@ -510,19 +552,23 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
     uint32_t  vibra;
     uint32_t  leds;
     uint32_t  blight;
+    int       limited;
     int       success = FALSE;
 
     if (granted) {
         mode = "long";
         resource_flags_to_booleans(granted, &audio, &vibra, &leds, &blight);
+        limited = (audio || vibra || blight);
     }
     else {
-        mode  = "short";
+        mode = "short";
         audio = TRUE;
         vibra = leds = blight = FALSE;
+        limited = TRUE;
     }
     
-    data = dbusif_append_to_play_data(proxy->data,
+    if (limited) {
+        data = dbusif_append_to_play_data(proxy->data,
                       DBUSIF_UNSIGNED_ARG ( NGF_TAG_POLICY_ID   , proxy->id  ),
                       DBUSIF_STRING_ARG   ( NGF_TAG_PLAY_MODE   , mode       ),
                       DBUSIF_UNSIGNED_ARG ( NGF_TAG_PLAY_LIMIT  , play_limit ),
@@ -531,12 +577,23 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
                       DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_LEDS  , leds       ),
                       DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_BLIGHT, blight     ),
                       DBUSIF_ARGLIST_END                                     );
+    }
+    else {
+        data = dbusif_append_to_play_data(proxy->data,
+                      DBUSIF_UNSIGNED_ARG ( NGF_TAG_POLICY_ID   , proxy->id  ),
+                      DBUSIF_STRING_ARG   ( NGF_TAG_PLAY_MODE   , mode       ),
+                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_AUDIO , audio      ),
+                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_VIBRA , vibra      ),
+                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_LEDS  , leds       ),
+                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_BLIGHT, blight     ),
+                      DBUSIF_ARGLIST_END                                     );
+    }
 
     if (data == NULL) {
         OHM_DEBUG(DBG_PROXY, "extended play request creation "
                    "failed (id %u) ", proxy->id);
 
-        create_and_send_status_to_client(proxy, 1);
+        create_and_send_status_to_client(proxy, NGF_FAILED);
         proxy_destroy(proxy);
 
         success = FALSE;
@@ -553,7 +610,8 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
         proxy->state     = state_forwarded; 
         proxy->data      = NULL;
         
-        timeout_create(proxy, play_timeout);
+        if (limited)
+            timeout_create(proxy, play_timeout);
 
         success = TRUE;
     }

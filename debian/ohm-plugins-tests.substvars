@@ -1,2 +1,2 @@
-shlibs:Depends=libc6 (>= 2.8-0), libdbus-1-3 (>= 1.1.4), libdbus-glib-1-2 (>= 0.76), libglib2.0-0 (>= 2.12.0), libhal1 (>= 0.5.10), libohm-plugin-core0, libprofile0, libtrace0
+shlibs:Depends=libc6 (>= 2.8-0), libdbus-1-3 (>= 1.0.2), libdbus-glib-1-2 (>= 0.71), libglib2.0-0 (>= 2.12.0), libhal1 (>= 0.5.8.1), libohm-plugin-core0, libprofile0, libtrace0
 misc:Depends=
