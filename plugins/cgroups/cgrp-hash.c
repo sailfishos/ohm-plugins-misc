@@ -95,12 +95,27 @@ addon_hash_exit(cgrp_context_t *ctx)
 /********************
  * addon_hash_reset
  ********************/
+static gboolean
+always_true(gpointer key, gpointer value, gpointer user_data)
+{
+    (void)key;
+    (void)value;
+    (void)user_data;
+
+    return TRUE;
+}
+
+
 void
 addon_hash_reset(cgrp_context_t *ctx)
 {
     if (ctx->addontbl) {
+#if 0
         g_hash_table_destroy(ctx->addontbl);
         ctx->addontbl = NULL;
+#else
+        g_hash_table_foreach_remove(ctx->addontbl, always_true, NULL);
+#endif
     }
 }
 

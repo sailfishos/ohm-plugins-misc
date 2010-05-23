@@ -1888,7 +1888,7 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
         goto err;
     }
 
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    return DBUS_HANDLER_RESULT_HANDLED;
 
 err:
 
