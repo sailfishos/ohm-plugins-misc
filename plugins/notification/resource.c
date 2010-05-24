@@ -25,18 +25,26 @@ typedef struct {
     void             *data;
 } callback_t;
 
-typedef struct {
+typedef struct fake_grant_s {
+    struct fake_grant_s   *next;
+    struct resource_set_s *rs;
+    uint32_t               srcid;
+    uint32_t               flags;
+    callback_t             callback;
+} fake_grant_t;
+
+typedef struct resource_set_s {
     resset_t         *resset;
     int               acquire;
     uint32_t          reqno;
     uint32_t          flags;
     callback_t        grant;
+    fake_grant_t     *fakes;
     struct {
         int    count;
         char **list;
     }                 event;
 } resource_set_t;
-
 
 OHM_IMPORTABLE(void *, timer_add  , (uint32_t delay,
                                      resconn_timercb_t callback,
@@ -48,12 +56,17 @@ static resource_set_t  resource_set[rset_max];
 static uint32_t        reqno;
 static int             verbose;
 
-static void  connect_to_manager(resconn_t *);
-static void  conn_status(resset_t *, resmsg_t *);
-static void  grant_handler(resmsg_t *, resset_t *, void *);
-static void  update_event_list(void);
-static void  free_event_list(char **);
-static char *strlist(char **, char *, int);
+static void          connect_to_manager(resconn_t *);
+static void          conn_status(resset_t *, resmsg_t *);
+static void          grant_handler(resmsg_t *, resset_t *, void *);
+static gboolean      fake_grant_handler(gpointer);
+static fake_grant_t *fake_grant_create(resource_set_t *, uint32_t,
+                                       resource_cb_t, void *);
+static void          fake_grant_delete(fake_grant_t *);
+static fake_grant_t *fake_grant_find(resource_set_t *, resource_cb_t, void *);
+static void          update_event_list(void);
+static void          free_event_list(char **);
+static char         *strlist(char **, char *, int);
 
 
 /*! \addtogroup pubif
@@ -131,8 +144,10 @@ int resource_set_acquire(resource_set_id_t id,
         rs  = resource_set + id;
         resset = rs->resset;
 
-        if (!all || !resset || rs->acquire) {
-            function(0, data);
+        if (!resset)
+            success = FALSE;
+        else if (!all || rs->acquire) {
+            fake_grant_create(rs, RESOURCE_SET_BUSY, function,data);
             success = TRUE;
         }
         else {
@@ -179,30 +194,42 @@ int resource_set_acquire(resource_set_id_t id,
     return success;
 }
 
-int resource_set_release(resource_set_id_t id)
+int resource_set_release(resource_set_id_t id,                      
+                         resource_cb_t     function,
+                         void             *data)
 {
     resource_set_t *rs;
     resmsg_t        msg;
     int             success;
+    fake_grant_t   *fake;
 
     if (id < 0 || id >= rset_max)
         success = FALSE;
     else {
         rs = resource_set + id;
 
-        rs->reqno = ++reqno;
-        rs->grant.function = NULL;
-        rs->grant.data     = NULL;
-
-        OHM_DEBUG(DBG_RESRC, "releasing resource set%u (reqno %u)",
-                  id, rs->reqno);
-
-        memset(&msg, 0, sizeof(msg));
-        msg.possess.type  = RESMSG_RELEASE;
-        msg.possess.id    = id;
-        msg.possess.reqno = rs->reqno;
+        if (function == rs->grant.function || data == rs->grant.data) {
+            rs->reqno = ++reqno;
+            rs->grant.function = NULL;
+            rs->grant.data     = NULL;
             
-        success = resproto_send_message(rs->resset, &msg, NULL);
+            OHM_DEBUG(DBG_RESRC, "releasing resource set%u (reqno %u)",
+                      id, rs->reqno);
+            
+            memset(&msg, 0, sizeof(msg));
+            msg.possess.type  = RESMSG_RELEASE;
+            msg.possess.id    = id;
+            msg.possess.reqno = rs->reqno;
+            
+            success = resproto_send_message(rs->resset, &msg, NULL);
+        }
+        else {
+            success = TRUE;
+
+            if ((fake = fake_grant_find(rs, function,data)) != NULL) {
+                fake_grant_delete(fake);
+            }
+        }
     }
 
     return success;
@@ -228,13 +255,17 @@ void resource_flags_to_booleans(uint32_t  flags,
 
 static void connect_to_manager(resconn_t *rc)
 {
-#define MANDATORY   RESMSG_AUDIO_PLAYBACK | RESMSG_VIBRA
-#define OPTIONAL    RESMSG_BACKLIGHT
+#define MANDATORY_DEFAULT   RESMSG_AUDIO_PLAYBACK | RESMSG_VIBRA
+#define MANDATORY_MISCALL   RESMSG_LEDS
+#define OPTIONAL_DEFAULT    RESMSG_BACKLIGHT
+#define OPTIONAL_MISCALL    0
 
+   
     static rset_def_t   defs[] = {
-        { rset_ringtone, "ringtone", MANDATORY, OPTIONAL },
-        { rset_alarm   , "alarm"   , MANDATORY, OPTIONAL },
-        { rset_event   , "event"   , MANDATORY, OPTIONAL },
+        { rset_ringtone  , "ringtone", MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
+        { rset_missedcall, "ringtone", MANDATORY_MISCALL  , OPTIONAL_MISCALL },
+        { rset_alarm     , "alarm"   , MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
+        { rset_event     , "event"   , MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
     };
 
     rset_def_t      *def;
@@ -272,8 +303,10 @@ static void connect_to_manager(resconn_t *rc)
         update_event_list();
     }
 
-#undef OPTIONAL
-#undef MANDATORY
+#undef OPTIONAL_MISCALL
+#undef OPTIONAL_DEFAULT
+#undef MANDATORY_MISCALL
+#undef MANDATORY_DEFAULT
 }
 
 static void conn_status(resset_t *resset, resmsg_t *msg)
@@ -357,6 +390,97 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
         if (update)
             update_event_list();
     }
+}
+
+static gboolean fake_grant_handler(gpointer data)
+{
+    fake_grant_t   *fake = data;
+    resource_set_t *rs;
+    resset_t       *resset;
+    
+
+    if (fake && (rs = fake->rs) && (resset = rs->resset)) {
+
+        OHM_DEBUG(DBG_RESRC, "resourse set%u fake grant %u",
+                  resset->id, fake->flags);
+
+        fake->callback.function(fake->flags, fake->callback.data);
+        fake->srcid = 0;
+        fake_grant_delete(fake);
+    }
+
+    return FALSE; /*  destroy this source */
+}
+
+
+static fake_grant_t *fake_grant_create(resource_set_t *rs,
+                                       uint32_t        flags,
+                                       resource_cb_t   function,
+                                       void           *data)
+{
+    fake_grant_t *fake;
+    fake_grant_t *last;
+
+    for (last = (fake_grant_t *)&rs->fakes;   last->next;   last = last->next)
+        ;
+
+    if ((fake = malloc(sizeof(fake_grant_t))) != NULL) {
+        memset(fake, 0, sizeof(fake_grant_t));
+        fake->rs = rs;
+        fake->srcid = g_idle_add(fake_grant_handler, fake);
+        fake->flags = flags;
+        fake->callback.function = function;
+        fake->callback.data = data;
+
+        last->next = fake;
+    }
+
+    return fake;
+}
+
+static void fake_grant_delete(fake_grant_t *fake)
+{
+    resource_set_t *rs;
+    fake_grant_t   *prev;
+
+    if (!fake || !(rs = fake->rs))
+        return;
+
+    for (prev = (fake_grant_t *)&rs->fakes;  prev->next;  prev = prev->next) {
+        if (fake == prev->next) {
+
+            if (fake->srcid)
+                g_source_remove(fake->srcid);
+
+            prev->next = fake->next;
+            free(fake);
+
+            return;
+        }
+    }
+}
+
+static fake_grant_t *fake_grant_find(resource_set_t  *rs, 
+                                       resource_cb_t  function,
+                                       void          *data)
+{
+    fake_grant_t *fake = NULL;
+    fake_grant_t *prev;
+
+    if (rs != NULL) {
+        for (prev = (fake_grant_t *)&rs->fakes;
+             (fake = prev->next) != NULL;
+             prev = prev->next)
+        {
+            if (fake->callback.function == function ||
+                fake->callback.data     == data       )
+            {
+                break;
+            }
+        }
+    }
+
+    return fake;
 }
 
 static void update_event_list(void)

@@ -15,6 +15,16 @@
 #include "ruleif.h"
 #include "resource.h"
 
+/*
+ * these should match their counterpart
+ * in duirealngfclient_p.h
+ */
+#define NGF_COMPLETED        0
+#define NGF_FAILED           1
+#define NGF_BUSY             (1 << 1)
+#define NGF_LONG             (1 << 2)
+#define NGF_SHORT            (1 << 3)
+
 #define MSEC                 1
 #define SECOND               1000
 #define MINUTE               (60 * SECOND)
@@ -53,6 +63,7 @@ typedef struct proxy_s {
     uint32_t         resources; /* bitmap of resources we own */
     uint32_t         timeout;   /* timer ID or zero if no timer is set */
     void            *data;      /* play data */
+    uint32_t         status;    /* status to reply */
 } proxy_t;
 
 
@@ -80,13 +91,15 @@ static int evaluate_notification_request_rules(const char *, uint32_t *,
 
 static int state_machine(proxy_t *, proxy_event_t, void *);
 
-static int forward_play_request_to_backend(proxy_t *, uint32_t);
+static int forward_play_request_to_backend(proxy_t *, uint32_t, uint32_t);
 static int forward_stop_request_to_backend(proxy_t *, void *);
 static int forward_status_to_client(proxy_t *, void *);
 static int create_and_send_status_to_client(proxy_t *, uint32_t);
 static int stop_if_loose_resources(proxy_t *, uint32_t);
 static int premature_stop(proxy_t *);
 static int fake_backend_timeout(proxy_t *);
+
+static uint32_t play_status(proxy_t *, uint32_t);
 
 
 /*! \addtogroup pubif
@@ -123,17 +136,32 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
                            void       *data,    /* incoming message */
                            char       *err)     /* ptr to a error msg buffer */
 {
-    uint32_t  mand  = 0;
-    uint32_t  opt   = 0;
-    proxy_t  *proxy = NULL;
-    int       type;
+    uint32_t       mand   = 0;
+    uint32_t       opt    = 0;
+    proxy_t       *proxy  = NULL;
+    uint32_t       status = NGF_COMPLETED;
+    proxy_state_t  state;
+    int            type;
 
     do { /* not a loop */
 
         type = evaluate_notification_request_rules(event, &mand, &opt, err);
 
-        if (type < 0)
-            break;
+        if (type >= 0)
+            state  = state_acquiring;
+        else {
+            state = state_created;
+            mand  = opt = 0;
+
+            if (!strcmp(err, "Busy")) {
+                /* reply with status 'busy' */
+                status = NGF_BUSY;
+            }
+            else {
+                /* reply with error */
+                break;
+            }
+        }
 
         if ((proxy = proxy_create(proxid, client, data)) == NULL) {
             strncpy(err, "internal proxy error", DBUS_DESCBUF_LEN);
@@ -141,8 +169,9 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
             break;
         }
 
-        proxy->type  = type;
-        proxy->state = state_acquiring;
+        proxy->type   = type;
+        proxy->state  = state;
+        proxy->status = status;
 
         if (!(mand | opt))
             timeout_create(proxy, 0);
@@ -170,8 +199,6 @@ int proxy_stop_request(uint32_t id, const char *client, void *data, char *err)
 {
     proxy_t *proxy;
     int      success = FALSE;
-
-    (void)err;
 
     if ((proxy = hash_lookup(id)) == NULL) {
         OHM_DEBUG(DBG_PROXY, "can't find proxy (id %u) for stop request", id);
@@ -259,7 +286,7 @@ static void proxy_destroy(proxy_t *proxy)
                   proxy->id);
 
         timeout_destroy(proxy);
-        resource_set_release(proxy->type);
+        resource_set_release(proxy->type, grant_handler, proxy);
 
         hash_delete(proxy);
 
@@ -310,9 +337,15 @@ static void timeout_create(proxy_t *proxy, uint32_t delay)
 {
     if (proxy) {
         timeout_destroy(proxy);
-        proxy->timeout = g_timeout_add(delay,
-                                       (GSourceFunc)timeout_handler,
-                                       proxy);
+
+        if (delay == 0)
+            proxy->timeout = g_idle_add((GSourceFunc)timeout_handler, proxy);
+        else {
+            proxy->timeout = g_timeout_add(delay,
+                                           (GSourceFunc)timeout_handler,
+                                           proxy);
+        }
+
         OHM_DEBUG(DBG_PROXY,"%u msec timeout added to proxy (id %u, timer %u)",
                   delay, proxy->id, proxy->timeout);
     }
@@ -417,16 +450,32 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
     uint32_t  granted = (uint32_t)evdata;
     void     *data    = evdata;
     int       success = TRUE;
+    int       type    = proxy->type;
+    uint32_t  status;
 
     switch (proxy->state) {
+
+    case state_created:
+        switch (ev) {
+        case backend_timeout:
+            create_and_send_status_to_client(proxy, proxy->status);
+            proxy_destroy(proxy);            
+            break;
+        default:
+            success = FALSE;
+            break;
+        }
+        break;
 
     case state_acquiring:
         switch (ev) {
         case resource_grant:
-            forward_play_request_to_backend(proxy, granted);
+            status = play_status(proxy, granted);
+            create_and_send_status_to_client(proxy, status);
+            forward_play_request_to_backend(proxy, granted, status);
             break;
         case backend_timeout:
-            create_and_send_status_to_client(proxy, 0);
+            create_and_send_status_to_client(proxy, NGF_COMPLETED);
             proxy_destroy(proxy);
             break;
         case client_stop:
@@ -449,7 +498,7 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             proxy_destroy(proxy);
             break;
         case backend_timeout:
-            create_and_send_status_to_client(proxy, 1);
+            create_and_send_status_to_client(proxy, NGF_FAILED);
             proxy_destroy(proxy);
             break;
         case client_stop:
@@ -502,7 +551,9 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
 }
 
 
-static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
+static int forward_play_request_to_backend(proxy_t *proxy,
+                                           uint32_t granted,
+                                           uint32_t status)
 {
     void     *data;
     char     *mode;
@@ -510,33 +561,45 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
     uint32_t  vibra;
     uint32_t  leds;
     uint32_t  blight;
+    uint32_t  limit;
     int       success = FALSE;
 
-    if (granted) {
-        mode = "long";
+    switch (status) {
+
+    case NGF_LONG:
+        mode  = "long";
         resource_flags_to_booleans(granted, &audio, &vibra, &leds, &blight);
-    }
-    else {
+        limit = (audio || vibra || blight) ? play_limit : 0;
+        break;
+
+    case NGF_SHORT:
         mode  = "short";
         audio = TRUE;
         vibra = leds = blight = FALSE;
+        limit = play_limit;
+        break;
+
+    default:
+        proxy->state = state_completed;
+        timeout_create(proxy, 0);
+        return TRUE;
     }
     
     data = dbusif_append_to_play_data(proxy->data,
-                      DBUSIF_UNSIGNED_ARG ( NGF_TAG_POLICY_ID   , proxy->id  ),
-                      DBUSIF_STRING_ARG   ( NGF_TAG_PLAY_MODE   , mode       ),
-                      DBUSIF_UNSIGNED_ARG ( NGF_TAG_PLAY_LIMIT  , play_limit ),
-                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_AUDIO , audio      ),
-                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_VIBRA , vibra      ),
-                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_LEDS  , leds       ),
-                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_BLIGHT, blight     ),
-                      DBUSIF_ARGLIST_END                                     );
+                      DBUSIF_UNSIGNED_ARG ( NGF_TAG_POLICY_ID   , proxy->id ),
+                      DBUSIF_STRING_ARG   ( NGF_TAG_PLAY_MODE   , mode      ),
+                      DBUSIF_UNSIGNED_ARG ( NGF_TAG_PLAY_LIMIT  , limit     ),
+                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_AUDIO , audio     ),
+                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_VIBRA , vibra     ),
+                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_LEDS  , leds      ),
+                      DBUSIF_BOOLEAN_ARG  ( NGF_TAG_MEDIA_BLIGHT, blight    ),
+                      DBUSIF_ARGLIST_END                                    );
 
     if (data == NULL) {
         OHM_DEBUG(DBG_PROXY, "extended play request creation "
                    "failed (id %u) ", proxy->id);
 
-        create_and_send_status_to_client(proxy, 1);
+        create_and_send_status_to_client(proxy, NGF_FAILED);
         proxy_destroy(proxy);
 
         success = FALSE;
@@ -553,7 +616,8 @@ static int forward_play_request_to_backend(proxy_t *proxy, uint32_t granted)
         proxy->state     = state_forwarded; 
         proxy->data      = NULL;
         
-        timeout_create(proxy, play_timeout);
+        if (limit)
+            timeout_create(proxy, play_timeout);
 
         success = TRUE;
     }
@@ -644,6 +708,26 @@ static int fake_backend_timeout(proxy_t *proxy)
     return TRUE;
 }
 
+static uint32_t play_status(proxy_t *proxy, uint32_t granted)
+{
+    static uint32_t  status[rset_max] = {
+        [ rset_ringtone   ] = NGF_SHORT ,
+        [ rset_missedcall ] = NGF_BUSY  ,
+        [ rset_alarm      ] = NGF_SHORT ,
+        [ rset_event      ] = NGF_SHORT
+    };
+
+    if (granted == RESOURCE_SET_BUSY)
+        return NGF_BUSY;
+
+    if (granted)
+        return NGF_LONG;
+
+    if (proxy->type < 0 || proxy->type >= rset_max)
+        return NGF_BUSY;
+
+    return status[proxy->type];
+}
 
 /* 
  * Local Variables:
