@@ -18,7 +18,7 @@ libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-process.c   \
 			    cgrp-classify.c  \
 			    cgrp-ep.c        \
-			    cgrp-notify.c    \
+			    cgrp-apptrack.c  \
 			    cgrp-utils.c     \
 			    cgrp-fact.c      \
 			    cgrp-console.c   \
