@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.23) unstable; urgency=low
+
+  * Implemented: SWP#Plicy-332.
+
+ -- Janos Kovacs <mmf-audio-bounces@projects.maemo.org>  Thu, 27 May 2010 18:57:01 +0300
+
 ohm-plugins-misc (1:1.22) unstable; urgency=low
 
   * Implemented: SWP#Plicy-228.
