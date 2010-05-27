@@ -369,6 +369,7 @@ AC_CONFIG_FILES([debian/Makefile
 		 plugins/backlight/Makefile
 		 plugins/delay/Makefile
 		 plugins/buttons/Makefile
+		 plugins/apptrack/Makefile
 		 ohm-session-agent/Makefile
  		 doc/Makefile])
 AC_OUTPUT

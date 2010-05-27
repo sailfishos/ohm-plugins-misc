@@ -33,8 +33,7 @@ static void plugin_exit(OhmPlugin *plugin);
 static void
 plugin_init(OhmPlugin *plugin)
 {
-    char *config, *portstr;
-    int   port;
+    char *config;
 
     if (!OHM_DEBUG_INIT(cgroups))
         OHM_WARNING("cgrp: failed to register for debugging");
@@ -62,11 +61,6 @@ plugin_init(OhmPlugin *plugin)
     if ((config = (char *)ohm_plugin_get_param(plugin, "config")) == NULL)
         config = DEFAULT_CONFIG;
 
-    if ((portstr = (char *)ohm_plugin_get_param(plugin, "notify-port")) == NULL)
-        port = DEFAULT_NOTIFY;
-    else
-        port = (unsigned short)strtoul(portstr, NULL, 10);
-    
     if (!config_parse_config(ctx, config ? config : DEFAULT_CONFIG)) {
         OHM_ERROR("cgrp: failed to parse %s", config);
         exit(1);
@@ -78,7 +72,7 @@ plugin_init(OhmPlugin *plugin)
     partition_add_root(ctx);
 
     ctx->resolve = resolve;
-    if (!notify_init(ctx, port))
+    if (!apptrack_init(ctx, plugin))
         plugin_exit(plugin);
     
     if (!classify_config(ctx) || !group_config(ctx) || !sysmon_init(ctx)) {
@@ -150,6 +144,37 @@ OHM_EXPORTABLE(int, cgrp_process_info, (pid_t pid, char **group, char **binary))
 }
 
 
+/********************
+ * cgrp_app_subscribe
+ ********************/
+OHM_EXPORTABLE(void, cgrp_app_subscribe,
+               (void (*callback)(pid_t, const char *, const char *, void *),
+                void *user_data))
+{
+    apptrack_subscribe(callback, user_data);
+}
+
+
+/********************
+ * cgrp_app_unsubscribe
+ ********************/
+OHM_EXPORTABLE(void, cgrp_app_unsubscribe,
+               (void (*callback)(pid_t, const char *, const char *, void *),
+                void *user_data))
+{
+    apptrack_unsubscribe(callback, user_data);
+}
+
+
+/********************
+ * cgrp_app_query
+ ********************/
+OHM_EXPORTABLE(void, cgrp_app_query, (pid_t *pid,
+                                      const char **binary, const char **group))
+{
+    apptrack_query(pid, binary, group);
+}
+
 
 /*****************************************************************************
  *                            *** OHM plugin glue ***                        *
@@ -167,9 +192,11 @@ OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 3,
    OHM_IMPORT("signaling.unregister_enforcement_point", signaling_unregister),
    OHM_IMPORT("dres.resolve", resolve));
 
-OHM_PLUGIN_PROVIDES_METHODS(cgroups, 1,
-    OHM_EXPORT(cgrp_process_info, "process_info")
-);
+OHM_PLUGIN_PROVIDES_METHODS(cgroups, 4,
+    OHM_EXPORT(cgrp_process_info   , "process_info"),
+    OHM_EXPORT(cgrp_app_subscribe  , "app_subscribe"),
+    OHM_EXPORT(cgrp_app_unsubscribe, "app_unsubscribe"),
+    OHM_EXPORT(cgrp_app_query      , "app_query"));
 
 
 /* 

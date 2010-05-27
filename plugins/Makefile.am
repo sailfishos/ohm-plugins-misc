@@ -7,7 +7,8 @@ SUBDIRS = 	     \
 	dvfs         \
 	cgroups      \
 	delay        \
-	buttons
+	buttons      \
+	apptrack
 
 #	notification
 #       vibra        
