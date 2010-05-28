@@ -2847,12 +2847,12 @@ tp_call_disconnect(call_t *call, unsigned int why)
         return ENOMEM;
     }
     
-    if (dbus_message_append_args(msg,
-                                 DBUS_TYPE_UINT32, &reason,
-                                 DBUS_TYPE_STRING, &detail,
-                                 DBUS_TYPE_STRING, &expl,
-                                 DBUS_TYPE_INVALID)) {
-        OHM_ERROR("Failed to allocate D-BUS request for disconnect.");
+    if (!dbus_message_append_args(msg,
+                                  DBUS_TYPE_UINT32, &reason,
+                                  DBUS_TYPE_STRING, &detail,
+                                  DBUS_TYPE_STRING, &expl,
+                                  DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to fill D-BUS request for disconnect.");
         status = ENOMEM;
     }
     else {
@@ -2881,7 +2881,7 @@ tp_sm_disconnect(call_t *call, unsigned int why)
     
     name      = call->name;
     path      = call->path;
-    handle[1] = call->local_handle ? call->local_handle : 1;
+    handle[0] = call->local_handle ? call->local_handle : 1;
     handles   = handle;
     reason    = why;
     errstr    = "";
@@ -2894,13 +2894,13 @@ tp_sm_disconnect(call_t *call, unsigned int why)
         return ENOMEM;
     }
     
-    if (dbus_message_append_args(msg,
-                                 DBUS_TYPE_ARRAY,
-                                 DBUS_TYPE_UINT32, &handles, 1,
-                                 DBUS_TYPE_STRING, &errstr,
-                                 DBUS_TYPE_UINT32, &reason,
-                                 DBUS_TYPE_INVALID)) {
-        OHM_ERROR("Failed to allocate D-BUS request for disconnect.");
+    if (!dbus_message_append_args(msg,
+                                  DBUS_TYPE_ARRAY,
+                                  DBUS_TYPE_UINT32, &handles, 1,
+                                  DBUS_TYPE_STRING, &errstr,
+                                  DBUS_TYPE_UINT32, &reason,
+                                  DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to fill D-BUS request for disconnect.");
         status = ENOMEM;
     }
     else {
