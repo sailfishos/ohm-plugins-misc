@@ -203,7 +203,7 @@ static void
 client_notify(const char *binary, const char *group)
 {
     DBusMessage *msg;
-    
+
     if ((msg = dbus_message_new_signal(APPTRACK_PATH, APPTRACK_INTERFACE,
                                        APPTRACK_NOTIFY)) == NULL) {
         OHM_ERROR("apptrack: failed to allocate D-BUS signal");
@@ -341,9 +341,9 @@ OHM_PLUGIN_REQUIRES_METHODS(apptrack, 3,
 
 
 OHM_PLUGIN_DBUS_METHODS(
-    { APPTRACK_INTERFACE, APPTRACK_PATH, "Subscribe",
+    { APPTRACK_INTERFACE, APPTRACK_PATH, APPTRACK_SUBSCRIBE,
             client_subscribe, NULL },
-    { APPTRACK_INTERFACE, APPTRACK_PATH, "Unsubscribe",
+    { APPTRACK_INTERFACE, APPTRACK_PATH, APPTRACK_UNSUBSCRIBE,
             client_unsubscribe, NULL });
 
 

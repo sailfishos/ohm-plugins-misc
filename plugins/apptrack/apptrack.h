@@ -10,6 +10,8 @@
 #define APPTRACK_INTERFACE    "com.nokia.ApplicationTracker"
 #define APPTRACK_PATH         "/com/nokia/ApplicationTracker"
 #define APPTRACK_NOTIFY       "CurrentActiveApplication"
+#define APPTRACK_SUBSCRIBE    "Subscribe"
+#define APPTRACK_UNSUBSCRIBE  "Unsubscribe"
 
 
 #endif /* __APPTRACK_PLUGIN_H__ */
