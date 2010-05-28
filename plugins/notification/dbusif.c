@@ -10,6 +10,7 @@
 #include "plugin.h"
 #include "dbusif.h"
 #include "proxy.h"
+#include "resource.h"
 
 typedef enum {
     unknown_handler = 0,
@@ -58,6 +59,7 @@ static uint32_t stop_handler(DBusMessage *, char *, char *);
 static uint32_t subscribe_handler(DBusMessage *, char *, char *);
 static uint32_t unsubscribe_handler(DBusMessage *, char *, char *);
 static uint32_t status_handler(DBusMessage *, char *, char *);
+static uint32_t update_handler(DBusMessage *, char *, char *);
 
 
 /*! \addtogroup pubif
@@ -877,6 +879,7 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
         { client_handler,  DBUS_PLAY_METHOD       , play_handler        },
         { client_handler,  DBUS_STOP_METHOD       , stop_handler        },
         { backend_handler, DBUS_STATUS_METHOD     , status_handler      },
+        { backend_handler, DBUS_UPDATE_METHOD     , update_handler      },
         { subscr_handler,  DBUS_SUBSCRIBE_METHOD  , subscribe_handler   },
         { subscr_handler,  DBUS_UNSUBSCRIBE_METHOD, unsubscribe_handler },
         { unknown_handler,        NULL            ,      NULL           }
@@ -1059,6 +1062,100 @@ static uint32_t status_handler(DBusMessage *msg, char *err, char *desc)
         OHM_DEBUG(DBG_DBUS, "malformed status request");
     else
         success = proxy_status_request(id, msg);
+
+    return success;
+}
+
+static uint32_t update_handler(DBusMessage *msg, char *err, char *desc)
+{
+    static const char *media = NGF_TAG_MEDIA_PREFIX;
+    static size_t      media_length = sizeof(NGF_TAG_MEDIA_PREFIX) - 1;
+
+    DBusMessageIter  mit;
+    DBusMessageIter  ait;
+    DBusMessageIter  dit;
+    DBusMessageIter  vit;
+    const char      *name;
+    int              type;
+    dbus_bool_t      stopped;
+    uint32_t         id      = 0;
+    uint32_t         flags   = 0;
+    int              success = TRUE;
+
+    (void)err;
+    (void)desc;
+
+    dbus_message_iter_init(msg, &mit);
+
+    do {
+        if (dbus_message_iter_get_arg_type(&mit) != DBUS_TYPE_ARRAY) {
+            success = FALSE;
+            break;
+        }
+
+        dbus_message_iter_recurse(&mit, &ait);
+
+        do {
+            if (dbus_message_iter_get_arg_type(&ait) != DBUS_TYPE_DICT_ENTRY) {
+                success = FALSE;
+                break;
+            }
+
+            dbus_message_iter_recurse(&ait, &dit);
+
+            if (dbus_message_iter_get_arg_type(&dit) != DBUS_TYPE_STRING) {
+                success = FALSE;
+                break;
+            }
+
+            dbus_message_iter_get_basic(&dit, (void *)&name);
+
+            if (!dbus_message_iter_next(&dit)) {
+                success = FALSE;
+                break;
+            }
+
+
+            if (dbus_message_iter_get_arg_type(&dit) != DBUS_TYPE_VARIANT) {
+                success = FALSE;
+                break;
+            }
+            
+            dbus_message_iter_recurse(&dit, &vit);
+
+            type = dbus_message_iter_get_arg_type(&vit);
+
+            if (!strcmp(name, NGF_TAG_POLICY_ID)) {
+                if (type != DBUS_TYPE_UINT32) {
+                    success = FALSE;
+                    break;
+                }
+
+                dbus_message_iter_get_basic(&vit, &id);
+            }
+            else if (!strncmp(name, media, media_length)) {
+                if (type != DBUS_TYPE_BOOLEAN) {
+                    success = FALSE;
+                    break;
+                }
+
+                dbus_message_iter_get_basic(&vit, &stopped);
+
+                if (!stopped)
+                    flags |= resource_name_to_flag(name + media_length);
+            }
+            
+        } while (dbus_message_iter_next(&ait));
+
+    } while(0);
+
+
+    if (!success)
+        OHM_DEBUG(DBG_DBUS, "malformed update request");
+    else {
+        OHM_DEBUG(DBG_DBUS, "update request id=%u flags=0x%x", id, flags);
+        success = proxy_update_request(id, &flags);
+    }
 
     return success;
 }

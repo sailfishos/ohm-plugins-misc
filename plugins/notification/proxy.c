@@ -49,6 +49,7 @@ typedef enum {
 typedef enum {
     resource_grant = 0,         /* resource grant from policy */
     backend_status,             /* backend status message */
+    backend_update,             /* backend update message */
     backend_timeout,            /* backend timeout ie. no status message */
     client_stop,                /* client stop request */
 } proxy_event_t;
@@ -94,6 +95,7 @@ static int state_machine(proxy_t *, proxy_event_t, void *);
 static int forward_play_request_to_backend(proxy_t *, uint32_t, uint32_t);
 static int forward_stop_request_to_backend(proxy_t *, void *);
 static int forward_status_to_client(proxy_t *, void *);
+static int partial_release_of_resources(proxy_t *, void *);
 static int create_and_send_status_to_client(proxy_t *, uint32_t);
 static int stop_if_loose_resources(proxy_t *, uint32_t);
 static int premature_stop(proxy_t *);
@@ -234,6 +236,25 @@ int proxy_status_request(uint32_t id, void *data)
 
         if (!state_machine(proxy, backend_status, data)) {
             OHM_DEBUG(DBG_PROXY, "ignoring out of sequence status "
+                      "message (id %u)", id);
+        }
+    }
+
+    return success;
+}
+
+int proxy_update_request(uint32_t id, void *data)
+{
+    proxy_t *proxy;
+    int      success = FALSE;
+
+    if ((proxy = hash_lookup(id)) == NULL)
+        OHM_DEBUG(DBG_PROXY, "can't find proxy (id %u) for update request",id);
+    else {
+        success = TRUE;
+
+        if (!state_machine(proxy, backend_update, data)) {
+            OHM_DEBUG(DBG_PROXY, "ignoring out of sequence update "
                       "message (id %u)", id);
         }
     }
@@ -501,6 +522,10 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             create_and_send_status_to_client(proxy, NGF_FAILED);
             proxy_destroy(proxy);
             break;
+        case backend_update:
+            timeout_destroy(proxy);
+            partial_release_of_resources(proxy, data);
+            break;
         case client_stop:
             forward_stop_request_to_backend(proxy, data);
             break;
@@ -648,6 +673,16 @@ static int forward_status_to_client(proxy_t *proxy, void *data)
               "to client %s", proxy->id, proxy->client);
     
     proxy->state = state_completed;
+
+    return TRUE;
+}
+
+static int partial_release_of_resources(proxy_t *proxy, void *data)
+{
+    uint32_t flags = *(uint32_t *)data;
+
+    OHM_DEBUG(DBG_PROXY, "partial release of resources (id %u resources 0x%x)",
+              proxy->id, flags);
 
     return TRUE;
 }

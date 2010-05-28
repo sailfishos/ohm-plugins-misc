@@ -27,6 +27,7 @@ int  resource_set_acquire(resource_set_id_t, uint32_t, uint32_t,
 int  resource_set_release(resource_set_id_t, resource_cb_t, void *);
 void resource_flags_to_booleans(uint32_t, uint32_t *, uint32_t *,
                                 uint32_t *, uint32_t *);
+uint32_t resource_name_to_flag(const char *);
 
 #endif	/* __OHM_NOTIFICATION_RESOURCE_H__ */
 

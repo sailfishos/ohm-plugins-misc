@@ -49,7 +49,6 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUS_ERRBUF_LEN   256
 #define DBUS_DESCBUF_LEN  512
 
-
 /*
  * types shall match the corresponding DBUS_TYPE_xxx definitions
  */
