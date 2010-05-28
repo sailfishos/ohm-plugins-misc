@@ -231,9 +231,11 @@ app_change_cb(pid_t pid, const char *binary, const char *group, void *dummy)
     (void)pid;
     (void)dummy;
 
+#if 0
     OHM_INFO("*** %s(%s, %s) ***", __FUNCTION__,
              binary ? binary : "<none>", group ? group : "<none>");
-    
+#endif    
+
     if (nclient <= 0)
         return;
     
