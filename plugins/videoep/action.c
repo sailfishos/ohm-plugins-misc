@@ -164,9 +164,10 @@ static gboolean transaction_parser(GObject *conn,
     (void)data;
 
     static argdsc_t  route_args [] = {
-        { argtype_string  ,   "device"    ,  STRUCT_OFFSET(route_t, device) },
-        { argtype_string  ,   "tvstandard",  STRUCT_OFFSET(route_t, tvstd ) },
-        { argtype_invalid ,     NULL      ,                 0               }
+        { argtype_string  ,   "device"     ,  STRUCT_OFFSET(route_t, device) },
+        { argtype_string  ,   "tvstandard" ,  STRUCT_OFFSET(route_t, tvstd ) },
+        { argtype_string  ,   "aspectratio",  STRUCT_OFFSET(route_t, ratio ) },
+        { argtype_invalid ,     NULL       ,                 0               }
     };
 
     static actdsc_t  actions[] = {
@@ -216,8 +217,8 @@ static int route_action(void *data)
     route_t *route   = data;
     int      success = FALSE;
 
-    OHM_DEBUG(DBG_ACTION, "Got video route to '%s' / '%s'",
-              route->device, route->tvstd);
+    OHM_DEBUG(DBG_ACTION, "Got video route to '%s' / '%s' / '%s'",
+              route->device, route->tvstd, route->ratio);
 
     if (route->device != NULL) {
         free(device);
@@ -229,12 +230,17 @@ static int route_action(void *data)
         tvstd = strdup(route->tvstd);
     }
 
+    if (route->ratio != NULL) {
+        free(ratio);
+        ratio = strdup(route->ratio);
+    }
+
     if (!xif_is_connected_to_xserver())
         xif_connect_to_xserver();
     else {
         if (device) {
             OHM_DEBUG(DBG_ACTION, "route to %s/%s/%s", device,
-                      tvstd ? tvstd : "<bull>", ratio ? ratio : "<null>");
+                      tvstd ? tvstd : "<null>", ratio ? ratio : "<null>");
             success = router_new_setup(device, tvstd, ratio);
         }
     }
