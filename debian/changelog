@@ -1,3 +1,18 @@
+ohm-plugins-misc (1:1.24) unstable; urgency=low
+
+  * Implemented: SWP#Plicy-331.
+  * Implemented: SWP#Plicy-326.
+
+ -- Janos Kovacs <mmf-audio-bounces@projects.maemo.org>  Fri, 28 May 2010 22:15:00 +0300
+
+ohm-plugins-misc (1:1.23) unstable; urgency=low
+
+  * Fix TP call disconnecting bugs.
+  * Added plugin for active application notifications over D-BUS.
+  * Implemented: SWP#Plicy-344.
+
+ -- Krisztian Litkey <mmf-audio-bounces@projects.maemo.org>  Fri, 28 May 2010 16:25:09 +0300
+
 ohm-plugins-misc (1:1.22) unstable; urgency=low
 
   * Implemented: SWP#Plicy-228.
