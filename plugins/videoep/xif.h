@@ -92,6 +92,8 @@ typedef void (*xif_prop_replycb_t)(uint32_t, uint32_t, videoep_value_type_t,
                                    void *, int, void *);
 typedef void (*xif_screen_replycb_t)(xif_screen_t *, void *);
 typedef void (*xif_crtc_replycb_t)(xif_crtc_t *, void *);
+typedef void (*xif_outprop_replycb_t)(uint32_t, uint32_t, uint32_t,
+                                      videoep_value_type_t,void *,int, void *);
 typedef void (*xif_crtc_notifycb_t)(xif_crtc_t *, void *);
 typedef void (*xif_output_replycb_t)(xif_output_t *, void *);
 typedef void (*xif_output_notifycb_t)(xif_output_t *, void *);
@@ -128,6 +130,11 @@ int      xif_crtc_query(uint32_t,uint32_t,uint32_t,
                         xif_crtc_replycb_t, void *);
 int      xif_output_query(uint32_t, uint32_t, uint32_t,
                           xif_output_replycb_t, void *);
+int      xif_output_property_query(uint32_t, uint32_t, uint32_t,
+                                   videoep_value_type_t, uint32_t,
+                                   xif_outprop_replycb_t, void *);
+int      xif_output_property_change(uint32_t,uint32_t, videoep_value_type_t,
+                                    uint32_t, void *);
 
 int xif_crtc_config(uint32_t, xif_crtc_t *);
 

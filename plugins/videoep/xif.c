@@ -82,6 +82,7 @@ typedef struct outpcb_s {
     void                  *usrdata;
 } outpcb_t;
 
+
 typedef struct xif_s {
     char               *display;
     xcb_connection_t   *xconn;
@@ -120,6 +121,7 @@ typedef enum {
     query_screen,
     query_crtc,
     query_output,
+    query_outprop,
 } randr_query_type_t;
 
 #define RANDR_QUERY_COMMON      \
@@ -153,11 +155,21 @@ typedef struct {
     void                 *usrdata;
 } randr_query_output_t;
 
+typedef struct {
+    RANDR_QUERY_COMMON;
+    uint32_t               window;
+    uint32_t               output;
+    uint32_t               xid;
+    xif_outprop_replycb_t  replycb;
+    void                  *usrdata;
+} randr_query_outprop_t;
+
 typedef union {
     randr_query_any_t     any;
     randr_query_screen_t  screen;
     randr_query_crtc_t    crtc;
     randr_query_output_t  output;
+    randr_query_outprop_t outprop;
 } randr_query_t;
 
 typedef enum {
@@ -209,6 +221,10 @@ static int  randr_config_crtc(xif_t *, uint32_t, xif_crtc_t *);
 static int  randr_query_output(xif_t *, uint32_t, uint32_t, uint32_t,
                                xif_output_replycb_t, void *);
 static void randr_query_output_finish(xif_t *, void *, void *);
+static int  randr_query_output_property(xif_t *, uint32_t,uint32_t,uint32_t,
+                                        videoep_value_type_t, uint32_t,
+                                        xif_outprop_replycb_t, void *);
+static void randr_query_output_property_finish(xif_t *, void  *, void  *);
 static int  randr_event_handler(xif_t *, xcb_generic_event_t *);
 static xif_connstate_t randr_connection_to_state(uint8_t);
 
@@ -656,6 +672,8 @@ int xif_track_randr_changes_on_window(uint32_t window, int track)
 
                 OHM_DEBUG(DBG_XCB, "%s tracking RandR changes on "
                           "window 0x%x", track_str, window);
+
+                xcb_flush(xiface->xconn);
             }
         }
     }
@@ -752,6 +770,75 @@ int xif_output_query(uint32_t              win,
                                     replycb,usrdata);
     return status;
 }
+
+int xif_output_property_query(uint32_t                window,
+                              uint32_t                output,
+                              uint32_t                property,
+                              videoep_value_type_t    type,
+                              uint32_t                length,
+                              xif_outprop_replycb_t   replycb,
+                              void                   *userdata)
+{
+    int status;
+
+    if (!window || !output || !property || !length || !replycb || !xiface)
+        status = -1;
+    else
+        status = randr_query_output_property(xiface, window, output, property,
+                                             type, length, replycb,userdata);
+
+    return status;
+}
+
+
+int xif_output_property_change(uint32_t                output,
+                               uint32_t                property,
+                               videoep_value_type_t    type,
+                               uint32_t                length,
+                               void                   *data)
+{
+    xcb_void_cookie_t ckie;
+    int               status = -1;
+    uint8_t           format;
+
+    if (output && property && length > 0 && data && xiface) {
+        if (xiface->xconn && !xcb_connection_has_error(xiface->xconn)) {
+
+            switch (type) {
+            case videoep_atom:   format = 32;   break;
+            case videoep_card:   format = 32;   break;
+            case videoep_string: format = 8;    break;
+            default:             format = 0;    break;
+            }
+
+            if (format) {
+                ckie = xcb_randr_change_output_property(xiface->xconn,
+                                                        output, property,
+                                                        type, format,
+                                                        XCB_PROP_MODE_REPLACE,
+                                                        length, data);
+
+                if (xcb_connection_has_error(xiface->xconn)) {
+                    OHM_DEBUG(DBG_XCB, "can't change RandR output 0x%x "
+                              "property 0x%x", output, property);
+                }
+                else {
+                    status = 0;
+                    
+                    OHM_DEBUG(DBG_XCB, "changing RandR output 0x%x property "
+                              "0x%x (num_units %u)", output, property, length);
+
+                    xcb_flush(xiface->xconn);
+                }
+            }
+        }
+    }
+
+    return status;
+}
+
+
+
 
 int xif_crtc_config(uint32_t cfgtime, xif_crtc_t *crtc)
 {
@@ -1312,7 +1399,7 @@ static void randr_query_screen_finish(xif_t *xif, void *reply_data, void *data)
             else {
                 mode->name = name;
 
-                strncpy(name, nbuf, namlen);
+                strncpy(name, (char *)nbuf, namlen);
                 name[namlen] = '\0';
                 
                 name += namlen + 1;
@@ -1561,7 +1648,92 @@ static void randr_query_output_finish(xif_t *xif, void *reply_data, void *data)
 #undef NAME_MAX_LENGTH
 }
 
+static int randr_query_output_property(xif_t                  *xif,
+                                       uint32_t                window,
+                                       uint32_t                output,
+                                       uint32_t                property,
+                                       videoep_value_type_t    type,
+                                       uint32_t                length,
+                                       xif_outprop_replycb_t   replycb,
+                                       void                   *usrdata)
+{
+    randr_query_t                          *rq = randr_qry + randr_idx;
+    xcb_randr_get_output_property_cookie_t  ckie;
 
+    if (xif->xconn == NULL || xcb_connection_has_error(xif->xconn))
+        return -1;
+
+    if (rque_is_full(&xif->rque)) {
+        OHM_ERROR("videoep: xif request queue is full");
+        return -1;
+    }
+
+    if (rq->any.busy) {
+        OHM_ERROR("videoep: maximum number of pending RandR queries reached");
+        return -1;
+    }
+
+    ckie = xcb_randr_get_output_property(xif->xconn, output,property,type,
+                                         0, length, FALSE,FALSE);
+
+    if (xcb_connection_has_error(xif->xconn)) {
+        OHM_ERROR("videoep: failed to query RandR output property");
+        return -1;
+    }
+
+    OHM_DEBUG(DBG_XCB, "querying RandR output property 0x%x/0x%x",
+              output, property);
+
+    rq->outprop.busy    = TRUE;
+    rq->outprop.type    = query_outprop;
+    rq->outprop.window  = window;
+    rq->outprop.output  = output;
+    rq->outprop.xid     = property;
+    rq->outprop.replycb = replycb;
+    rq->outprop.usrdata = usrdata;
+
+    randr_idx = RANDR_QUERY_INDEX(randr_idx + 1);
+
+    rque_append_request(&xif->rque, ckie.sequence,
+                        randr_query_output_property_finish, rq);
+    xcb_flush(xif->xconn);
+
+    return 0;
+}
+
+static void randr_query_output_property_finish(xif_t *xif,
+                                               void  *reply_data,
+                                               void  *data)
+{
+    xcb_randr_get_output_property_reply_t *reply = reply_data;
+    randr_query_t                         *rq    = data;
+    randr_query_outprop_t                 *pq    = &rq->outprop;
+    uint32_t                               format;
+    void                                  *value;
+    int                                    length;
+
+    (void)xif;
+
+    if (!reply)
+        OHM_ERROR("videoep: could not get RandR output property info");
+    else if (pq->type != query_outprop)
+        OHM_ERROR("videoep: %s() confused with type", __FUNCTION__);
+    else {
+        format = reply->format;
+        value  = xcb_randr_get_output_property_data(reply);
+
+        if (format == 8)
+            length = xcb_randr_get_output_property_data_length(reply);
+        else
+            length = reply->length;
+
+        
+        pq->replycb(pq->window, pq->output, pq->xid, pq->type,
+                    value, length, pq->usrdata);
+
+        memset(rq, 0, sizeof(randr_query_t));
+    }
+}
 
 
 static int  randr_event_handler(xif_t *xif, xcb_generic_event_t *ev)

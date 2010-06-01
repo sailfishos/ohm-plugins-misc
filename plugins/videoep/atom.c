@@ -80,8 +80,8 @@ uint32_t atom_create(const char *id, const char *name)
             if (!strcmp(name, atom->name))
                 index = atom->index;
             else {
-                OHM_ERROR("videoep: incosistent multiple definition of tracker"
-                          " atom '%s' ('%s' vs. '%s')", id, name, atom->name);
+                OHM_ERROR("videoep: incosistent multiple definition of "
+                          "atom '%s' ('%s' vs. '%s')", id, name, atom->name);
             }
         }
     }
