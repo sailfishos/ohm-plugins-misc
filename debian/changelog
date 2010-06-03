@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.25) unstable; urgency=low
+
+  * Generalized classify-by-argv0 to classify-by-argv[0-9]+.
+
+ -- Krisztian Litkey <mmf-audio-blunces@projects.maemo.org>  Thu, 03 Jun 2010 21:50:09 +0300
+
 ohm-plugins-misc (1:1.24) unstable; urgency=low
 
   * Implemented: SWP#Plicy-331.
