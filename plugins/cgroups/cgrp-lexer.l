@@ -95,7 +95,6 @@ typedef enum {
     TOKEN_TYPE_EOL,                            /* end of line */
 } token_type_t;
 
-
 static lexer_t lexer;
 static int     lexer_start_token;              /* parser selector token */
 static int     lexer_noinclude;                /* disable includes */
@@ -195,12 +194,18 @@ lexer_error(lexer_t *l, const char *format, ...)
 }
 
 
-
 #define PASS_KEYWORD(kw) do {                                           \
+        char *__token;                                                  \
+                                                                        \
         DEBUG("KEYWORD %s @ %s:%d", #kw, lexer_file(), lexer_line());   \
                                                                         \
-        token_save(&lexer, cgrpyytext);                                 \
+        __token = token_save(&lexer, cgrpyytext);                       \
         lexer.eol = FALSE;                                              \
+                                                                        \
+        if (KEYWORD_##kw == KEYWORD_CLASSIFY_ARGVX) {                   \
+            __token += sizeof("classify-by-argv") - 1;                  \
+            cgrpyylval.uint32.value = parse_uint32(&lexer, __token);    \
+        }                                                               \
                                                                         \
         return KEYWORD_##kw;                                            \
     } while (0)
@@ -217,6 +222,7 @@ lexer_error(lexer_t *l, const char *format, ...)
         return TOKEN_##type;                                            \
     } while (0)
     
+
 #define PASS_NUMBER(type) do {                                          \
         char *__token;                                                  \
                                                                         \
@@ -227,7 +233,8 @@ lexer_error(lexer_t *l, const char *format, ...)
                                                                         \
         switch (TOKEN_TYPE_##type) {                                    \
         case TOKEN_TYPE_ARG:                                            \
-            cgrpyylval.uint32.value = parse_uint32(&lexer, __token+3);  \
+            __token += sizeof("arg") - 1;                               \
+            cgrpyylval.uint32.value = parse_uint32(&lexer, __token);    \
             break;                                                      \
         case TOKEN_TYPE_UINT:                                           \
             cgrpyylval.uint32.value = parse_uint32(&lexer, __token);    \
@@ -655,7 +662,7 @@ KEYWORD_PARENT            parent
 KEYWORD_IGNORE            ignore
 KEYWORD_RECLASS_AFTER     reclassify-after
 KEYWORD_RECLASSIFY        reclassify-count
-KEYWORD_CLASSIFY_ARGV0    classify-by-argv0
+KEYWORD_CLASSIFY_ARGVX    classify-by-argv[0-9]+
 KEYWORD_CLASSIFY          classify
 KEYWORD_EXPORT_GROUPS     export-group-facts
 KEYWORD_EXPORT_PARTITIONS export-partition-facts
@@ -765,8 +772,8 @@ ESCAPE		       \\
 {KEYWORD_IGNORE}            { PASS_KEYWORD(IGNORE);            }
 {KEYWORD_RECLASS_AFTER}     { PASS_KEYWORD(RECLASS_AFTER);     }
 {KEYWORD_RECLASSIFY}        { PASS_KEYWORD(RECLASSIFY);        }
-{KEYWORD_CLASSIFY_ARGV0}    { PASS_KEYWORD(CLASSIFY_ARGV0);    }
 {KEYWORD_CLASSIFY}          { PASS_KEYWORD(CLASSIFY);          }
+{KEYWORD_CLASSIFY_ARGVX}    { PASS_KEYWORD(CLASSIFY_ARGVX);    }
 {KEYWORD_EXPORT_GROUPS}     { PASS_KEYWORD(EXPORT_GROUPS);     }
 {KEYWORD_EXPORT_PARTITIONS} { PASS_KEYWORD(EXPORT_PARTITIONS); }
 {KEYWORD_EXPORT_FACT}       { PASS_KEYWORD(EXPORT_FACT);       }

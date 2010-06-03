@@ -322,7 +322,7 @@ typedef struct {
     uid_t              euid;                /* effective user id */
     gid_t              egid;                /* effective group id */
     int                reclassify;          /* reclassification count */
-    int                byargv0;             /* classifying by argv[0] */
+    int                byargvx;             /* classifying by argv[x] */
 } cgrp_proc_attr_t;
 
 
@@ -585,7 +585,8 @@ void classify_exit  (cgrp_context_t *);
 int  classify_config(cgrp_context_t *);
 int  classify_reconfig(cgrp_context_t *);
 int  classify_by_binary(cgrp_context_t *, pid_t, int);
-int  classify_by_argv0(cgrp_context_t *, cgrp_proc_attr_t *);
+int  classify_by_argvx(cgrp_context_t *, cgrp_proc_attr_t *, int);
+
 
 void classify_schedule(cgrp_context_t *, pid_t, unsigned int, int);
 

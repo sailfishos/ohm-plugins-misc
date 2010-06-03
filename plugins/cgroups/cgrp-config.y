@@ -110,7 +110,6 @@ static char rule_group[256];
 %token KEYWORD_IGNORE
 %token KEYWORD_RECLASSIFY
 %token KEYWORD_RECLASS_AFTER
-%token KEYWORD_CLASSIFY_ARGV0
 %token KEYWORD_CLASSIFY
 %token KEYWORD_EXPORT_GROUPS
 %token KEYWORD_EXPORT_PARTITIONS
@@ -136,6 +135,7 @@ static char rule_group[256];
 %token TOKEN_SEMICOLON ";"
 
 %token <uint32> TOKEN_ARG
+%token <uint32> KEYWORD_CLASSIFY_ARGVX
 %token <string> TOKEN_IDENT
 %token <string> TOKEN_PATH
 %token <string> TOKEN_STRING
@@ -714,10 +714,10 @@ action_classify: KEYWORD_RECLASS_AFTER TOKEN_UINT {
     ;
 
 
-action_classify: KEYWORD_CLASSIFY_ARGV0 {
+action_classify: KEYWORD_CLASSIFY_ARGVX {
         cgrp_action_t *action;
 
-        action = action_classify_new(-1);
+        action = action_classify_new(-1 - $1.value);
         if (action == NULL) {
             OHM_ERROR("cgrp: failed to allocate new classify-by-argv0 action");
             YYABORT;

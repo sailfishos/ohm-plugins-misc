@@ -496,7 +496,7 @@ action_classify_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
     if (action->classify.delay >= 0)
         return fprintf(fp, "reclassify-after %d", action->classify.delay);
     else
-        return fprintf(fp, "classify-by-argv0");
+        return fprintf(fp, "classify-by-argv%d", -action->classify.delay - 1);
 }
 
 
@@ -508,7 +508,7 @@ action_classify_exec(cgrp_context_t *ctx,
                      cgrp_proc_attr_t *attr, cgrp_action_t *action)
 {
     cgrp_process_t *process;
-    int             count, delay;
+    int             count, delay, argn;
 
     if (action->classify.delay > 0) {
         count = attr->reclassify;
@@ -531,8 +531,10 @@ action_classify_exec(cgrp_context_t *ctx,
         
         return TRUE;
     }
-    else
-        return classify_by_argv0(ctx, attr);
+    else {
+        argn = -action->classify.delay - 1;   /* -1: 0, -2: 1, -3: 2, ... */
+        return classify_by_argvx(ctx, attr, argn);
+    }
 }
 
 
