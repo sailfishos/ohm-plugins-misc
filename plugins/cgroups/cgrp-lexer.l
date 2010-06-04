@@ -688,8 +688,8 @@ IMPLIES                =>
 SEMICOLON              ;
 
 ASTERISK               \*
+PATH                   (\/([a-zA-Z_]([a-zA-Z0-9_\.-]*)*))+
 IDENT                  [a-zA-Z_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])*
-PATH                   (\/({IDENT}|\.))+
 STRING                 (('[^\n']*')|(\"[^\n\"]*\"))
 UINT                   [0-9]+
 SINT                   [+|-]?[0-9]+
