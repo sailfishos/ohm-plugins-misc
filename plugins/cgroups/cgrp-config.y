@@ -791,17 +791,21 @@ string: TOKEN_IDENT  { $$ = $1; }
 
 
 path: TOKEN_PATH {
+#if 0  /* hmm... */
           if ($1.value[0] != '/') {
               OHM_ERROR("cgrp: invalid path '%s'", $1.value);
               exit(1);
           }
+#endif
           $$ = $1;
     }
     | TOKEN_STRING {
+#if 0 /* hmm... allow anything if quoted (we also classify by WRT IDs etc.) */
           if ($1.value[0] != '/') {
               OHM_ERROR("cgrp: invalid path '%s'", $1.value);
               exit(1);
           }
+#endif
           $$ = $1;
     }
     ;
