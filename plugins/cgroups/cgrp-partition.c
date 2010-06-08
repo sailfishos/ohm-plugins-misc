@@ -448,7 +448,7 @@ partition_limit_rt(cgrp_partition_t *partition, int period, int runtime)
      */
 
     if (ctlper >= 0 && ctlrun >= 0) {
-        if (write_control(ctlrun, "%d", -1)) {
+        if (write_control(ctlrun, "%d", 0)) {
             success  = write_control(ctlper, "%d", period);
             success &= write_control(ctlrun, "%d", runtime);
         }
