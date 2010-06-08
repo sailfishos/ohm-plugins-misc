@@ -411,8 +411,8 @@ partition_rt_limit: KEYWORD_REALTIME_LIMIT
 	      $$.limit.rt_period  = $3;
 	      $$.limit.rt_runtime = $5;
           }
-	  else if (!strcmp($2.value, "period") &&
-                   !strcmp($4.value, "runtime")) {
+	  else if (!strcmp($4.value, "period") &&
+                   !strcmp($2.value, "runtime")) {
 	      $$.limit.rt_period  = $5;
 	      $$.limit.rt_runtime = $3;
           }
