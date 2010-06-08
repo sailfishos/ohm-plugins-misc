@@ -3924,13 +3924,13 @@ static void
 resctl_connect(void)
 {
     resmsg_t msg;
-
+    
     OHM_INFO("telephony resctl: connecting...");
 
     msg.record.type       = RESMSG_REGISTER;
     msg.record.id         = RSET_ID;
     msg.record.reqno      = rctl.reqno++;
-    msg.record.rset.all   = RESMSG_AUDIO_PLAYBACK;
+    msg.record.rset.all   = RESMSG_AUDIO_PLAYBACK | RESMSG_AUDIO_RECORDING;
     msg.record.rset.opt   = 0;
     msg.record.rset.share = 0;
     msg.record.rset.mask  = 0;
@@ -4144,12 +4144,12 @@ resctl_update(int videocall)
     if ((videocall && rctl.video) || (!videocall && !rctl.video))
         return;
     
-    video = videocall ? RESMSG_VIDEO_PLAYBACK : 0;
+    video = videocall ? (RESMSG_VIDEO_PLAYBACK | RESMSG_VIDEO_RECORDING): 0;
     
     msg.record.type       = RESMSG_UPDATE;
     msg.record.id         = RSET_ID;
     msg.record.reqno      = rctl.reqno++;
-    msg.record.rset.all   = RESMSG_AUDIO_PLAYBACK | video;
+    msg.record.rset.all   = RESMSG_AUDIO_PLAYBACK|RESMSG_AUDIO_RECORDING|video;
     msg.record.rset.opt   = 0;
     msg.record.rset.share = 0;
     msg.record.rset.mask  = 0;
