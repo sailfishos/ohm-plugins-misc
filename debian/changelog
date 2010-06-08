@@ -1,8 +1,14 @@
 ohm-plugins-misc (1:1.26) unstable; urgency=low
 
+  [Janos Kovacs]
   * Fixes: NB#164531 - instead of B-Bus session bus start to use system bus
     in resource & notification plugins to make resource management available
     even if the session bus were not up
+
+  [Krisztian Litkey]
+  * Grab also the audio/video recording for calls.
+  * Fix reverse order realtime-limit parsing.
+  * Relaxed cgroup path parsing pedancy.
 
  -- Janos Kovacs <mmf-audio-blunces@projects.maemo.org>  Mon, 07 Jun 2010 08:19:21 +0300
 
