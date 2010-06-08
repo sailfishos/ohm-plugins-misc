@@ -24,13 +24,16 @@ typedef struct {
     uint32_t      (*function)(DBusMessage *, char *, char *);
 } handler_t;
 
-static DBusConnection   *conn;      /* connection to D-Bus session bus */
-static int               timeout;   /* message timeoutin msec */
-static char             *backend;   /* backend's D-Bus address or NULL */
-static int               namesig;   /* wheter we ever got a NameOwnerChanged */
+static int             systembus;  /* wheter to use system or session bus */
+static DBusConnection *conn;       /* D-Bus system/session bus */
+static int             timeout;    /* message timeoutin msec */
+static char           *backend;    /* backend's D-Bus address or NULL */
+static int             namesig;    /* whether we ever got a NameOwnerChanged */
 
 static void get_parameters(OhmPlugin *);
+static void system_bus_init(void);
 static void session_bus_init(const char *);
+static void setup_dbus_proxy_methods(void);
 
 static void reply_with_error(DBusMessage *, const char *, const char *);
 static void reply_with_id(DBusMessage *, uint32_t);
@@ -68,6 +71,8 @@ static uint32_t status_handler(DBusMessage *, char *, char *);
 void dbusif_init(OhmPlugin *plugin)
 {
     get_parameters(plugin);
+
+    system_bus_init();
 }
 
 
@@ -83,6 +88,9 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *syscon,
     (void)ud;                   /* not used */
 
     do { /* not a loop */
+        if (systembus)
+            break;
+
         dbus_error_init(&error);
     
         success = dbus_message_get_args(msg, &error,
@@ -342,9 +350,27 @@ void dbusif_free_data(void *data)
 
 static void get_parameters(OhmPlugin *plugin)
 {
+    const char *bus_str;
     const char *timeout_str;
     char       *e;
     
+    if ((bus_str = ohm_plugin_get_param(plugin, "dbus-bus")) == NULL)
+        systembus = TRUE;
+    else {
+        if (!strcmp(bus_str, "system"))
+            systembus = TRUE;
+        else if (strcmp(bus_str, "session")) {
+            OHM_ERROR("notification: invalid value '%s' for 'dbus-bus'",
+                      bus_str);
+            systembus = TRUE;
+        }
+    }
+
+    OHM_INFO("notification: using D-Bus %s bus for resource management",
+             systembus ? "system" : "session");
+
+
+
     if ((timeout_str = ohm_plugin_get_param(plugin, "dbus-timeout")) == NULL)
         timeout = -1;           /* 'a sane default timeout' will be used */
     else {
@@ -361,25 +387,33 @@ static void get_parameters(OhmPlugin *plugin)
     }
 
     OHM_INFO("notification: D-Bus message timeout is %dmsec", timeout);
+
+    
 }
 
 
+static void system_bus_init(void)
+{
+    DBusError   err;
+
+    if (systembus) {
+        dbus_error_init(&err);
+
+        if ((conn = dbus_bus_get(DBUS_BUS_SYSTEM , &err)) == NULL) {
+            if (dbus_error_is_set(&err))
+                OHM_ERROR("Can't get system D-Bus connection: %s",err.message);
+            else
+                OHM_ERROR("Can't get system D-Bus connection");
+            exit(1);
+        }
+        
+        setup_dbus_proxy_methods();
+    }
+}
+    
 static void session_bus_init(const char *addr)
 {
-    static char *filter =
-        "type='signal',"
-        "sender='"    DBUS_ADMIN_SERVICE             "',"
-        "interface='" DBUS_ADMIN_INTERFACE           "',"
-        "member='"    DBUS_NAME_OWNER_CHANGED_SIGNAL "',"
-        "path='"      DBUS_ADMIN_PATH                "',"
-        "arg0='"      DBUS_NGF_BACKEND_SERVICE       "'";
-
-    static struct DBusObjectPathVTable method = {
-        .message_function = proxy_method
-    };
-
     DBusError err;
-    int       retval;
     int       success;
 
     dbus_error_init(&err);
@@ -422,6 +456,30 @@ static void session_bus_init(const char *addr)
         return;
     }
 
+
+    setup_dbus_proxy_methods();
+}
+
+static void setup_dbus_proxy_methods(void)
+{
+    static char *filter =
+        "type='signal',"
+        "sender='"    DBUS_ADMIN_SERVICE             "',"
+        "interface='" DBUS_ADMIN_INTERFACE           "',"
+        "member='"    DBUS_NAME_OWNER_CHANGED_SIGNAL "',"
+        "path='"      DBUS_ADMIN_PATH                "',"
+        "arg0='"      DBUS_NGF_BACKEND_SERVICE       "'";
+
+    static struct DBusObjectPathVTable method = {
+        .message_function = proxy_method
+    };
+
+    const char *busname = systembus ? "system" : "session";
+    DBusError   err;
+    int         retval;
+
+    dbus_error_init(&err);
+
     /*
      * signal filtering to track the backand
      */
@@ -439,15 +497,15 @@ static void session_bus_init(const char *addr)
         exit(1);
     }
 
-    /*
-     * proxy methods
-     */
     if(!dbus_connection_register_object_path(conn,DBUS_NGF_PATH,&method,NULL)){
         OHM_ERROR("notification: can't register object path '%s'",
                   DBUS_NGF_PATH);
         exit(1);
     }
-
+    
+    /*
+     * proxy methods
+     */
     retval = dbus_bus_request_name(conn, DBUS_NGF_PROXY_SERVICE,
                                    DBUS_NAME_FLAG_REPLACE_EXISTING, &err);
 
@@ -464,12 +522,12 @@ static void session_bus_init(const char *addr)
         exit(1);
     }
     
-    OHM_INFO("notification: got name '%s' on session D-BUS",
-             DBUS_NGF_PROXY_SERVICE);
+    OHM_INFO("notification: got name '%s' on %s D-BUS",
+             DBUS_NGF_PROXY_SERVICE, busname);
 
     get_name_owner(DBUS_NGF_BACKEND_SERVICE);
 
-    OHM_INFO("notification: successfully connected to D-Bus session bus");
+    OHM_INFO("notification: successfully connected to D-Bus %s bus", busname);
 }
 
 

@@ -11,13 +11,15 @@
 #include "dbusif.h"
 #include "manager.h"
 
-static DBusConnection    *sys_conn;      /* connection for D-Bus system bus */
-static DBusConnection    *sess_conn;     /* connection for D-Bus session bus */
-static int                timeout;       /* message timeout in msec */
-static resconn_t         *res_conn;      /* resource manager connection */
+static DBusConnection   *sys_conn;       /* connection for D-Bus system bus */
+static DBusConnection   *sess_conn;      /* connection for D-Bus session bus */
+static int               timeout;        /* message timeout in msec */
+static int               use_system_bus; /* to use system or session bus */
+static resconn_t        *res_conn;       /* resource manager connection */
 
 static void system_bus_init(void);
 static void session_bus_init(const char *);
+static void res_conn_setup(DBusConnection *);
 
 
 
@@ -29,8 +31,25 @@ static void session_bus_init(const char *);
 
 void dbusif_init(OhmPlugin *plugin)
 {
+    const char *bus_str;
     const char *timeout_str;
     char       *e;
+
+    if ((bus_str = ohm_plugin_get_param(plugin, "dbus-bus")) == NULL)
+        use_system_bus = TRUE;
+    else {
+        if (!strcmp(bus_str, "system"))
+            use_system_bus = TRUE;
+        else if (strcmp(bus_str, "session")) {
+            OHM_ERROR("resource: invalid value '%s' for 'dbus-bus'", bus_str);
+            use_system_bus = TRUE;
+        }
+    }
+
+    OHM_INFO("resource: using D-Bus %s bus for resource management",
+             use_system_bus ? "system" : "session");
+
+
 
     if ((timeout_str = ohm_plugin_get_param(plugin, "dbus-timeout")) == NULL)
         timeout = -1;           /* 'a sane default timeout' will be used */
@@ -71,6 +90,9 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *conn,
     (void)ud;                   /* not used */
 
     do { /* not a loop */
+        if (use_system_bus)
+            break;
+
         dbus_error_init(&error);
     
         success = dbus_message_get_args(msg, &error,
@@ -131,6 +153,9 @@ static void system_bus_init(void)
             OHM_ERROR("Can't get system D-Bus connection");
         exit(1);
     }
+
+    if (use_system_bus)
+        res_conn_setup(sys_conn);
 }
 
 
@@ -190,26 +215,30 @@ static void session_bus_init(const char *addr)
     
         dbus_connection_setup_with_g_main(sess_conn, NULL);
 
-        res_conn = resproto_init(RESPROTO_ROLE_MANAGER,
-                                 RESPROTO_TRANSPORT_DBUS,
-                                 sess_conn);
-
-        if (res_conn == NULL) {
-            OHM_ERROR("resource: resource protocol setup over D-Bus failed");
-            return;
-        }
-
-        resproto_set_handler(res_conn, RESMSG_REGISTER  , manager_register  );
-        resproto_set_handler(res_conn, RESMSG_UNREGISTER, manager_unregister);
-        resproto_set_handler(res_conn, RESMSG_UPDATE    , manager_update    );
-        resproto_set_handler(res_conn, RESMSG_ACQUIRE   , manager_acquire   );
-        resproto_set_handler(res_conn, RESMSG_RELEASE   , manager_release   );
-        resproto_set_handler(res_conn, RESMSG_AUDIO     , manager_audio     );
+        res_conn_setup(sess_conn);
 
         OHM_INFO("resource: successfully connected to D-Bus session bus");
     }
 }
 
+static void res_conn_setup(DBusConnection *conn)
+{
+    res_conn = resproto_init(RESPROTO_ROLE_MANAGER,
+                             RESPROTO_TRANSPORT_DBUS,
+                             conn);
+
+    if (res_conn == NULL) {
+        OHM_ERROR("resource: resource protocol setup over D-Bus failed");
+        return;
+    }
+
+    resproto_set_handler(res_conn, RESMSG_REGISTER  , manager_register  );
+    resproto_set_handler(res_conn, RESMSG_UNREGISTER, manager_unregister);
+    resproto_set_handler(res_conn, RESMSG_UPDATE    , manager_update    );
+    resproto_set_handler(res_conn, RESMSG_ACQUIRE   , manager_acquire   );
+    resproto_set_handler(res_conn, RESMSG_RELEASE   , manager_release   );
+    resproto_set_handler(res_conn, RESMSG_AUDIO     , manager_audio     );
+}
 
 /* 
  * Local Variables:
