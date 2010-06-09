@@ -6,7 +6,7 @@ ohm-plugins-misc (1:1.26) unstable; urgency=low
     even if the session bus were not up
 
   [Krisztian Litkey]
-  * Grab also the audio/video recording for calls.
+  * Grab also the audio/video recording for calls (Fixes: NB#173105).
   * Fix reverse order realtime-limit parsing.
   * Relaxed cgroup path parsing pedancy.
 
