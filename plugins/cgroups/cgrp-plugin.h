@@ -322,7 +322,7 @@ typedef struct {
     uid_t              euid;                /* effective user id */
     gid_t              egid;                /* effective group id */
     int                reclassify;          /* reclassification count */
-    int                byargv0;             /* classifying by argv[0] */
+    int                byargvx;             /* classifying by argv[x] */
 } cgrp_proc_attr_t;
 
 
@@ -467,13 +467,13 @@ typedef struct {
     gulong            sigdcn;               /* policy decision id */
     gulong            sigkey;               /* policy keychange id */
     
-    int               notifsock;            /* notification fd */
-    GIOChannel       *notifchnl;            /* g I/O channel and */
-    guint             notifsrc;             /*   event source */
-    list_hook_t       notifsubscr;          /* event subscribers */
-    OhmFact          *app_changes;          /* $application_changes */
-    guint             app_update;           /* scheduled change update */
-
+    int               apptrack_sock;        /* notification fd */
+    GIOChannel       *apptrack_chnl;        /* associated I/O channel */
+    guint             apptrack_src;         /*     and event source */
+    list_hook_t       apptrack_subscribers; /* list of subscribers */
+    OhmFact          *apptrack_changes;     /* $application_changes */
+    guint             apptrack_update;      /* scheduled change update */
+    
     int             (*resolve)(char *, char **);
 
     /* I/O wait monitoring */
@@ -585,7 +585,8 @@ void classify_exit  (cgrp_context_t *);
 int  classify_config(cgrp_context_t *);
 int  classify_reconfig(cgrp_context_t *);
 int  classify_by_binary(cgrp_context_t *, pid_t, int);
-int  classify_by_argv0(cgrp_context_t *, cgrp_proc_attr_t *);
+int  classify_by_argvx(cgrp_context_t *, cgrp_proc_attr_t *, int);
+
 
 void classify_schedule(cgrp_context_t *, pid_t, unsigned int, int);
 
@@ -699,13 +700,16 @@ void     fact_delete(cgrp_context_t *, OhmFact *);
 void fact_add_process(OhmFact *, cgrp_process_t *);
 void fact_del_process(OhmFact *, cgrp_process_t *);
 
-/* cgrp-notify.c */
-int  notify_init(cgrp_context_t *, int);
-void notify_exit(cgrp_context_t *);
-int  notify_group_change(cgrp_context_t *, cgrp_group_t *, cgrp_group_t *);
-void notify_subscribe(cgrp_context_t *,
-                      void (*)(cgrp_context_t *, cgrp_process_t *, char *,
-                               void *), void *);
+/* cgrp-apptrack.c */
+int  apptrack_init(cgrp_context_t *, OhmPlugin *);
+void apptrack_exit(cgrp_context_t *);
+int  apptrack_group_change(cgrp_context_t *, cgrp_group_t *, cgrp_group_t *);
+void apptrack_subscribe(void (*)(pid_t, const char *, const char *, void *),
+                        void *);
+void apptrack_unsubscribe(void (*)(pid_t, const char *, const char *, void *),
+                          void *);
+void apptrack_query(pid_t *, const char **, const char **);
+
 
 /* cgrp-console.c */
 int  console_init(cgrp_context_t *);

@@ -217,7 +217,7 @@ group_add_process(cgrp_context_t *ctx,
 
     if (ctx->active_process == process) {
         ctx->active_group = group;
-        notify_group_change(ctx, old, group);
+        apptrack_group_change(ctx, old, group);
     }
 
     if (group->priority != CGRP_DEFAULT_PRIORITY)

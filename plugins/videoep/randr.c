@@ -9,6 +9,7 @@
 
 #include "plugin.h"
 #include "randr.h"
+#include "atom.h"
 #include "xif.h"
 
 #define SCREEN_MAX 4
@@ -19,11 +20,12 @@ typedef struct statecb_slot_s {
     void                   *data;
 } statecb_slot_t;
 
-static int             connup;
-static int             ready;
-static int             nscreen;
-static randr_screen_t  screens[SCREEN_MAX];
-static statecb_slot_t *statecbs;
+static int                  connup;
+static int                  ready;
+static int                  nscreen;
+static randr_screen_t       screens[SCREEN_MAX];
+static randr_outprop_def_t *outprops;
+static statecb_slot_t      *statecbs;
 
 static void connection_state(int, void *);
 
@@ -62,6 +64,21 @@ static randr_output_t *output_find_by_id(randr_screen_t *, uint32_t);
 static randr_output_t *output_find_by_name(randr_screen_t *, char *);
 static char           *output_state_str(randr_connstate_t);
 
+static randr_outprop_def_t  *outprop_definition_create(char *, char *,
+                                                       videoep_value_type_t);
+static void                  outprop_definition_update_xid(uint32_t,
+                                                           const char *,
+                                                           uint32_t, void *);
+static randr_outprop_inst_t *outprop_instance_create(randr_output_t *,
+                                                     randr_outprop_def_t *);
+static void                  outprop_instance_query(randr_outprop_inst_t *);
+static void                  outprop_instance_update_value(uint32_t, uint32_t,
+                                                           uint32_t,
+                                                          videoep_value_type_t,
+                                                           void *,int, void *);
+static randr_outprop_inst_t *outprop_instance_find_by_name(randr_output_t *,
+                                                           char *);
+
 static randr_mode_t   *mode_register(randr_screen_t *, xif_mode_t *);
 static void            mode_unregister(randr_mode_t *);
 static void            mode_reset(randr_mode_t *);
@@ -69,7 +86,8 @@ static void            mode_synchronize(randr_mode_t *);
 static randr_mode_t   *mode_find_by_id(randr_screen_t *, uint32_t);
 static randr_mode_t   *mode_find_by_name(randr_screen_t *, char *);
 
-static char           *print_xids(int, uint32_t *, char *, int);
+static char *print_xids(int, uint32_t *, char *, int);
+static char *print_propval(videoep_value_type_t, void *, char *, int);
 
 
 /*! \addtogroup pubif
@@ -234,6 +252,80 @@ void randr_crtc_set_outputs(int        screen_id,
     }
 }
 
+void randr_output_define_property(char                 *output,
+                                  char                 *property,
+                                  char                 *id,
+                                  videoep_value_type_t  type) 
+{
+    randr_outprop_def_t *def;
+    int                  idx;
+    size_t               dim;
+    char               **outputs;
+
+    if ((def = outprop_definition_create(property, id, type)) != NULL) {
+        idx = def->noutput++;
+        dim = sizeof(char *) * (idx + 1);
+
+        if ((outputs = realloc(def->outputs, dim)) == NULL) {
+            OHM_ERROR("videoep: can't allocate memory for output "
+                      "property definition");
+            def->noutput = 0;
+            def->outputs = NULL;
+        }
+        else {
+            outputs[idx] = strdup(output);
+            def->outputs = outputs;
+        }
+    }
+}
+
+void randr_output_change_property(char *outnam, char *propnam, void *value)
+{
+    randr_screen_t       *screen;
+    randr_output_t       *output;
+    randr_outprop_inst_t *inst;
+    randr_outprop_def_t  *def;
+    int                   i;
+    char                  buf[256];
+
+    for (i = 0;  i < nscreen;  i++) {
+        screen = screens + i;
+
+        if ((output = output_find_by_name(screen, outnam)) != NULL) {
+            if ((inst = outprop_instance_find_by_name(output, propnam))) {
+                def = inst->def;
+
+                switch (def->type) {
+                case videoep_atom:
+                    inst->value.atom = *(uint32_t *)value;
+                    break;
+                case videoep_card:
+                    inst->value.card = *(int32_t *)value;
+                    break;
+                case videoep_string:
+                    strncpy(inst->value.string, *(char **)value,
+                            sizeof(inst->value.string));
+                    inst->value.string[sizeof(inst->value.string) - 1] = '\0';
+                default:
+                    /* unsupported type */
+                    continue;
+                }
+                
+                OHM_DEBUG(DBG_RANDR,"output 0x%x property '%s' value "
+                          "changed to %s", output->xid, def->id,
+                          print_propval(def->type, &inst->value,
+                                        buf, sizeof(buf)));
+
+                inst->hasvalue = TRUE;
+                inst->sync     = TRUE;
+
+                output->sync = TRUE;
+            }
+
+            continue;
+        }
+    }
+}
 
 void randr_synchronize(void)
 {
@@ -846,11 +938,13 @@ static void output_query(uint32_t rootwin, uint32_t output, uint32_t tstamp)
 
 static void output_query_finish(xif_output_t *xif_output, void *usrdata)
 {
-    randr_screen_t *screen;
-    randr_output_t *randr_output;
-    uint32_t       *modes;
-    char            buf[256];
-    int             i;
+    randr_screen_t       *screen;
+    randr_output_t       *randr_output;
+    randr_outprop_inst_t *outprop_inst;
+    randr_outprop_def_t  *outprop_def;
+    uint32_t             *modes;
+    char                  buf[256];
+    int                   i;
 
     (void)usrdata;
 
@@ -894,6 +988,15 @@ static void output_query_finish(xif_output_t *xif_output, void *usrdata)
               xif_output->window, xif_output->name, xif_output->nclone,
               print_xids(xif_output->nmode, xif_output->modes,buf,sizeof(buf)),
               output_state_str(randr_output->state));
+
+    for (outprop_def = outprops; outprop_def; outprop_def = outprop_def->next){
+        for (i = 0;   i < outprop_def->noutput;   i++) {
+            if (!strcmp(randr_output->name, outprop_def->outputs[i])) {
+                outprop_inst = outprop_instance_create(randr_output,
+                                                       outprop_def);
+            }
+        }
+    }
 
     randr_check_if_ready();
 }
@@ -994,6 +1097,66 @@ static int output_check_if_ready(randr_output_t *output)
 
 static void output_synchronize(randr_output_t *output)
 {
+    randr_outprop_inst_t *prinst;
+    randr_outprop_def_t  *prdef;
+    uint32_t              length;
+    void                 *data;
+    int                   status;
+    char                  buf[256];
+
+    if (output->sync) {
+        output->sync = FALSE;
+
+        if (output->name)
+            OHM_DEBUG(DBG_RANDR, "synchronizing output '%s'", output->name);
+        else
+            OHM_DEBUG(DBG_RANDR, "synchronizing output 0x%x", output->xid);
+
+        for (prinst = output->props;  prinst;  prinst = prinst->next) {
+            prdef = prinst->def;
+
+            if (prinst->sync) {            
+                prinst->sync = FALSE;
+
+                if (prinst->hasvalue) {
+                    switch (prdef->type) {
+                    case videoep_string:
+                        length = strlen(prinst->value.string);
+                        data   = prinst->value.string;
+                        break;
+                    case videoep_card:
+                        length = 1;
+                        data   = &prinst->value.card;
+                        break;
+                    case videoep_atom:
+                        length = 1;
+                        data   = &prinst->value.atom;
+                        break;
+                    default:
+                        OHM_ERROR("videoep: unsupported output property "
+                                  "type 0x%x", prdef->type);
+                        return;
+                    }
+
+                    status = xif_output_property_change(output->xid,
+                                                        prdef->xid,
+                                                        prdef->type,
+                                                        length,
+                                                        data);
+                    if (status < 0) {
+                        OHM_DEBUG(DBG_RANDR, "failed to change output 0x%x "
+                                  "property '%s'", output->xid, prdef->name);
+                    }
+                    else {
+                        print_propval(prdef->type, &prinst->value,
+                                      buf, sizeof(buf));
+                        OHM_DEBUG(DBG_RANDR, "output 0x%x property '%s' value "
+                                  "changed to %s",output->xid,prdef->name,buf);
+                    }
+                }
+            } /* if sync */
+        } /* for prinst */
+    }
 }
 
 static randr_output_t *output_find_by_id(randr_screen_t *screen, uint32_t xid)
@@ -1039,6 +1202,209 @@ static char *output_state_str(randr_connstate_t state)
     case randr_connected:       return "connected";
     case randr_disconnected:    return "disconnected";
     }
+}
+
+static randr_outprop_def_t *outprop_definition_create(char *id,
+                                                      char *name,
+                                                      videoep_value_type_t type
+                                                      )
+{
+    randr_outprop_def_t *prev;
+    randr_outprop_def_t *def;
+    uint32_t             ax;
+
+    for (prev = (randr_outprop_def_t *)&outprops;
+         (def = prev->next) != NULL;
+         prev = prev->next)
+    {
+        if (!strcmp(name, def->name)) {
+            if (strcmp(id, def->id) || type != def->type) {
+                OHM_ERROR("videoep: attempt to redefine output property '%s' "
+                          " with different data type", name);
+                return NULL;
+            }
+
+            return def;
+        }
+    }
+
+    if ((def = malloc(sizeof(randr_outprop_def_t))) != NULL) {
+        memset(def, 0, sizeof(randr_outprop_def_t));
+        def->name = strdup(name);
+        def->id   = strdup(id);
+        def->xid  = ATOM_INVALID_VALUE;
+        def->type = type;
+
+        if ((ax = atom_create(id, name)) == ATOM_INVALID_INDEX ||
+            atom_add_query_callback(ax, outprop_definition_update_xid,def) < 0)
+        {
+            free(def->name);
+            free(def->id);
+            free(def);
+            return NULL;
+        }
+
+        prev->next = def;
+    }
+
+    return def;
+}
+                                   
+static void outprop_definition_update_xid(uint32_t    aidx,
+                                          const char *id,
+                                          uint32_t    value,
+                                          void       *usrdata)
+{
+    randr_outprop_def_t  *def = usrdata;
+    randr_screen_t       *screen;
+    randr_output_t       *output;
+    randr_outprop_inst_t *prop;
+    int                   i,j;
+
+    (void)aidx;
+    
+    if (def != NULL && !strcmp(id, def->id)) {
+        def->xid = value;
+
+        OHM_DEBUG(DBG_RANDR, "output property '%s'/'%s' xid is 0x%x",
+                  def->name, def->id, def->xid);
+
+        for (i = 0;  i < nscreen;  i++) {
+            screen = screens + i;
+
+            for (j = 0;  j < screen->noutput;  j++) {
+                output = screen->outputs + j;
+
+                for (prop = output->props;   prop;   prop = prop->next)
+                    outprop_instance_query(prop);
+            }
+        }
+    }
+}
+
+static randr_outprop_inst_t *outprop_instance_create(randr_output_t *output,
+                                                     randr_outprop_def_t *def)
+{
+    randr_outprop_inst_t *last;
+    randr_outprop_inst_t *inst;
+
+    for (last = (randr_outprop_inst_t *)&output->props;
+         last->next != NULL;
+         last = last->next)
+        ;
+
+    if ((inst = malloc(sizeof(randr_outprop_inst_t))) != NULL) {
+        memset(inst, 0, sizeof(randr_outprop_inst_t));
+        inst->def    = def;
+        inst->output = output;
+
+        last->next = inst;
+
+        OHM_DEBUG(DBG_RANDR, "property instance '%s' created for output 0x%x",
+                  def->name, output->xid);
+
+        if (def->xid != ATOM_INVALID_VALUE)
+            outprop_instance_query(inst);
+    }
+
+    return inst;
+}
+
+static void outprop_instance_query(randr_outprop_inst_t *prop)
+{
+    randr_outprop_def_t *def;
+    randr_output_t      *output;
+    randr_screen_t      *screen;
+    int                  length;
+    int                  status;
+
+    if ( prop                     != NULL &&
+        (def    = prop->def)      != NULL && 
+        (output = prop->output)   != NULL &&
+        (screen = output->screen) != NULL   )
+    {
+        switch (def->type) {
+        case videoep_atom:   length = sizeof(uint32_t);                break;
+        case videoep_card:   length = sizeof(int32_t);                 break; 
+        case videoep_string: length = sizeof(prop->value.string) - 1;  break;
+        default:                /* unsupported type */                 return;
+        }
+
+        status = xif_output_property_query(screen->rootwin, output->xid,
+                                           def->xid, def->type, length,
+                                           outprop_instance_update_value,prop);
+
+        OHM_DEBUG(DBG_RANDR, "%s output 0x%x property '%s'",
+                  status < 0 ? "failed to query" : "querying",
+                  output->xid, def->name);
+
+        if (status == 0)
+            prop->hasvalue = TRUE;
+    }
+}
+
+static void outprop_instance_update_value(uint32_t              rootwin,
+                                          uint32_t              output,
+                                          uint32_t              xid,
+                                          videoep_value_type_t  type,
+                                          void                 *value,
+                                          int                   length,
+                                          void                 *usrdata)
+{
+    randr_outprop_inst_t *prop = usrdata;
+    randr_outprop_def_t  *def;
+    char                  buf[512];
+
+    (void)rootwin;
+    (void)output;
+
+    if (!prop || !(def = prop->def) || xid != def->xid || type != def->type)
+        OHM_DEBUG(DBG_RANDR, "confused with data structures");
+    else {
+        switch (type) {
+
+        case videoep_string:
+            if (length > (int)sizeof(prop->value.string) - 1)
+                length = sizeof(prop->value.string) - 1;
+            strncpy(prop->value.string, value, length);
+            prop->value.string[length] = '\0';
+            break;
+
+        case videoep_atom:
+            prop->value.atom = *(uint32_t *)value;
+            break;
+
+        case videoep_card:
+            prop->value.card = *(int32_t *)value;
+            break;
+
+        default:
+            return;              /* we should never got here */
+        }
+
+        OHM_DEBUG(DBG_RANDR, "output 0x%x property '%s' value updated to %s",
+                  prop->output->xid, def->id,
+                  print_propval(def->type,&prop->value, buf,sizeof(buf)));
+    }
+}
+
+static randr_outprop_inst_t *
+outprop_instance_find_by_name(randr_output_t *output, char *propname)
+{
+    randr_outprop_inst_t *inst;
+    randr_outprop_def_t  *def;
+
+
+    if (output && propname) {
+        for (inst = output->props;  inst;  inst = inst->next) {
+            def = inst->def;
+
+            if (!strcmp(propname, def->id))
+                return inst;
+        }
+    }
+
+    return NULL;
 }
 
 
@@ -1190,6 +1556,19 @@ static char *print_xids(int nxid, uint32_t *xids, char *buf, int len)
         for (i = 0, e = (p = buf) + len;   (p+4 < e) && (i < nxid);   i++) {
             p += snprintf(p, e-p, "%s0x%x", (i ? ",":""), xids[i]);
         }
+    }
+
+    return buf;
+}
+
+static char *print_propval(videoep_value_type_t type, void *data,
+                           char *buf, int len)
+{
+    switch (type) {
+    case videoep_atom:   snprintf(buf,len, "0x%x", *(uint32_t *)data);   break;
+    case videoep_card:   snprintf(buf,len, "%d"  , *(int32_t *)data);    break;
+    case videoep_string: snprintf(buf,len, "'%s'", (char *)data);        break;
+    default:             snprintf(buf,len, "<unsupported type>");        break;
     }
 
     return buf;
