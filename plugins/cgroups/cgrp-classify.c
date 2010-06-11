@@ -148,33 +148,40 @@ classify_by_binary(cgrp_context_t *ctx, pid_t pid, int reclassify)
 
 
 /********************
- * classify_by_argv0
+ * classify_by_argvx
  ********************/
 int
-classify_by_argv0(cgrp_context_t *ctx, cgrp_proc_attr_t *procattr)
+classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *procattr, int argn)
 {
     cgrp_process_t process;
 
-    if (procattr->byargv0) {
-        OHM_ERROR("cgrp: classify-by-argv0 loop for process <%u>",
+    if (procattr->byargvx) {
+        OHM_ERROR("cgrp: classify-by-argvx loop for process <%u>",
                   procattr->pid);
         return -EINVAL;
     }
     
-    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by argv0",
-              procattr->reclassify ? "re" : "", procattr->pid);
+    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by argv%d",
+              procattr->reclassify ? "re" : "", procattr->pid, argn);
 
     memset(&process, 0, sizeof(process));
     
     if (process_get_argv(procattr) == NULL)
         return -ENOENT;                       /* we assume it's gone already */
- 
-    procattr->binary  = procattr->argv[0];
-    procattr->byargv0 = TRUE;
+
+    if (argn >= procattr->argc) {
+        OHM_WARNING("cgrp: classify-by-argv%d found only %d arguments",
+                    argn, procattr->argc);
+        procattr->binary = "<none>";          /* force fallback-rule */
+    }
+    else
+        procattr->binary = procattr->argv[argn];
+    
+    procattr->byargvx = TRUE;    
     
     process.pid    = procattr->pid;
     process.binary = procattr->binary;
-   
+    
     return classify_process(ctx, &process, procattr);
 }
 
