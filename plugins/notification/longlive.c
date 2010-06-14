@@ -260,7 +260,7 @@ static int state_machine(longlive_t *longlive, longlive_event_t ev, void *data)
     case state_playing:
         switch (ev) {
         case resource_grant:
-            success = send_stop_request_to_backend(longlive, resources);
+            success = send_stop_request_to_backend(longlive,longlive->granted);
             break;
         case stop_request:
             if (!send_stop_request_to_backend(longlive, longlive->granted) ||
@@ -277,6 +277,7 @@ static int state_machine(longlive_t *longlive, longlive_event_t ev, void *data)
         switch (ev) {
         case backend_status:
             hash_delete(longlive);
+            longlive->state = state_acquiring;
             break;
         default:
             success = FALSE;
