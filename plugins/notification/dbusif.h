@@ -3,6 +3,15 @@
 
 #include <stdint.h>
 
+#define NGF_TAG_POLICY_ID     "policy.id"       /* systemwide unique id */
+#define NGF_TAG_PLAY_MODE     "play.mode"       /* 'short' or 'long' */
+#define NGF_TAG_PLAY_LIMIT    "play.timeout"    /* notification time limit */
+#define NGF_TAG_MEDIA_PREFIX  "media."
+#define NGF_TAG_MEDIA_AUDIO   NGF_TAG_MEDIA_PREFIX "audio"     /* TRUE/FALSE */
+#define NGF_TAG_MEDIA_VIBRA   NGF_TAG_MEDIA_PREFIX "vibra"     /* TRUE/FALSE */
+#define NGF_TAG_MEDIA_LEDS    NGF_TAG_MEDIA_PREFIX "leds"      /* TRUE/FALSE */
+#define NGF_TAG_MEDIA_BLIGHT  NGF_TAG_MEDIA_PREFIX "backlight" /* TRUE/FALSE */
+
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
 
@@ -64,6 +73,7 @@ void dbusif_init(OhmPlugin *);
 DBusHandlerResult dbusif_session_notification(DBusConnection *,
                                               DBusMessage *, void *);
 void *dbusif_append_to_play_data(void *, ...);
+void *dbusif_create_play_data(char *, ...);
 void *dbusif_copy_status_data(const char *, void *);
 void *dbusif_create_status_data(const char *, uint32_t, uint32_t);
 void *dbusif_copy_stop_data(void *);

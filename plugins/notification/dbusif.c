@@ -11,6 +11,7 @@
 #include "dbusif.h"
 #include "proxy.h"
 #include "resource.h"
+#include "subscription.h"
 
 typedef enum {
     unknown_handler = 0,
@@ -47,6 +48,7 @@ static int copy_variant(DBusMessageIter *, DBusMessageIter *);
 static int append_variant(DBusMessageIter *, int, void *);
 static int append_dict_entry(DBusMessageIter *, DBusMessageIter *);
 static int close_dict_entry(DBusMessageIter *, DBusMessageIter *);
+static int append_array(DBusMessageIter *, DBusMessageIter *);
 static int copy_array(DBusMessageIter *, DBusMessageIter *, DBusMessageIter *);
 static int extend_array(DBusMessageIter *, va_list);
 static int close_array(DBusMessageIter *, DBusMessageIter *);
@@ -187,6 +189,57 @@ void *dbusif_append_to_play_data(void *data, ...)
 
     return (void *)dst;
 }
+
+
+void *dbusif_create_play_data(char *what, ...)
+{
+    DBusMessage    *msg = NULL;
+    int             success = FALSE;
+    DBusMessageIter dit;
+    DBusMessageIter darr;
+    va_list         ap;
+
+    if (what != NULL) {
+
+        msg = dbus_message_new_method_call(DBUS_NGF_BACKEND_SERVICE,
+                                           DBUS_NGF_PATH,
+                                           DBUS_NGF_INTERFACE,
+                                           DBUS_PLAY_METHOD);
+
+        if (msg != NULL) {
+
+            dbus_message_set_no_reply(msg, TRUE);
+
+            va_start(ap, what);
+            
+            dbus_message_iter_init_append(msg, &dit);
+                
+            if (append_string(&dit, what) &&
+                append_array(&dit, &darr) &&
+                extend_array(&darr, ap)   &&
+                close_array(&dit, &darr)    )
+            {
+                success = TRUE;
+            }
+
+            va_end(ap);
+        }
+    }
+
+    if (success)
+        OHM_DEBUG(DBG_DBUS, "create play data succeeded");
+    else {
+        OHM_DEBUG(DBG_DBUS, "create play data failed");
+
+        if (msg) {
+            dbus_message_unref(msg);
+            msg = NULL;
+        }
+    }
+
+    return (void *)msg;
+}
+
 
 void *dbusif_copy_status_data(const char *addr, void *data)
 {
@@ -697,6 +750,12 @@ static int close_dict_entry(DBusMessageIter *it, DBusMessageIter *dict)
     dbus_message_iter_close_container(it, dict);
 }
 
+static int append_array(DBusMessageIter *dit, DBusMessageIter *darr)
+{
+    dbus_message_iter_open_container(dit, DBUS_TYPE_ARRAY, "{sv}", darr);
+
+    return TRUE;
+}
 
 static int copy_array(DBusMessageIter *sit,
                       DBusMessageIter *dit,
@@ -726,7 +785,7 @@ static int copy_array(DBusMessageIter *sit,
          * play request wo. properties is OK;
          * output array is still needed to hold our own stuff
          */
-        dbus_message_iter_open_container(dit, DBUS_TYPE_ARRAY, "{sv}", darr);
+        append_array(dit, darr);
         success = TRUE;
         break;
 
@@ -735,7 +794,7 @@ static int copy_array(DBusMessageIter *sit,
          * we seem to have a property list, so let's parse it
          */
         dbus_message_iter_recurse(sit, sarr);
-        dbus_message_iter_open_container(dit, DBUS_TYPE_ARRAY, "{sv}", darr);
+        append_array(dit, darr);
 
         success = TRUE;
 
@@ -1118,8 +1177,13 @@ static uint32_t status_handler(DBusMessage *msg, char *err, char *desc)
 
     if (!success)
         OHM_DEBUG(DBG_DBUS, "malformed status request");
-    else
-        success = proxy_status_request(id, msg);
+    else {
+        switch (NOTIFICATION_TYPE(id)) {
+        case regular_id:    success = proxy_status_request(id, msg);    break;
+        case longlive_id:   success = longlive_status_request(id, msg); break;
+        default:            success = FALSE;                            break;
+        }
+    }
 
     return success;
 }
@@ -1212,7 +1276,11 @@ static uint32_t update_handler(DBusMessage *msg, char *err, char *desc)
         OHM_DEBUG(DBG_DBUS, "malformed update request");
     else {
         OHM_DEBUG(DBG_DBUS, "update request id=%u flags=0x%x", id, flags);
-        success = proxy_update_request(id, &flags);
+        switch (NOTIFICATION_TYPE(id)) {
+        case regular_id:   success = proxy_update_request(id, &flags);   break;
+        case longlive_id:  success = TRUE;                               break;
+        default:           success = FALSE;                              break;
+        }
     }
 
     return success;

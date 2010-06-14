@@ -14,6 +14,7 @@
 #include "dbusif.h"
 #include "ruleif.h"
 #include "resource.h"
+#include "longlive.h"
 
 /*
  * these should match their counterpart
@@ -44,6 +45,7 @@ typedef enum {
     state_forwarded,            /* after play request forwarded to backend */
     state_completed,            /* after reciving status from backend */
     state_stopped,              /* client stop request or lost resources */
+    state_longlive,             /* if only longlive resources are in use */
 } proxy_state_t;
 
 typedef enum {
@@ -60,15 +62,16 @@ typedef struct proxy_s {
     int              type;      /* notification type */
     uint32_t         id;        /* system-wide unique play request ID */
     const char      *client;    /* client's D-Bus address */
+    uint32_t         longlive;  /* wheter we have longlive resources or not */
     proxy_state_t    state;     /* stages of play request processing */
-    uint32_t         resources; /* bitmap of resources we own */
+    uint32_t         resources; /* bitmap of regular resources we own */
     uint32_t         timeout;   /* timer ID or zero if no timer is set */
     void            *data;      /* play data */
     uint32_t         status;    /* status to reply */
 } proxy_t;
 
 
-static uint32_t      proxid = 1;         /* serial # for unique notif.ID */
+static uint32_t      seqno = 1;          /* serial # for unique notif.ID */
 static proxy_t      *hashtbl[HASH_DIM];  /* to fetch data based on notif. ID */
 static uint32_t      play_limit;         /* notif. play limit in msec's */
 static uint32_t      play_timeout;       /* max.time for a play request */
@@ -88,7 +91,7 @@ static uint32_t timeout_handler(proxy_t *);
 static void     grant_handler(uint32_t, void *);
 
 static int evaluate_notification_request_rules(const char *, uint32_t *,
-                                               uint32_t *, char *);
+                                               uint32_t *, uint32_t *, char *);
 
 static int state_machine(proxy_t *, proxy_event_t, void *);
 
@@ -99,9 +102,13 @@ static int partial_release_of_resources(proxy_t *, void *);
 static int create_and_send_status_to_client(proxy_t *, uint32_t);
 static int stop_if_loose_resources(proxy_t *, uint32_t);
 static int premature_stop(proxy_t *);
+static int playback_partial_end(proxy_t *);
 static int fake_backend_timeout(proxy_t *);
 
 static uint32_t play_status(proxy_t *, uint32_t);
+
+static const char *state_str(proxy_state_t);
+static const char *event_str(proxy_event_t);
 
 
 /*! \addtogroup pubif
@@ -140,20 +147,23 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
 {
     uint32_t       mand   = 0;
     uint32_t       opt    = 0;
+    uint32_t       lliv   = 0;
     proxy_t       *proxy  = NULL;
     uint32_t       status = NGF_COMPLETED;
+    uint32_t       proxid;
     proxy_state_t  state;
     int            type;
+    int            success;
 
     do { /* not a loop */
 
-        type = evaluate_notification_request_rules(event, &mand, &opt, err);
+        type = evaluate_notification_request_rules(event,&mand,&opt,&lliv,err);
 
         if (type >= 0)
             state  = state_acquiring;
         else {
             state = state_created;
-            mand  = opt = 0;
+            mand  = opt = lliv = 0;
 
             if (!strcmp(err, "Busy")) {
                 /* reply with status 'busy' */
@@ -165,27 +175,39 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
             }
         }
 
+        proxid = NOTIFICATION_ID(regular_id, seqno);
+
         if ((proxy = proxy_create(proxid, client, data)) == NULL) {
             strncpy(err, "internal proxy error", DBUS_DESCBUF_LEN);
             err[DBUS_DESCBUF_LEN-1] = '\0';
             break;
         }
 
-        proxy->type   = type;
-        proxy->state  = state;
-        proxy->status = status;
+        proxy->type     = type;
+        proxy->longlive = lliv;
+        proxy->state    = state;
+        proxy->status   = status;
 
-        if (!(mand | opt))
-            timeout_create(proxy, 0);
+        if (!(mand | opt)) {
+            if (!lliv)
+                timeout_create(proxy, 0);
+        }
         else {
-            if (!resource_set_acquire(type, mand, opt, grant_handler, proxy)) {
+            success = resource_set_acquire(type, rset_regular, mand, opt,
+                                           grant_handler, proxy);
+            if (!success) {
                 strncpy(err, "recource acquisition failed", DBUS_DESCBUF_LEN);
                 err[DBUS_DESCBUF_LEN-1] = '\0';
                 break;
             }
         }
+
+        if (lliv)
+            longlive_playback_request(type, lliv);
+
+        seqno++;
         
-        return proxid++;
+        return proxid;
 
     } while(0);
 
@@ -212,6 +234,11 @@ int proxy_stop_request(uint32_t id, const char *client, void *data, char *err)
         strncpy(err, "requests is from diferrent client", DBUS_DESCBUF_LEN);
     }
     else {
+        if (proxy->longlive) {
+            proxy->longlive = 0;
+            longlive_stop_request(proxy->type);
+        }
+
         success = state_machine(proxy, client_stop, data);
 
         if (!success)
@@ -306,8 +333,11 @@ static void proxy_destroy(proxy_t *proxy)
         OHM_DEBUG(DBG_PROXY, "proxy object will be destroyed (id %u)",
                   proxy->id);
 
+        if (proxy->longlive)
+            longlive_stop_request(proxy->type);
+
         timeout_destroy(proxy);
-        resource_set_release(proxy->type, grant_handler, proxy);
+        resource_set_release(proxy->type, rset_regular, grant_handler, proxy);
 
         hash_delete(proxy);
 
@@ -407,7 +437,7 @@ static void grant_handler(uint32_t granted, void *void_proxy)
     if (proxy == NULL)
         return;
 
-    OHM_DEBUG(DBG_PROXY, "granted resources %s",
+    OHM_DEBUG(DBG_PROXY, "granted regular resources %s",
               resmsg_res_str(granted, buf, sizeof(buf)));
 
     state_machine(proxy, resource_grant, (void *)granted);
@@ -416,12 +446,14 @@ static void grant_handler(uint32_t granted, void *void_proxy)
 static int evaluate_notification_request_rules(const char *event,
                                                uint32_t   *mand_ret,
                                                uint32_t   *opt_ret,
+                                               uint32_t   *lliv_ret,
                                                char       *errbuf)
 {
     int   success;
     int   type;
     int   mand;
     int   opt;
+    int   lliv;
     char *error = NULL;
 
     success = ruleif_notification_request(event,
@@ -429,6 +461,7 @@ static int evaluate_notification_request_rules(const char *event,
                      RULEIF_STRING_ARG  ("error"    , error),
                      RULEIF_INTEGER_ARG ("mandatory", mand ),
                      RULEIF_INTEGER_ARG ("optional" , opt  ),
+                     RULEIF_INTEGER_ARG ("longlive" , lliv ),
                      RULEIF_ARGLIST_END                    );
 
     if (!success || type < 0) {
@@ -456,9 +489,12 @@ static int evaluate_notification_request_rules(const char *event,
         if (opt_ret != NULL)
             *opt_ret = (uint32_t)opt;
 
+        if (lliv_ret != NULL)
+            *lliv_ret = (uint32_t)lliv;
+
         OHM_DEBUG(DBG_PROXY, "notification request rules returned: "
-                  "type=%d, mandatory=%d optional=%d err='%s'",
-                  type, mand, opt, error);
+                  "type=%d, mandatory=%d optional=%d longliv=%d err='%s'",
+                  type, mand, opt, lliv, error);
     }
 
     free(error);
@@ -468,19 +504,26 @@ static int evaluate_notification_request_rules(const char *event,
 
 static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
 {
-    uint32_t  granted = (uint32_t)evdata;
-    void     *data    = evdata;
-    int       success = TRUE;
-    int       type    = proxy->type;
-    uint32_t  status;
+    uint32_t       granted = (uint32_t)evdata;
+    void          *data    = evdata;
+    int            success = TRUE;
+    int            type    = proxy->type;
+    proxy_state_t  state   = proxy->state;
+    int            killed  = FALSE;
+    uint32_t       status;
 
-    switch (proxy->state) {
+    OHM_DEBUG(DBG_PROXY, "proxy %s/%d received '%s' event in '%s' state",
+              proxy->client,type, event_str(ev), state_str(state));
+
+
+    switch (state) {
 
     case state_created:
         switch (ev) {
         case backend_timeout:
             create_and_send_status_to_client(proxy, proxy->status);
-            proxy_destroy(proxy);            
+            proxy_destroy(proxy);
+            killed = TRUE;
             break;
         default:
             success = FALSE;
@@ -493,11 +536,16 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         case resource_grant:
             status = play_status(proxy, granted);
             create_and_send_status_to_client(proxy, status);
-            forward_play_request_to_backend(proxy, granted, status);
+            if (!forward_play_request_to_backend(proxy, granted, status)) {
+                create_and_send_status_to_client(proxy, NGF_FAILED);
+                proxy_destroy(proxy);
+                killed = TRUE;
+            }
             break;
         case backend_timeout:
             create_and_send_status_to_client(proxy, NGF_COMPLETED);
             proxy_destroy(proxy);
+            killed = TRUE;
             break;
         case client_stop:
             premature_stop(proxy);
@@ -514,13 +562,19 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         case resource_grant:
             stop_if_loose_resources(proxy, granted);
             break;
-        case backend_status:
-            forward_status_to_client(proxy, data);
-            proxy_destroy(proxy);
+        case backend_status: 
+            if (proxy->longlive)
+                playback_partial_end(proxy);
+            else {
+                forward_status_to_client(proxy, data);
+                proxy_destroy(proxy);
+                killed = TRUE;
+            }
             break;
         case backend_timeout:
             create_and_send_status_to_client(proxy, NGF_FAILED);
             proxy_destroy(proxy);
+            killed = TRUE;
             break;
         case backend_update:
             timeout_destroy(proxy);
@@ -540,9 +594,11 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         switch (ev) {
         case resource_grant:
             proxy_destroy(proxy);   /* will release the resources */
+            killed = TRUE;
             break; 
         case backend_timeout:
             proxy_destroy(proxy);
+            killed = TRUE;
             break;
         default:
             success = FALSE;
@@ -556,9 +612,27 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         case backend_status:
             forward_status_to_client(proxy, data);
             proxy_destroy(proxy);
+            killed = TRUE;
             break;
         case backend_timeout:
             proxy_destroy(proxy);
+            killed = TRUE;
+            break;
+        default:
+            success = FALSE;
+            break;
+        }
+        break;
+
+    case state_longlive:
+        switch (ev) {
+        case client_stop:
+            timeout_create(proxy, 0);
+            break;
+        case backend_timeout:
+            create_and_send_status_to_client(proxy, NGF_COMPLETED);
+            proxy_destroy(proxy);
+            killed = TRUE;
             break;
         default:
             success = FALSE;
@@ -570,6 +644,11 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         OHM_ERROR("notification: invalid proxy state %d for %s/%u",
                   proxy->state, proxy->client, proxy->id);
         break;
+    }
+
+    if (!killed && state != proxy->state) {
+        OHM_DEBUG(DBG_PROXY, "proxy %s/%d enters to '%s' state",
+                  proxy->client,type, state_str(proxy->state));
     }
 
     return success;
@@ -623,10 +702,6 @@ static int forward_play_request_to_backend(proxy_t *proxy,
     if (data == NULL) {
         OHM_DEBUG(DBG_PROXY, "extended play request creation "
                    "failed (id %u) ", proxy->id);
-
-        create_and_send_status_to_client(proxy, NGF_FAILED);
-        proxy_destroy(proxy);
-
         success = FALSE;
     }
     else {
@@ -732,6 +807,16 @@ static int premature_stop(proxy_t *proxy)
      * moving to completed state
      */
     proxy->state = state_completed;
+    timeout_create(proxy, 0);
+
+    return TRUE;
+}
+
+static int playback_partial_end(proxy_t *proxy)
+{
+    timeout_destroy(proxy);
+    resource_set_release(proxy->type, rset_regular, grant_handler,proxy);
+    proxy->state = state_longlive;
 
     return TRUE;
 }
@@ -745,7 +830,7 @@ static int fake_backend_timeout(proxy_t *proxy)
 
 static uint32_t play_status(proxy_t *proxy, uint32_t granted)
 {
-    static uint32_t  status[rset_max] = {
+    static uint32_t  status[rset_id_max] = {
         [ rset_ringtone   ] = NGF_SHORT ,
         [ rset_missedcall ] = NGF_BUSY  ,
         [ rset_alarm      ] = NGF_SHORT ,
@@ -758,11 +843,37 @@ static uint32_t play_status(proxy_t *proxy, uint32_t granted)
     if (granted)
         return NGF_LONG;
 
-    if (proxy->type < 0 || proxy->type >= rset_max)
+    if (proxy->type < 0 || proxy->type >= rset_id_max)
         return NGF_BUSY;
 
     return status[proxy->type];
 }
+
+static const char *state_str(proxy_state_t state)
+{
+    switch (state) {
+    case state_created:      return "created";
+    case state_acquiring:    return "acquiring";
+    case state_forwarded:    return "forwarded";
+    case state_completed:    return "completed";
+    case state_stopped:      return "stopped";
+    case state_longlive:     return "longlive";
+    default:                 return "<unknown>";
+    }
+}
+
+static const char *event_str(proxy_event_t event)
+{
+    switch (event) {
+    case resource_grant:    return "resource grant";
+    case backend_status:    return "backend status";
+    case backend_update:    return "backend update";
+    case backend_timeout:   return "backend_timeout";
+    case client_stop:       return "client stop";
+    default:                return "<unknown>";
+    }
+}
+
 
 /* 
  * Local Variables:

@@ -18,6 +18,7 @@ typedef struct {
     char              *klass;  /* resource class      */
     uint32_t           mand;   /* mandatory resources */
     uint32_t           opt;    /* optional resources  */
+    uint32_t           lliv;   /* longlive resources */
 } rset_def_t;
 
 typedef struct {
@@ -34,16 +35,17 @@ typedef struct fake_grant_s {
 } fake_grant_t;
 
 typedef struct resource_set_s {
-    resset_t         *resset;
-    int               acquire;
-    uint32_t          reqno;
-    uint32_t          flags;
-    callback_t        grant;
-    fake_grant_t     *fakes;
+    resource_set_type_t  type;
+    resset_t            *resset;
+    int                  acquire;
+    uint32_t             reqno;
+    uint32_t             flags;
+    callback_t           grant;
+    fake_grant_t        *fakes;
     struct {
         int    count;
         char **list;
-    }                 event;
+    }                    event;
 } resource_set_t;
 
 
@@ -53,7 +55,9 @@ OHM_IMPORTABLE(void *, timer_add  , (uint32_t delay,
 OHM_IMPORTABLE(void  , timer_del  , (void *timer));
 
 static resconn_t      *conn;
-static resource_set_t  resource_set[rset_max];
+static resource_set_t  regular_set[rset_id_max];
+static resource_set_t  longlive_set[rset_id_max];
+static resource_set_t  empty_set[rset_id_max];
 static uint32_t        reqno;
 static int             verbose;
 
@@ -124,12 +128,14 @@ void resource_init(OhmPlugin *plugin)
     verbose = TRUE;
 }
 
-int resource_set_acquire(resource_set_id_t id,
-                         uint32_t          mand,
-                         uint32_t          opt,
-                         resource_cb_t     function,
-                         void             *data)
+int resource_set_acquire(resource_set_id_t    id,
+                         resource_set_type_t  type,
+                         uint32_t             mand,
+                         uint32_t             opt,
+                         resource_cb_t        function,
+                         void                *data)
 {
+    resource_set_t *rspool;
     resource_set_t *rs;
     resset_t       *resset;
     uint32_t        all;
@@ -137,18 +143,26 @@ int resource_set_acquire(resource_set_id_t id,
     char            mbuf[256];
     char            obuf[256];
     int             success;
+    const char     *typstr;
 
-    if (id < 0 || id >= rset_max)
+    if (id < 0 || id >= rset_id_max || type < 0 || type >= rset_type_max)
         success = FALSE;
     else {
+        switch (type) {
+        case rset_regular:  rspool = regular_set;   typstr = "regular";  break;
+        case rset_longlive: rspool = longlive_set;  typstr = "longlive"; break;
+        default:            rspool = empty_set;     typstr = "???";      break;
+        }
+
         all = mand | opt;
-        rs  = resource_set + id;
+        rs  = rspool + id;
         resset = rs->resset;
 
         if (!resset)
             success = FALSE;
         else if (!all || rs->acquire) {
-            fake_grant_create(rs, RESOURCE_SET_BUSY, function,data);
+            if (type == rset_regular)
+                fake_grant_create(rs, RESOURCE_SET_BUSY, function,data);
             success = TRUE;
         }
         else {
@@ -158,8 +172,8 @@ int resource_set_acquire(resource_set_id_t id,
 
             if ((all ^ resset->flags.all) || (opt ^ resset->flags.opt)) {
 
-                OHM_DEBUG(DBG_RESRC, "updating resource_set%u (reqno %u) "
-                          "mandatory='%s' optional='%s'", id, rs->reqno,
+                OHM_DEBUG(DBG_RESRC, "updating %s resource set%u (reqno %u) "
+                          "mandatory='%s' optional='%s'",typstr, id, rs->reqno,
                           resmsg_res_str(mand, mbuf, sizeof(mbuf)),
                           resmsg_res_str(opt , obuf, sizeof(obuf)));
 
@@ -177,8 +191,8 @@ int resource_set_acquire(resource_set_id_t id,
 
             rs->reqno = ++reqno;
 
-            OHM_DEBUG(DBG_RESRC, "acquiring resource set%u (reqno %u)",
-                      id, rs->reqno);
+            OHM_DEBUG(DBG_RESRC, "acquiring %s resource set%u (reqno %u)",
+                      typstr, id, rs->reqno);
 
             memset(&msg, 0, sizeof(msg));
             msg.possess.type  = RESMSG_ACQUIRE;
@@ -195,27 +209,36 @@ int resource_set_acquire(resource_set_id_t id,
     return success;
 }
 
-int resource_set_release(resource_set_id_t id,                      
-                         resource_cb_t     function,
-                         void             *data)
+int resource_set_release(resource_set_id_t    id,
+                         resource_set_type_t  type,
+                         resource_cb_t        function,
+                         void                *data)
 {
+    resource_set_t *rspool;
     resource_set_t *rs;
     resmsg_t        msg;
     int             success;
     fake_grant_t   *fake;
+    const char     *typstr;
 
-    if (id < 0 || id >= rset_max)
+    if (id < 0 || id >= rset_id_max || type < 0 || type >= rset_type_max)
         success = FALSE;
     else {
-        rs = resource_set + id;
+        switch (type) {
+        case rset_regular:  rspool = regular_set;   typstr = "regular";  break;
+        case rset_longlive: rspool = longlive_set;  typstr = "longlive"; break;
+        default:            rspool = empty_set;     typstr = "???";      break;
+        }
 
-        if (function == rs->grant.function || data == rs->grant.data) {
+        rs = rspool + id;
+
+        if (function == rs->grant.function && data == rs->grant.data) {
             rs->reqno = ++reqno;
             rs->grant.function = NULL;
             rs->grant.data     = NULL;
             
-            OHM_DEBUG(DBG_RESRC, "releasing resource set%u (reqno %u)",
-                      id, rs->reqno);
+            OHM_DEBUG(DBG_RESRC, "releasing %s resource set%u (reqno %u)",
+                      typstr, id, rs->reqno);
             
             memset(&msg, 0, sizeof(msg));
             msg.possess.type  = RESMSG_RELEASE;
@@ -223,6 +246,9 @@ int resource_set_release(resource_set_id_t id,
             msg.possess.reqno = rs->reqno;
             
             success = resproto_send_message(rs->resset, &msg, NULL);
+
+            if (success && type == rset_longlive)
+                rs->acquire = FALSE;
         }
         else {
             success = TRUE;
@@ -281,17 +307,20 @@ uint32_t resource_name_to_flag(const char *name)
 
 static void connect_to_manager(resconn_t *rc)
 {
-#define MANDATORY_DEFAULT   RESMSG_AUDIO_PLAYBACK | RESMSG_VIBRA
-#define MANDATORY_MISCALL   RESMSG_LEDS
-#define OPTIONAL_DEFAULT    RESMSG_BACKLIGHT
-#define OPTIONAL_MISCALL    0
+#define MAND_DEFAULT   RESMSG_AUDIO_PLAYBACK | RESMSG_VIBRA
+#define MAND_MISCALL   RESMSG_LEDS
+#define OPT_DEFAULT    RESMSG_BACKLIGHT
+#define OPT_MISCALL    0
+#define LLIV_DEFAULT   RESMSG_LEDS
+#define LLIV_RING      0
+#define LLIV_MISCALL   0
 
    
     static rset_def_t   defs[] = {
-        { rset_ringtone  , "ringtone", MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
-        { rset_missedcall, "ringtone", MANDATORY_MISCALL  , OPTIONAL_MISCALL },
-        { rset_alarm     , "alarm"   , MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
-        { rset_event     , "event"   , MANDATORY_DEFAULT  , OPTIONAL_DEFAULT },
+        {rset_ringtone  , "ringtone", MAND_DEFAULT, OPT_DEFAULT, LLIV_RING   },
+        {rset_missedcall, "ringtone", MAND_MISCALL, OPT_MISCALL, LLIV_MISCALL},
+        {rset_alarm     , "alarm"   , MAND_DEFAULT, OPT_DEFAULT, LLIV_DEFAULT},
+        {rset_event     , "event"   , MAND_DEFAULT, OPT_DEFAULT, LLIV_DEFAULT},
     };
 
     rset_def_t      *def;
@@ -304,7 +333,6 @@ static void connect_to_manager(resconn_t *rc)
     rec = &msg.record;
 
     rec->type = RESMSG_REGISTER;
-    rec->mode = RESMSG_MODE_ALWAYS_REPLY | RESMSG_MODE_AUTO_RELEASE;
 
     for (i = 0, success = TRUE;   i < DIM(defs);   i++) {
         def = defs + i;
@@ -314,13 +342,31 @@ static void connect_to_manager(resconn_t *rc)
         rec->rset.all = def->mand | def->opt;
         rec->rset.opt = def->opt;
         rec->klass    = def->klass;
+        rec->mode     = RESMSG_MODE_ALWAYS_REPLY | RESMSG_MODE_AUTO_RELEASE;
 
         if (resconn_connect(rc, &msg, conn_status) == NULL) {
             if (verbose) {
-                OHM_ERROR("notification: can't register '%s' "
+                OHM_ERROR("notification: can't register '%s' regular "
                           "resource class", def->klass);
             }
             success = FALSE;
+        }
+
+        if (def->lliv) {
+            rec->id       = def->id + rset_id_max;
+            rec->reqno    = ++reqno;
+            rec->rset.all = def->lliv;
+            rec->rset.opt = 0;
+            rec->klass    = def->klass;
+            rec->mode     = 0;
+            
+            if (resconn_connect(rc, &msg, conn_status) == NULL) {
+                if (verbose) {
+                    OHM_ERROR("notification: can't register '%s' longlive "
+                              "resource class", def->klass);
+                }
+                success = FALSE;
+            }
         }
     }
 
@@ -329,10 +375,13 @@ static void connect_to_manager(resconn_t *rc)
         update_event_list();
     }
 
-#undef OPTIONAL_MISCALL
-#undef OPTIONAL_DEFAULT
-#undef MANDATORY_MISCALL
-#undef MANDATORY_DEFAULT
+#undef LLIV_MISCALL
+#undef LLIV_RING
+#undef LLIV_DEFAULT
+#undef OPT_MISCALL
+#undef OPT_DEFAULT
+#undef MAND_MISCALL
+#undef MAND_DEFAULT
 }
 
 static void conn_status(resset_t *resset, resmsg_t *msg)
@@ -345,29 +394,47 @@ static void conn_status(resset_t *resset, resmsg_t *msg)
 
     if (msg->type == RESMSG_STATUS) {
         if (msg->status.errcod == 0) {
-            if (!ruleif_notification_events(resset->id, &kl, &evs, &len)) {
-                OHM_ERROR("notification: creation of '%s' resource set (id %u)"
-                          " failed: querying event list failed",
-                          resset->klass, resset->id);
+            if (resset->id < rset_id_max) {
+                /* regular set */
+                if (!ruleif_notification_events(resset->id, &kl, &evs, &len)) {
+                    OHM_ERROR("notification: creation of '%s' resource set "
+                              "(id %u) failed: querying event list failed",
+                              resset->klass, resset->id);
+                }
+                else {
+                    OHM_DEBUG(DBG_RESRC, "'%s' regular resource set (id %u) "
+                              "successfully created (event list = %d %s)",
+                              resset->klass, resset->id, len,
+                              strlist(evs, buf, sizeof(buf)));
+
+                    rs = regular_set + resset->id;
+
+                    memset(rs, 0, sizeof(resource_set_t));
+                    rs->type = rset_regular;
+                    rs->resset = resset;
+                    rs->event.count = len;
+                    rs->event.list  = evs;
+                    
+                    resset->userdata = rs;
+                }
             }
             else {
-                OHM_DEBUG(DBG_RESRC, "'%s' resource set (id %u) successfully "
-                          "created (event list = %d %s)", resset->klass,
-                          resset->id, len, strlist(evs, buf, sizeof(buf)));
+                /* longlive set */
+                OHM_DEBUG(DBG_RESRC, "'%s' longlive resource set (id %u) "
+                          "successfully created", resset->klass, resset->id);
 
-                rs = resource_set + resset->id;
+                rs = longlive_set + (resset->id - rset_id_max);
 
                 memset(rs, 0, sizeof(resource_set_t));
+                rs->type = rset_longlive;
                 rs->resset = resset;
-                rs->event.count = len;
-                rs->event.list  = evs;
-
+                    
                 resset->userdata = rs;
             }
         }
         else {
-            OHM_ERROR("notification: creation of '%s' resource set (id %u) "
-                      "failed: %d %s", resset->klass, resset->id,
+            OHM_ERROR("notification: creation of '%s' resource set "
+                      "(id %u) failed: %d %s", resset->klass, resset->id,
                       msg->status.errcod,
                       msg->status.errmsg ? msg->status.errmsg : "");
         }
@@ -380,39 +447,60 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
     callback_t      grant;
     int             update;
     char            buf[256];
+    const char     *typstr;
 
     (void)protodata;
 
     if ((rs = resset->userdata) != NULL) {
         update = FALSE;
+        grant  = rs->grant;
+        typstr = (rs->type == rset_regular) ? "regular" : "longlive";
 
-        OHM_DEBUG(DBG_RESRC, "granted resource set%u %s (reqno %u)",resset->id,
+        OHM_DEBUG(DBG_RESRC, "granted %s resource set%u %s (reqno %u)",
+                  typstr, resset->id,
                   resmsg_res_str(msg->notify.resrc, buf, sizeof(buf)),
                   msg->notify.reqno);
 
-        if (rs->reqno == msg->notify.reqno) {
-            grant = rs->grant;
 
-            rs->reqno = 0;
-            rs->flags = msg->notify.resrc;
-            
-            if (rs->flags == 0) {
+        switch (rs->type) {
 
-                update  = rs->acquire;
-
-                rs->acquire        = FALSE; /* auto released */
-                rs->grant.function = NULL;
-                rs->grant.data     = NULL;
+        case rset_regular:
+            if (rs->reqno != msg->notify.reqno)
+                grant.function = NULL;
+            else {
+                rs->reqno = 0;
+                rs->flags = msg->notify.resrc;
+                
+                if (rs->flags == 0) {
+                    
+                    update  = rs->acquire;
+                    
+                    rs->acquire        = FALSE; /* auto released */
+                    rs->grant.function = NULL;
+                    rs->grant.data     = NULL;
+                }
+                
+                if (grant.function != NULL)
+                    grant.function(rs->flags, grant.data);
             }
-            
-            if (grant.function != NULL)
-                grant.function(rs->flags, grant.data);
+            break;
+
+        case rset_longlive:
+            rs->flags = msg->notify.resrc;
+            break;
+
+        default:
+            grant.function = NULL;
+            break;
         }
+
+        if (grant.function != NULL)
+            grant.function(rs->flags, grant.data);
 
         OHM_DEBUG(DBG_RESRC, "resource set%u acquire=%s reqno=%u %s",
                   resset->id, rs->acquire ? "True":"False", rs->reqno,
                   rs->grant.function ? "grantcb present":"no grantcb");
-
+        
         if (update)
             update_event_list();
     }
@@ -520,8 +608,8 @@ static void update_event_list(void)
 
     sign = 0;
 
-    for (i = evcnt = 0;   i < rset_max && evcnt < DIM(evls)-1;    i++) {
-        rs = resource_set + i;
+    for (i = evcnt = 0;   i < rset_id_max && evcnt < DIM(evls)-1;    i++) {
+        rs = regular_set + i;
 
         if (!rs->acquire) {
             sign |= (((uint32_t)1) << i);
