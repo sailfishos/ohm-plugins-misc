@@ -1,6 +1,7 @@
 #ifndef __OHM_NOTIFICATION_PLUGIN_H__
 #define __OHM_NOTIFICATION_PLUGIN_H__
 
+#include <stdint.h>
 #include <glib.h>
 #include <glib-object.h>
 #include <gmodule.h>
@@ -18,12 +19,38 @@
 
 #define DIM(a)   (sizeof(a) / sizeof(a[0]))
 
-/* FactStore prefix */
-#define FACTSTORE_PREFIX                "com.nokia.policy"
-#define FACTSTORE_NOTIFICATION          FACTSTORE_PREFIX ".notification"
+/*
+ * FactStore prefix's 
+ */
+#define FACTSTORE_PREFIX        "com.nokia.policy"
+#define FACTSTORE_NOTIFICATION  FACTSTORE_PREFIX ".notification"
 
+/*
+ * notification ID's
+ */
+#define SEQNO_BITS              31
+#define TYPE_BITS               1
+#define SEQNO_MASK              ((((uint32_t)1) << SEQNO_BITS) - 1)
+#define TYPE_MASK               ((((uint32_t)1) << TYPE_BITS)  - 1)
+#define NOTIFICATION_TYPE(id)   (((id) >> SEQNO_BITS) & TYPE_MASK)
+#define NOTIFICATION_SEQNO(id)  ((id) & SEQNO_MASK)
+#define NOTIFICATION_ID(t,s)  \
+  ((((uint32_t)(t) & TYPE_MASK) << SEQNO_BITS) | ((uint32_t)(s) & SEQNO_MASK))
 
-extern int DBG_PROXY, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
+#if (SEQNO_BITS + TYPE_BITS) > 32
+#error "Notification ID is wider than 32 bit"
+#endif
+
+typedef enum {
+    unknown_id = -1,
+
+    regular_id = 0,
+    longlive_id,
+
+    max_id
+} notification_id_type_t;
+
+extern int DBG_PROXY, DBG_LLIV, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
 
 
 /*
