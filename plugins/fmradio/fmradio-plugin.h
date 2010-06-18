@@ -1,0 +1,71 @@
+#ifndef __OHM_PLUGIN_FMRADIO_H__
+#define __OHM_PLUGIN_FMRADIO_H__
+
+#include <stdio.h>
+
+#include <ohm/ohm-plugin.h>
+#include <ohm/ohm-plugin-log.h>
+#include <ohm/ohm-plugin-debug.h>
+#include <ohm/ohm-fact.h>
+
+#include <glib.h>
+
+
+#ifndef TRUE
+#define TRUE  1
+#define FALSE 0
+#endif
+
+#define PLUGIN_PREFIX   fmradio
+#define PLUGIN_NAME    "fmradio"
+#define PLUGIN_VERSION "0.0.1"
+
+#define FACT_NAME_RES_OWNER "com.nokia.policy.resource_owner"
+
+
+/*
+ * debug flags
+ */
+
+extern int DBG_ACTION, DBG_REQUEST;
+
+
+/*
+ * forward declarations
+ */
+
+struct fmradio_context_s;
+typedef struct fmradio_context_s fmradio_context_t;
+
+
+/*
+ * fmradio plugin context/state
+ */
+
+struct fmradio_context_s {
+    OhmFactStore       *store;                 /* ohm factstore */
+    GObject            *sigconn;               /* policy signaling interface */
+    gulong              sigdcn;                /* policy decision id */
+    gulong              sigkey;                /* policy keychange id */
+    int                 active;                /* current fmradio state */
+};
+
+
+/* fmradio-ep.c */
+void ep_init(fmradio_context_t *, GObject *(*)(gchar *, gchar **));
+void ep_exit(fmradio_context_t *, gboolean (*)(GObject *));
+void ep_disable(void);
+void ep_enable(void);
+
+#endif /* __OHM_PLUGIN_FMRADIO_H__ */
+
+
+
+/* 
+ * Local Variables:
+ * c-basic-offset: 4
+ * indent-tabs-mode: nil
+ * End:
+ * vim:set expandtab shiftwidth=4:
+ */
+

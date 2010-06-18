@@ -10,6 +10,7 @@ SUBDIRS = 	     \
 	buttons      \
 	apptrack
 
+#	fmradio
 #	notification
 #       vibra        
 #       backlight
