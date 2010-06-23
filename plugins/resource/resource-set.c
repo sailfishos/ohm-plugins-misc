@@ -137,10 +137,11 @@ void resource_set_destroy(resset_t *resset)
 
             delete_factstore_entry(rs);
             delete_from_hash_table(rs);
-            resset->userdata = NULL;
 
             free(rs->request);
             free(rs);
+
+            resset->userdata=NULL;
 
             OHM_DEBUG(DBG_SET, "destroyed resource set %s/%u (manager id %u)",
                       resset->peer, resset->id, mgrid);
@@ -175,15 +176,15 @@ int resource_set_add_spec(resset_t *resset, resource_spec_type_t type, ...)
                     break;
                 }
             }
-
-            if (spec == NULL)
+            if (spec == NULL) {
                 spec = resource_spec_create(rs, type, args);
+                spec->any.next = rs->specs;
+                rs->specs  = spec;
 
+            }
             va_end(args);
 
             if (spec != NULL) {
-                spec->any.next = rs->specs;
-                rs->specs  = spec;
 
                 switch (spec->any.type) {
 
