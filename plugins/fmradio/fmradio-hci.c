@@ -21,8 +21,9 @@
 int
 hci_enable(fmradio_context_t *ctx)
 {
-    struct hci_dev_info di;
+#if 0
     struct hci_filter   flt;
+#endif
     int                 ctl, hci, success;
     uint16_t            ocf = 0x00;
     uint8_t             ogf = 0x3f;
@@ -86,8 +87,9 @@ hci_enable(fmradio_context_t *ctx)
 int
 hci_disable(fmradio_context_t *ctx)
 {
-    struct hci_dev_info di;
+#if 0
     struct hci_filter   flt;
+#endif
     int                 ctl, hci, success;
     uint16_t            ocf = 0x00;
     uint8_t             ogf = 0x3f;

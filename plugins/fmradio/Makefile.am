@@ -13,7 +13,7 @@ libohm_fmradio_la_LDFLAGS = -module -avoid-version
 libohm_fmradio_la_CFLAGS = @OHM_PLUGIN_CFLAGS@ @BLUEZ_CFLAGS@ \
                            -fvisibility=hidden
 
-bin_PROGRAMS = hci-test
-hci_test_SOURCES = hci-test.c
-hci_test_CFLAGS  = @BLUEZ_CFLAGS@
-hci_test_LDADD  = @BLUEZ_LIBS@
+#bin_PROGRAMS = hci-test
+#hci_test_SOURCES = hci-test.c
+#hci_test_CFLAGS  = @BLUEZ_CFLAGS@
+#hci_test_LDADD  = @BLUEZ_LIBS@
