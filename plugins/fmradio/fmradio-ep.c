@@ -70,6 +70,7 @@ fmradio_enable(fmradio_context_t *ctx)
 {
     if (!ctx->active) {
         OHM_INFO("***** fmradio: should turn fmradio on");
+        hci_enable(ctx);
         ctx->active = TRUE;
     }
 }
@@ -83,6 +84,7 @@ fmradio_disable(fmradio_context_t *ctx)
 {
     if (ctx->active) {
         OHM_INFO("***** fmradio: should turn fmradio off");
+        hci_disable(ctx);
         ctx->active = FALSE;
     }
 }
