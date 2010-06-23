@@ -8,9 +8,9 @@ SUBDIRS = 	     \
 	cgroups      \
 	delay        \
 	buttons      \
-	apptrack
+	apptrack     \
+	fmradio
 
-#	fmradio
 #	notification
 #       vibra        
 #       backlight
