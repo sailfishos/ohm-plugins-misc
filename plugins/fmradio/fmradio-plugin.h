@@ -57,6 +57,11 @@ void ep_exit(fmradio_context_t *, gboolean (*)(GObject *));
 void ep_disable(void);
 void ep_enable(void);
 
+/* fmradio-hci.c */
+int hci_enable(fmradio_context_t *ctx);
+int hci_disable(fmradio_context_t *ctx);
+
+
 #endif /* __OHM_PLUGIN_FMRADIO_H__ */
 
 

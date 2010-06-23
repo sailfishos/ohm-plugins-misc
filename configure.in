@@ -95,6 +95,10 @@ PKG_CHECK_MODULES(XCBRANDR, xcb-randr)
 AC_SUBST(XCBRANDR_CFLAGS)
 AC_SUBST(XCBRANDR_LIBS)
 
+# Checks for bluez (for fmradio).
+PKG_CHECK_MODULES(BLUEZ, bluez)
+AC_SUBST(BLUEZ_CFLAGS)
+AC_SUBST(BLUEZ_LIBS)
 
 # Checks for libohmplugin and libohmfact.
 PKG_CHECK_MODULES(LIBOHMPLUGIN, libohmplugin)
