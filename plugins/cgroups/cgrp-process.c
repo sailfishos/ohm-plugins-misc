@@ -255,7 +255,10 @@ proc_dump_event(struct proc_event *event)
     struct exec_proc_event *exec;
     struct id_proc_event   *id;
     struct exit_proc_event *exit;
-    const char             *action;
+#ifdef HAVE_PROC_EVENT_NAME 
+    struct name_proc_event *name;
+#endif
+   const char             *action;
     
 
     switch (event->what) {
@@ -300,6 +303,15 @@ proc_dump_event(struct proc_event *event)
                       exit->process_tgid, exit->process_pid, exit->exit_code);
         break;
 
+#ifdef HAVE_PROC_EVENT_NAME
+    case PROC_EVENT_NAME:
+        name = &event->event_data.name;
+        if (name->process_pid == name->process_tgid)
+            OHM_DEBUG(DBG_EVENT, "<pid %u/u> has changed name",
+                      name->process_pid, name->process_tgid);
+        break;
+#endif
+        
     case PROC_EVENT_NONE:
         OHM_DEBUG(DBG_EVENT, "process event <none> (ACK)");
         break;
@@ -341,6 +353,11 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
             case PROC_EVENT_EXIT:
                 process_remove_by_pid(ctx, event->event_data.exit.process_pid);
                 break;
+#ifdef HAVE_PROC_EVENT_NAME
+            case PROC_EVENT_EXEC:
+                classify_by_binary(ctx,event->event_data.name.process_pid, 0);
+                break;
+#endif
             default:
                 break;
             }

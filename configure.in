@@ -343,6 +343,28 @@ AC_MSG_RESULT($has_immts)
 AM_CONDITIONAL(HAVE_IMMTS, test "x$has_immts" = "xyes")
 AC_SUBST(HAVE_IMMTS)
 
+# Check for PROC_EVENT_NAME kernel process connector event.
+AC_MSG_CHECKING([for PROC_EVENT_NAME connector event])
+AC_COMPILE_IFELSE([
+#include <linux/cn_proc.h>
+
+int main(int argc, char **argv)
+{
+    return PROC_EVENT_NAME;
+}], [has_proc_event_name=yes],
+    [has_proc_event_name=no])
+
+AC_MSG_RESULT($has_proc_event_name)
+
+if test x$has_proc_event_name = xyes;
+then
+  AC_DEFINE([HAVE_PROC_EVENT_NAME], 1, [Have PROC_EVENT_NAME support ?])
+fi
+
+AM_CONDITIONAL(HAVE_PROC_EVENT_NAME, test "x$has_proc_event_name" = "xyes")
+AC_SUBST(HAVE_PROC_EVENT_NAME)
+
+
 AC_CONFIG_FILES([debian/Makefile
                  Makefile
                  plugins/Makefile
