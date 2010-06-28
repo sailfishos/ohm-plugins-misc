@@ -12,8 +12,5 @@ endif
 if BUILD_NOTIFICATION
 	echo "${libdir}/ohm/libohm_notification.so" >> $@
 endif
-if BUILD_NOTIFICATION
-	echo "${libdir}/ohm/libohm_notification.so" >> $@
-endif
 
 .PHONY: ohm-plugins-misc.install

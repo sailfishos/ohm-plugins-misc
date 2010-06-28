@@ -10,6 +10,7 @@ usr/lib/ohm/libohm_videoep.so
 usr/lib/ohm/libohm_delay.so
 usr/lib/ohm/libohm_buttons.so
 usr/lib/ohm/libohm_cgroups.so
+usr/lib/ohm/libohm_fmradio.so
 etc/ohm/plugins.d/*
 usr/bin/ohm-session-agent
 usr/share/ohm-session-agent/*
