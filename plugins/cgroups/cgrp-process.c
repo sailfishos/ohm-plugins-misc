@@ -35,6 +35,10 @@
 #include <linux/connector.h>
 #include <linux/cn_proc.h>
 
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
+
 #include "cgrp-plugin.h"
 
 #ifndef SOL_NETLINK
@@ -307,7 +311,7 @@ proc_dump_event(struct proc_event *event)
     case PROC_EVENT_NAME:
         name = &event->event_data.name;
         if (name->process_pid == name->process_tgid)
-            OHM_DEBUG(DBG_EVENT, "<pid %u/u> has changed name",
+            OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has changed name",
                       name->process_pid, name->process_tgid);
         break;
 #endif
