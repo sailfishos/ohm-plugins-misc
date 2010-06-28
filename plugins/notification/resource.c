@@ -291,7 +291,7 @@ void resource_flags_to_booleans(uint32_t  flags,
     if (audio)   *audio  = (flags & RESMSG_AUDIO_PLAYBACK);
     if (vibra)   *vibra  = (flags & RESMSG_VIBRA         );
     if (leds)    *leds   = (flags & RESMSG_LEDS          );
-    if (blight)  *blight = (flags & RESMSG_AUDIO_PLAYBACK);
+    if (blight)  *blight = (flags & RESMSG_BACKLIGHT     );
 }
 
 uint32_t resource_name_to_flag(const char *name)
