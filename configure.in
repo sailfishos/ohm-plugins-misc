@@ -372,6 +372,7 @@ fi
 
 AC_SUBST(BUILD_FMRADIO)
 
+
 # Check for PROC_EVENT_NAME kernel process connector event.
 AC_MSG_CHECKING([for PROC_EVENT_NAME connector event])
 AC_COMPILE_IFELSE([
@@ -392,6 +393,43 @@ fi
 
 AM_CONDITIONAL(HAVE_PROC_EVENT_NAME, test "x$has_proc_event_name" = "xyes")
 AC_SUBST(HAVE_PROC_EVENT_NAME)
+
+
+# Check whether we have the input layer events for the accessories plugin.
+AC_MSG_CHECKING([kernel input layer events for accessories plugin])
+AC_COMPILE_IFELSE([
+#include <linux/input.h>
+int main(int argc, char **argv)
+{
+    printf("%d, %d, %d, %d, %d\n",
+           SW_HEADPHONE_INSERT,
+           SW_JACK_PHYSICAL_INSERT,
+           SW_LINEOUT_INSERT,
+           SW_MICROPHONE_INSERT,
+           SW_VIDEOOUT_INSERT);
+
+    return 0;
+}], [has_accessory_events=yes],
+    [has_accessory_events=no])
+
+AC_MSG_RESULT($has_accessory_events)
+
+if test x$has_accessory_events = xyes;
+then
+  AC_DEFINE([HAVE_ACCESSORY_EVENTS], 1, [Have necessary accessory events ?])
+fi
+
+
+AM_CONDITIONAL(BUILD_ACCESSORIES, test "x$has_accessory_events" = "xyes")
+if test x$has_accessory_events = xyes;
+then
+  AC_DEFINE([BUILD_ACCESSORIES], 1, [Build accessories plugin ?])
+  AC_MSG_NOTICE([accessories plugin WILL BE built])
+else
+  AC_MSG_NOTICE([accessories plugin WILL NOT be built])
+fi
+
+AC_SUBST(BUILD_ACCESSORIES)
 
 
 AC_CONFIG_FILES([Makefile

@@ -1,7 +1,6 @@
 SUBDIRS = 	     \
 	signaling    \
 	hal          \
-	accessories  \
 	console      \
 	gconf        \
 	dvfs         \
@@ -16,6 +15,10 @@ SUBDIRS = 	     \
 #       backlight
 #	sensor
 #	dbus
+
+if BUILD_ACCESSORIES
+SUBDIRS += accessories
+endif
 
 if BUILD_OLD_VIDEOEP
 SUBDIRS += videoep-fremantle
