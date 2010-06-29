@@ -35,6 +35,10 @@
 #include <linux/connector.h>
 #include <linux/cn_proc.h>
 
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
+
 #include "cgrp-plugin.h"
 
 #ifndef SOL_NETLINK
@@ -307,7 +311,7 @@ proc_dump_event(struct proc_event *event)
     case PROC_EVENT_NAME:
         name = &event->event_data.name;
         if (name->process_pid == name->process_tgid)
-            OHM_DEBUG(DBG_EVENT, "<pid %u/u> has changed name",
+            OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has changed name",
                       name->process_pid, name->process_tgid);
         break;
 #endif
@@ -354,7 +358,7 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
                 process_remove_by_pid(ctx, event->event_data.exit.process_pid);
                 break;
 #ifdef HAVE_PROC_EVENT_NAME
-            case PROC_EVENT_EXEC:
+            case PROC_EVENT_NAME:
                 classify_by_binary(ctx,event->event_data.name.process_pid, 0);
                 break;
 #endif

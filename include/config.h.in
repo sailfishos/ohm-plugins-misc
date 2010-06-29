@@ -1,16 +1,25 @@
 /* include/config.h.in.  Generated from configure.in by autoheader.  */
 
+/* Build accessories plugin ? */
+#undef BUILD_ACCESSORIES
+
+/* Build FM radio plugin ? */
+#undef BUILD_FMRADIO
+
 /* Build notification plugin ? */
 #undef BUILD_NOTIFICATION
-
-/* Build old videoep ? */
-#undef BUILD_OLD_VIDEOEP
 
 /* Build playback plugin ? */
 #undef BUILD_PLAYBACK
 
 /* Build resource plugin ? */
 #undef BUILD_RESOURCE
+
+/* Build videoep plugin ? */
+#undef BUILD_VIDEOEP
+
+/* Have necessary accessory events ? */
+#undef HAVE_ACCESSORY_EVENTS
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H

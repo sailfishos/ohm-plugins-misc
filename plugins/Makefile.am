@@ -1,7 +1,6 @@
 SUBDIRS = 	     \
 	signaling    \
 	hal          \
-	accessories  \
 	console      \
 	gconf        \
 	dvfs         \
@@ -17,9 +16,15 @@ SUBDIRS = 	     \
 #	sensor
 #	dbus
 
+if BUILD_ACCESSORIES
+SUBDIRS += accessories
+endif
+
 if BUILD_OLD_VIDEOEP
 SUBDIRS += videoep-fremantle
-else
+endif
+
+if BUILD_VIDEOEP
 SUBDIRS += videoep
 endif
 
@@ -44,6 +49,11 @@ endif
 
 if BUILD_TELEPHONY
 SUBDIRS += telephony
+endif
+
+if BUILD_FMRADIO
+SUBDIRS += \
+	fmradio
 endif
 
 if HAVE_SP_TIMESTAMP

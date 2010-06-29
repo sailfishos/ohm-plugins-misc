@@ -1821,7 +1821,7 @@ DBusHandlerResult update_external_enforcement_points(DBusConnection * c,
         }
     }
 
-    return DBUS_HANDLER_RESULT_HANDLED;
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
