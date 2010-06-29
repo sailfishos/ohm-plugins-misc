@@ -358,7 +358,7 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
                 process_remove_by_pid(ctx, event->event_data.exit.process_pid);
                 break;
 #ifdef HAVE_PROC_EVENT_NAME
-            case PROC_EVENT_EXEC:
+            case PROC_EVENT_NAME:
                 classify_by_binary(ctx,event->event_data.name.process_pid, 0);
                 break;
 #endif
