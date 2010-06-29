@@ -291,7 +291,7 @@ name_owner_changed(DBusConnection *conn, DBusMessage *msg, void *user_data)
         if (!after || !after[0])
             client_unregister(sender);
     
-    return DBUS_HANDLER_RESULT_HANDLED;  /* hmm, perhaps we shouldn't... */
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 
