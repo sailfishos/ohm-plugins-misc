@@ -22,7 +22,9 @@ endif
 
 if BUILD_OLD_VIDEOEP
 SUBDIRS += videoep-fremantle
-else
+endif
+
+if BUILD_VIDEOEP
 SUBDIRS += videoep
 endif
 
