@@ -1,5 +1,8 @@
 /* include/config.h.in.  Generated from configure.in by autoheader.  */
 
+/* Build FM radio plugin ? */
+#undef BUILD_FMRADIO
+
 /* Build notification plugin ? */
 #undef BUILD_NOTIFICATION
 

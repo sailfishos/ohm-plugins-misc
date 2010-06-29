@@ -46,6 +46,11 @@ if BUILD_TELEPHONY
 SUBDIRS += telephony
 endif
 
+if BUILD_FMRADIO
+SUBDIRS += \
+	fmradio
+endif
+
 if HAVE_SP_TIMESTAMP
 SUBDIRS += timestamp
 endif
