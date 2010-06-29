@@ -10,6 +10,8 @@ ohm-plugins-misc (1:1.28) unstable; urgency=low
 
   [Janos Kovacs]
   * Fix for proper backlight notification
+  * do not eat up the 'NameOwnerChanged' D-Bus signals
+    in signaling and apptarck modul
 
  -- Wolf Bergenheim <wolf.2.bergenheim@nokia.com>  Wed, 23 Jun 2010 17:00:46 +0300
 
