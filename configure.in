@@ -118,19 +118,19 @@ else
 fi
 
 # Check for mission-control (for telephony plugins).
-MISSION_CONTROL_REQUIRED=5.0.beta39
-PKG_CHECK_MODULES(LIBMISSIONCONTROL, 
-                  mission-control >= $MISSION_CONTROL_REQUIRED,
-                  [has_mc=true], [has_mc=false])
+#MISSION_CONTROL_REQUIRED=5.0.beta39
+#PKG_CHECK_MODULES(LIBMISSIONCONTROL, 
+#                  mission-control >= $MISSION_CONTROL_REQUIRED,
+#                  [has_mc=true], [has_mc=false])
+#
+#AC_SUBST(LIBMISSIONCONTROL_CFLAGS)
+#AC_SUBST(LIBMISSIONCONTROL_LIBS)
 
-AC_SUBST(LIBMISSIONCONTROL_CFLAGS)
-AC_SUBST(LIBMISSIONCONTROL_LIBS)
-
-if test x$has_mc = xtrue;
-then
-  pluginlibdir="`$PKG_CONFIG --variable=pluginlibdir mission-control`"
-fi
-AC_SUBST(pluginlibdir)
+#if test x$has_mc = xtrue;
+#then
+#  pluginlibdir="`$PKG_CONFIG --variable=pluginlibdir mission-control`"
+#fi
+#AC_SUBST(pluginlibdir)
 
 # Check for telepathy (for telephony plugins).
 PKG_CHECK_MODULES(LIBTELEPATHY, telepathy-glib,
@@ -138,10 +138,9 @@ PKG_CHECK_MODULES(LIBTELEPATHY, telepathy-glib,
 AC_SUBST(LIBTELEPATHY_CFLAGS)
 AC_SUBST(LIBTELEPATHY_LIBS)
 
-AM_CONDITIONAL(BUILD_TELEPHONY,
-               test x$has_mc = xtrue -a x$has_libtp = xtrue)
+AM_CONDITIONAL(BUILD_TELEPHONY, x$has_libtp = xtrue)
 
-if test x$has_mc = xtrue -a x$has_libtp = xtrue;
+if test x$has_libtp = xtrue;
 then
   AC_MSG_NOTICE([Telephony plugins WILL BE built.])
 else
