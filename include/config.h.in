@@ -3,8 +3,14 @@
 /* Build accessories plugin ? */
 #undef BUILD_ACCESSORIES
 
+/* Build buttons plugin ? */
+#undef BUILD_BUTTONS
+
 /* Build FM radio plugin ? */
 #undef BUILD_FMRADIO
+
+/* Build HAL plugin ? */
+#undef BUILD_HAL
 
 /* Build notification plugin ? */
 #undef BUILD_NOTIFICATION

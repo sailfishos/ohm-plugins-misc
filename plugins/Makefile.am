@@ -1,12 +1,10 @@
 SUBDIRS = 	     \
 	signaling    \
-	hal          \
 	console      \
 	gconf        \
 	dvfs         \
 	cgroups      \
 	delay        \
-	buttons      \
 	apptrack
 
 #	fmradio
@@ -26,6 +24,14 @@ endif
 
 if BUILD_VIDEOEP
 SUBDIRS += videoep
+endif
+
+if BUILD_HAL
+SUBDIRS += hal
+endif
+
+if BUILD_BUTTONS
+SUBDIRS += buttons
 endif
 
 if BUILD_PLAYBACK
