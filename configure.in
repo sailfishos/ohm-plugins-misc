@@ -138,7 +138,7 @@ PKG_CHECK_MODULES(LIBTELEPATHY, telepathy-glib,
 AC_SUBST(LIBTELEPATHY_CFLAGS)
 AC_SUBST(LIBTELEPATHY_LIBS)
 
-AM_CONDITIONAL(BUILD_TELEPHONY, x$has_libtp = xtrue)
+AM_CONDITIONAL(BUILD_TELEPHONY, test x$has_libtp = xtrue)
 
 if test x$has_libtp = xtrue;
 then
@@ -570,7 +570,6 @@ AC_CONFIG_FILES([debian/Makefile
                  plugins/signaling/libep/Makefile
                  plugins/telephony/Makefile
                  plugins/telephony/ohm/Makefile
-                 plugins/telephony/mission-control/Makefile
                  plugins/videoep/Makefile
                  plugins/videoep-fremantle/Makefile
                  plugins/dvfs/Makefile
@@ -585,4 +584,7 @@ AC_CONFIG_FILES([debian/Makefile
 		 plugins/fmradio/Makefile
 		 ohm-session-agent/Makefile
  		 doc/Makefile])
+
+# plugins/telephony/mission-control/Makefile
+
 AC_OUTPUT
