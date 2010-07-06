@@ -1,6 +1,5 @@
 SUBDIRS = 	     \
 	signaling    \
-	hal          \
 	console      \
 	gconf        \
 	dvfs         \
@@ -9,7 +8,6 @@ SUBDIRS = 	     \
 	buttons      \
 	apptrack     \
 	fmradio
-
 #	notification
 #       vibra        
 #       backlight
@@ -26,6 +24,14 @@ endif
 
 if BUILD_VIDEOEP
 SUBDIRS += videoep
+endif
+
+if BUILD_HAL
+SUBDIRS += hal
+endif
+
+if BUILD_BUTTONS
+SUBDIRS += buttons
 endif
 
 if BUILD_PLAYBACK
