@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.29) unstable; urgency=low
+
+  * Enabled apptrack plugin.
+
+ -- Krisztian Litkey <mmf-audio-bounces@projects.maemo.org>  Wed, 07 Jul 2010 16:33:07 +0300
+
 ohm-plugins-misc (1:1.28) unstable; urgency=low
 
   [Krisztian Litkey]
