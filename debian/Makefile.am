@@ -33,6 +33,9 @@ endif
 if BUILD_TELEPHONY
 	echo "${libdir}/ohm/libohm_telephony.so" >> $@
 endif
+if BUILD_APPTRACK
+	echo "${libdir}/ohm/libohm_apptrack.so" >> $@
+endif
 if BUILD_FMRADIO
 	echo "${libdir}/ohm/libohm_fmradio.so" >> $@
 endif
