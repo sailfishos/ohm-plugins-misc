@@ -24,19 +24,19 @@ USA.
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
 
-#define malloc(s)   __malloc(__FILE__, __LINE__, s)
-#define calloc(n,s) __calloc(__FILE__, __LINE__, n, s)
-#define strdup(s)   __strdup(__FILE__, __LINE__, s)
-#define free(m)     __free(__FILE__, __LINE__, m)
+#define malloc(s)   mem_malloc(__FILE__, __LINE__, s)
+#define calloc(n,s) mem_calloc(__FILE__, __LINE__, n, s)
+#define strdup(s)   mem_strdup(__FILE__, __LINE__, s)
+#define free(m)     mem_free(__FILE__, __LINE__, m)
 
 
 void mem_init(OhmPlugin *);
 void mem_exit(OhmPlugin *);
 
-void *__malloc(const char *, int, size_t);
-void *__calloc(const char *, int, size_t, size_t);
-char *__strdup(const char *, int, const char *);
-void  __free(const char *, int, void *);
+void *mem_malloc(const char *, int, size_t);
+void *mem_calloc(const char *, int, size_t, size_t);
+char *mem_strdup(const char *, int, const char *);
+void  mem_free(const char *, int, void *);
 
 
 #endif /* __OHM_VIDEOEP_MEM_H__ */
