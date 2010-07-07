@@ -62,7 +62,7 @@ void mem_exit(OhmPlugin *plugin)
         fclose(mfile);
 }
 
-void *__malloc(const char *file, int line, size_t size)
+void *mem_malloc(const char *file, int line, size_t size)
 {
     void *mem;
 
@@ -79,7 +79,7 @@ void *__malloc(const char *file, int line, size_t size)
     return mem;
 }
 
-void *__calloc(const char *file, int line, size_t nmemb, size_t size)
+void *mem_calloc(const char *file, int line, size_t nmemb, size_t size)
 {
     void *mem;
 
@@ -95,7 +95,7 @@ void *__calloc(const char *file, int line, size_t nmemb, size_t size)
     return mem;
 }
 
-char *__strdup(const char *file, int line, const char *string)
+char *mem_strdup(const char *file, int line, const char *string)
 {
     char *dup;
 
@@ -111,7 +111,7 @@ char *__strdup(const char *file, int line, const char *string)
     return dup;
 }
 
-void __free(const char *file, int line, void *mem)
+void mem_free(const char *file, int line, void *mem)
 {
     if (mfile != NULL) {
         fprintf(mfile, "0x%08x            free   %s %d\n",

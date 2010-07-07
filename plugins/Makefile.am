@@ -4,10 +4,10 @@ SUBDIRS = 	     \
 	gconf        \
 	dvfs         \
 	cgroups      \
-	delay        \
-	buttons      \
-	apptrack     \
-	fmradio
+	delay
+
+#	apptrack
+#	fmradio
 #	notification
 #       vibra        
 #       backlight
@@ -55,6 +55,11 @@ endif
 
 if BUILD_TELEPHONY
 SUBDIRS += telephony
+endif
+
+if BUILD_APPTRACK
+SUBDIRS += \
+	apptrack
 endif
 
 if BUILD_FMRADIO

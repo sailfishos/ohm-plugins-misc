@@ -3,6 +3,9 @@
 /* Build accessories plugin ? */
 #undef BUILD_ACCESSORIES
 
+/* Build apptrack plugin ? */
+#undef BUILD_APPTRACK
+
 /* Build buttons plugin ? */
 #undef BUILD_BUTTONS
 
