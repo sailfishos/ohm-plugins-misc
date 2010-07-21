@@ -132,6 +132,7 @@ plugin_exit(OhmPlugin *plugin)
     procdef_exit(ctx);
     group_exit(ctx);
     partition_exit(ctx);
+    ctrl_del(ctx->controls);
     fact_exit(ctx);
 }
 
