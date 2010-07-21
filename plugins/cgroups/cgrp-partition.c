@@ -185,8 +185,10 @@ partition_add(cgrp_context_t *ctx, cgrp_partition_t *p)
     partition_limit_cpu(partition, p->limit.cpu);
     partition_limit_mem(partition, p->limit.mem);
     partition_limit_rt(partition, p->limit.rt_period, p->limit.rt_runtime);
-    
 
+    partition->settings = p->settings;
+    partition_apply_settings(ctx, partition);
+    
     if (!part_hash_insert(ctx, partition)) {
         OHM_ERROR("cgrp: failed to add partition '%s'", partition->name);
         goto fail;
@@ -215,6 +217,8 @@ partition_del(cgrp_context_t *ctx, cgrp_partition_t *partition)
     close(partition->control.freeze);
     close(partition->control.cpu);
     close(partition->control.mem);
+
+    ctrl_setting_del(partition->settings);
 
     FREE(partition->name);
     FREE(partition->path);
@@ -252,9 +256,10 @@ partition_print(cgrp_partition_t *partition, FILE *fp)
 #define M (1024 * 1024)
 #define K (1024)
 
-    u64_t  mem;
-    int    unitdiv;
-    char  *unitsuf;
+    cgrp_ctrl_setting_t *cs;
+    u64_t                mem;
+    int                  unitdiv;
+    char                *unitsuf;
     
     fprintf(fp, "[partition %s]\n", partition->name);
     fprintf(fp, "path '%s'\n", partition->path);
@@ -278,6 +283,9 @@ partition_print(cgrp_partition_t *partition, FILE *fp)
     }
     fprintf(fp, "realtime-limit period %d runtime %d\n",
             partition->limit.rt_period, partition->limit.rt_runtime);
+
+    for (cs = partition->settings; cs != NULL; cs = cs->next)
+        fprintf(fp, "%s %s\n", cs->name, cs->value);
 }
 
 
@@ -482,6 +490,159 @@ partition_limit_rt(cgrp_partition_t *partition, int period, int runtime)
         close(ctlper);
     if (ctlrun)
         close(ctlrun);
+    
+    return success;
+}
+
+
+/********************
+ * partition_apply_settings
+ ********************/
+int
+partition_apply_settings(cgrp_context_t *ctx, cgrp_partition_t *partition)
+{
+    cgrp_ctrl_setting_t *cs;
+    int                  success;
+
+    success = TRUE;
+    
+    for (cs = partition->settings; cs != NULL; cs = cs->next)
+        success &= !ctrl_apply(ctx, partition, cs);
+
+    return success;
+}
+
+
+/********************
+ * ctrl_dump
+ ********************/
+void
+ctrl_dump(cgrp_context_t *ctx, FILE *fp)
+{
+    cgrp_ctrl_t         *ctrl;
+    cgrp_ctrl_setting_t *sttng;
+
+    if (ctx->controls == NULL)
+        return;
+
+    fprintf(fp, "# controls\n");
+    for (ctrl = ctx->controls; ctrl != NULL; ctrl = ctrl->next) {
+        fprintf(fp, "cgroup-control '%s' '%s'", ctrl->name, ctrl->path);
+        for (sttng = ctrl->settings; sttng != NULL; sttng = sttng->next)
+            fprintf(fp, " %s:%s", sttng->name, sttng->value);
+        fprintf(fp, "\n");
+    }
+}
+
+
+/********************
+ * ctrl_setting_free
+ ********************/
+static void
+ctrl_setting_free(cgrp_ctrl_setting_t *setting)
+{
+    if (setting != NULL) {
+        FREE(setting->name);
+        FREE(setting->value);
+        FREE(setting);
+    }
+}
+
+
+/********************
+ * ctrl_settings_del
+ ********************/
+void
+ctrl_setting_del(cgrp_ctrl_setting_t *settings)
+{
+    cgrp_ctrl_setting_t *next;
+
+    while (settings != NULL) {
+        next = settings->next;
+        ctrl_setting_free(settings);
+        settings = next;
+    }
+}
+
+
+/********************
+ * ctrl_free
+ ********************/
+void
+ctrl_free(cgrp_ctrl_t *ctrl)
+{
+    ctrl_setting_del(ctrl->settings);
+    FREE(ctrl->name);
+    FREE(ctrl->path);
+    FREE(ctrl);
+}
+
+
+/********************
+ * ctrl_del
+ ********************/
+void
+ctrl_del(cgrp_ctrl_t *ctrl)
+{
+    cgrp_ctrl_t *next;
+
+    while (ctrl != NULL) {
+        next = ctrl->next;
+        ctrl_free(ctrl);
+        ctrl = next;
+    }
+}
+
+
+/********************
+ * ctrl_apply
+ ********************/
+int
+ctrl_apply(cgrp_context_t *ctx, cgrp_partition_t *partition,
+           cgrp_ctrl_setting_t *setting)
+{
+    cgrp_ctrl_setting_t *cs;
+    cgrp_ctrl_t         *ctrl;
+    int                  fd, success;
+
+    for (ctrl = ctx->controls; ctrl != NULL; ctrl = ctrl->next) {
+        if (!strcmp(ctrl->name, setting->name))
+            break;
+    }
+
+    if (ctrl == NULL) {
+        OHM_ERROR("cgrp: could not find cgroup-conrol '%s'", setting->name);
+        return FALSE;
+    }
+    
+    for (cs = ctrl->settings; cs != NULL; cs = cs->next) {
+        if (!strcmp(cs->name, setting->value))
+            break;
+    }
+
+    if (cs == NULL) {
+        OHM_ERROR("cgrp: cgroup-control '%s' has no setting '%s'",
+                  ctrl->name, setting->value);
+        return FALSE;
+    }
+
+    fd = open_control(partition, ctrl->path);
+
+    if (fd < 0) {
+        OHM_ERROR("cgrp: partition '%s' has no control entry '%s'",
+                  partition->name, ctrl->path);
+        return FALSE;
+    }
+
+    OHM_INFO("cgrp: setting '%s' ('%s') to '%s' ('%s') for partition '%s'",
+             ctrl->name, ctrl->path, cs->name, cs->value, partition->name);
+
+    success = write_control(fd, "%s", cs->value);
+    close(fd);
+
+    if (!success)
+        OHM_ERROR("failed to set '%s' to '%s' ('%s') for partition '%s'",
+                  ctrl->name, cs->name, cs->value, partition->name);
     
     return success;
 }
