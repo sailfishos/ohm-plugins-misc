@@ -446,10 +446,7 @@ partition: "[" KEYWORD_PARTITION TOKEN_IDENT "]" "\n" partition_properties
           OHM_ERROR("cgrp: partition '%s' multiply defined", $6.name);
 	  YYABORT;
       }
-      if (!strcmp($6.name, "root")) {
-          OHM_ERROR("cgrp: invalid partition with reserved name 'root'");
-          YYABORT;
-      }
+
       if (partition_add(ctx, &$6) == NULL)
           YYABORT;
     }

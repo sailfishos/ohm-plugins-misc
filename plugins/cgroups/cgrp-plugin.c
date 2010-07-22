@@ -89,7 +89,8 @@ plugin_init(OhmPlugin *plugin)
     if (!config_parse_addons(ctx))
         OHM_WARNING("cgrp: failed to parse extra rules");
     
-    partition_add_root(ctx);
+    if (partition_lookup(ctx, "root") == NULL)
+        partition_add_root(ctx);
 
     ctx->resolve = resolve;
     if (!apptrack_init(ctx, plugin))
