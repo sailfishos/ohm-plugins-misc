@@ -1,6 +1,7 @@
 ohm-plugins-misc (1:1.30) unstable; urgency=low
 
   * Added limited support for custom per-partition cgroup settings.
+  * Allow "root" cgroup partition to be explicitly defined.
 
  -- Krisztian Litkey <mmf-audio-bounces@projects.maemo.org>  Thu, 22 Jul 2010 11:36:26 +0300
 
