@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.32) unstable; urgency=low
+
+  * Installing debug symbols in separate package (Fixes: NB#183227).
+
+ -- Nippan Singam <ext-nippan.singam@nokia.com>  Thu, 05 Aug 2010 11:46:34 +0300
+
 ohm-plugins-misc (1:1.31) unstable; urgency=low
 
   * ECI probe delay is now configurable (Fixes: NB#180539).
