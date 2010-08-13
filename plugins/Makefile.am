@@ -1,25 +1,37 @@
 SUBDIRS = 	     \
 	signaling    \
-	hal          \
-	accessories  \
 	console      \
 	gconf        \
 	dvfs         \
 	cgroups      \
-	delay        \
-	buttons      \
-	apptrack
+	delay
 
+#	apptrack
+#	fmradio
 #	notification
 #       vibra        
 #       backlight
 #	sensor
 #	dbus
 
+if BUILD_ACCESSORIES
+SUBDIRS += accessories
+endif
+
 if BUILD_OLD_VIDEOEP
 SUBDIRS += videoep-fremantle
-else
+endif
+
+if BUILD_VIDEOEP
 SUBDIRS += videoep
+endif
+
+if BUILD_HAL
+SUBDIRS += hal
+endif
+
+if BUILD_BUTTONS
+SUBDIRS += buttons
 endif
 
 if BUILD_PLAYBACK
@@ -43,6 +55,16 @@ endif
 
 if BUILD_TELEPHONY
 SUBDIRS += telephony
+endif
+
+if BUILD_APPTRACK
+SUBDIRS += \
+	apptrack
+endif
+
+if BUILD_FMRADIO
+SUBDIRS += \
+	fmradio
 endif
 
 if HAVE_SP_TIMESTAMP

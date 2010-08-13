@@ -1,3 +1,23 @@
+/*************************************************************************
+Copyright (C) 2010 Nokia Corporation.
+
+These OHM Modules are free software; you can redistribute
+it and/or modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation
+version 2.1 of the License.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+USA.
+*************************************************************************/
+
+
 /*! \defgroup pubif Public Interfaces */
 #include <stdlib.h>
 #include <stdio.h>
@@ -613,10 +633,30 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             forward_status_to_client(proxy, data);
             proxy_destroy(proxy);
             killed = TRUE;
+<<<<<<< HEAD:plugins/notification/proxy.c
+=======
             break;
         case backend_timeout:
             proxy_destroy(proxy);
             killed = TRUE;
+            break;
+        default:
+            success = FALSE;
+            break;
+        }
+        break;
+
+    case state_longlive:
+        switch (ev) {
+        case client_stop:
+            timeout_create(proxy, 0);
+>>>>>>> a423941b196ed1e0f81a9ec24f00ffec1b65246b:plugins/notification/proxy.c
+            break;
+        case backend_timeout:
+            create_and_send_status_to_client(proxy, NGF_COMPLETED);
+            proxy_destroy(proxy);
+            killed = TRUE;
+<<<<<<< HEAD:plugins/notification/proxy.c
             break;
         default:
             success = FALSE;
@@ -633,6 +673,8 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             create_and_send_status_to_client(proxy, NGF_COMPLETED);
             proxy_destroy(proxy);
             killed = TRUE;
+=======
+>>>>>>> a423941b196ed1e0f81a9ec24f00ffec1b65246b:plugins/notification/proxy.c
             break;
         default:
             success = FALSE;

@@ -1,16 +1,34 @@
 /* include/config.h.in.  Generated from configure.in by autoheader.  */
 
+/* Build accessories plugin ? */
+#undef BUILD_ACCESSORIES
+
+/* Build apptrack plugin ? */
+#undef BUILD_APPTRACK
+
+/* Build buttons plugin ? */
+#undef BUILD_BUTTONS
+
+/* Build FM radio plugin ? */
+#undef BUILD_FMRADIO
+
+/* Build HAL plugin ? */
+#undef BUILD_HAL
+
 /* Build notification plugin ? */
 #undef BUILD_NOTIFICATION
-
-/* Build old videoep ? */
-#undef BUILD_OLD_VIDEOEP
 
 /* Build playback plugin ? */
 #undef BUILD_PLAYBACK
 
 /* Build resource plugin ? */
 #undef BUILD_RESOURCE
+
+/* Build videoep plugin ? */
+#undef BUILD_VIDEOEP
+
+/* Have necessary accessory events ? */
+#undef HAVE_ACCESSORY_EVENTS
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H
@@ -48,6 +66,9 @@
 
 /* Have OSSO swap pressure notification? */
 #undef HAVE_OSSO_SWAP_PRESSURE
+
+/* Have PROC_EVENT_NAME support ? */
+#undef HAVE_PROC_EVENT_NAME
 
 /* Define to 1 if your system has a GNU libc compatible `realloc' function,
    and to 0 otherwise. */

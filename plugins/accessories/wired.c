@@ -1,3 +1,23 @@
+/*************************************************************************
+Copyright (C) 2010 Nokia Corporation.
+
+These OHM Modules are free software; you can redistribute
+it and/or modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation
+version 2.1 of the License.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+USA.
+*************************************************************************/
+
+
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -169,6 +189,7 @@ static int physical;
  */
 
 static gulong eci_timer;                          /* eci detection timer */
+static int    probe_delay = ECI_PROBE_DELAY;      /* eci detection delay */
 
 /*****************************************************************************
  *                             *** jack insertion ***                        *
@@ -392,7 +413,7 @@ jack_update_facts(int initial_query)
             dres_accessory_request(current->name, -1, 1);
         }
         
-        eci_schedule_update(current, 1000);
+        eci_schedule_update(current, probe_delay);
     }
 }
 
@@ -410,6 +431,21 @@ eci_init(OhmPlugin *plugin, input_dev_t *dev)
 {
     const char *device;
     const char *pattern;
+    const char *delay;
+
+    delay = ohm_plugin_get_param(plugin, "eci-probe-delay");
+
+    if (delay != NULL) {
+        errno = 0;
+        probe_delay = (int)strtoul(delay, NULL, 10);
+        if (errno != 0) {
+            OHM_ERROR("accessories: invalid probe delay '%s'", delay);
+            probe_delay = ECI_PROBE_DELAY;
+        }
+        else
+            OHM_INFO("accessories: using ECI probe delay %d", probe_delay);
+        errno = 0;
+    }
 
     device = ohm_plugin_get_param(plugin, "eci-device");
 

@@ -1,3 +1,23 @@
+/*************************************************************************
+Copyright (C) 2010 Nokia Corporation.
+
+These OHM Modules are free software; you can redistribute
+it and/or modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation
+version 2.1 of the License.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+USA.
+*************************************************************************/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -15,6 +35,10 @@
 #include <linux/netlink.h>
 #include <linux/connector.h>
 #include <linux/cn_proc.h>
+
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
 
 #include "cgrp-plugin.h"
 
@@ -236,7 +260,10 @@ proc_dump_event(struct proc_event *event)
     struct exec_proc_event *exec;
     struct id_proc_event   *id;
     struct exit_proc_event *exit;
-    const char             *action;
+#ifdef HAVE_PROC_EVENT_NAME 
+    struct name_proc_event *name;
+#endif
+   const char             *action;
     
 
     switch (event->what) {
@@ -281,6 +308,15 @@ proc_dump_event(struct proc_event *event)
                       exit->process_tgid, exit->process_pid, exit->exit_code);
         break;
 
+#ifdef HAVE_PROC_EVENT_NAME
+    case PROC_EVENT_NAME:
+        name = &event->event_data.name;
+        if (name->process_pid == name->process_tgid)
+            OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has changed name",
+                      name->process_pid, name->process_tgid);
+        break;
+#endif
+        
     case PROC_EVENT_NONE:
         OHM_DEBUG(DBG_EVENT, "process event <none> (ACK)");
         break;
@@ -322,6 +358,11 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
             case PROC_EVENT_EXIT:
                 process_remove_by_pid(ctx, event->event_data.exit.process_pid);
                 break;
+#ifdef HAVE_PROC_EVENT_NAME
+            case PROC_EVENT_NAME:
+                classify_by_binary(ctx,event->event_data.name.process_pid, 0);
+                break;
+#endif
             default:
                 break;
             }

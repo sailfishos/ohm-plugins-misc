@@ -1,3 +1,23 @@
+/*************************************************************************
+Copyright (C) 2010 Nokia Corporation.
+
+These OHM Modules are free software; you can redistribute
+it and/or modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation
+version 2.1 of the License.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+USA.
+*************************************************************************/
+
+
 /*! \defgroup pubif Public Interfaces */
 
 #include <stdio.h>
@@ -42,7 +62,7 @@ void mem_exit(OhmPlugin *plugin)
         fclose(mfile);
 }
 
-void *__malloc(const char *file, int line, size_t size)
+void *mem_malloc(const char *file, int line, size_t size)
 {
     void *mem;
 
@@ -59,7 +79,7 @@ void *__malloc(const char *file, int line, size_t size)
     return mem;
 }
 
-void *__calloc(const char *file, int line, size_t nmemb, size_t size)
+void *mem_calloc(const char *file, int line, size_t nmemb, size_t size)
 {
     void *mem;
 
@@ -75,7 +95,7 @@ void *__calloc(const char *file, int line, size_t nmemb, size_t size)
     return mem;
 }
 
-char *__strdup(const char *file, int line, const char *string)
+char *mem_strdup(const char *file, int line, const char *string)
 {
     char *dup;
 
@@ -91,7 +111,7 @@ char *__strdup(const char *file, int line, const char *string)
     return dup;
 }
 
-void __free(const char *file, int line, void *mem)
+void mem_free(const char *file, int line, void *mem)
 {
     if (mfile != NULL) {
         fprintf(mfile, "0x%08x            free   %s %d\n",

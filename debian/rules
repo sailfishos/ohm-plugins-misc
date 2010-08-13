@@ -11,10 +11,9 @@ DEB_DH_GENCONTROL_ARGS += -u-VGit-Id=$(GIT_VERSION)
 
 # for dbg package
 CFLAGS += -g -O2
-DEB_DH_STRIP_ARGS += --dbg-package=ohm-plugins-misc \
-                     --dbg-package=ohm-plugin-console \
-                     --dbg-package=ohm-plugin-timestamp \
-                     --dbg-package=libep
+DEB_DH_STRIP_ARGS += --dbg-package=ohm-plugins-misc-dbg \
+                     --dbg-package=ohm-plugin-console-dbg \
+                     --dbg-package=ohm-plugin-timestamp-dbg 
 
 DEB_TAR_SRCDIR = ${DEB_SOURCE_PACKAGE}-${DEB_UPSTREAM_VERSION}
 DEB_DH_INSTALL_SOURCEDIR = debian/tmp
@@ -23,7 +22,8 @@ DEB_CONFIGURE_USER_FLAGS = --disable-static \
                            --enable-libresource \
                            --enable-notification \
                            --disable-libplayback \
-                           --disable-oldvideoep
+                           --disable-oldvideoep \
+                           --enable-apptrack
 
 include /usr/share/cdbs/1/rules/utils.mk
 include /usr/share/cdbs/1/rules/debhelper.mk

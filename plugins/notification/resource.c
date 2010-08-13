@@ -1,3 +1,23 @@
+/*************************************************************************
+Copyright (C) 2010 Nokia Corporation.
+
+These OHM Modules are free software; you can redistribute
+it and/or modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation
+version 2.1 of the License.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+USA.
+*************************************************************************/
+
+
 /*! \defgroup pubif Public Interfaces */
 #include <stdlib.h>
 #include <stdio.h>
@@ -272,7 +292,32 @@ void resource_flags_to_booleans(uint32_t  flags,
     if (audio)   *audio  = (flags & RESMSG_AUDIO_PLAYBACK);
     if (vibra)   *vibra  = (flags & RESMSG_VIBRA         );
     if (leds)    *leds   = (flags & RESMSG_LEDS          );
-    if (blight)  *blight = (flags & RESMSG_AUDIO_PLAYBACK);
+    if (blight)  *blight = (flags & RESMSG_BACKLIGHT     );
+}
+
+uint32_t resource_name_to_flag(const char *name)
+{
+    typedef struct {
+        const char *name;
+        uint32_t    flag;
+    } flag_def_t;
+
+    static flag_def_t flag_defs[] = {
+        { "audio"    , RESMSG_AUDIO_PLAYBACK },
+        { "vibra"    , RESMSG_VIBRA          },
+        { "leds"     , RESMSG_LEDS           },
+        { "backlight", RESMSG_BACKLIGHT      },
+        { NULL       , 0                     }
+    };
+
+    flag_def_t *fd;
+
+    for (fd = flag_defs;  fd->name != NULL;  fd++) {
+        if (!strcmp(name, fd->name))
+            return fd->flag;
+    }
+    
+    return 0;
 }
 
 uint32_t resource_name_to_flag(const char *name)

@@ -1,3 +1,22 @@
+/******************************************************************************/
+/*  Copyright (C) 2010 Nokia Corporation.                                     */
+/*                                                                            */
+/*  These OHM Modules are free software; you can redistribute                 */
+/*  it and/or modify it under the terms of the GNU Lesser General Public      */
+/*  License as published by the Free Software Foundation                      */
+/*  version 2.1 of the License.                                               */
+/*                                                                            */
+/*  This library is distributed in the hope that it will be useful,           */
+/*  but WITHOUT ANY WARRANTY; without even the implied warranty of            */
+/*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU          */
+/*  Lesser General Public License for more details.                           */
+/*                                                                            */
+/*  You should have received a copy of the GNU Lesser General Public          */
+/*  License along with this library; if not, write to the Free Software       */
+/*  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  */
+/*  USA.                                                                      */
+/******************************************************************************/
+
 %{
 
 #include <stdio.h>
@@ -43,6 +62,7 @@ static char rule_group[256];
     cgrp_context_t    ctx;
     int               renice;
     s64_t             time;
+    cgrp_ctrl_setting_t *ctrl_settings;
 }
 
 %defines
@@ -85,6 +105,15 @@ static char rule_group[256];
 %type <action> action_renice
 %type <action> action_ignore
 
+%type <ctrl_settings> cgroup_control_settings
+%type <ctrl_settings> cgroup_control_setting
+%type <string> cgroup_control_name
+%type <string> cgroup_control_path
+%type <string> control_setting
+%type <string> control_value
+%type <ctrl_settings> optional_partition_controls
+%type <ctrl_settings> partition_controls
+%type <ctrl_settings> partition_control
 
 
 %token START_FULL_PARSER
@@ -115,6 +144,7 @@ static char rule_group[256];
 %token KEYWORD_EXPORT_PARTITIONS
 %token KEYWORD_EXPORT_FACT
 %token KEYWORD_CGROUPFS_OPTIONS
+%token KEYWORD_CGROUP_CONTROL
 %token KEYWORD_IOWAIT_NOTIFY
 %token KEYWORD_IOQLEN_NOTIFY
 %token KEYWORD_SWAP_PRESSURE
@@ -133,6 +163,7 @@ static char rule_group[256];
 %token TOKEN_LESS      "<"
 %token TOKEN_IMPLIES   "=>"
 %token TOKEN_SEMICOLON ";"
+%token TOKEN_COLON     ":"
 
 %token <uint32> TOKEN_ARG
 %token <uint32> KEYWORD_CLASSIFY_ARGVX
@@ -174,6 +205,7 @@ global_option: KEYWORD_EXPORT_GROUPS "\n" {
     | swap_pressure "\n"
     | cgroupfs_options "\n"
     | addon_rules "\n"
+    | cgroup_control "\n"
     | error {
         OHM_ERROR("cgrp: failed to parse global options near token '%s'",
                   cgrpyylval.any.token);
@@ -325,6 +357,78 @@ optional_monitor: /* empty */ {
     }
     ;
 
+cgroup_control: KEYWORD_CGROUP_CONTROL cgroup_control_def
+    ;
+
+cgroup_control_def: cgroup_control_name cgroup_control_path 
+                    cgroup_control_settings {
+          cgrp_ctrl_t *ctrl, **p;
+
+          if (ALLOC_OBJ(ctrl) == NULL) {
+              OHM_ERROR("cgrp: failed to allocate cgroup control");
+              exit(1);
+          }
+
+          ctrl->name = STRDUP($1.value);
+	  ctrl->path = STRDUP($2.value);
+          ctrl->settings = $3;
+
+          for (p = &ctx->controls; *p != NULL; p = &(*p)->next)
+    	      ;
+          *p = ctrl;
+    }
+    ;
+
+cgroup_control_name: TOKEN_IDENT  { $$ = $1; }
+    |                TOKEN_STRING { $$ = $1; }
+    ;
+
+cgroup_control_path: TOKEN_STRING { $$ = $1; }
+    ;
+
+cgroup_control_settings: cgroup_control_setting {
+          $$ = $1;
+    }
+    | cgroup_control_settings cgroup_control_setting {
+          cgrp_ctrl_setting_t *setting;
+
+          for (setting = $1; setting->next != NULL; setting = setting->next)
+              ;
+          setting->next = $2;
+          $$            = $1;
+    }
+    ;
+
+cgroup_control_setting: control_setting TOKEN_COLON control_value {
+          cgrp_ctrl_setting_t *setting;
+
+          if (ALLOC_OBJ(setting) == NULL) {
+              OHM_ERROR("cgrp: failed to allocate cgroup control setting");
+              exit(1);
+          }
+
+          setting->name  = STRDUP($1.value);
+          setting->value = STRDUP($3.value);
+          $$             = setting;
+    }
+    ;
+
+control_setting: TOKEN_IDENT  { $$ = $1; }
+    |            TOKEN_STRING { $$ = $1; }
+    ;
+
+control_value: TOKEN_IDENT { $$ = $1; }
+    | TOKEN_STRING         { $$ = $1; }
+    | TOKEN_SINT {
+          $$.lineno = $1.lineno;
+          $$.value  = (char *)$1.token;
+    }
+    | TOKEN_UINT {
+          $$.lineno = $1.lineno;
+          $$.value  = (char *)$1.token;
+    }
+    ;
+
 
 /*****************************************************************************
  *                           *** partition section ***                       *
@@ -334,16 +438,15 @@ partition_section: partition
     | partition_section partition
     ;
 
-partition: "[" KEYWORD_PARTITION TOKEN_IDENT "]" "\n" partition_properties {
-      $6.name = $3.value;
+partition: "[" KEYWORD_PARTITION TOKEN_IDENT "]" "\n" partition_properties 
+            optional_partition_controls {
+      $6.name     = $3.value;
+      $6.settings = $7;
       if (partition_lookup(ctx, $6.name) != NULL) {
           OHM_ERROR("cgrp: partition '%s' multiply defined", $6.name);
 	  YYABORT;
       }
-      if (!strcmp($6.name, "root")) {
-          OHM_ERROR("cgrp: invalid partition with reserved name 'root'");
-          YYABORT;
-      }
+
       if (partition_add(ctx, &$6) == NULL)
           YYABORT;
     }
@@ -421,6 +524,49 @@ partition_rt_limit: KEYWORD_REALTIME_LIMIT
 	                $2.value, $4.value);
               exit(1);
           }
+    }
+    ;
+
+optional_partition_controls: /* empty */ { $$ = NULL; }
+    | partition_controls                 { $$ = $1;   }
+    ;
+
+partition_controls: partition_control {
+          $$ = $1;
+    }
+    | partition_controls partition_control {
+          cgrp_ctrl_setting_t *setting;
+
+          for (setting = $1; setting->next != NULL; setting = setting->next)
+              ;
+          setting->next = $2;
+          $$            = $1;
+    }
+    ;
+
+partition_control: TOKEN_IDENT TOKEN_IDENT "\n" {
+          cgrp_ctrl_setting_t *setting;
+
+          if (ALLOC_OBJ(setting) == NULL) {
+              OHM_ERROR("cgrp: failed to allocate partition control setting");
+              exit(1);
+          }
+
+          setting->name  = STRDUP($1.value);
+          setting->value = STRDUP($2.value);
+          $$             = setting;
+    }
+    |  TOKEN_IDENT TOKEN_STRING "\n" {
+          cgrp_ctrl_setting_t *setting;
+
+          if (ALLOC_OBJ(setting) == NULL) {
+              OHM_ERROR("cgrp: failed to allocate partition control setting");
+              exit(1);
+          }
+
+          setting->name  = STRDUP($1.value);
+          setting->value = STRDUP($2.value);
+          $$             = setting;
     }
     ;
 
@@ -1113,6 +1259,7 @@ config_monitor_exit(cgrp_context_t *ctx)
 void
 config_print(cgrp_context_t *ctx, FILE *fp)
 {
+    ctrl_dump(ctx, fp);
     partition_dump(ctx, fp);
     group_dump(ctx, fp);
     procdef_dump(ctx, fp);

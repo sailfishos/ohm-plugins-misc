@@ -95,7 +95,7 @@ typedef enum {
     TOKEN_TYPE_EOL,                            /* end of line */
 } token_type_t;
 
-static lexer_t lexer;
+static lexer_t lexer /* = { .debug = 1 }*/;
 static int     lexer_start_token;              /* parser selector token */
 static int     lexer_noinclude;                /* disable includes */
 
@@ -672,6 +672,7 @@ KEYWORD_IOWAIT_NOTIFY     iowait-notify
 KEYWORD_IOQLEN_NOTIFY     ioqlen-notify
 KEYWORD_SWAP_PRESSURE     swap-pressure
 KEYWORD_ADDON_RULES       addon-rules
+KEYWORD_CGROUP_CONTROL    cgroup-control
 
 HEADER_OPEN            \[
 HEADER_CLOSE           \]
@@ -686,6 +687,7 @@ OR                     \|\|
 NOT                    \!
 IMPLIES                =>
 SEMICOLON              ;
+COLON                  :
 
 ASTERISK               \*
 PATH                   (\/([a-zA-Z_]([a-zA-Z0-9_\.-]*)*))+
@@ -778,6 +780,7 @@ ESCAPE		       \\
 {KEYWORD_EXPORT_PARTITIONS} { PASS_KEYWORD(EXPORT_PARTITIONS); }
 {KEYWORD_EXPORT_FACT}       { PASS_KEYWORD(EXPORT_FACT);       }
 {KEYWORD_CGROUPFS_OPTIONS}  { PASS_KEYWORD(CGROUPFS_OPTIONS);  }
+{KEYWORD_CGROUP_CONTROL}    { PASS_KEYWORD(CGROUP_CONTROL);    }
 {KEYWORD_IOWAIT_NOTIFY}     { PASS_KEYWORD(IOWAIT_NOTIFY);     }
 {KEYWORD_IOQLEN_NOTIFY}     { PASS_KEYWORD(IOQLEN_NOTIFY);     }
 {KEYWORD_SWAP_PRESSURE}     { PASS_KEYWORD(SWAP_PRESSURE);     }
@@ -795,6 +798,7 @@ ESCAPE		       \\
 {NOT}                       { PASS_TOKEN(NOT);                 }
 {IMPLIES}                   { PASS_TOKEN(IMPLIES);             }
 {SEMICOLON}                 { PASS_TOKEN(SEMICOLON);           }
+{COLON}                     { PASS_TOKEN(COLON);               }
 
 {ASTERISK}                  { PASS_TOKEN(ASTERISK);            }
 {IDENT}                     { PASS_STRING(IDENT);              }

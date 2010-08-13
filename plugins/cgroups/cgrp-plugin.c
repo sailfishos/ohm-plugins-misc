@@ -1,3 +1,23 @@
+/*************************************************************************
+Copyright (C) 2010 Nokia Corporation.
+
+These OHM Modules are free software; you can redistribute
+it and/or modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation
+version 2.1 of the License.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+USA.
+*************************************************************************/
+
+
 #include <stdlib.h>
 
 #include "cgrp-plugin.h"
@@ -69,7 +89,8 @@ plugin_init(OhmPlugin *plugin)
     if (!config_parse_addons(ctx))
         OHM_WARNING("cgrp: failed to parse extra rules");
     
-    partition_add_root(ctx);
+    if (partition_lookup(ctx, "root") == NULL)
+        partition_add_root(ctx);
 
     ctx->resolve = resolve;
     if (!apptrack_init(ctx, plugin))
@@ -112,6 +133,7 @@ plugin_exit(OhmPlugin *plugin)
     procdef_exit(ctx);
     group_exit(ctx);
     partition_exit(ctx);
+    ctrl_del(ctx->controls);
     fact_exit(ctx);
 }
 

@@ -1,3 +1,23 @@
+/*************************************************************************
+Copyright (C) 2010 Nokia Corporation.
+
+These OHM Modules are free software; you can redistribute
+it and/or modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation
+version 2.1 of the License.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+USA.
+*************************************************************************/
+
+
 /*! \defgroup pubif Public Interfaces */
 #include <stdlib.h>
 #include <stdio.h>
@@ -118,10 +138,11 @@ void resource_set_destroy(resset_t *resset)
 
             delete_factstore_entry(rs);
             delete_from_hash_table(rs);
-            resset->userdata = NULL;
 
             free(rs->request);
             free(rs);
+
+            resset->userdata=NULL;
 
             OHM_DEBUG(DBG_SET, "destroyed resource set %s/%u (manager id %u)",
                       resset->peer, resset->id, mgrid);
@@ -156,15 +177,15 @@ int resource_set_add_spec(resset_t *resset, resource_spec_type_t type, ...)
                     break;
                 }
             }
-
-            if (spec == NULL)
+            if (spec == NULL) {
                 spec = resource_spec_create(rs, type, args);
+                spec->any.next = rs->specs;
+                rs->specs  = spec;
 
+            }
             va_end(args);
 
             if (spec != NULL) {
-                spec->any.next = rs->specs;
-                rs->specs  = spec;
 
                 switch (spec->any.type) {
 

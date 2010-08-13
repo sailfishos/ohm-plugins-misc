@@ -1,3 +1,23 @@
+/*************************************************************************
+Copyright (C) 2010 Nokia Corporation.
+
+These OHM Modules are free software; you can redistribute
+it and/or modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation
+version 2.1 of the License.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+USA.
+*************************************************************************/
+
+
 #ifndef __OHM_PLUGIN_CGRP_H__
 #define __OHM_PLUGIN_CGRP_H__
 
@@ -42,6 +62,30 @@ typedef u64_t cgrp_mask_t;
 
 
 /*
+ * a custom partition controls
+ */
+
+typedef struct cgrp_ctrl_setting_s cgrp_ctrl_setting_t;
+typedef struct cgrp_ctrl_s cgrp_ctrl_t;
+
+struct cgrp_ctrl_setting_s {
+    cgrp_ctrl_setting_t *next;
+    char                *name;
+    char                *value;
+};
+
+
+struct cgrp_ctrl_s {
+    cgrp_ctrl_t         *next;
+    char                *name;
+    char                *path;
+    cgrp_ctrl_setting_t *settings;
+};
+
+
+
+
+/*
  * a system partition
  */
 
@@ -76,6 +120,8 @@ typedef struct {
     list_hook_t       hash_bucket;          /* hook to hash bucket chain */
     list_hook_t       hash_next;            /* hook to next hash entry */
 #endif
+
+    cgrp_ctrl_setting_t *settings;          /* extra cgroup controls */
 } cgrp_partition_t;
 
 
@@ -436,6 +482,7 @@ typedef struct {
     char             *desired_mount;        /* desired mount point */
     char             *actual_mount;         /* actual mount point */
     unsigned int      cgroup_options;       /* cgroup mount options */
+    cgrp_ctrl_t      *controls;             /* cgroup extra controls */
 
     cgrp_partition_t *root;                 /* root partition */
     cgrp_group_t     *groups;               /* classification groups */
@@ -532,7 +579,6 @@ void              partition_del(cgrp_context_t *, cgrp_partition_t *);
 cgrp_partition_t *partition_lookup(cgrp_context_t *, const char *);
 int               partition_add_root(cgrp_context_t *);
 
-
 void partition_dump(cgrp_context_t *, FILE *);
 void partition_print(cgrp_partition_t *, FILE *);
 int partition_add_process(cgrp_partition_t *, pid_t);
@@ -541,8 +587,12 @@ int partition_freeze(cgrp_context_t *, cgrp_partition_t *, int);
 int partition_limit_cpu(cgrp_partition_t *, unsigned int);
 int partition_limit_mem(cgrp_partition_t *, unsigned int);
 int partition_limit_rt(cgrp_partition_t *, int, int);
+int partition_apply_settings(cgrp_context_t *, cgrp_partition_t *);
 
-
+void ctrl_dump(cgrp_context_t *, FILE *);
+void ctrl_del(cgrp_ctrl_t *);
+void ctrl_setting_del(cgrp_ctrl_setting_t *);
+int ctrl_apply(cgrp_context_t *, cgrp_partition_t *, cgrp_ctrl_setting_t *);
 
 /* cgrp-group.c */
 int  group_init(cgrp_context_t *);
