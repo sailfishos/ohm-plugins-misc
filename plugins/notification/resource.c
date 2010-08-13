@@ -320,31 +320,6 @@ uint32_t resource_name_to_flag(const char *name)
     return 0;
 }
 
-uint32_t resource_name_to_flag(const char *name)
-{
-    typedef struct {
-        const char *name;
-        uint32_t    flag;
-    } flag_def_t;
-
-    static flag_def_t flag_defs[] = {
-        { "audio"    , RESMSG_AUDIO_PLAYBACK },
-        { "vibra"    , RESMSG_VIBRA          },
-        { "leds"     , RESMSG_LEDS           },
-        { "backlight", RESMSG_BACKLIGHT      },
-        { NULL       , 0                     }
-    };
-
-    flag_def_t *fd;
-
-    for (fd = flag_defs;  fd->name != NULL;  fd++) {
-        if (!strcmp(name, fd->name))
-            return fd->flag;
-    }
-    
-    return 0;
-}
-
 
 /*!
  * @}

@@ -633,30 +633,10 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             forward_status_to_client(proxy, data);
             proxy_destroy(proxy);
             killed = TRUE;
-<<<<<<< HEAD:plugins/notification/proxy.c
-=======
             break;
         case backend_timeout:
             proxy_destroy(proxy);
             killed = TRUE;
-            break;
-        default:
-            success = FALSE;
-            break;
-        }
-        break;
-
-    case state_longlive:
-        switch (ev) {
-        case client_stop:
-            timeout_create(proxy, 0);
->>>>>>> a423941b196ed1e0f81a9ec24f00ffec1b65246b:plugins/notification/proxy.c
-            break;
-        case backend_timeout:
-            create_and_send_status_to_client(proxy, NGF_COMPLETED);
-            proxy_destroy(proxy);
-            killed = TRUE;
-<<<<<<< HEAD:plugins/notification/proxy.c
             break;
         default:
             success = FALSE;
@@ -673,8 +653,6 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             create_and_send_status_to_client(proxy, NGF_COMPLETED);
             proxy_destroy(proxy);
             killed = TRUE;
-=======
->>>>>>> a423941b196ed1e0f81a9ec24f00ffec1b65246b:plugins/notification/proxy.c
             break;
         default:
             success = FALSE;
