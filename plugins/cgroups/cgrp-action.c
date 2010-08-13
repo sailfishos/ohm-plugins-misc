@@ -186,11 +186,14 @@ action_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
 int
 action_exec(cgrp_context_t *ctx, cgrp_proc_attr_t *attr, cgrp_action_t *action)
 {
-    int type = action->type;
+    int type;
     int success;
     
     success = TRUE;
     while (action != NULL) {
+
+        type = action->type;
+
         if (CGRP_ACTION_UNKNOWN < type && type < CGRP_ACTION_MAX) {
             if (actions[type].exec != NULL)
                 success &= actions[type].exec(ctx, attr, action);

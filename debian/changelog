@@ -1,3 +1,11 @@
+ohm-plugins-misc (1:1.33) unstable; urgency=low
+
+  * Fix in cgroup plugin to handle properly multiple actions
+  * Hearing aid coil support in accessories plugin
+  * Implemented: SWP#Plicy-427
+
+ -- Janos Kovacs <mmf-audio-bounces@projects.maemo.org>  Thu, 12 Aug 2010 20:45:12 +0300
+
 ohm-plugins-misc (1:1.32) unstable; urgency=low
 
   * Installing debug symbols in separate package (Fixes: NB#183227).
