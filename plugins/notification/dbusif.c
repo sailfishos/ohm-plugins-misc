@@ -31,6 +31,7 @@ USA.
 #include "dbusif.h"
 #include "proxy.h"
 #include "resource.h"
+#include "longlive.h"
 #include "subscription.h"
 
 typedef enum {
@@ -418,6 +419,45 @@ void dbusif_free_data(void *data)
         dbus_message_unref(msg);
 }
 
+void dbusif_monitor_client(const char *address, int monitor)
+{
+    static char *fmt =
+        "type='signal',"
+        "sender='"    DBUS_ADMIN_SERVICE             "',"
+        "interface='" DBUS_ADMIN_INTERFACE           "',"
+        "member='"    DBUS_NAME_OWNER_CHANGED_SIGNAL "',"
+        "path='"      DBUS_ADMIN_PATH                "',"
+        "arg0='"      "%s"                           "'";
+
+    char filter[256];
+    DBusError err;
+
+    if (address != NULL) {
+        snprintf(filter, sizeof(filter), fmt, address);
+
+        if (monitor) {
+            dbus_error_init(&err);
+
+            OHM_DEBUG(DBG_DBUS, "start monitoring client \"%s\"", address);
+
+            /* setup_dbus_proxy_methods() already added the
+               name_changed() filter */
+
+            dbus_bus_add_match(conn, filter, &err);
+
+            if (dbus_error_is_set(&err)) {
+                OHM_ERROR("Can't add match \"&s\": %s", filter, err.message);
+                dbus_error_free(&err);
+            }
+        }
+        else {
+            OHM_DEBUG(DBG_DBUS, "stop monitoring client \"%s\"", address);
+
+            dbus_bus_remove_match(conn, filter, NULL);
+        }
+    }
+}
+
 
 /*!
  * @}
@@ -768,6 +808,8 @@ static int append_dict_entry(DBusMessageIter *it, DBusMessageIter *dict)
 static int close_dict_entry(DBusMessageIter *it, DBusMessageIter *dict)
 {
     dbus_message_iter_close_container(it, dict);
+
+    return TRUE;
 }
 
 static int append_array(DBusMessageIter *dit, DBusMessageIter *darr)
@@ -987,19 +1029,29 @@ static DBusHandlerResult name_changed(DBusConnection *conn,
                                         DBUS_TYPE_STRING, &after,
                                         DBUS_TYPE_INVALID);
 
-        if (success && sender && !strcmp(sender, DBUS_NGF_BACKEND_SERVICE)) {
+        if (success && sender) {
+            if (!strcmp(sender, DBUS_NGF_BACKEND_SERVICE)) {
 
-            namesig = TRUE;  /* supress the possible result of GetNameOwner */
+                namesig = TRUE;  /* supress the result of GetNameOwner's */
 
-            if (after && strcmp(after, "")) {
-                OHM_DEBUG(DBG_DBUS, "notification backend is up (%s)", after);
-                backend = strdup(after);
+                if (after && strcmp(after, "")) {
+                    OHM_DEBUG(DBG_DBUS, "notification backend "
+                              "is up (%s)", after);
+                    backend = strdup(after);
+                }
+                else if (before != NULL && (!after || !strcmp(after, ""))) {
+                    OHM_DEBUG(DBG_DBUS, "notification backend is gone");
+                    free(backend);
+                    backend = NULL;
+                    proxy_backend_is_down();
+                }
             }
-            else if (before != NULL && (!after || !strcmp(after, ""))) {
-                OHM_DEBUG(DBG_DBUS, "notification backend is gone");
-                free(backend);
-                backend = NULL;
-                proxy_backend_is_down();
+            else {
+                if (before != NULL && (!after || !strcmp(after, ""))) {
+                    OHM_DEBUG(DBG_DBUS, "notification client '%s' is gone",
+                              sender);
+                    proxy_client_is_down(sender);
+                }
             }
         }
     }
@@ -1165,6 +1217,9 @@ static uint32_t subscribe_handler(DBusMessage *msg, char *err, char *desc)
 {
     const char *client = dbus_message_get_sender(msg);
 
+    (void)err;
+    (void)desc;
+
     OHM_DEBUG(DBG_DBUS, "susbscription request for %s", client);
 
     subscription_create(client);
@@ -1175,6 +1230,9 @@ static uint32_t subscribe_handler(DBusMessage *msg, char *err, char *desc)
 static uint32_t unsubscribe_handler(DBusMessage *msg, char *err, char *desc)
 {
     const char *client = dbus_message_get_sender(msg);
+
+    (void)err;
+    (void)desc;
 
     OHM_DEBUG(DBG_DBUS, "unsusbscription request for %s", client);
 

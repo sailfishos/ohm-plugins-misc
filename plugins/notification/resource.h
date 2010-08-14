@@ -34,6 +34,7 @@ typedef enum {
     rset_missedcall,
     rset_alarm,
     rset_event,
+    rset_notifier,
     
     rset_id_max
 } resource_set_id_t;

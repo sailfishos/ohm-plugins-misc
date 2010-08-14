@@ -329,18 +329,21 @@ static void connect_to_manager(resconn_t *rc)
 {
 #define MAND_DEFAULT   RESMSG_AUDIO_PLAYBACK | RESMSG_VIBRA
 #define MAND_MISCALL   RESMSG_LEDS
+#define MAND_NOTIF     RESMSG_LEDS
 #define OPT_DEFAULT    RESMSG_BACKLIGHT
 #define OPT_MISCALL    0
+#define OPT_NOTIF      0
 #define LLIV_DEFAULT   RESMSG_LEDS
 #define LLIV_RING      0
 #define LLIV_MISCALL   0
-
+#define LLIV_NOTIF     0
    
     static rset_def_t   defs[] = {
         {rset_ringtone  , "ringtone", MAND_DEFAULT, OPT_DEFAULT, LLIV_RING   },
-        {rset_missedcall, "ringtone", MAND_MISCALL, OPT_MISCALL, LLIV_MISCALL},
+        {rset_missedcall, "event"   , MAND_MISCALL, OPT_MISCALL, LLIV_MISCALL},
         {rset_alarm     , "alarm"   , MAND_DEFAULT, OPT_DEFAULT, LLIV_DEFAULT},
         {rset_event     , "event"   , MAND_DEFAULT, OPT_DEFAULT, LLIV_DEFAULT},
+        {rset_notifier  , "ringtone", MAND_NOTIF  , OPT_NOTIF  , LLIV_NOTIF  },
     };
 
     rset_def_t      *def;
