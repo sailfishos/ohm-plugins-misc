@@ -2,7 +2,9 @@ ohm-plugins-misc (1:1.33) unstable; urgency=low
 
   * Fix in cgroup plugin to handle properly multiple actions
   * Hearing aid coil support in accessories plugin
+  * Monitoring ngf clients and cleanup if they died
   * Implemented: SWP#Plicy-427
+  * Implemented: SWP#Plicy-407
 
  -- Janos Kovacs <mmf-audio-bounces@projects.maemo.org>  Thu, 12 Aug 2010 20:45:12 +0300
 
