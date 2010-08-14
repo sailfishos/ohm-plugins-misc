@@ -6,7 +6,7 @@ ohm-plugins-misc (1:1.33) unstable; urgency=low
   * support for notifier class (beside ringtone, missedcall, alarm and event)
   * Implemented: SWP#Plicy-427
   * Implemented: SWP#Plicy-407
-  * Implemented: SWP#DUI-3359
+  * Implemented  SWP#DUI-3359
 
  -- Janos Kovacs <mmf-audio-bounces@projects.maemo.org>  Thu, 12 Aug 2010 20:45:12 +0300
 
