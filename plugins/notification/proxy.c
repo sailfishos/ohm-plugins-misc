@@ -1062,7 +1062,8 @@ static uint32_t play_status(proxy_t *proxy, uint32_t granted)
         [ rset_ringtone   ] = NGF_SHORT ,
         [ rset_missedcall ] = NGF_BUSY  ,
         [ rset_alarm      ] = NGF_SHORT ,
-        [ rset_event      ] = NGF_SHORT
+        [ rset_event      ] = NGF_SHORT ,
+        [ rset_notifier   ] = NGF_BUSY  ,
     };
 
     if (granted == RESOURCE_SET_BUSY)
