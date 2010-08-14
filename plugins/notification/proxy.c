@@ -52,11 +52,17 @@ USA.
 #define HOUR                 (60 * MINUTE_IN_SECS)
 #define DEFAULT_PLAY_LIMIT   (5 * MINUTE)
 
+/* ID based hashing */
+#define ID_HASH_BITS      6
+#define ID_HASH_DIM       (1 << ID_HASH_BITS)
+#define ID_HASH_MASK      (ID_HASH_DIM - 1)
+#define ID_HASH_INDEX(i)  (i & ID_HASH_MASK) 
 
-#define HASH_BITS      6
-#define HASH_DIM       (1 << HASH_BITS)
-#define HASH_MASK      (HASH_DIM - 1)
-#define HASH_INDEX(i)  (i & HASH_MASK) 
+/* client based hashing */
+#define CL_HASH_BITS      8
+#define CL_HASH_DIM       (1 << CL_HASH_BITS)
+#define CL_HASH_MASK      (CL_HASH_DIM - 1)
+#define CL_HASH_INDEX(i)  (i & CL_HASH_MASK) 
 
 
 typedef enum {
@@ -65,6 +71,7 @@ typedef enum {
     state_forwarded,            /* after play request forwarded to backend */
     state_completed,            /* after reciving status from backend */
     state_stopped,              /* client stop request or lost resources */
+    state_killed,               /* client died accrding to D-Bus */
     state_longlive,             /* if only longlive resources are in use */
 } proxy_state_t;
 
@@ -74,11 +81,13 @@ typedef enum {
     backend_update,             /* backend update message */
     backend_timeout,            /* backend timeout ie. no status message */
     client_stop,                /* client stop request */
+    client_died,                /* client D-Bus connetion is down */
 } proxy_event_t;
 
 
 typedef struct proxy_s {
-    struct proxy_s  *next;
+    struct proxy_s  *idnext;    /* chain for id hashes */
+    struct proxy_s  *clnext;    /* chain for client hashes */
     int              type;      /* notification type */
     uint32_t         id;        /* system-wide unique play request ID */
     const char      *client;    /* client's D-Bus address */
@@ -91,18 +100,25 @@ typedef struct proxy_s {
 } proxy_t;
 
 
-static uint32_t      seqno = 1;          /* serial # for unique notif.ID */
-static proxy_t      *hashtbl[HASH_DIM];  /* to fetch data based on notif. ID */
-static uint32_t      play_limit;         /* notif. play limit in msec's */
-static uint32_t      play_timeout;       /* max.time for a play request */
-static uint32_t      stop_timeout;       /* max.time for a stop request */
+static uint32_t      seqno = 1;              /* serial # for unique notif.ID */
+static proxy_t      *idhashtbl[ID_HASH_DIM]; /* for ID based access */
+static proxy_t      *clhashtbl[CL_HASH_DIM]; /* for client based access */
+static uint32_t      play_limit;             /* notif. play limit in msec's */
+static uint32_t      play_timeout;           /* max.time for a play request */
+static uint32_t      stop_timeout;           /* max.time for a stop request */
 
 static proxy_t *proxy_create(uint32_t, const char *, void *);
 static void     proxy_destroy(proxy_t *);
 
-static void     hash_add(proxy_t *);
-static void     hash_delete(proxy_t *);
-static proxy_t *hash_lookup(uint32_t);
+static void     id_hash_add(proxy_t *);
+static void     id_hash_delete(proxy_t *);
+static proxy_t *id_hash_lookup(uint32_t);
+
+static uint32_t cl_hash_index(const char *);
+static void     cl_hash_add(proxy_t *);
+static void     cl_hash_delete(proxy_t *);
+static proxy_t *cl_hash_lookup_proxy(const char *, void **);
+static int      cl_hash_lookup_client(const char *);
 
 static void     timeout_create(proxy_t *, uint32_t);
 static void     timeout_destroy(proxy_t *);
@@ -117,6 +133,7 @@ static int state_machine(proxy_t *, proxy_event_t, void *);
 
 static int forward_play_request_to_backend(proxy_t *, uint32_t, uint32_t);
 static int forward_stop_request_to_backend(proxy_t *, void *);
+static int create_and_send_stop_request_to_backend(proxy_t *);
 static int forward_status_to_client(proxy_t *, void *);
 static int partial_release_of_resources(proxy_t *, void *);
 static int create_and_send_status_to_client(proxy_t *, uint32_t);
@@ -244,7 +261,7 @@ int proxy_stop_request(uint32_t id, const char *client, void *data, char *err)
     proxy_t *proxy;
     int      success = FALSE;
 
-    if ((proxy = hash_lookup(id)) == NULL) {
+    if ((proxy = id_hash_lookup(id)) == NULL) {
         OHM_DEBUG(DBG_PROXY, "can't find proxy (id %u) for stop request", id);
         strncpy(err, "can't find corresponding play request",DBUS_DESCBUF_LEN);
     }
@@ -276,7 +293,7 @@ int proxy_status_request(uint32_t id, void *data)
     proxy_t *proxy;
     int      success = FALSE;
 
-    if ((proxy = hash_lookup(id)) == NULL)
+    if ((proxy = id_hash_lookup(id)) == NULL)
         OHM_DEBUG(DBG_PROXY, "can't find proxy (id %u) for status request",id);
     else {
         success = TRUE;
@@ -295,7 +312,7 @@ int proxy_update_request(uint32_t id, void *data)
     proxy_t *proxy;
     int      success = FALSE;
 
-    if ((proxy = hash_lookup(id)) == NULL)
+    if ((proxy = id_hash_lookup(id)) == NULL)
         OHM_DEBUG(DBG_PROXY, "can't find proxy (id %u) for update request",id);
     else {
         success = TRUE;
@@ -309,13 +326,23 @@ int proxy_update_request(uint32_t id, void *data)
     return success;
 }
 
+void proxy_client_is_down(const char *client)
+{
+    proxy_t *proxy;
+    void    *cur = NULL;
+
+    while ((proxy = cl_hash_lookup_proxy(client, &cur)) != NULL) {
+        state_machine(proxy, client_died, NULL);
+    }
+}
+
 void proxy_backend_is_down(void)
 {
     proxy_t *proxy;
     int      i;
 
-    for (i = 0;  i < HASH_DIM;  i++) {
-        while ((proxy = hashtbl[i]) != NULL) {
+    for (i = 0;  i < ID_HASH_DIM;  i++) {
+        while ((proxy = idhashtbl[i]) != NULL) {
             timeout_destroy(proxy);
             timeout_handler(proxy);
         }
@@ -338,7 +365,11 @@ static proxy_t *proxy_create(uint32_t id, const char *client, void *data)
         proxy->state  = state_created; 
         proxy->data   = dbusif_engage_data(data);
 
-        hash_add(proxy);
+        if (!cl_hash_lookup_client(client))
+            dbusif_monitor_client(client, TRUE);
+
+        id_hash_add(proxy);
+        cl_hash_add(proxy);
 
         OHM_DEBUG(DBG_PROXY, "proxy object created (id %u)", id);
     }
@@ -359,7 +390,11 @@ static void proxy_destroy(proxy_t *proxy)
         timeout_destroy(proxy);
         resource_set_release(proxy->type, rset_regular, grant_handler, proxy);
 
-        hash_delete(proxy);
+        id_hash_delete(proxy);
+        cl_hash_delete(proxy);
+
+        if (!cl_hash_lookup_client(proxy->client))
+            dbusif_monitor_client(proxy->client, FALSE);
 
         free((void *)proxy->client);
         dbusif_free_data(proxy->data);
@@ -369,40 +404,140 @@ static void proxy_destroy(proxy_t *proxy)
 }
 
 
-static void hash_add(proxy_t *proxy)
+static void id_hash_add(proxy_t *proxy)
 {
-    uint32_t idx = HASH_INDEX(proxy->id);
+    uint32_t idx = ID_HASH_INDEX(proxy->id);
 
-    proxy->next  = hashtbl[idx];
-    hashtbl[idx] = proxy;
+    proxy->idnext  = idhashtbl[idx];
+    idhashtbl[idx] = proxy;
 }
 
-static void hash_delete(proxy_t *proxy)
+static void id_hash_delete(proxy_t *proxy)
 {
-    uint32_t  idx = HASH_INDEX(proxy->id);
+    uint32_t  idx = ID_HASH_INDEX(proxy->id);
     proxy_t  *prev;
 
-    for (prev = (proxy_t *)&hashtbl[idx];   prev->next;    prev = prev->next) {
-        if (prev->next == proxy) {
-            prev->next  = proxy->next;
-            proxy->next = NULL;
+    for (prev = (proxy_t *)&idhashtbl[idx];
+         prev->idnext != NULL;
+         prev = prev->idnext)
+    {
+        if (prev->idnext == proxy) {
+            prev->idnext  = proxy->idnext;
+            proxy->idnext = NULL;
             return;
         }
     }
 }
 
-static proxy_t *hash_lookup(uint32_t id)
+static proxy_t *id_hash_lookup(uint32_t id)
 {
-    uint32_t  idx = HASH_INDEX(id);
+    uint32_t  idx = ID_HASH_INDEX(id);
     proxy_t  *proxy;
 
-    for (proxy = hashtbl[idx];  proxy;  proxy = proxy->next) {
+    for (proxy = idhashtbl[idx];  proxy;  proxy = proxy->idnext) {
         if (id == proxy->id)
             return proxy;
     }
 
     return NULL;
 }
+
+static uint32_t cl_hash_index(const char *client)
+{
+    uint32_t    idx = 0;
+    const char *numstr;
+    uint32_t    num;
+    
+    if (client != NULL) {
+        if ((numstr = strchr(client, '.')) != NULL)
+            numstr++;
+        else
+            numstr = client;
+
+        num = strtoul(numstr, NULL, 10);
+        idx = CL_HASH_INDEX(num);
+    }
+
+    return idx;
+}
+
+static void cl_hash_add(proxy_t *proxy)
+{
+    uint32_t  idx = cl_hash_index(proxy->client);
+
+    proxy->clnext  = clhashtbl[idx];
+    clhashtbl[idx] = proxy;
+}
+
+
+static void cl_hash_delete(proxy_t *proxy)
+{
+    uint32_t  idx = cl_hash_index(proxy->client);
+    proxy_t  *prev;
+
+    if (proxy != NULL) {
+        if ((prev = clhashtbl[idx]) == proxy) {
+            clhashtbl[idx] = proxy->clnext;
+            proxy->clnext = NULL;
+        }
+        else {
+            while (prev->clnext != NULL) {
+                if (prev->clnext == proxy) {
+                    prev->clnext  = proxy->clnext;
+                    proxy->clnext = NULL;
+                    return;
+                }
+
+                prev = prev->clnext;
+            }
+        }
+    }
+}
+
+static proxy_t *cl_hash_lookup_proxy(const char *client, void **cursor)
+{
+    proxy_t  *proxy;
+
+    if (cursor != NULL && client != NULL) {
+        if (*cursor == NULL)
+            proxy = clhashtbl[cl_hash_index(client)];
+        else {
+            proxy = *(proxy_t **)cursor;
+            proxy = proxy->clnext;
+        }
+
+        while (proxy != NULL) { 
+            if (!strcmp(client, proxy->client)) {
+                *cursor = proxy;
+                return proxy;
+            }
+            
+            proxy = proxy->clnext;
+        }
+
+        *cursor = NULL;
+    }
+ 
+    return NULL;
+}
+
+static int cl_hash_lookup_client(const char *client)
+{
+    uint32_t   idx;
+    proxy_t   *proxy;
+
+    if (client != NULL) {
+        idx = cl_hash_index(client);
+
+        for (proxy = clhashtbl[idx];  proxy;  proxy = proxy->clnext) {
+            if (proxy->client && !strcmp(client, proxy->client))
+                return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 
 static void timeout_create(proxy_t *proxy, uint32_t delay)
 {
@@ -545,6 +680,10 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             proxy_destroy(proxy);
             killed = TRUE;
             break;
+        case client_died:
+            proxy_destroy(proxy);
+            killed = TRUE;
+            break;
         default:
             success = FALSE;
             break;
@@ -569,6 +708,10 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             break;
         case client_stop:
             premature_stop(proxy);
+            break;
+        case client_died:
+            proxy_destroy(proxy);
+            killed = TRUE;
             break;
         default:
             success = FALSE;
@@ -603,6 +746,9 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         case client_stop:
             forward_stop_request_to_backend(proxy, data);
             break;
+        case client_died:
+            create_and_send_stop_request_to_backend(proxy);
+            break;
         default:
             success = FALSE;
             break;
@@ -612,6 +758,7 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
 
     case state_completed:
         switch (ev) {
+        case client_died:
         case resource_grant:
             proxy_destroy(proxy);   /* will release the resources */
             killed = TRUE;
@@ -634,6 +781,20 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             proxy_destroy(proxy);
             killed = TRUE;
             break;
+        case client_died:
+        case backend_timeout:
+            proxy_destroy(proxy);
+            killed = TRUE;
+            break;
+        default:
+            success = FALSE;
+            break;
+        }
+        break;
+
+    case state_killed:
+        switch (ev) {
+        case backend_status:
         case backend_timeout:
             proxy_destroy(proxy);
             killed = TRUE;
@@ -652,6 +813,10 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
         case backend_timeout:
             create_and_send_status_to_client(proxy, NGF_COMPLETED);
             proxy_destroy(proxy);
+            killed = TRUE;
+            break;
+        case client_died:
+            proxy_destroy(proxy); /* that will send the longlieve stop */
             killed = TRUE;
             break;
         default:
@@ -758,18 +923,54 @@ static int forward_stop_request_to_backend(proxy_t *proxy, void *data)
     return TRUE;
 }
 
+static int create_and_send_stop_request_to_backend(proxy_t *proxy)
+{
+    void *data;
+    int   success;
+
+    data = dbusif_create_stop_data(proxy->id);
+
+    if (data == NULL) {
+        OHM_DEBUG(DBG_PROXY, "failed to send stop request (id %u) "
+                  "to backend",proxy->id);
+        success = FALSE;
+    }
+    else {    
+        OHM_DEBUG(DBG_PROXY,"stop request (id %u) will be "
+                  "sent to backend", proxy->id);
+
+        dbusif_forward_data(data);
+
+        proxy->state = state_killed;
+
+        success = TRUE;
+    }
+
+    return success;
+}
+
 static int forward_status_to_client(proxy_t *proxy, void *data)
 {
-    void *fwdata = dbusif_copy_status_data(proxy->client, data);
+    void *fwdata;
+    int   success;
 
-    dbusif_forward_data(fwdata);
+    if (proxy->client == NULL || proxy->client[0] == '\0')
+        success = FALSE;
+    else {
+        success = TRUE;
+        fwdata  = dbusif_copy_status_data(proxy->client, data);
+
+        dbusif_forward_data(fwdata);
     
-    OHM_DEBUG(DBG_PROXY, "status request (id %u) forwarded "
-              "to client %s", proxy->id, proxy->client);
+        timeout_create(proxy, stop_timeout);
+
+        OHM_DEBUG(DBG_PROXY, "status request (id %u) forwarded "
+                  "to client %s", proxy->id, proxy->client);
+    }
     
     proxy->state = state_completed;
 
-    return TRUE;
+    return success;
 }
 
 static int partial_release_of_resources(proxy_t *proxy, void *data)
@@ -785,14 +986,21 @@ static int partial_release_of_resources(proxy_t *proxy, void *data)
 static int create_and_send_status_to_client(proxy_t *proxy, uint32_t status)
 {
     void *data;
+    int   success;
 
-    OHM_DEBUG(DBG_PROXY, "create & send status message to client %s (id %u)",
-              proxy->client, proxy->id);
+    if (proxy->client == NULL || proxy->client[0] == '\0')
+        success = FALSE;
+    else {
+        OHM_DEBUG(DBG_PROXY, "create & send status message to client %s "
+                  "(id %u)", proxy->client, proxy->id);
 
-    data = dbusif_create_status_data(proxy->client, proxy->id, status);
-    dbusif_forward_data(data);
+        success = TRUE;
+        data = dbusif_create_status_data(proxy->client, proxy->id, status);
 
-    return TRUE;
+        dbusif_forward_data(data);
+    }
+
+    return success;
 }
 
 
@@ -877,6 +1085,7 @@ static const char *state_str(proxy_state_t state)
     case state_forwarded:    return "forwarded";
     case state_completed:    return "completed";
     case state_stopped:      return "stopped";
+    case state_killed:       return "killed";
     case state_longlive:     return "longlive";
     default:                 return "<unknown>";
     }
@@ -890,6 +1099,7 @@ static const char *event_str(proxy_event_t event)
     case backend_update:    return "backend update";
     case backend_timeout:   return "backend_timeout";
     case client_stop:       return "client stop";
+    case client_died:       return "client died";
     default:                return "<unknown>";
     }
 }

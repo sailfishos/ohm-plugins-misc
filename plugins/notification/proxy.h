@@ -32,6 +32,7 @@ int  proxy_playback_request(const char *, const char *, void *, char *);
 int  proxy_stop_request(uint32_t, const char *, void *, char *);
 int  proxy_status_request(uint32_t, void *);
 int  proxy_update_request(uint32_t, void *);
+void proxy_client_is_down(const char *);
 void proxy_backend_is_down(void);
 
 
