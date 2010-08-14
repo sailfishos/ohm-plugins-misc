@@ -103,6 +103,7 @@ void  dbusif_forward_data(void *);
 void  dbusif_send_data_to(void *, const char *);
 void *dbusif_engage_data(void *);
 void  dbusif_free_data(void *);
+void  dbusif_monitor_client(const char *, int);
 
 #endif	/* __OHM_NOTIFICATION_DBUSIF_H__ */
 
