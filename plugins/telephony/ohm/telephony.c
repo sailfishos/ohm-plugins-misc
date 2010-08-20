@@ -3329,8 +3329,10 @@ tp_stop_dtmf(call_t *call, unsigned int stream)
 static int
 call_activate(call_t *call, const char *action, event_t *event)
 {
+    int was_connected;
+    
     (void)action;
-
+    
     OHM_INFO("ACTIVATE %s.", short_path(call->path));
     
     if (call == event->any.call && event->any.state == STATE_ACTIVE) {
@@ -3354,6 +3356,7 @@ call_activate(call_t *call, const char *action, event_t *event)
     
         call->state     = STATE_ACTIVE;
         call->order     = 0;
+        was_connected   = call->connected;
         call->connected = TRUE;
         policy_call_update(call, UPDATE_STATE | UPDATE_ORDER | UPDATE_CONNECT);
 
@@ -3361,7 +3364,34 @@ call_activate(call_t *call, const char *action, event_t *event)
             run_hook(HOOK_CALL_CONNECT);
         else if (event->type == EVENT_CALL_ACTIVATE_REQUEST)
             run_hook(HOOK_CALL_OFFHOLD);
-        else
+        /*
+         * Notes:
+         *   If one toggles hold on/off like crazy, we end up here with an
+         *   (partially) incorrect EVENT_CALL_ACTIVATED. That in turn will
+         *   result in resetting any mutes. The actual problem is in how we
+         *   handle hold state changes. In the normal hold/unhold case the
+         *   sequence of events is correctly:
+         *
+         *   <CALL HOLD REQUEST>     (EVENT_CALL_HOLD_REQUEST)
+         *   <CALL ACTIVATE REQUEST> (EVENT_CALL_ACTIVATE_REQUEST)
+         *   ...
+         *   <CALL HOLD REQUEST>     (EVENT_CALL_HOLD_REQUEST)
+         *   <CALL ACTIVATE REQUEST> (EVENT_CALL_ACTIVATE_REQUEST)
+         *
+         *   In the frantic hold-tapping case the sequence of events ends up
+         *   being incorrectly (last event):
+         *
+         *   <CALL HOLD REQUEST>     (EVENT_CALL_HOLD_REQUEST)
+         *   <CALL ACTIVATE REQUEST> (EVENT_CALL_ACTIVATE_REQUEST)
+         *   ...
+         *   <CALL HOLD REQUEST>     (EVENT_CALL_HOLD_REQUEST)
+         *   <CALL ACTIVATED>        (EVENT_CALL_ACTIVATED)
+         *
+         *   As a _workaround_ we don't run the call activate hook if the
+         *   call was already connected. Note that this is a really ugly
+         *   hack (trying to cure the symptoms) instead of a fix.
+         */
+        else if (!was_connected)
             run_hook(HOOK_CALL_ACTIVE);
     }
     else {
