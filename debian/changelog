@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.34) unstable; urgency=low
+
+  * Workaround for running the incorrect hook with frantic hold/unhold tapping.
+  * Fixes: NB 173949.
+
+ -- Krisztian Litkey <mmf-audio-bounces@projects.maemo.org>  Fri, 20 Aug 2010 21:42:14 +0300
+
 ohm-plugins-misc (1:1.33) unstable; urgency=low
 
   * Fix in cgroup plugin to handle properly multiple actions
