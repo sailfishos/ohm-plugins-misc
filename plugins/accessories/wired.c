@@ -383,6 +383,9 @@ jack_update_facts(int initial_query)
     else if (videoout)                current = states + DEV_VIDEOOUT;
     else if (lineout)                 current = states + DEV_LINEOUT;
     else                              current = NULL;
+
+    if (current != NULL && current->name == NULL)   /* filter out line-out */
+        current = NULL;
     
     for (device = states; device->name != NULL; device++) {
         if (device != current && device->connected) {
