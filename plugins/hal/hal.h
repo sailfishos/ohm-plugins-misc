@@ -47,6 +47,7 @@ USA.
 
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin.h>
+#include <ohm/ohm-plugin-log.h>
 #include <ohm/ohm-plugin-debug.h>
 
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
