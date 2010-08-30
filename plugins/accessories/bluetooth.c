@@ -43,6 +43,12 @@ USA.
 #define BT_STATE_PLAYING_S       "playing"
 #define BT_STATE_DISCONNECTED_S  "disconnected"
 
+#define DBUS_ADMIN_INTERFACE       "org.freedesktop.DBus"
+#define DBUS_ADMIN_PATH            "/org/freedesktop/DBus"
+#define DBUS_NAME_OWNER_CHANGED    "NameOwnerChanged"
+
+
+#define BLUEZ_DBUS_NAME          "org.bluez"
 
 static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_data);
 static void get_properties_cb (DBusPendingCall *pending, void *user_data);
@@ -51,6 +57,14 @@ static gboolean get_default_adapter(void);
 static gboolean get_properties(const gchar *device_path,
         const gchar *interface,
         DBusPendingCallNotifyFunction cb);
+
+static int watch_dbus_addr(const char *addr, int watchit,
+                           DBusHandlerResult (*filter)(DBusConnection *,
+                                                       DBusMessage *, void *),
+                           void *user_data);
+static DBusHandlerResult bluez_change(DBusConnection *c,
+                                      DBusMessage *msg, void *data);
+static DBusConnection *sys_conn;
 
 enum bt_state { BT_STATE_NONE,
     BT_STATE_CONNECTING,
@@ -615,6 +629,13 @@ gboolean bluetooth_init(OhmPlugin *plugin, int flag_bt)
 
     DBG_BT = flag_bt;
 
+    if ((sys_conn = dbus_bus_get(DBUS_BUS_SYSTEM, NULL)) == NULL) {
+        OHM_ERROR("Failed to get connection to system D-BUS.");
+        return FALSE;
+    }
+
+    watch_dbus_addr(BLUEZ_DBUS_NAME, TRUE, bluez_change, NULL);
+
     /* initialize the state transtitions */
 
     for (i = 0; i < BT_STATE_LAST; i++) {
@@ -645,6 +666,13 @@ gboolean bluetooth_init(OhmPlugin *plugin, int flag_bt)
 gboolean bluetooth_deinit(OhmPlugin *plugin)
 {
     (void) plugin;
+
+    if (sys_conn) {
+        watch_dbus_addr(BLUEZ_DBUS_NAME, FALSE, bluez_change, NULL);
+        
+        dbus_connection_unref(sys_conn);
+        sys_conn = NULL;
+    }
 
     if (bt_delete_all_facts())
         dres_all();
@@ -1186,37 +1214,99 @@ error:
     return FALSE;
 }
 
-DBusHandlerResult check_bluez(DBusConnection * c, DBusMessage * msg,
-        void *user_data)
+
+static int watch_dbus_addr(const char *addr, int watchit,
+                           DBusHandlerResult (*filter)(DBusConnection *,
+                                                       DBusMessage *, void *),
+                           void *user_data)
 {
-    gchar *sender = NULL, *before = NULL, *after = NULL;
-    gboolean ret;
-
-    (void) user_data;
-    (void) c;
-
-    ret = dbus_message_get_args(msg,
-            NULL,
-            DBUS_TYPE_STRING,
-            &sender,
-            DBUS_TYPE_STRING,
-            &before,
-            DBUS_TYPE_STRING,
-            &after,
-            DBUS_TYPE_INVALID);
-
-    if (ret) {
-        if (!strcmp(after, "")) {
-            /* a service went away, check if it is bluez */
-            if (!strcmp(sender, "org.bluez")) {
-                /* delete all facts */
-                if (bt_delete_all_facts())
-                    dres_all();
+    char      match[1024];
+    DBusError err;
+    
+    snprintf(match, sizeof(match),
+             "type='signal',"
+             "sender='%s',interface='%s',member='%s',path='%s',"
+             "arg0='%s'",
+             DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+             DBUS_NAME_OWNER_CHANGED, DBUS_ADMIN_PATH,
+             addr);
+    
+    if (filter) {
+        if (watchit) {
+            if (!dbus_connection_add_filter(sys_conn, filter, user_data,NULL)) {
+                OHM_ERROR("Failed to install dbus filter %p.", filter);
+                return FALSE;
             }
         }
+        else
+            dbus_connection_remove_filter(sys_conn, filter, user_data);
     }
+    
+    
+    /*
+     * Notes:
+     *   We block when adding filters, to minimize (= eliminate ?) the time
+     *   window for the client to crash after it has let us know about itself
+     *   but before we managed to install the filter. According to the docs
+     *   we do not re-enter the main loop and all other messages than the
+     *   reply to AddMatch will get queued and processed once we're back in the
+     *   main loop. On the watch removal path we do not care about errors and
+     *   we do not want to block either.
+     */
 
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    if (watchit) {
+        dbus_error_init(&err);
+        dbus_bus_add_match(sys_conn, match, &err);
+
+        if (dbus_error_is_set(&err)) {
+            OHM_ERROR("Can't add match \"%s\": %s", match, err.message);
+            dbus_error_free(&err);
+            return FALSE;
+        }
+    }
+    else
+        dbus_bus_remove_match(sys_conn, match, NULL);
+    
+    return TRUE;
 }
 
+
+static DBusHandlerResult bluez_change(DBusConnection *c,
+                                      DBusMessage *msg, void *data)
+{
+    char *name, *before, *after;
+
+    (void)c;
+    (void)data;
+
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_STRING, &name,
+                               DBUS_TYPE_STRING, &before,
+                               DBUS_TYPE_STRING, &after,
+                               DBUS_TYPE_INVALID) ||
+        strcmp(name, BLUEZ_DBUS_NAME))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    
+    if (!after[0]) {                              /* bluez gone */
+        OHM_INFO("BlueZ is down.");
+        bt_delete_all_facts();
+        dres_all();
+    }
+    else
+        OHM_INFO("BlueZ is up.");
+
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
 /* bluetooth part ends */
+
+
+
+/* 
+ * Local Variables:
+ * c-basic-offset: 4
+ * indent-tabs-mode: nil
+ * End:
+ * vim:set expandtab shiftwidth=4:
+ */
