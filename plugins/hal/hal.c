@@ -36,6 +36,20 @@ OHM_DEBUG_PLUGIN(hal,
 
 hal_plugin *hal_plugin_p = NULL;
 
+#define DBUS_ADMIN_INTERFACE       "org.freedesktop.DBus"
+#define DBUS_ADMIN_PATH            "/org/freedesktop/DBus"
+#define DBUS_NAME_OWNER_CHANGED    "NameOwnerChanged"
+
+#define HALD_DBUS_NAME              "org.freedesktop.Hal"
+
+static int watch_dbus_addr(const char *addr, int watchit,
+                           DBusHandlerResult (*filter)(DBusConnection *,
+                                                       DBusMessage *, void *),
+                           void *user_data);
+static DBusHandlerResult hald_change(DBusConnection *c,
+                                     DBusMessage *msg, void *data);
+static DBusConnection *sys_conn;
+
 static void
 plugin_init(OhmPlugin * plugin)
 {
@@ -48,8 +62,15 @@ plugin_init(OhmPlugin * plugin)
     OHM_DEBUG(DBG_HAL, "> HAL plugin init");
     /* should we ref the connection? */
     hal_plugin_p = init_hal(c, DBG_HAL, DBG_FACTS);
-    OHM_DEBUG(DBG_HAL, "< HAL plugin init");
 
+    if ((sys_conn = dbus_bus_get(DBUS_BUS_SYSTEM, NULL)) == NULL) {
+        OHM_ERROR("Failed to get connection to system D-BUS.");
+        return;
+    }
+
+    watch_dbus_addr(HALD_DBUS_NAME, TRUE, hald_change, NULL);
+
+    OHM_DEBUG(DBG_HAL, "< HAL plugin init");
     return;
 }
 
@@ -70,6 +91,13 @@ static void
 plugin_exit(OhmPlugin * plugin)
 {
     (void) plugin;
+
+    if (sys_conn) {
+        watch_dbus_addr(HALD_DBUS_NAME, FALSE, hald_change, NULL);
+        
+        dbus_connection_unref(sys_conn);
+        sys_conn = NULL;
+    }
     
     if (hal_plugin_p) {
         deinit_hal(hal_plugin_p);
@@ -78,20 +106,76 @@ plugin_exit(OhmPlugin * plugin)
     return;
 }
 
-DBusHandlerResult check_hald(DBusConnection *c, DBusMessage *msg,
-        void *user_data)
+static int watch_dbus_addr(const char *addr, int watchit,
+                           DBusHandlerResult (*filter)(DBusConnection *,
+                                                       DBusMessage *, void *),
+                           void *user_data)
+{
+    char      match[1024];
+    DBusError err;
+
+    snprintf(match, sizeof(match),
+             "type='signal',"
+             "sender='%s',interface='%s',member='%s',path='%s',"
+             "arg0='%s'",
+             DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+             DBUS_NAME_OWNER_CHANGED, DBUS_ADMIN_PATH,
+             addr);
+
+    if (filter) {
+        if (watchit) {
+            if (!dbus_connection_add_filter(sys_conn, filter, user_data,NULL)) {
+                OHM_ERROR("Failed to install dbus filter %p.", filter);
+                return FALSE;
+            }
+        }
+        else
+            dbus_connection_remove_filter(sys_conn, filter, user_data);
+    }
+
+    /*
+     * Notes:
+     *   We block when adding filters, to minimize (= eliminate ?) the time
+     *   window for the client to crash after it has let us know about itself
+     *   but before we managed to install the filter. According to the docs
+     *   we do not re-enter the main loop and all other messages than the
+     *   reply to AddMatch will get queued and processed once we're back in the
+     *   main loop. On the watch removal path we do not care about errors and
+     *   we do not want to block either.
+     */
+
+    if (watchit) {
+        dbus_error_init(&err);
+        dbus_bus_add_match(sys_conn, match, &err);
+
+        if (dbus_error_is_set(&err)) {
+            OHM_ERROR("Can't add match \"%s\": %s", match, err.message);
+            dbus_error_free(&err);
+            return FALSE;
+        }
+    }
+    else
+        dbus_bus_remove_match(sys_conn, match, NULL);
+
+    return TRUE;
+}
+
+DBusHandlerResult hald_change(DBusConnection *c, DBusMessage *msg,
+                              void *user_data)
 {
     gchar *sender = NULL, *before = NULL, *after = NULL;
     gboolean ret;
     hal_plugin *plugin = hal_plugin_p;
 
-    OHM_DEBUG(DBG_HAL, "> check_hald");
+    (void)user_data;
+
+    OHM_DEBUG(DBG_HAL, "> hald_change");
 
     if (plugin == NULL) {
-        goto end;
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
 
-    ret = dbus_message_get_args(msg,
+    if (!dbus_message_get_args(msg,
             NULL,
             DBUS_TYPE_STRING,
             &sender,
@@ -99,22 +183,24 @@ DBusHandlerResult check_hald(DBusConnection *c, DBusMessage *msg,
             &before,
             DBUS_TYPE_STRING,
             &after,
-            DBUS_TYPE_INVALID);
+            DBUS_TYPE_INVALID) ||
+        strcmp(sender, HALD_DBUS_NAME))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    if (ret) {
-        OHM_DEBUG(DBG_HAL, "  check_hald: sender '%s', before '%s', after '%s'",
-                sender, before, after);
+    OHM_DEBUG(DBG_HAL, "  check_hald: sender '%s', before '%s', after '%s'",
+            sender, before, after);
 
-        if (!strcmp(before, "") && strcmp(after, "")) {
-            /* a service just started, check if it is hald */
-            if (!strcmp(sender, "org.freedesktop.Hal")) {
-                reload_hal_context(c, plugin);
-            }
-        }
+    if (!strcmp(before, "") && strcmp(after, "")) {
+        OHM_INFO("hald appeared on D-Bus.");
+        /* hald service just started, check if it is hald */
+        reload_hal_context(c, plugin);
+    }
+    else {
+        OHM_INFO("hald went away.");
     }
 
-end:
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    OHM_DEBUG(DBG_HAL, "< hald_change");
+    return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 OHM_PLUGIN_DESCRIPTION("hal",
@@ -126,10 +212,6 @@ OHM_PLUGIN_DESCRIPTION("hal",
 OHM_PLUGIN_PROVIDES_METHODS(hal, 2,
         OHM_EXPORT(unset_observer, "unset_observer"),
         OHM_EXPORT(set_observer, "set_observer"));
-
-OHM_PLUGIN_DBUS_SIGNALS(
-     { NULL, "org.freedesktop.DBus", "NameOwnerChanged", NULL, check_hald, NULL }
-);
 
 /*
  * Local Variables:
