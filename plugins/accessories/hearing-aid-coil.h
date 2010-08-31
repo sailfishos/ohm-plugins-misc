@@ -25,7 +25,7 @@ USA.
 
 
 #define FACT_NAME_GCONF        "com.nokia.policy.gconf"
-#define GCONF_PATH             "/system/hearing_aid_coil"
+#define GCONF_PATH             "/system/telecoil/enable"
 
 
 void hearing_aid_coil_init(OhmPlugin *plugin, int dbg_hac);
