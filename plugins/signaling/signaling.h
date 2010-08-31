@@ -53,6 +53,7 @@ USA.
 #define DBUS_INTERFACE_POLICY    "com.nokia.policy"
 #define DBUS_INTERFACE_FDO       "org.freedesktop.DBus"
 #define DBUS_PATH_POLICY         "/com/nokia/policy"
+#define DBUS_PATH_FDO            "/org/freedesktop/DBus"
 
 #define METHOD_POLICY_REGISTER    "register"
 #define METHOD_POLICY_UNREGISTER  "unregister"

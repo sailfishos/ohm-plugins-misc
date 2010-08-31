@@ -231,9 +231,7 @@ OHM_PLUGIN_PROVIDES_METHODS(signaling, 5,
 
 OHM_PLUGIN_DBUS_SIGNALS(
         {NULL, DBUS_INTERFACE_POLICY, SIGNAL_POLICY_ACK,
-            NULL, dbus_ack, NULL},
-        {NULL, DBUS_INTERFACE_FDO, SIGNAL_NAME_OWNER_CHANGED,
-            NULL, update_external_enforcement_points, NULL}
+            NULL, dbus_ack, NULL}
         );
 
 OHM_PLUGIN_DBUS_METHODS(

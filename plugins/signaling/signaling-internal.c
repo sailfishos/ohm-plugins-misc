@@ -46,6 +46,11 @@ typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean su
 
 static gboolean process_inq(gpointer data);
 
+static int watch_dbus_addr(const char *addr, gboolean watchit,
+                           DBusHandlerResult (*filter)(DBusConnection *,
+                                                       DBusMessage *, void *),
+                           void *user_data);
+
 static Transaction * transaction_lookup(guint txid)
 {
     return (Transaction *)g_hash_table_lookup(transactions, &txid);
@@ -1789,7 +1794,61 @@ gboolean unregister_enforcement_point(const gchar *uri)
 
     return TRUE;
 }
-    
+
+static int watch_dbus_addr(const char *addr, gboolean watchit,
+                           DBusHandlerResult (*filter)(DBusConnection *,
+                                                       DBusMessage *, void *),
+                           void *user_data)
+{
+    char      match[1024];
+    DBusError err;
+
+    snprintf(match, sizeof(match),
+             "type='signal',"
+             "sender='%s',interface='%s',member='%s',path='%s',"
+             "arg0='%s'",
+             DBUS_INTERFACE_FDO, DBUS_INTERFACE_FDO,
+             SIGNAL_NAME_OWNER_CHANGED, DBUS_PATH_FDO,
+             addr);
+
+    if (filter) {
+        if (watchit) {
+            if (!dbus_connection_add_filter(connection, filter, user_data,NULL)) {
+                OHM_ERROR("Failed to install dbus filter %p.", filter);
+                return FALSE;
+            }
+        }
+        else
+            dbus_connection_remove_filter(connection, filter, user_data);
+    }
+
+    /*
+     * Notes:
+     *   We block when adding filters, to minimize (= eliminate ?) the time
+     *   window for the client to crash after it has let us know about itself
+     *   but before we managed to install the filter. According to the docs
+     *   we do not re-enter the main loop and all other messages than the
+     *   reply to AddMatch will get queued and processed once we're back in the
+     *   main loop. On the watch removal path we do not care about errors and
+     *   we do not want to block either.
+     */
+
+    if (watchit) {
+        dbus_error_init(&err);
+        dbus_bus_add_match(connection, match, &err);
+
+        if (dbus_error_is_set(&err)) {
+            OHM_ERROR("Can't add match \"%s\": %s", match, err.message);
+            dbus_error_free(&err);
+            return FALSE;
+        }
+    }
+    else
+        dbus_bus_remove_match(connection, match, NULL);
+
+    return TRUE;
+}
+
 DBusHandlerResult update_external_enforcement_points(DBusConnection * c,
         DBusMessage * msg,
         void *user_data)
@@ -1800,7 +1859,7 @@ DBusHandlerResult update_external_enforcement_points(DBusConnection * c,
     (void) user_data;
     (void) c;
 
-    ret = dbus_message_get_args(msg,
+    if (!dbus_message_get_args(msg,
             NULL,
             DBUS_TYPE_STRING,
             &sender,
@@ -1808,21 +1867,22 @@ DBusHandlerResult update_external_enforcement_points(DBusConnection * c,
             &before,
             DBUS_TYPE_STRING,
             &after,
-            DBUS_TYPE_INVALID);
+            DBUS_TYPE_INVALID))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    if (ret) {
-        if (!strcmp(after, "")) {
-            /* a service went away, unregister if it was one of ours */
-            if (unregister_enforcement_point(sender)) {
-                OHM_DEBUG(DBG_SIGNALING, "Removed service '%s'", sender);
-            }
-            else {
-                OHM_DEBUG(DBG_SIGNALING, "Terminated service '%s' wasn't registered", sender);
-            }
+    if (!strcmp(after, "")) {
+        /* a service went away, unregister if it was one of ours */
+        if (unregister_enforcement_point(sender)) {
+            OHM_DEBUG(DBG_SIGNALING, "Removed service '%s'", sender);
+            watch_dbus_addr(sender, FALSE, update_external_enforcement_points, NULL);
+        }
+        else {
+            OHM_DEBUG(DBG_SIGNALING, "Terminated service '%s' wasn't registered", sender);
+            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
         }
     }
 
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
@@ -1894,6 +1954,9 @@ DBusHandlerResult register_external_enforcement_point(DBusConnection * c,
     }
     else {
         reply = dbus_message_new_method_return(msg);
+        /* start watching client so that we get notified when it disconnects
+           even if it doesn't explicitly disconnect */
+        watch_dbus_addr(uri, TRUE, update_external_enforcement_points, NULL);
     }
 
     if (reply == NULL) {
