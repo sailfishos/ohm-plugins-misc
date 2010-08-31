@@ -106,6 +106,13 @@ static gboolean update_fact(gconf_plugin *plugin, GConfEntry *entry)
                 set_gval = ohm_value_from_string(gconf_value_get_string(val));
             }
             break;
+        case GCONF_VALUE_BOOL:
+            OHM_DEBUG(DBG_GCONF, "boolean value\n");
+            if (!gval || G_VALUE_TYPE(gval) == G_TYPE_STRING) {
+                gboolean bval = gconf_value_get_bool(val);
+                set_gval = ohm_value_from_string(bval ? "on" : "off");
+            }
+            break;
         default:
             OHM_DEBUG(DBG_GCONF, "not a proper value: ''\n");
             break;
