@@ -1,6 +1,7 @@
 ohm-plugins-misc (1:1.35) unstable; urgency=low
 
   * Filter out lineout from accessory detection (Fixes: NB#187035).
+  * Don't listen to all NameOwnerChanged signals (Fixes: NB#188231).
 
  -- Krisztian Litkey <mmf-audio-bounces@projects.maemo.org>  Fri, 27 Aug 2010 18:00:19 +0300
 
