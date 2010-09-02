@@ -1,3 +1,11 @@
+ohm-plugins-misc (1:1.36) unstable; urgency=low
+
+  * Workaround for the dialstring/DTMF mute problems (I-Hope-Fixes: NB#174389).
+  * Sync hearing aid coil gconf key with the control applet.
+  * Added support for gconf boolean keys (mapped to off/on strings).
+
+ -- Krisztian Litkey <mmf-audio-bounces@projects.maemo.org>  Thu, 02 Sep 2010 20:58:29 +0300
+
 ohm-plugins-misc (1:1.35) unstable; urgency=low
 
   * Filter out lineout from accessory detection (Fixes: NB#187035).
