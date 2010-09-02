@@ -46,6 +46,7 @@ void mute_init(OhmPlugin *plugin)
     (void)plugin;
 
     fsif_add_field_watch(FACTSTORE_MUTE, NULL, "value", mute_changed_cb, NULL);
+    fsif_add_field_watch(FACTSTORE_MUTE, NULL, "forced", mute_changed_cb, NULL);
 }
 
 int mute_request(int value)
@@ -104,6 +105,9 @@ static void mute_changed_cb(fsif_entry_t *entry,
 
     fsif_get_field_by_entry(entry, fldtype_integer, "forced", &forced);
 
+    if (!strcmp(fld->name, "forced"))
+        fsif_get_field_by_entry(entry, fldtype_integer, "value" , &mute);
+    
     if (forced) {
         OHM_DEBUG(DBG_MUTE, "ignoring forced mute change to '%s'",
                   mute_str(mute));
