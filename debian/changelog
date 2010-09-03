@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.37) unstable; urgency=low
+
+  * Added automake and autoconf dependencies
+  * Fixes: NB#188892
+
+ -- Vsevolod Buzinov <ext-vsevolod.buzinov@nokia.com>  Fri, 03 Sep 2010 14:07:12 +0300
+
 ohm-plugins-misc (1:1.36) unstable; urgency=low
 
   * Workaround for the dialstring/DTMF mute problems (I-Hope-Fixes: NB#174389).
