@@ -3,11 +3,11 @@ Section: utils
 Priority: optional
 Maintainer: Resource Policy Team <resource-policy@projects.maemo.org>
 Standards-Version: 3.8.0
-Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libxcb-render0-dev, libsp-timestamp-dev, flex, libosso-dev, libbluetooth3-dev, check, automake, autoconf
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libxcb-render0-dev, libsp-timestamp-dev, flex, libosso-dev, libbluetooth3-dev, check, automake, autoconf, libcreds2-dev
 
 Package: ohm-plugins-misc
 Architecture: any
-Depends: ${shlibs:Depends}, ohm (>= 1:1.0), libohm-plugin-core0 (>= 1:1.0), osso-mission-control, libdres0 (>= 1:1.0), libprofile0 (>= 0.0.10), policy-settings, libcontextprovider0 (>= 0.5.8)
+Depends: ${shlibs:Depends}, ohm (>= 1:1.0), libohm-plugin-core0 (>= 1:1.0), osso-mission-control, libdres0 (>= 1:1.0), libprofile0 (>= 0.0.10), policy-settings, libcontextprovider0 (>= 0.5.8), libcreds2
 Conflicts: policy-settings-rx51, policy-settings-rx51-text (<< 0.4.6), policy-settings (<< 1:1.12)
 XB-GIT-ID: ${Git-Id}
 Description: Nokia policy OHM plugins.
