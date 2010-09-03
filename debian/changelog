@@ -1,7 +1,7 @@
 ohm-plugins-misc (1:1.37) unstable; urgency=low
 
   * Added automake and autoconf dependencies
-  * Fixes: NB#188892
+  * Fixes: NB#188893
 
  -- Vsevolod Buzinov <ext-vsevolod.buzinov@nokia.com>  Fri, 03 Sep 2010 14:07:12 +0300
 
