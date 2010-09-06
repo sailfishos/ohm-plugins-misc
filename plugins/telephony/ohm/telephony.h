@@ -107,6 +107,11 @@ USA.
 #define DBUS_INTERFACE_POLICY   "com.nokia.policy"
 #define DBUS_POLICY_NEW_SESSION "NewSession"
 
+#define TONEGEN_DBUS_INTERFACE "com.Nokia.Telephony.Tones"
+#define TONEGEN_DBUS_PATH      "/com/Nokia/Telephony/Tones"
+#define TONEGEN_MUTE           "Mute"
+
+
 /*
  * call actions (policy decisions)
  */

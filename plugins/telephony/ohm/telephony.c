@@ -99,6 +99,7 @@ DBUS_SIGNAL_HANDLER(member_channel_removed);
 DBUS_SIGNAL_HANDLER(call_end);
 DBUS_SIGNAL_HANDLER(sending_dialstring);
 DBUS_SIGNAL_HANDLER(stopped_dialstring);
+DBUS_METHOD_HANDLER(dtmf_mute);
 
 DBUS_METHOD_HANDLER(dispatch_method);
 DBUS_METHOD_HANDLER(call_request);
@@ -106,6 +107,7 @@ DBUS_METHOD_HANDLER(accept_call_request);
 DBUS_METHOD_HANDLER(hold_call_request);
 DBUS_METHOD_HANDLER(dtmf_start_request);
 DBUS_METHOD_HANDLER(dtmf_stop_request);
+
 
 static int tp_start_dtmf(call_t *call, unsigned int stream, int tone);
 static int tp_stop_dtmf (call_t *call, unsigned int stream);
@@ -128,6 +130,7 @@ static int         nipcall;                     /* number of ohter calls */
 static int         nvideo;                      /* number of calls with video */
 static int         callid;                      /* call id */
 static int         holdorder;                   /* autohold order */
+static int         tonegen_muting = FALSE;      /* muting driver by tonegen */
 
 call_t *call_register(call_type_t type, const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
@@ -1804,10 +1807,12 @@ sending_dialstring(DBusConnection *c, DBusMessage *msg, void *data)
     (void)c;
     (void)data;
 
-    event.path = dbus_message_get_path(msg);
-    event.call = call_lookup(event.path);
-    event.type = EVENT_SENDING_DIALSTRING;
-    event_handler((event_t *)&event);
+    if (!tonegen_muting) {
+        event.path = dbus_message_get_path(msg);
+        event.call = call_lookup(event.path);
+        event.type = EVENT_SENDING_DIALSTRING;
+        event_handler((event_t *)&event);
+    }
     
     return DBUS_HANDLER_RESULT_HANDLED;
 }
@@ -1821,11 +1826,42 @@ stopped_dialstring(DBusConnection *c, DBusMessage *msg, void *data)
     (void)c;
     (void)data;
 
-    event.path = dbus_message_get_path(msg);
-    event.call = call_lookup(event.path);
-    event.type = EVENT_STOPPED_DIALSTRING;
-    event_handler((event_t *)&event);
+    if (!tonegen_muting) {
+        event.path = dbus_message_get_path(msg);
+        event.call = call_lookup(event.path);
+        event.type = EVENT_STOPPED_DIALSTRING;
+        event_handler((event_t *)&event);
+    }
     
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+static DBusHandlerResult
+dtmf_mute(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    call_event_t event;
+    int          mute;
+
+    (void)c;
+    (void)data;
+
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_BOOLEAN, &mute,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse tone-generator Mute signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    OHM_DEBUG(DBG_CALL, "%smute signalled by tone-generator", mute ? "" : "un");
+
+    tonegen_muting = TRUE;
+
+    event.path = NULL;
+    event.call = NULL;
+    event.type = mute ? EVENT_SENDING_DIALSTRING : EVENT_STOPPED_DIALSTRING;
+    event_handler((event_t *)&event);
+
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
@@ -2154,8 +2190,6 @@ dtmf_stop_request(DBusConnection *c, DBusMessage *msg, void *data)
     
     return DBUS_HANDLER_RESULT_HANDLED;
 }
-
-
 
 
 /********************
@@ -4363,8 +4397,9 @@ OHM_PLUGIN_DBUS_METHODS(
 
 OHM_PLUGIN_DBUS_SIGNALS(
     { NULL, DBUS_INTERFACE_POLICY, DBUS_POLICY_NEW_SESSION, NULL,
-            bus_new_session, NULL }
-);
+            bus_new_session, NULL },
+    { NULL, TONEGEN_DBUS_INTERFACE, TONEGEN_MUTE, TONEGEN_DBUS_PATH,
+            dtmf_mute, NULL });
 
 
 /*
