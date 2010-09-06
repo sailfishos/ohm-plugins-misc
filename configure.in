@@ -568,9 +568,36 @@ fi
 
 AC_SUBST(BUILD_ACCESSORIES)
 
+# check if auth plugin should be/can be built
+AC_ARG_ENABLE(auth,
+              [  --enable-auth		enable authorization support],
+	      enable_auth=$enableval, enable_auth=auto)
+
+if test x$enable_auth != xno; then
+    AC_CHECK_LIB(creds, creds_find, [has_creds=yes], [has_creds=no])
+
+    if test x$enable_auth = xauto; then
+        enable_auth=$has_creds
+    else
+        if test x$has_creds; then
+	    AC_MSG_ERROR([*** missing auth dependency: creds])
+	fi
+    fi  
+fi
+
+if test x$enable_auth = xyes; then
+    AC_SUBST(AUTH_CFLAGS, [-DHAVE_CREDS])
+    AC_SUBST(AUTH_LIBS, [-lcreds])
+    AC_MSG_NOTICE([authentication/authorization support is enabled])
+else
+    AC_SUBST(AUTH_CFLAGS, [])
+    AC_SUBST(AUTH_LIBS, [])
+    AC_MSG_NOTICE([authentication/authorization support is disabled])
+fi
 
 AC_CONFIG_FILES([Makefile
                  plugins/Makefile
+		 plugins/auth/Makefile
                  plugins/accessories/Makefile
                  plugins/console/Makefile
                  plugins/gconf/Makefile

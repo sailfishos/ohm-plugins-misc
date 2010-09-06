@@ -4,7 +4,8 @@ SUBDIRS = 	     \
 	gconf        \
 	dvfs         \
 	cgroups      \
-	delay
+	delay        \
+	auth
 
 #	apptrack
 #	fmradio
@@ -70,6 +71,7 @@ endif
 if HAVE_SP_TIMESTAMP
 SUBDIRS += timestamp
 endif
+
 
 clean-local:
 	rm -f *~
