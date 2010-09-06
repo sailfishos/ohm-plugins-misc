@@ -8,3 +8,4 @@ usr/lib/ohm/libohm_gconf.so
 usr/lib/ohm/libohm_signaling.so
 usr/lib/ohm/libohm_delay.so
 usr/lib/ohm/libohm_cgroups.so
+usr/lib/ohm/libohm_auth.so
