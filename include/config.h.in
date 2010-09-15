@@ -15,6 +15,9 @@
 /* Build HAL plugin ? */
 #undef BUILD_HAL
 
+/* Use ioq-notify/swap pressure notifications? */
+#undef BUILD_IOQNOTIFY
+
 /* Build notification plugin ? */
 #undef BUILD_NOTIFICATION
 
@@ -63,9 +66,6 @@
 
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
-
-/* Have OSSO swap pressure notification? */
-#undef HAVE_OSSO_SWAP_PRESSURE
 
 /* Have PROC_EVENT_NAME support ? */
 #undef HAVE_PROC_EVENT_NAME
