@@ -237,7 +237,7 @@ fi
 # Check whether swap pressure notifications should be used.
 PKG_CHECK_MODULES(LIBOSSO, libosso, [has_libosso=yes], [has_libosso=no])
 
-if test x$has_libosso = xyes -a test -f /usr/include/ioq-notify.h; then
+if test x$has_libosso = xyes -a -f /usr/include/ioq-notify.h; then
   has_ioqnotify=yes
 else
   has_ioqnotify=no
