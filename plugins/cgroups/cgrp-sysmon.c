@@ -29,7 +29,7 @@ USA.
 #include "config.h"
 #include "cgrp-plugin.h"
 
-#ifdef HAVE_OSSO_SWAP_PRESSURE
+#ifdef BUILD_IOQNOTIFY
 #include <ioq-notify.h>
 #endif
 
@@ -538,7 +538,7 @@ ioq_exit(cgrp_context_t *ctx)
  *****************************************************************************/
 
 
-#ifdef HAVE_OSSO_SWAP_PRESSURE
+#ifdef BUILD_IOQNOTIFY
 /********************
  * swp_notify
  ********************/
@@ -588,7 +588,7 @@ swp_exit(cgrp_context_t *ctx)
 }
 
 
-#else /* !HAVE_OSSO_SWAP_PRESSURE */
+#else /* !BUILD_IOQNOTIFY */
 
 
 static int
