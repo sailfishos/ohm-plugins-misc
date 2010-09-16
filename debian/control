@@ -60,7 +60,7 @@ Description: Debug symbols for OHM timestamping plugin.
 
 Package: ohm-plugins-tests
 Section: misc
-Depends: testrunner, ${shlibs:Depends}
+Depends: ci-testing, ${shlibs:Depends}
 XB-Maemo-CI-Packages: ohm-plugins-misc
 XB-Maemo-CI-Stage: fast, staging, acceptance, validation
 Architecture: any
