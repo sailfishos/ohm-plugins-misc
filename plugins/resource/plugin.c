@@ -72,6 +72,7 @@ static void plugin_init(OhmPlugin *plugin)
     resource_set_init(plugin);
     resource_spec_init(plugin);
     transaction_init(plugin);
+    auth_init();
 
 #if 0    
     DBG_MGR = DBG_SET = DBG_DBUS = DBG_INTERNAL = DBG_DRES =
@@ -81,8 +82,7 @@ static void plugin_init(OhmPlugin *plugin)
 
 static void plugin_destroy(OhmPlugin *plugin)
 {
-
-    (void)plugin;
+    auth_exit(plugin);
 }
 
 
