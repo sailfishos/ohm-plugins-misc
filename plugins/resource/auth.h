@@ -31,7 +31,7 @@ typedef enum {
 
 void auth_init(OhmPlugin *);
 void auth_query(const char* klass, char** method, char** arg);
-auth_policy_t auth_get_default_decision();
+auth_policy_t auth_get_default_policy();
 void auth_exit(OhmPlugin *plugin);
 
 #endif /* __OHM_RESOURCE_AUTH_H__ */
