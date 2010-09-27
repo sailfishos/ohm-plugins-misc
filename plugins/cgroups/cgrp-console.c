@@ -22,7 +22,7 @@ USA.
 
 #define IMPORT_METHOD(name, ptr) ({                                     \
             signature = (char *)ptr##_SIGNATURE;                        \
-            ohm_module_find_method((name), &signature, (void *)(ptr));  \
+            ohm_module_find_method((name), &signature, (void *)&(ptr)); \
         })
 
 
@@ -42,7 +42,7 @@ console_init(cgrp_context_t *context)
 {
     char *signature;
 
-    if (IMPORT_METHOD("dres.add_command", &add_command)) {
+    if (IMPORT_METHOD("dres.add_command", add_command)) {
         add_command("cgroup", console_command);
         OHM_INFO("cgrp: registered cgroup console command handler");
     }
