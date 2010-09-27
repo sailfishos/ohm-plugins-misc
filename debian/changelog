@@ -1,6 +1,7 @@
 ohm-plugins-misc (1:1.39) unstable; urgency=low
 
   * Bumping the version due to the problem with the alsaped massacre build
+  * Fixes: NB#194797
 
  -- Nippan Singam <ext-nippan.singam@nokia.com>  Mon, 27 Sep 2010 15:08:11 +0300
 
