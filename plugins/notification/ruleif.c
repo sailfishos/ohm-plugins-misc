@@ -52,6 +52,7 @@ OHM_IMPORTABLE(int , rule_eval        , (int rule, void *retval,
 
 static int    notreq  = -1;          /* 'notification_request' rule */
 static int    notevnt = -1;          /* 'notification_events' rule  */
+static int    notplsh = -1;          /* 'notification-play_short' rule */
 
 static int copy_value(char *, int, void *, char **);
 
@@ -66,8 +67,9 @@ static int lookup_rules(void)
     };
 
     static rule_def_t  ruldefs[] = {
-        {"notification_request", 2, &notreq  },
-        {"notification_events" , 2, &notevnt },
+        {"notification_request"   , 2, &notreq  },
+        {"notification_events"    , 2, &notevnt },
+        {"notification_play_short", 2, &notplsh },
     };
 
     import_t     *imp;
@@ -186,8 +188,8 @@ int ruleif_notification_request(const char *what, ...)
 }
 
 
-int ruleif_notification_events(int    id,
-                               char **class_ret,
+int ruleif_notification_events(int     id,
+                               char  **class_ret,
                                char ***events_ret,
                                int    *length_ret)
 {
@@ -251,6 +253,60 @@ int ruleif_notification_events(int    id,
                         
                         success = TRUE;
                     }
+                }
+            }
+        }
+
+        if (retval)
+            rules_free_result(retval);
+    }
+
+    OHM_DEBUG(DBG_RULE, "%s", success ? "succeeded" : "failed");
+
+    return success;
+}
+
+
+int ruleif_notification_play_short(int id, int *play_ret)
+{
+    char    *argv[16];
+    char  ***retval;
+    char   **entry;
+    int      i, j;
+    int      status;
+    int      success = FALSE;
+
+    if (notplsh < 0)
+        lookup_rules();
+
+    if (notplsh >= 0) {
+        retval = NULL;
+
+        argv[i=0] = (char *)'i';
+        argv[++i] = (char *)id;
+
+        status = rule_eval(notplsh, &retval, (void **)argv, (i+1)/2);
+
+        OHM_DEBUG(DBG_RULE, "rule_eval returned %d (retval %p)",status,retval);
+
+        if (status <= 0) {
+            if (retval && status < 0)
+                rules_dump_result(retval);
+        }
+        else {
+            if (OHM_LOGGED(INFO))
+                rules_dump_result(retval);
+
+            if (retval && retval[0] != NULL && retval[1] == NULL) {
+                entry = retval[0];
+
+                if (entry[0] && !strcmp(entry[0], "name") &&
+                    (int)entry[1] == 's' && !strcmp(entry[2], "play") &&
+                    entry[3] && !strcmp(entry[3], "value") &&
+                    (int)entry[4] == 'i' && !entry[6])
+                {
+                    *play_ret = (int)entry[5];
+                    success = TRUE;
                 }
             }
         }

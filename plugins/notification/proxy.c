@@ -1058,13 +1058,7 @@ static int fake_backend_timeout(proxy_t *proxy)
 
 static uint32_t play_status(proxy_t *proxy, uint32_t granted)
 {
-    static uint32_t  status[rset_id_max] = {
-        [ rset_ringtone   ] = NGF_SHORT ,
-        [ rset_missedcall ] = NGF_BUSY  ,
-        [ rset_alarm      ] = NGF_SHORT ,
-        [ rset_event      ] = NGF_SHORT ,
-        [ rset_notifier   ] = NGF_BUSY  ,
-    };
+    int play;
 
     if (granted == RESOURCE_SET_BUSY)
         return NGF_BUSY;
@@ -1075,7 +1069,10 @@ static uint32_t play_status(proxy_t *proxy, uint32_t granted)
     if (proxy->type < 0 || proxy->type >= rset_id_max)
         return NGF_BUSY;
 
-    return status[proxy->type];
+    if (!ruleif_notification_play_short(proxy->type, &play))
+        play = 0;
+
+    return play ? NGF_SHORT : NGF_BUSY;
 }
 
 static const char *state_str(proxy_state_t state)
