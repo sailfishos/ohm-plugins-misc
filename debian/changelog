@@ -1,9 +1,16 @@
-ohm-plugins-misc (1:1.39) unstable; urgency=low
+ohm-plugins-misc (1:1.40) unstable; urgency=low
 
   * context dependent short play of notification or report busy
   * Implemented: SWP#Plicy-458
 
- -- Janos Kovacs <janos.f.kovacs@nokia.com>  Mon, 27 Sep 2010 01:54:12 +0300
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Wed, 29 Sep 2010 15:52:01 +0300
+
+ohm-plugins-misc (1:1.39) unstable; urgency=low
+
+  * Bumping the version due to the problem with the alsaped massacre build
+  * Fixes: NB#194797
+
+ -- Nippan Singam <ext-nippan.singam@nokia.com>  Mon, 27 Sep 2010 15:08:11 +0300
 
 ohm-plugins-misc (1:1.38) unstable; urgency=low
 
