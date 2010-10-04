@@ -442,7 +442,11 @@ static int add_factstore_entry(resource_set_t *rs)
 {
     resset_t *resset    = rs->resset;
     uint32_t  mandatory = resset->flags.all & ~resset->flags.opt;
+    char     *audiogr;
     int       success;
+
+    /* TODO: this should come from prolog at init time */
+    audiogr = strcmp(resset->klass, "proclaimer") ? resset->klass : "alwayson";
 
     fsif_field_t  fldlist[] = {
         INTEGER_FIELD ("manager_id" , rs->manager_id       ),
@@ -458,7 +462,7 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("advice"     , rs->advice.factstore ),
         STRING_FIELD  ("request"    , rs->request          ),
         INTEGER_FIELD ("reqno"      , 0                    ),
-        STRING_FIELD  ("audiogr"    , resset->klass        ),
+        STRING_FIELD  ("audiogr"    , audiogr              ),
         INVALID_FIELD
     };
 
