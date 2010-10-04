@@ -133,14 +133,20 @@ fi
 #AC_SUBST(pluginlibdir)
 
 # Check for telepathy (for telephony plugins).
-PKG_CHECK_MODULES(LIBTELEPATHY, telepathy-glib,
-		  [has_libtp=true], [has_libtp=false])
-AC_SUBST(LIBTELEPATHY_CFLAGS)
-AC_SUBST(LIBTELEPATHY_LIBS)
+#PKG_CHECK_MODULES(LIBTELEPATHY, telepathy-glib,
+#		  [has_libtp=true], [has_libtp=false])
+#AC_SUBST(LIBTELEPATHY_CFLAGS)
+#AC_SUBST(LIBTELEPATHY_LIBS)
 
-AM_CONDITIONAL(BUILD_TELEPHONY, test x$has_libtp = xtrue)
 
-if test x$has_libtp = xtrue;
+AC_ARG_ENABLE(telephony,
+              [  --enable-telephony     enable telephony plugin],
+              enable_telephony=$enableval,enable_telephony=no)
+
+#AM_CONDITIONAL(BUILD_TELEPHONY, test x$has_libtp = xtrue)
+AM_CONDITIONAL(BUILD_TELEPHONY, test x$enable_telephony = xyes)
+
+if test x$enable_telephony = xyes;
 then
   AC_MSG_NOTICE([Telephony plugins WILL BE built.])
 else
