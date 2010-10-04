@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.41) unstable; urgency=low
+
+  * proclaimer resource class
+  * Fixes: NB#185299
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sun, 03 Oct 2010 23:36:11 +0300
+
 ohm-plugins-misc (1:1.40) unstable; urgency=low
 
   * context dependent short play of notification or report busy
