@@ -30,6 +30,7 @@ typedef struct _OhmPlugin OhmPlugin;
 typedef enum {
     rset_id_unknown  = -1,
 
+    rset_proclaimer,
     rset_ringtone,
     rset_missedcall,
     rset_alarm,
