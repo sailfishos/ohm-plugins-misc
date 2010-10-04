@@ -37,7 +37,7 @@ OHM_DEBUG_PLUGIN(accessories,
 );
 
 
-#ifndef __NO_HAL__
+#ifdef BUILD_HAL
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 OHM_IMPORTABLE(gboolean, set_observer, (gchar *capability, hal_cb cb, void *user_data));
 OHM_IMPORTABLE(gboolean, unset_observer, (void *user_data));
@@ -48,7 +48,9 @@ OHM_PLUGIN_REQUIRES_METHODS(accessories, 3,
    OHM_IMPORT("hal.set_observer", set_observer),
    OHM_IMPORT("hal.unset_observer", unset_observer)
 );
-#else
+
+#else /* !BUILD_HAL */
+
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
 static gboolean set_observer(gchar *capability, hal_cb cb, void *userdata)
@@ -70,7 +72,7 @@ static gboolean unset_observer(void *userdata)
 OHM_PLUGIN_REQUIRES_METHODS(accessories, 1, 
    OHM_IMPORT("dres.resolve", resolve)
 );
-#endif
+#endif /* !BUILD_HAL */
 
 
 gboolean local_set_observer(gchar *capability, hal_cb cb, void *userdata)
