@@ -433,7 +433,7 @@ then
             enable_buttons=no
         fi
     else
-        if test x$has_buttons = xno;
+        if test x$has_hal = xno;
         then
             AC_MSG_ERROR([*** buttons plugin requires HAL])
         fi
