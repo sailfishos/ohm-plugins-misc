@@ -23,6 +23,7 @@ USA.
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <errno.h>
 
 #include "plugin.h"
@@ -31,13 +32,37 @@ USA.
 #include "fsif.h"
 #include "dresif.h"
 #include "transaction.h"
+#include "auth.h"
 
+#define MAX_CREDS 16
 
-static uint32_t trans_id;
+typedef struct auth_data_s {
+    struct auth_data_s *next;
+    int                 canceled;
+    resmsg_t           *msg;
+    resset_t           *resset;
+    void               *proto_data;
+} auth_data_t;
 
+typedef void (*auth_request_cb_t)(int, char *, void *);
+
+OHM_IMPORTABLE(int, auth_request, (char *id_type,  void *id,
+                                   char *req_type, void *req,
+                                   auth_request_cb_t callback, void *data));
+
+static uint32_t     trans_id;
+static auth_data_t *auth_reqs;
+
+static void keyword_list(char *, char **, int);
+
+static void register_cb(int, char *, void *);
 static void granted_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void advice_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void request_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+
+static int  auth_request_create(resmsg_t *, resset_t *, void *);
+static void auth_request_destroy(auth_data_t *);
+static void auth_request_cancel(resset_t *);
 
 static void transaction_start(resource_set_t *, resmsg_t *);
 static void transaction_end(resource_set_t *);
@@ -57,6 +82,16 @@ void manager_init(OhmPlugin *plugin)
 
     (void)plugin;
 
+    char *name      = "auth.request";
+    char *signature = (char *)auth_request_SIGNATURE; 
+
+    ohm_module_find_method(name, &signature, (void *)&auth_request);
+
+    if (auth_request == NULL) {
+        OHM_ERROR("resource: can't find mandatory method '%s'", name);
+        exit(1);
+    }
+
     ADD_FIELD_WATCH("granted", granted_cb);
     ADD_FIELD_WATCH("advice" , advice_cb );
     ADD_FIELD_WATCH("request", request_cb);
@@ -66,36 +101,14 @@ void manager_init(OhmPlugin *plugin)
 
 void manager_register(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
-    resource_set_t *rs;
-    int32_t         errcod = 0;
-    const char     *errmsg = "OK";
-
     resource_set_dump_message(msg, resset, "from");
 
     OHM_DEBUG(DBG_MGR, "message received");
 
-    if ((rs = resource_set_create(resset)) == NULL) {
-        errcod = ENOMEM;
-        errmsg = strerror(errcod);
+    if (!auth_request_create(msg, resset, proto_data)) {
+        OHM_DEBUG(DBG_MGR, "auth request creation failed");
+        resproto_reply_message(resset, msg, proto_data, errno,strerror(errno));
     }
-    else {
-        transaction_start(rs, msg);
-
-        dresif_resource_request(rs->manager_id, resset->peer,
-                                resset->id, "register");
-    }
-
-    OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
-
-    resproto_reply_message(resset, msg, proto_data, 0, "OK");
-
-#if 0
-    if (rs && trans_id && (resset->mode & RESMSG_MODE_ALWAYS_REPLY)) {
-        resource_set_queue_change(rs,trans_id,rs->reqno,resource_set_granted);
-    }
-#endif
-
-    transaction_end(rs);
 }
 
 void manager_unregister(resmsg_t *msg, resset_t *resset, void *proto_data)
@@ -127,6 +140,7 @@ void manager_unregister(resmsg_t *msg, resset_t *resset, void *proto_data)
         client_id  = ~(uint32_t)0;
     }
 
+    auth_request_cancel(resset);
     resource_set_destroy(resset);
     dresif_resource_request(manager_id, client_name, client_id, "unregister");
 
@@ -336,6 +350,72 @@ void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
  * @}
  */
 
+static void keyword_list(char *str, char **list, int length)
+{
+    char *p;
+    int   i;
+    
+    for (i = 0, p = str;  i < length-1 && *p;  i++) {
+        list[i] = p;
+
+        while (*p != '\0' && *p != ',')
+            p++;
+
+        if (*p == ',')
+            *p++ = '\0';
+    }
+
+    list[i] = NULL;
+}
+
+static void register_cb(int authorized, char *autherr, void *data)
+{
+    auth_data_t    *authreq    = (auth_data_t *)data;
+    resmsg_t       *msg        = authreq->msg;
+    resset_t       *resset     = authreq->resset;
+    void           *proto_data = authreq->proto_data;
+    int32_t         errcod     = 0;
+    const char     *errmsg     = "OK";
+    resource_set_t *rs;
+
+    if (!authreq->canceled) {
+
+        if (!authorized) {
+            errmsg = strerror(EPERM);
+            OHM_DEBUG(DBG_AUTH, "registration forbidden: %s", errmsg);
+            resproto_reply_message(resset, msg, proto_data, EPERM, errmsg);
+        }
+        else {
+            OHM_DEBUG(DBG_AUTH, "registration allowed");
+            
+            if ((rs = resource_set_create(resset)) == NULL) {
+                errcod = ENOMEM;
+                errmsg = strerror(errcod);
+            }
+            else {
+                transaction_start(rs, msg);
+                
+                dresif_resource_request(rs->manager_id, resset->peer,
+                                        resset->id, "register");
+            }
+            
+            OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
+            
+            resproto_reply_message(resset, msg, proto_data, 0, "OK");
+            
+#if 0
+            if (rs && trans_id && (resset->mode & RESMSG_MODE_ALWAYS_REPLY)) {
+                resource_set_queue_change(rs,trans_id,rs->reqno,
+                                          resource_set_granted);
+            }
+#endif
+
+            transaction_end(rs);
+        }
+    }
+
+    auth_request_destroy(authreq);
+}
 
 static void granted_cb(fsif_entry_t *entry,
                        char         *name,
@@ -439,6 +519,137 @@ static void request_cb(fsif_entry_t *entry,
     }
 }
 
+static int auth_request_create(resmsg_t *msg,
+                               resset_t *resset,
+                               void     *proto_data)
+{
+    resconn_t   *resconn = resset->resconn;
+    resmsg_t    *msgcopy;
+    auth_data_t *authreq;
+    auth_data_t *last;
+    char        *method;
+    char        *arg;
+    int          authorize;
+    char        *autherr;
+    char        *creds[MAX_CREDS];
+    char         buf[512];
+    int          success = FALSE;
+    
+    for (last = (auth_data_t *)&auth_reqs;   last->next;   last = last->next)
+        ;
+
+    if ((msgcopy = malloc(sizeof(resmsg_t)))    != NULL &&
+        (authreq = malloc(sizeof(auth_data_t))) != NULL    )
+    {
+        memcpy(msgcopy, msg, sizeof(resmsg_t));
+
+        memset(authreq, 0, sizeof(auth_data_t));
+        authreq->msg        = msgcopy;
+        authreq->resset     = resset;
+        authreq->proto_data = proto_data;
+        
+        last->next = authreq;
+        
+
+        switch (resconn->any.transp) {
+
+        case RESPROTO_TRANSPORT_INTERNAL:
+            register_cb(TRUE, "OK", authreq);
+            break;
+
+        case RESPROTO_TRANSPORT_DBUS:
+            switch (msg->type) {
+
+            case RESMSG_REGISTER:
+                auth_query(resset->klass, &method, &arg);
+                
+                if (!resset->peer || !method || !arg) {
+                    OHM_DEBUG(DBG_AUTH, "applying default policies");
+                    
+                    if (auth_get_default_policy() == auth_accept) {
+                        authorize = TRUE;
+                        autherr   = "OK";
+                    }
+                    else {
+                        authorize = FALSE;
+                        autherr   = "not authorized";
+                    }
+                    
+                    register_cb(authorize, autherr, authreq);
+                }
+                else {
+                    OHM_DEBUG(DBG_AUTH, "auth_request"
+                              "('dbus', '%s', '%s', '%s')",
+                              resset->peer, method, arg);
+                    
+                    if (!strcmp(method, "creds")) {
+                        strncpy(buf, arg, sizeof(buf));
+                        buf[sizeof(buf)-1] = '\0';
+
+                        keyword_list(buf, creds, MAX_CREDS);
+
+                        auth_request("dbus", resset->peer, method, creds,
+                                     register_cb, authreq);
+                    }
+                    else {
+                        OHM_DEBUG(DBG_AUTH, "unsupported auth "
+                                  "method '%s'", method);
+
+                        register_cb(FALSE, "internal error", authreq);
+                    }
+                }
+                
+                success = TRUE;
+                break;
+                
+            default:
+                auth_request_destroy(authreq);
+                errno   = EINVAL;
+                success = FALSE;
+                break;
+            } /* switch msg type */
+            break;
+
+        default:
+            auth_request_destroy(authreq);
+            errno   = EINVAL;
+            success = FALSE;
+            break;
+
+        } /* switch transp */
+    }
+
+    return success;
+}
+
+static void auth_request_destroy(auth_data_t *authreq)
+{
+    auth_data_t *prev;
+
+    if (authreq != NULL) {
+        for (prev = (auth_data_t*)&auth_reqs;  prev->next;  prev = prev->next){
+            if (prev->next == authreq) {
+                prev->next = authreq->next;
+                free(authreq->msg);
+                free(authreq);
+                return;
+            }
+        }
+    }
+}
+
+static void auth_request_cancel(resset_t *resset)
+{
+    auth_data_t *authreq;
+
+    for (authreq = auth_reqs;   authreq;   authreq = authreq->next) {
+        if (authreq->resset == resset) {
+            authreq->canceled = TRUE;
+            authreq->resset   = NULL;
+        }
+    }
+}
+
 static void transaction_start(resource_set_t *rs, resmsg_t *msg)
 {
     trans_id = transaction_create(transaction_complete, NULL);
@@ -454,7 +665,7 @@ static void transaction_end(resource_set_t *rs)
         trans_id = NO_TRANSACTION;
 
         if (rs != NULL)
-            rs->reqno = NULL;
+            rs->reqno = 0;
     }
 }
 

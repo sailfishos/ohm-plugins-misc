@@ -52,7 +52,7 @@ static void plugin_init(OhmPlugin *plugin)
     auth_creds_init(plugin);
     dbusif_init(plugin);
 
-#if 1
+#if 0
     DBG_REQ = DBG_DBUS = DBG_CREDS = TRUE;
 #endif
 }
