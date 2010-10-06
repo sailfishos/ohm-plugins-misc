@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.42) unstable; urgency=low
+
+  * security check at resource registartion
+  * Implemented: SWP#Plicy-235
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Wed, 06 Oct 2010 11:31:12 +0300
+
 ohm-plugins-misc (1:1.41) unstable; urgency=low
 
   * proclaimer resource class
