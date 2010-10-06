@@ -34,6 +34,7 @@ USA.
 #include "transaction.h"
 #include "fsif.h"
 #include "dresif.h"
+#include "auth.h"
 
 /* these are the manually set up equivalents of OHM_EXPORTABLE */
 static const char *OHM_VAR(internalif_timer_add,_SIGNATURE) =
@@ -44,7 +45,7 @@ static const char *OHM_VAR(internalif_timer_del,_SIGNATURE) =
 
 
 int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
-int DBG_DRES, DBG_FS, DBG_QUE, DBG_TRANSACT, DBG_MEDIA;
+int DBG_DRES, DBG_FS, DBG_QUE, DBG_TRANSACT, DBG_MEDIA, DBG_AUTH;
 
 OHM_DEBUG_PLUGIN(resource,
     OHM_DEBUG_FLAG("manager" , "resource manager"   , &DBG_MGR     ),
@@ -55,7 +56,8 @@ OHM_DEBUG_PLUGIN(resource,
     OHM_DEBUG_FLAG("fact"    , "factstore interface", &DBG_FS      ),
     OHM_DEBUG_FLAG("queue"   , "queued requests"    , &DBG_QUE     ),
     OHM_DEBUG_FLAG("transact", "transactions"       , &DBG_TRANSACT),
-    OHM_DEBUG_FLAG("media"   , "media"              , &DBG_MEDIA   )
+    OHM_DEBUG_FLAG("media"   , "media"              , &DBG_MEDIA   ),
+    OHM_DEBUG_FLAG("auth"    , "security"           , &DBG_AUTH    )
 );
 
 
@@ -72,7 +74,7 @@ static void plugin_init(OhmPlugin *plugin)
     resource_set_init(plugin);
     resource_spec_init(plugin);
     transaction_init(plugin);
-    auth_init();
+    auth_init(plugin);
 
 #if 0    
     DBG_MGR = DBG_SET = DBG_DBUS = DBG_INTERNAL = DBG_DRES =

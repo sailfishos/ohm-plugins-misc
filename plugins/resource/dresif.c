@@ -52,7 +52,7 @@ void dresif_init(OhmPlugin *plugin)
     ohm_module_find_method(name, &signature, (void *)&resolve);
 
     if (resolve == NULL) {
-        OHM_ERROR("resolve: can't find mandatory method '%s'", name);
+        OHM_ERROR("resource: can't find mandatory method '%s'", name);
         exit(1);
     }
 }
