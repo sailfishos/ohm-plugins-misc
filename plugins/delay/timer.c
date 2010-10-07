@@ -23,7 +23,7 @@ static int build_fldlist(fsif_field_t *, char *, char *, unsigned int,
 static void calculate_expiration_time(unsigned int, char *,int);
 
 static unsigned int schedule_timer_event(char *, unsigned int);
-static int  cancel_timer_event_by_srcid(unsigned int);
+static void cancel_timer_event_by_srcid(unsigned int);
 static void cancel_timer_event_by_entry(fsif_entry_t *);
 static int  timer_event_cb(void *);
 
@@ -292,7 +292,7 @@ static unsigned int schedule_timer_event(char *id, unsigned int delay)
     return srcid;
 }
 
-static int cancel_timer_event_by_srcid(unsigned int srcid)
+static void cancel_timer_event_by_srcid(unsigned int srcid)
 {
     if (srcid != 0) {
         if (g_source_remove(srcid))
