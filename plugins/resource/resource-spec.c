@@ -99,7 +99,7 @@ int resource_spec_update(resource_spec_t      *spec,
                          resource_spec_type_t  type,
                          va_list               args)
 {
-    int success;
+    int success = TRUE;
 
     switch (type) {
     case resource_audio:

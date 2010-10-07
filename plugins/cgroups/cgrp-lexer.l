@@ -736,7 +736,7 @@ ESCAPE		       \\
                               beg = strchr(yytext, '\''); beg++;
                               end = strchr(beg,    '\''); end--;
                               len = end - beg + 1;
-                              if (len > PATH_MAX)
+                              if (len >= PATH_MAX)
                                   OHM_ERROR("cgrp: too long path '%s'", beg-1);
                               else {
                                   strncpy(path, beg, len);

@@ -76,6 +76,8 @@ socket_init(cgrp_context_t *ctx, OhmPlugin *plugin)
     const char         *portstr;
     char               *end;
     
+    memset(&addr, 0, sizeof(addr));
+    
     if ((portstr = ohm_plugin_get_param(plugin, "notify-port")) == NULL)
         addr.sin_port = DEFAULT_NOTIFY;
     else {
@@ -89,9 +91,8 @@ socket_init(cgrp_context_t *ctx, OhmPlugin *plugin)
     
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(addr.sin_port);
-    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
-    
-    if ((ctx->apptrack_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) <= 0 ||
+        (ctx->apptrack_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         OHM_ERROR("cgrp: failed to create notification socket");
         return FALSE;
     }

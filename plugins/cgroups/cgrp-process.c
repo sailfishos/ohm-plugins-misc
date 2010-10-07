@@ -378,8 +378,12 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
         socklen_t errlen;
         
         errlen = sizeof(sckerr);
-        getsockopt(sock, SOL_SOCKET, SO_ERROR, &sckerr, &errlen);
-        OHM_ERROR("cgrp: netlink error %d (%s)", sckerr, strerror(sckerr));
+        if (getsockopt(sock, SOL_SOCKET, SO_ERROR, &sckerr, &errlen) < 0) {
+            OHM_ERROR("cgrp: getsockopt error %d (%s)", errno, strerror(errno));
+        } 
+        else {
+            OHM_ERROR("cgrp: netlink error %d (%s)", sckerr, strerror(sckerr));
+        }
 
         proc_unsubscribe();
         netlink_close();

@@ -472,10 +472,11 @@ static void cl_hash_add(proxy_t *proxy)
 
 static void cl_hash_delete(proxy_t *proxy)
 {
-    uint32_t  idx = cl_hash_index(proxy->client);
+    uint32_t  idx;
     proxy_t  *prev;
 
     if (proxy != NULL) {
+        idx = cl_hash_index(proxy->client);
         if ((prev = clhashtbl[idx]) == proxy) {
             clhashtbl[idx] = proxy->clnext;
             proxy->clnext = NULL;

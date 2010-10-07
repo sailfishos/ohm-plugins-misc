@@ -138,13 +138,16 @@ void exec_definition_clear(exec_def_t *exdef)
 
 int exec_instance_setup(exec_inst_t *inst, exec_def_t *def)
 {
-    size_t            dim  = def->argc > 0 ? def->argc : 1;
-    size_t            size = dim * sizeof(const char *);
+    size_t            dim;
+    size_t            size;
     argument_inst_t **argv;
     int               i;
 
     if (!inst || !def)
         goto failed;
+
+    dim  = def->argc > 0 ? def->argc : 1;
+    size = dim * sizeof(const char *);
 
     switch (def->type) {
 
