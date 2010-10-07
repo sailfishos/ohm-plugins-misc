@@ -21,6 +21,7 @@ DEB_DH_INSTALL_SOURCEDIR = debian/tmp
 DEB_CONFIGURE_USER_FLAGS = --disable-static \
                            --enable-libresource \
                            --enable-notification \
+                           --enable-telephony \
                            --disable-libplayback \
                            --disable-oldvideoep \
                            --enable-apptrack \
