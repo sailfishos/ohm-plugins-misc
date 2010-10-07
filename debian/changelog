@@ -1,3 +1,12 @@
+ohm-plugins-misc (1:1.43) unstable; urgency=low
+
+  [Krisztian Litkey]
+  * Ouch... build the telephony plugin.
+  [Vsevolod Buzinov]
+  * Coverity-based fixes.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 07 Oct 2010 16:13:06 +0300
+
 ohm-plugins-misc (1:1.42) unstable; urgency=low
 
   * security check at resource registartion
