@@ -64,6 +64,7 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUS_GET_NAME_OWNER_METHOD     "GetNameOwner"
 #define DBUS_PLAY_METHOD               "Play"
 #define DBUS_STOP_METHOD               "Stop"
+#define DBUS_PAUSE_METHOD              "Pause"
 #define DBUS_SUBSCRIBE_METHOD          "Subscribe"
 #define DBUS_UNSUBSCRIBE_METHOD        "Unsubscribe"
 #define DBUS_STATUS_METHOD             "Status"
@@ -92,7 +93,7 @@ typedef struct _OhmPlugin OhmPlugin;
 void dbusif_init(OhmPlugin *);
 DBusHandlerResult dbusif_session_notification(DBusConnection *,
                                               DBusMessage *, void *);
-void *dbusif_append_to_play_data(void *, ...);
+void *dbusif_append_to_play_data(void *, const char *, ...);
 void *dbusif_create_play_data(char *, ...);
 void *dbusif_copy_status_data(const char *, void *);
 void *dbusif_create_status_data(const char *, uint32_t, uint32_t);
