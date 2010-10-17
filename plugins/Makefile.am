@@ -2,7 +2,6 @@ SUBDIRS = 	     \
 	signaling    \
 	console      \
 	gconf        \
-	dvfs         \
 	cgroups      \
 	delay        \
 	auth
