@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.44) unstable; urgency=low
+
+  * translate the incoming notification event name to internal ones
+  * notification forward pause and resume (Fixes: NB#197460)
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Wed, 13 Oct 2010 23:57:12 +0300
+
 ohm-plugins-misc (1:1.43) unstable; urgency=low
 
   [Krisztian Litkey]
