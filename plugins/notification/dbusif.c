@@ -82,6 +82,7 @@ static DBusHandlerResult name_changed(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult proxy_method(DBusConnection *, DBusMessage *, void *);
 static uint32_t play_handler(DBusMessage *, char *, char *);
 static uint32_t stop_handler(DBusMessage *, char *, char *);
+static uint32_t pause_handler(DBusMessage *, char *, char *);
 static uint32_t subscribe_handler(DBusMessage *, char *, char *);
 static uint32_t unsubscribe_handler(DBusMessage *, char *, char *);
 static uint32_t status_handler(DBusMessage *, char *, char *);
@@ -159,7 +160,7 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *syscon,
 }
 
 
-void *dbusif_append_to_play_data(void *data, ...)
+void *dbusif_append_to_play_data(void *data, const char *what, ...)
 {
     DBusMessage    *src = data;
     DBusMessage    *dst = NULL;
@@ -180,12 +181,13 @@ void *dbusif_append_to_play_data(void *data, ...)
 
             dbus_message_set_no_reply(dst, TRUE);
 
-            va_start(ap, data);
+            va_start(ap, what);
             
             dbus_message_iter_init(src, &sit);
             dbus_message_iter_init_append(dst, &dit);
                 
-            if (copy_string(&sit, &dit)       &&
+            if (append_string(&dit, what)     &&
+                dbus_message_iter_next (&sit) &&
                 copy_array(&sit, &dit, &darr) &&
                 extend_array(&darr, ap)       &&
                 close_array(&dit, &darr)        )
@@ -1067,6 +1069,7 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
     static handler_t  handlers[] = {
         { client_handler,  DBUS_PLAY_METHOD       , play_handler        },
         { client_handler,  DBUS_STOP_METHOD       , stop_handler        },
+        { client_handler,  DBUS_PAUSE_METHOD      , pause_handler       },
         { backend_handler, DBUS_STATUS_METHOD     , status_handler      },
         { backend_handler, DBUS_UPDATE_METHOD     , update_handler      },
         { subscr_handler,  DBUS_SUBSCRIBE_METHOD  , subscribe_handler   },
@@ -1212,6 +1215,39 @@ static uint32_t stop_handler(DBusMessage *msg, char *err, char *desc)
 
     return success;
 }
+
+static uint32_t pause_handler(DBusMessage *msg, char *err, char *desc)
+{
+    uint32_t    success;
+    const char *client;
+    uint32_t    id;
+    int         pause;
+
+    client  = dbus_message_get_sender(msg);
+    success = dbus_message_get_args(msg, NULL,
+                                    DBUS_TYPE_UINT32, &id,
+                                    DBUS_TYPE_BOOLEAN, &pause,
+                                    DBUS_TYPE_INVALID);
+
+    if (!success) {
+        OHM_DEBUG(DBG_DBUS, "malformed pause request from '%s'", client);
+
+        snprintf(err , DBUS_ERRBUF_LEN , "%s", DBUS_NGF_ERROR_FORMAT);
+        snprintf(desc, DBUS_DESCBUF_LEN, "can't obtain id or pause flag from request");
+    }
+    else {
+        OHM_DEBUG(DBG_DBUS, "%s requested to pause %u", client, id);
+
+        success = proxy_pause_request(id, pause, client, msg, desc);
+
+        if (!success) {
+            snprintf(err, DBUS_ERRBUF_LEN, "%s", DBUS_NGF_ERROR_DENIED);
+        }
+    }
+
+    return success;
+}
+
 
 static uint32_t subscribe_handler(DBusMessage *msg, char *err, char *desc)
 {

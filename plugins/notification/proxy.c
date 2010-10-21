@@ -1,4 +1,5 @@
 /*************************************************************************
+
 Copyright (C) 2010 Nokia Corporation.
 
 These OHM Modules are free software; you can redistribute
@@ -82,6 +83,8 @@ typedef enum {
     backend_timeout,            /* backend timeout ie. no status message */
     client_stop,                /* client stop request */
     client_died,                /* client D-Bus connetion is down */
+    client_pause,               /* client pause request */
+    client_resume,              /* client resume request */
 } proxy_event_t;
 
 
@@ -89,6 +92,7 @@ typedef struct proxy_s {
     struct proxy_s  *idnext;    /* chain for id hashes */
     struct proxy_s  *clnext;    /* chain for client hashes */
     int              type;      /* notification type */
+    char            *event;     /* event name */
     uint32_t         id;        /* system-wide unique play request ID */
     const char      *client;    /* client's D-Bus address */
     uint32_t         longlive;  /* wheter we have longlive resources or not */
@@ -126,13 +130,14 @@ static uint32_t timeout_handler(proxy_t *);
 
 static void     grant_handler(uint32_t, void *);
 
-static int evaluate_notification_request_rules(const char *, uint32_t *,
+static int evaluate_notification_request_rules(const char *, char *, uint32_t *,
                                                uint32_t *, uint32_t *, char *);
 
 static int state_machine(proxy_t *, proxy_event_t, void *);
 
 static int forward_play_request_to_backend(proxy_t *, uint32_t, uint32_t);
 static int forward_stop_request_to_backend(proxy_t *, void *);
+static int forward_pause_request_to_backend(proxy_t *, int, void *);
 static int create_and_send_stop_request_to_backend(proxy_t *);
 static int forward_status_to_client(proxy_t *, void *);
 static int partial_release_of_resources(proxy_t *, void *);
@@ -177,7 +182,7 @@ void proxy_init(OhmPlugin *plugin)
     stop_timeout = 10 * SECOND;
 }
 
-int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
+int proxy_playback_request(const char *what,    /* eg. ringtone, alarm, etc */
                            const char *client,  /* client's D-Bus address */
                            void       *data,    /* incoming message */
                            char       *err)     /* ptr to a error msg buffer */
@@ -191,10 +196,12 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
     proxy_state_t  state;
     int            type;
     int            success;
+    char           event[DBUS_DESCBUF_LEN];
 
     do { /* not a loop */
 
-        type = evaluate_notification_request_rules(event,&mand,&opt,&lliv,err);
+        memset(event, 0, sizeof(char) * DBUS_DESCBUF_LEN);
+        type = evaluate_notification_request_rules(what,event,&mand,&opt,&lliv,err);
 
         if (type >= 0)
             state  = state_acquiring;
@@ -221,6 +228,7 @@ int proxy_playback_request(const char *event,   /* eg. ringtone, alarm, etc */
         }
 
         proxy->type     = type;
+        proxy->event    = strdup(event);
         proxy->longlive = lliv;
         proxy->state    = state;
         proxy->status   = status;
@@ -287,6 +295,31 @@ int proxy_stop_request(uint32_t id, const char *client, void *data, char *err)
     return success;
 }
 
+int proxy_pause_request(uint32_t id, int pause, const char *client, void *data, char *err)
+{
+    proxy_t *proxy;
+    int      success = FALSE;
+
+    if ((proxy = id_hash_lookup(id)) == NULL) {
+        OHM_DEBUG(DBG_PROXY, "can't find proxy (id %u) for pause request", id);
+        strncpy(err, "can't find corresponding play request",DBUS_DESCBUF_LEN);
+    }
+    else if (strcmp(client, proxy->client)) {
+        OHM_DEBUG(DBG_PROXY, "refusing to accept request from non-owner: owner"
+                  " is '%s' while requestor was '%s'", proxy->client, client);
+        strncpy(err, "requests is from diferrent client", DBUS_DESCBUF_LEN);
+    }
+    else {
+        success = state_machine(proxy, pause ? client_pause : client_resume, data);
+
+        if (!success)
+            strncpy(err, "can't accept in the current stage", DBUS_DESCBUF_LEN);
+    }
+
+    err[DBUS_DESCBUF_LEN-1] = '\0';
+
+    return success;
+}
 
 int proxy_status_request(uint32_t id, void *data)
 {
@@ -398,6 +431,9 @@ static void proxy_destroy(proxy_t *proxy)
 
         free((void *)proxy->client);
         dbusif_free_data(proxy->data);
+
+        if (proxy->event)
+            free(proxy->event);
 
         free(proxy);
     }
@@ -600,6 +636,7 @@ static void grant_handler(uint32_t granted, void *void_proxy)
 }
 
 static int evaluate_notification_request_rules(const char *event,
+                                               char       *event_ret,
                                                uint32_t   *mand_ret,
                                                uint32_t   *opt_ret,
                                                uint32_t   *lliv_ret,
@@ -610,10 +647,12 @@ static int evaluate_notification_request_rules(const char *event,
     int   mand;
     int   opt;
     int   lliv;
+    char *evt   = NULL;
     char *error = NULL;
 
     success = ruleif_notification_request(event,
                      RULEIF_INTEGER_ARG ("type"     , type ),
+                     RULEIF_STRING_ARG  ("event"    , evt  ),
                      RULEIF_STRING_ARG  ("error"    , error),
                      RULEIF_INTEGER_ARG ("mandatory", mand ),
                      RULEIF_INTEGER_ARG ("optional" , opt  ),
@@ -639,6 +678,11 @@ static int evaluate_notification_request_rules(const char *event,
     else {
         errbuf[0] = '\0';
 
+        if (event_ret != NULL) {
+            strncpy(event_ret, evt, DBUS_DESCBUF_LEN);
+            event_ret[DBUS_DESCBUF_LEN-1] = '\0';
+        }
+
         if (mand_ret != NULL)
             *mand_ret = (uint32_t)mand;
 
@@ -649,10 +693,11 @@ static int evaluate_notification_request_rules(const char *event,
             *lliv_ret = (uint32_t)lliv;
 
         OHM_DEBUG(DBG_PROXY, "notification request rules returned: "
-                  "type=%d, mandatory=%d optional=%d longliv=%d err='%s'",
-                  type, mand, opt, lliv, error);
+                  "type=%d, event='%s', mandatory=%d optional=%d longliv=%d err='%s'",
+                  type, evt, mand, opt, lliv, error);
     }
 
+    free(evt);
     free(error);
 
     return type;
@@ -749,6 +794,12 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
             break;
         case client_died:
             create_and_send_stop_request_to_backend(proxy);
+            break;
+        case client_pause:
+            forward_pause_request_to_backend(proxy, TRUE, data);
+            break;
+        case client_resume:
+            forward_pause_request_to_backend(proxy, FALSE, data);
             break;
         default:
             success = FALSE;
@@ -875,7 +926,7 @@ static int forward_play_request_to_backend(proxy_t *proxy,
         return TRUE;
     }
     
-    data = dbusif_append_to_play_data(proxy->data,
+    data = dbusif_append_to_play_data(proxy->data, proxy->event,
                       DBUSIF_UNSIGNED_ARG ( NGF_TAG_POLICY_ID   , proxy->id ),
                       DBUSIF_STRING_ARG   ( NGF_TAG_PLAY_MODE   , mode      ),
                       DBUSIF_UNSIGNED_ARG ( NGF_TAG_PLAY_LIMIT  , limit     ),
@@ -948,6 +999,18 @@ static int create_and_send_stop_request_to_backend(proxy_t *proxy)
     }
 
     return success;
+}
+
+static int forward_pause_request_to_backend(proxy_t *proxy, int pause, void *data)
+{
+    void *fwdata = dbusif_copy_stop_data(data);
+
+    dbusif_forward_data(fwdata);
+
+    OHM_DEBUG(DBG_PROXY,"%s request (id %u) forwarded to backend",
+              pause ? "pause" : "resume", proxy->id);
+
+    return TRUE;
 }
 
 static int forward_status_to_client(proxy_t *proxy, void *data)
@@ -1099,6 +1162,8 @@ static const char *event_str(proxy_event_t event)
     case backend_timeout:   return "backend_timeout";
     case client_stop:       return "client stop";
     case client_died:       return "client died";
+    case client_pause:      return "client pause";
+    case client_resume:     return "client resume";
     default:                return "<unknown>";
     }
 }
