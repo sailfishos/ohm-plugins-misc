@@ -8,11 +8,14 @@ AC_INIT([ohm-plugins-misc],
 	[multimedia at maemo.org])
 
 AC_CONFIG_SRCDIR([plugins/profile/profile.c])
+AC_CONFIG_MACRO_DIR([m4])
 
 DOC_SUPPORT_INIT
 
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AC_CONFIG_HEADER([include/config.h])
+
+AC_SUBST(ACLOCAL_AMFLAGS, "-I m4")
 
 m4_define(version_major, `echo $VERSION | cut -d. -f1 | cut -d- -f1`)
 m4_define(version_minor, `echo $VERSION | cut -d. -f2 | cut -d- -f1`)
@@ -601,7 +604,12 @@ else
     AC_MSG_NOTICE([authentication/authorization support is disabled])
 fi
 
-AC_CONFIG_FILES([Makefile
+# shave
+SHAVE_INIT([build-aux], [enable])
+
+AC_CONFIG_FILES([build-aux/shave
+		 build-aux/shave-libtool
+		 Makefile
                  plugins/Makefile
 		 plugins/auth/Makefile
                  plugins/accessories/Makefile
