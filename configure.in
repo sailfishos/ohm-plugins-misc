@@ -2,21 +2,27 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(ohm-plugins-misc, 0.1)
+
+AC_INIT([ohm-plugins-misc],
+	m4_esyscmd([build-aux/git-version-gen .tarball-version]),
+	[multimedia at maemo.org])
+
 AC_CONFIG_SRCDIR([plugins/profile/profile.c])
 
-DOC_SUPPORT_INIT()
+DOC_SUPPORT_INIT
 
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AC_CONFIG_HEADER([include/config.h])
 
-# libtool
-LT_CURRENT=2
-LT_REVISION=0
-LT_AGE=0
-AC_SUBST(LT_CURRENT)
-AC_SUBST(LT_REVISION)
-AC_SUBST(LT_AGE)
+m4_define(version_major, `echo $VERSION | cut -d. -f1 | cut -d- -f1`)
+m4_define(version_minor, `echo $VERSION | cut -d. -f2 | cut -d- -f1`)
+m4_define(version_patch, `echo $VERSION | cut -d. -f3 | cut -d- -f1`)
+
+AC_SUBST(VERSION)
+AC_SUBST(VERSION_MAJOR, version_major)
+AC_SUBST(VERSION_MINOR, version_minor)
+AC_SUBST(VERSION_PATCH, version_patch)
+AC_SUBST(VERSION_FULL, version_major.version_minor.version_patch)
 
 # Disable static libraries.
 AC_DISABLE_STATIC
@@ -633,3 +639,4 @@ AC_CONFIG_FILES([Makefile
 
 AC_OUTPUT
 
+echo "$PACKAGE_NAME: version $VERSION"
