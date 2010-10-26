@@ -59,7 +59,7 @@ static void plugin_init(OhmPlugin *plugin)
     bluetooth_init(plugin);
     audio_init(plugin);
 
-#if 1
+#if 0
     DBG_PRIVACY = DBG_MUTE = DBG_BT = DBG_AUDIO = TRUE;
     DBG_DBUS = DBG_FS = DBG_DRES = TRUE;
 #endif
