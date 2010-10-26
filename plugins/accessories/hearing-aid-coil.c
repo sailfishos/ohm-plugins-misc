@@ -187,12 +187,12 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
     const char  *fldval;
     
     if (fact == NULL) {
-        OHM_ERROR("%s() called with null fact pointer", __FUNCTION__);
+        OHM_DEBUG(DBG_HAC, "%s() called with null fact pointer", __FUNCTION__);
         return;
     }
 
     if (value == NULL) {
-        OHM_ERROR("%s() called with null value pointer", __FUNCTION__);
+        OHM_DEBUG(DBG_HAC, "%s() called with null value pointer", __FUNCTION__);
         return;
     }
             
@@ -219,7 +219,7 @@ static void inserted_cb(void *data, OhmFact *fact)
 
     
     if (fact == NULL) {
-        OHM_ERROR("%s() called with null fact pointer", __FUNCTION__);
+        OHM_DEBUG(DBG_HAC, "%s() called with null fact pointer", __FUNCTION__);
         return;
     }
         
@@ -239,7 +239,7 @@ static void removed_cb(void *data, OhmFact *fact)
     (void)data;
     
     if (fact == NULL) {
-        OHM_ERROR("%s() called with null fact pointer", __FUNCTION__);
+        OHM_DEBUG(DBG_HAC, "%s() called with null fact pointer", __FUNCTION__);
         return;
     }
         

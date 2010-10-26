@@ -71,8 +71,8 @@ static void plugin_init(OhmPlugin *plugin)
     DBG_EXEC = DBG_FUNC = DBG_SEQ = DBG_RESOLV = TRUE;
     DBG_TRACK = DBG_ROUTE = TRUE;
     DBG_XCB = DBG_RANDR = DBG_XV = TRUE;
-#endif
     DBG_RANDR = DBG_ROUTE = DBG_ACTION = TRUE;
+#endif
 
     mem_init(plugin);
     xif_init(plugin);
