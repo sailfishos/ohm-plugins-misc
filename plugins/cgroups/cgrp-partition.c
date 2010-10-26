@@ -611,7 +611,7 @@ ctrl_apply(cgrp_context_t *ctx, cgrp_partition_t *partition,
     }
 
     if (ctrl == NULL) {
-        OHM_ERROR("cgrp: could not find cgroup-conrol '%s'", setting->name);
+        OHM_WARNING("cgrp: could not find cgroup-control '%s'", setting->name);
         return FALSE;
     }
     
@@ -621,16 +621,16 @@ ctrl_apply(cgrp_context_t *ctx, cgrp_partition_t *partition,
     }
 
     if (cs == NULL) {
-        OHM_ERROR("cgrp: cgroup-control '%s' has no setting '%s'",
-                  ctrl->name, setting->value);
+        OHM_WARNING("cgrp: cgroup-control '%s' has no setting '%s'",
+                    ctrl->name, setting->value);
         return FALSE;
     }
 
     fd = open_control(partition, ctrl->path);
 
     if (fd < 0) {
-        OHM_ERROR("cgrp: partition '%s' has no control entry '%s'",
-                  partition->name, ctrl->path);
+        OHM_WARNING("cgrp: partition '%s' has no control entry '%s'",
+                    partition->name, ctrl->path);
         return FALSE;
     }
 
@@ -641,8 +641,8 @@ ctrl_apply(cgrp_context_t *ctx, cgrp_partition_t *partition,
     close(fd);
 
     if (!success)
-        OHM_ERROR("failed to set '%s' to '%s' ('%s') for partition '%s'",
-                  ctrl->name, cs->name, cs->value, partition->name);
+        OHM_WARNING("failed to set '%s' to '%s' ('%s') for partition '%s'",
+                    ctrl->name, cs->name, cs->value, partition->name);
     
     return success;
 }
