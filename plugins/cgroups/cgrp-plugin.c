@@ -170,7 +170,9 @@ OHM_EXPORTABLE(int, cgrp_process_info, (pid_t pid, char **group, char **binary))
  * cgrp_app_subscribe
  ********************/
 OHM_EXPORTABLE(void, cgrp_app_subscribe,
-               (void (*callback)(pid_t, const char *, const char *, void *),
+               (void (*callback)(pid_t,
+                                 const char *, const char *, const char *,
+                                 void *),
                 void *user_data))
 {
     apptrack_subscribe(callback, user_data);
@@ -181,7 +183,9 @@ OHM_EXPORTABLE(void, cgrp_app_subscribe,
  * cgrp_app_unsubscribe
  ********************/
 OHM_EXPORTABLE(void, cgrp_app_unsubscribe,
-               (void (*callback)(pid_t, const char *, const char *, void *),
+               (void (*callback)(pid_t,
+                                 const char *, const char *, const char *,
+                                 void *),
                 void *user_data))
 {
     apptrack_unsubscribe(callback, user_data);
@@ -192,9 +196,10 @@ OHM_EXPORTABLE(void, cgrp_app_unsubscribe,
  * cgrp_app_query
  ********************/
 OHM_EXPORTABLE(void, cgrp_app_query, (pid_t *pid,
-                                      const char **binary, const char **group))
+                                      const char **binary, const char **argv0,
+                                      const char **group))
 {
-    apptrack_query(pid, binary, group);
+    apptrack_query(pid, binary, argv0, group);
 }
 
 

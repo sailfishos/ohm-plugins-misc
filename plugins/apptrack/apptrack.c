@@ -34,9 +34,11 @@ USA.
 OHM_IMPORTABLE(void, app_subscribe,   (void (*callback)(pid_t,
                                                         const char *,
                                                         const char *,
+                                                        const char *,
                                                         void *),
                                        void *user_data));
 OHM_IMPORTABLE(void, app_unsubscribe, (void (*callback)(pid_t,
+                                                        const char *,
                                                         const char *,
                                                         const char *,
                                                         void *),
@@ -44,6 +46,7 @@ OHM_IMPORTABLE(void, app_unsubscribe, (void (*callback)(pid_t,
 
 OHM_IMPORTABLE(void, app_query,       (pid_t *pid,
                                        const char **binary,
+                                       const char **argv0,
                                        const char **group));
 
 
@@ -145,7 +148,7 @@ static DBusHandlerResult
 client_subscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
 {
     DBusMessage *reply;
-    const char  *sender, *binary, *group;
+    const char  *sender, *binary, *argv0, *group;
     
     (void)user_data;
     
@@ -159,10 +162,12 @@ client_subscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
         binary = NULL;
         group  = NULL;
 
-        app_query(NULL, &binary, &group);
+        app_query(NULL, &binary, &argv0, &group);
 
         if (binary == NULL)
             binary = "";
+        if (argv0 == NULL)
+            argv0 = "";
         if (group == NULL)
             group = "";
 
@@ -174,6 +179,7 @@ client_subscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
         if (dbus_message_append_args(reply,
                                      DBUS_TYPE_STRING, &binary,
                                      DBUS_TYPE_STRING, &group,
+                                     DBUS_TYPE_STRING, &argv0,
                                      DBUS_TYPE_INVALID))
             dbus_connection_send(conn, reply, NULL);
         else
@@ -220,7 +226,7 @@ client_unsubscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
  * client_notify
  ********************/
 static void
-client_notify(const char *binary, const char *group)
+client_notify(const char *binary, const char *group, const char *argv0)
 {
     DBusMessage *msg;
 
@@ -233,6 +239,7 @@ client_notify(const char *binary, const char *group)
     if (dbus_message_append_args(msg,
                                  DBUS_TYPE_STRING, &binary,
                                  DBUS_TYPE_STRING, &group,
+                                 DBUS_TYPE_STRING, &argv0,
                                  DBUS_TYPE_INVALID))
         dbus_connection_send(bus, msg, NULL);
     else
@@ -246,7 +253,8 @@ client_notify(const char *binary, const char *group)
  * app_change_cb
  ********************/
 static void
-app_change_cb(pid_t pid, const char *binary, const char *group, void *dummy)
+app_change_cb(pid_t pid, const char *binary, const char *argv0,
+              const char *group, void *dummy)
 {
     (void)pid;
     (void)dummy;
@@ -261,10 +269,12 @@ app_change_cb(pid_t pid, const char *binary, const char *group, void *dummy)
     
     if (binary == NULL)
         binary = "";
+    if (argv0 == NULL)
+        argv0 = "";
     if (group == NULL)
         group = "";
 
-    client_notify(binary != NULL ? binary : "", group != NULL ? group : "");
+    client_notify(binary, group, argv0);
 }
 
 

@@ -186,7 +186,7 @@ classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *procattr, int argn)
 
     memset(&process, 0, sizeof(process));
     
-    if (process_get_argv(procattr) == NULL)
+    if (process_get_argv(procattr, CGRP_MAX_ARGS) == NULL)
         return -ENOENT;                       /* we assume it's gone already */
 
     if (argn >= procattr->argc) {

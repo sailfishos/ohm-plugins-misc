@@ -32,10 +32,13 @@ static gboolean socket_cb(GIOChannel *, GIOCondition, gpointer);
 static void schedule_update(void *, OhmFact *, GQuark, gpointer, gpointer);
 static gboolean apptrack_update(gpointer);
 
+static const char *get_argv0(cgrp_process_t *);
+
 
 typedef struct {
     list_hook_t   hook;
-    void        (*callback)(pid_t pid, const char *, const char *, void *);
+    void        (*callback)(pid_t pid, const char *, const char *,
+                            const char *, void *);
     void         *user_data;
 } subscriber_t;
 
@@ -190,7 +193,8 @@ apptrack_exit(cgrp_context_t *ctx)
  ********************/
 void
 apptrack_subscribe(void (*callback)(pid_t pid,
-                                    const char *binary, const char *group,
+                                    const char *binary, const char *argv0,
+                                    const char *group,
                                     void *user_data),
                    void *user_data)
 {
@@ -218,7 +222,8 @@ apptrack_subscribe(void (*callback)(pid_t pid,
  ********************/
 void
 apptrack_unsubscribe(void (*callback)(pid_t pid,
-                                      const char *binary, const char *group,
+                                      const char *binary, const char *argv0,
+                                      const char *group,
                                       void *user_data),
                      void *user_data)
 {
@@ -247,7 +252,8 @@ apptrack_unsubscribe(void (*callback)(pid_t pid,
  * apptrack_query
  ********************/
 void
-apptrack_query(pid_t *pid, const char **binary, const char **group)
+apptrack_query(pid_t *pid, const char **binary, const char **argv0,
+               const char **group)
 {
     cgrp_process_t *process = context ? context->active_process : NULL;
 
@@ -256,6 +262,8 @@ apptrack_query(pid_t *pid, const char **binary, const char **group)
             *pid = 0;
         if (binary != NULL)
             *binary = NULL;
+        if (argv0 != NULL)
+            *argv0 = NULL;
         if (group != NULL)
             *group  = NULL;
     }
@@ -264,6 +272,8 @@ apptrack_query(pid_t *pid, const char **binary, const char **group)
             *pid = process->pid;
         if (binary != NULL)
             *binary = process->binary;
+        if (argv0 != NULL)
+            *argv0 = get_argv0(process);
         if (group != NULL)
             *group  = process->group ? process->group->name : "<unknown>";
     }
@@ -279,23 +289,25 @@ apptrack_notify(cgrp_context_t *ctx, cgrp_process_t *process)
     list_hook_t  *p, *n;
     subscriber_t *subscr;
     pid_t         pid;
-    const char   *binary, *group;
+    const char   *binary, *group, *argv0;
 
     if (process == NULL) {
         pid    = 0;
         binary = NULL;
         group  = NULL;
+        argv0  = NULL;
     }
     else {
         pid    = process->pid;
         binary = process->binary;
         group  = process->group ? process->group->name : "<unknown>";
+        argv0  = process->argv0 ? process->argv0 : get_argv0(process);
     }
     
     list_foreach(&ctx->apptrack_subscribers, p, n) {
         subscr = list_entry(p, subscriber_t, hook);
 
-        subscr->callback(pid, binary, group, subscr->user_data);
+        subscr->callback(pid, binary, argv0, group, subscr->user_data);
     }
 }
 
@@ -473,6 +485,32 @@ apptrack_group_change(cgrp_context_t *ctx,
     vars[4] = NULL;
     
     return ctx->resolve("cgroup_notify", vars) == 0;
+}
+
+
+/********************
+ * get_argv0
+ ********************/
+static const char *
+get_argv0(cgrp_process_t *process)
+{
+    cgrp_proc_attr_t  procattr;
+    char             *argv[CGRP_MAX_ARGS];
+    char              args[CGRP_MAX_CMDLINE];
+    char              cmdl[CGRP_MAX_CMDLINE];
+    
+    memset(&procattr, 0, sizeof(procattr));
+    
+    procattr.binary  = process->binary;
+    procattr.pid     = process->pid;
+    procattr.argv    = argv;
+    argv[0]          = args;
+    procattr.cmdline = cmdl;
+
+    if (process_get_argv(&procattr, 1))
+        process->argv0 = STRDUP(procattr.argv[0]);
+    
+    return process->argv0;
 }
 
 

@@ -529,7 +529,7 @@ process_get_cmdline(cgrp_proc_attr_t *attr)
     if (CGRP_TST_MASK(attr->mask, CGRP_PROC_CMDLINE))
         return attr->cmdline;
     
-    if (process_get_argv(attr) != NULL)
+    if (process_get_argv(attr, CGRP_MAX_ARGS) != NULL)
         return attr->cmdline;
     else
         return NULL;
@@ -540,7 +540,7 @@ process_get_cmdline(cgrp_proc_attr_t *attr)
  * process_get_argv
  ********************/
 char **
-process_get_argv(cgrp_proc_attr_t *attr)
+process_get_argv(cgrp_proc_attr_t *attr, int max_args)
 {
     char   buf[CGRP_MAX_CMDLINE], *s, *ap, *cp;
     char **argvp, *argp, *cmdp;
@@ -571,7 +571,9 @@ process_get_argv(cgrp_proc_attr_t *attr)
     CGRP_SET_MASK(attr->mask, CGRP_PROC_CMDLINE);
 
     term = FALSE;
-    for (s = buf, ap = argp, cp = cmdp; size > 0; s++, size--) {
+    for (s = buf, ap = argp, cp = cmdp;
+         size > 0 && narg < max_args;
+         s++, size--) {
         if (*s) {
             if (term)
                 *cp++ = ' ';
@@ -772,6 +774,7 @@ process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
     group_del_process(process);
     proc_hash_unhash(ctx, process);
     FREE(process->binary);
+    FREE(process->argv0);
     FREE(process);
 }
 

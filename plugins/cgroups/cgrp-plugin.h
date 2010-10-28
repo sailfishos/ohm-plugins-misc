@@ -326,6 +326,7 @@ typedef struct {
 typedef struct {
     pid_t         pid;                      /* process id */
     char         *binary;                   /* path to binary */
+    char         *argv0;                    /* argv[0] if needed */
     cgrp_group_t *group;                    /* current group */
     list_hook_t   proc_hook;                /* hook to process table */
     list_hook_t   group_hook;               /* hook to group */
@@ -552,7 +553,7 @@ void proc_exit(cgrp_context_t *);
 char   *process_get_binary (cgrp_proc_attr_t *);
 char   *process_get_cmdline(cgrp_proc_attr_t *);
 char   *process_get_name   (cgrp_proc_attr_t *);
-char  **process_get_argv   (cgrp_proc_attr_t *);
+char  **process_get_argv   (cgrp_proc_attr_t *, int);
 uid_t   process_get_euid   (cgrp_proc_attr_t *);
 gid_t   process_get_egid   (cgrp_proc_attr_t *);
 pid_t   process_get_ppid   (cgrp_proc_attr_t *);
@@ -754,11 +755,13 @@ void fact_del_process(OhmFact *, cgrp_process_t *);
 int  apptrack_init(cgrp_context_t *, OhmPlugin *);
 void apptrack_exit(cgrp_context_t *);
 int  apptrack_group_change(cgrp_context_t *, cgrp_group_t *, cgrp_group_t *);
-void apptrack_subscribe(void (*)(pid_t, const char *, const char *, void *),
+void apptrack_subscribe(void (*)(pid_t, const char *, const char *,
+                                 const char *, void *),
                         void *);
-void apptrack_unsubscribe(void (*)(pid_t, const char *, const char *, void *),
+void apptrack_unsubscribe(void (*)(pid_t, const char *, const char *,
+                                   const char *, void *),
                           void *);
-void apptrack_query(pid_t *, const char **, const char **);
+void apptrack_query(pid_t *, const char **, const char **, const char **);
 
 
 /* cgrp-console.c */

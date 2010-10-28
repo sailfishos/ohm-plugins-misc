@@ -403,8 +403,8 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
         break;
         
     case CGRP_PROP_ARG0 ... CGRP_PROP_ARG_MAX:
-        process_get_argv(attr);
         argn    = expr->prop - CGRP_PROP_ARG0;
+        process_get_argv(attr, argn + 1);
         v1.type = CGRP_VALUE_TYPE_STRING;
         v1.str  = argn < attr->argc ? attr->argv[argn] : "";
         break;
