@@ -39,6 +39,10 @@ typedef struct {
 } configuration_entry;
 
 
+static void free_key(gpointer ptr);
+static void free_entry(gpointer ptr);
+
+
 /*! \addtogroup pubif
  *  Functions
  *  @{
@@ -53,7 +57,8 @@ void auth_init(OhmPlugin *plugin)
     char *saveptr1, *saveptr2;
     configuration_entry *entry;
 
-    security_configuration = g_hash_table_new(g_str_hash, g_str_equal);
+    security_configuration = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                   free_key, free_entry);
 
     default_policy = auth_accept;
 
@@ -119,23 +124,22 @@ auth_policy_t auth_get_default_policy() {
   return default_policy;
 }
 
-void auth_exit(OhmPlugin *plugin) {
+static void free_key(gpointer ptr)
+{
+    g_free(ptr);
+}
 
-  GHashTableIter iter;
-  gpointer key, value;
-  configuration_entry *entry;
+static void free_entry(gpointer ptr)
+{
+    configuration_entry *entry = (configuration_entry *)ptr;
 
-  OHM_INFO("resource: destroying security configuration table");
-
-  g_hash_table_iter_init (&iter, security_configuration);
-  while (g_hash_table_iter_next (&iter, &key, &value))
-  {
-    entry = (configuration_entry*) value;
     g_free(entry->method);
     g_free(entry->arg);
-    g_free(key);
-    g_free(value);
-  }
+    g_free(entry);
+}
+
+void auth_exit(OhmPlugin *plugin) {
+  OHM_INFO("resource: destroying security configuration table");
 
   g_hash_table_destroy(security_configuration);
 }
