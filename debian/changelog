@@ -1,3 +1,19 @@
+ohm-plugins-misc (1:1.45) unstable; urgency=low
+
+  * Better shave argument protection.
+  * Use destroy notifier callbacks to clean up the configuration table.
+  * Include also argv[0] in application tracking notifications and queries.
+  * Cgroups: failing to apply extra cgroup settings generate warnings instead of errors.
+  * Turned off all debug flags by default.
+  * Allow unsolicited grant/advice updates.
+  * Use shave for Kbuild-like compilation verbosity control.
+  * Added git-version-gen to support base package versioning.
+  * Don't expect the obsolete dvfs plugin to be built.
+  * Disabled ancient dvfs plugin.
+  * Update changelog.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 02 Nov 2010 15:59:05 +0200
+
 ohm-plugins-misc (1:1.44) unstable; urgency=low
 
   * translate the incoming notification event name to internal ones
