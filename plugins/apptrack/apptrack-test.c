@@ -47,11 +47,12 @@ static DBusConnection *sys_conn;
 
 
 static void
-active_application(const char *binary, const char *group)
+active_application(const char *binary, const char *group, const char *argv0)
 {
-    printf("currently active application: %s (group: %s)\n",
+    printf("currently active application: %s (group: %s, argv[0]: %s)\n",
            binary[0] ? binary : "<none>",
-           group[0]  ? group  : "<none>");
+           group[0]  ? group  : "<none>",
+           argv0[0]  ? argv0  : "<none>");
 }
 
 
@@ -60,7 +61,7 @@ static void
 subscribe_reply(DBusPendingCall *pcall, void *user_data)
 {
     DBusMessage *reply;
-    const char  *binary, *group;
+    const char  *binary, *group, *argv0;
 
     (void)user_data;
 
@@ -74,10 +75,11 @@ subscribe_reply(DBusPendingCall *pcall, void *user_data)
     if (!dbus_message_get_args(reply, NULL,
                                DBUS_TYPE_STRING, &binary,
                                DBUS_TYPE_STRING, &group,
+                               DBUS_TYPE_STRING, &argv0,
                                DBUS_TYPE_INVALID))
         fatal("failed to parse D-BUS reply message");
 
-    active_application(binary, group);
+    active_application(binary, group, argv0);
     
     dbus_message_unref(reply);
     dbus_pending_call_unref(pcall);
@@ -110,7 +112,7 @@ apptrack_subscribe(void)
 static DBusHandlerResult
 apptrack_notification(DBusConnection *conn, DBusMessage *msg, void *user_data)
 {
-    const char *binary, *group;
+    const char *binary, *group, *argv0;
     
     (void)conn;
     (void)msg;
@@ -122,10 +124,11 @@ apptrack_notification(DBusConnection *conn, DBusMessage *msg, void *user_data)
     if (!dbus_message_get_args(msg, NULL,
                                DBUS_TYPE_STRING, &binary,
                                DBUS_TYPE_STRING, &group,
+                               DBUS_TYPE_STRING, &argv0,
                                DBUS_TYPE_INVALID))
         fatal("failed to parse D-BUS apptrack notification");
     
-    active_application(binary, group);
+    active_application(binary, group, argv0);
     
     return DBUS_HANDLER_RESULT_HANDLED;
 }

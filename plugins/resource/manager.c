@@ -447,8 +447,15 @@ static void granted_cb(fsif_entry_t *entry,
         rs->granted.factstore = granted;
         
         if (!(resset->mode & RESMSG_MODE_ALWAYS_REPLY) || !rs->reqno) {
-            resource_set_queue_change(rs, trans_id, rs->reqno, 
-                                      resource_set_granted);
+            if (trans_id != NO_TRANSACTION)
+                resource_set_queue_change(rs, trans_id, rs->reqno, 
+                                          resource_set_granted);
+            else {
+                transaction_start(rs, NULL);
+                resource_set_queue_change(rs, trans_id, rs->reqno, 
+                                          resource_set_granted);
+                transaction_end(rs);
+            }
         }
     }
 }
@@ -482,7 +489,13 @@ static void advice_cb(fsif_entry_t *entry,
 
         rs->advice.factstore = advice;
 
-        resource_set_queue_change(rs, trans_id, 0, resource_set_advice);
+        if (trans_id != NO_TRANSACTION)
+            resource_set_queue_change(rs, trans_id, 0, resource_set_advice);
+        else {
+            transaction_start(rs, NULL);
+            resource_set_queue_change(rs, trans_id, 0, resource_set_advice);
+            transaction_end(rs);
+        }
     }
 }
 
