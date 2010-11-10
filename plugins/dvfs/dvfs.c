@@ -360,7 +360,7 @@ OHM_EXPORTABLE(int, priority_relax, (void))
 OHM_PLUGIN_DESCRIPTION("dvfs",
 		       "0.0.1",
 		       "krisztian.litkey@nokia.com",
-		       OHM_LICENSE_NON_FREE,
+		       OHM_LICENSE_LGPL,
 		       plugin_init,
 		       plugin_exit,
 		       NULL);

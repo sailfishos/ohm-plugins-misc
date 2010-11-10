@@ -154,7 +154,7 @@ select_driver(vibra_context_t *ctx, OhmPlugin *plugin)
 EXPORT OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        PLUGIN_VERSION,
                        "krisztian.litkey@nokia.com",
-                       OHM_LICENSE_NON_FREE, /* OHM_LICENSE_LGPL */
+                       OHM_LICENSE_LGPL, /* OHM_LICENSE_LGPL */
                        plugin_init, plugin_exit, NULL);
 
 
