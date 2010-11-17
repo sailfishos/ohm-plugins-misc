@@ -242,7 +242,7 @@ OHM_EXPORTABLE(int, del_watch, (DBusBusType type,
 OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        PLUGIN_VERSION,
                        "krisztian.litkey@nokia.com",
-                       OHM_LICENSE_NON_FREE, /* OHM_LICENSE_LGPL */
+                       OHM_LICENSE_LGPL, /* OHM_LICENSE_LGPL */
                        plugin_init, plugin_exit, NULL);
 
 OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 6,

@@ -206,7 +206,7 @@ DBusHandlerResult hald_change(DBusConnection *c, DBusMessage *msg,
 OHM_PLUGIN_DESCRIPTION("hal",
         "0.0.1",
         "ismo.h.puustinen@nokia.com",
-        OHM_LICENSE_NON_FREE, plugin_init, plugin_exit,
+        OHM_LICENSE_LGPL, plugin_init, plugin_exit,
         NULL);
 
 OHM_PLUGIN_PROVIDES_METHODS(hal, 2,

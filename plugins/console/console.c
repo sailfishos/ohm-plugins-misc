@@ -755,7 +755,7 @@ console_handler(GIOChannel *source, GIOCondition condition, gpointer data)
 OHM_PLUGIN_DESCRIPTION("console",
                        "0.0.0",
                        "krisztian.litkey@nokia.com",
-                       OHM_LICENSE_NON_FREE,
+                       OHM_LICENSE_LGPL,
                        plugin_init,
                        plugin_exit,
                        NULL);

@@ -219,7 +219,7 @@ plugin_exit(OhmPlugin * plugin)
 OHM_PLUGIN_DESCRIPTION("signaling",
         "0.0.2",
         "ismo.h.puustinen@nokia.com",
-        OHM_LICENSE_NON_FREE, plugin_init, plugin_exit,
+        OHM_LICENSE_LGPL, plugin_init, plugin_exit,
         NULL);
 
 OHM_PLUGIN_PROVIDES_METHODS(signaling, 5,

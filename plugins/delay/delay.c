@@ -88,7 +88,7 @@ OHM_PLUGIN_PROVIDES_METHODS(delay, 2,
 OHM_PLUGIN_DESCRIPTION("delay",
                        "0.0.1",
                        "janos.f.kovacs@nokia.com",
-                       OHM_LICENSE_NON_FREE,
+                       OHM_LICENSE_LGPL,
                        plugin_init,
                        plugin_exit,
                        NULL);

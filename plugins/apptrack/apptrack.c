@@ -362,7 +362,7 @@ plugin_exit(OhmPlugin *plugin)
  *****************************************************************************/
 
 OHM_PLUGIN_DESCRIPTION("apptrack", "0.0.1", "krisztian.litkey@nokia.com",
-                       OHM_LICENSE_NON_FREE,
+                       OHM_LICENSE_LGPL,
                        plugin_init, plugin_exit, NULL);
 
 OHM_PLUGIN_REQUIRES_METHODS(apptrack, 3,

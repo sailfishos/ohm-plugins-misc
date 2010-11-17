@@ -147,7 +147,7 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
 OHM_PLUGIN_DESCRIPTION("profile",
         "0.0.1",
         "ismo.h.puustinen@nokia.com",
-        OHM_LICENSE_NON_FREE, plugin_init, plugin_exit,
+        OHM_LICENSE_LGPL, plugin_init, plugin_exit,
         NULL);
 
 OHM_PLUGIN_DBUS_SIGNALS(
