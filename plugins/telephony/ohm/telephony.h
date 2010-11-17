@@ -39,6 +39,7 @@ USA.
 
 #define TP_CHANNEL_CALL_DRAFT TP_CHANNEL".Type.Call.DRAFT"
 #define TP_CHANNEL_CONF_DRAFT TP_CHANNEL".Interface.Conference.DRAFT"
+#define TP_CHANNEL_CONF       TP_CHANNEL".Interface.Conference"
 
 #define TP_CONN_PATH      "/org/freedesktop/Telepathy/Connection"
 #define TP_RING           "/org/freedesktop/Telepathy/Connection/ring/tel/ring"
@@ -67,7 +68,8 @@ USA.
 #define PROP_EMERGENCY        TP_EMERGENCY".InitialEmergencyService"
 #define PROP_INTERFACES       TP_CHANNEL".Interfaces"
 
-#define PROP_INITIAL_CHANNELS TP_CHANNEL_CONF_DRAFT".InitialChannels"
+#define PROP_DRAFT_INITIAL_CHANNELS TP_CHANNEL_CONF_DRAFT".InitialChannels"
+#define PROP_INITIAL_CHANNELS       TP_CHANNEL_CONF".InitialChannels"
 
 #define NEW_CHANNEL        "NewChannel"
 #define NEW_CHANNELS       "NewChannels"

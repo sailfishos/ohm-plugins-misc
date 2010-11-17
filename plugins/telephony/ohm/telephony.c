@@ -390,6 +390,12 @@ bus_init(const char *address)
     if (!bus_add_match("signal", TP_CHANNEL_CONF_DRAFT, CHANNEL_REMOVED, NULL))
         exit(1);
     
+    if (!bus_add_match("signal", TP_CHANNEL_CONF, CHANNEL_MERGED, NULL))
+        exit(1);
+    
+    if (!bus_add_match("signal", TP_CHANNEL_CONF, CHANNEL_REMOVED, NULL))
+        exit(1);
+    
     if (!bus_add_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_ADDED, NULL))
         exit(1);
     
@@ -467,7 +473,9 @@ bus_exit(void)
     bus_del_match("signal", TP_CHANNEL_MEDIA, STREAM_ADDED, NULL);
     bus_del_match("signal", TP_CHANNEL_MEDIA, STREAM_REMOVED, NULL);
     bus_del_match("signal", TP_CHANNEL_CONF_DRAFT, CHANNEL_MERGED, NULL);
-    bus_add_match("signal", TP_CHANNEL_CONF_DRAFT, CHANNEL_REMOVED, NULL);
+    bus_del_match("signal", TP_CHANNEL_CONF_DRAFT, CHANNEL_REMOVED, NULL);
+    bus_del_match("signal", TP_CHANNEL_CONF, CHANNEL_MERGED, NULL);
+    bus_del_match("signal", TP_CHANNEL_CONF, CHANNEL_REMOVED, NULL);
     bus_del_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_ADDED, NULL);
     bus_add_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_REMOVED, NULL);
     
@@ -692,6 +700,12 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
         return channel_merged(c, msg, data);
 
     if (MATCHES(TP_CHANNEL_CONF_DRAFT, CHANNEL_REMOVED))
+        return channel_removed(c, msg, data);
+
+    if (MATCHES(TP_CHANNEL_CONF, CHANNEL_MERGED))
+        return channel_merged(c, msg, data);
+
+    if (MATCHES(TP_CHANNEL_CONF, CHANNEL_REMOVED))
         return channel_removed(c, msg, data);
 
     if (MATCHES(TP_CONFERENCE, MEMBER_CHANNEL_ADDED))
@@ -950,7 +964,8 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                     VARIANT_PATH_ARRAY(&idict, members);
                     event.members = &members[0];
                 }
-                else if (!strcmp(name, PROP_INITIAL_CHANNELS)) {
+                else if (!strcmp(name, PROP_DRAFT_INITIAL_CHANNELS) ||
+                         !strcmp(name, PROP_INITIAL_CHANNELS)) {
                     ITER_NEXT(&idict);
                     VARIANT_PATH_ARRAY(&idict, members);
                     event.members = &members[0];
