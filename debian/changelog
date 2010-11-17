@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.46) unstable; urgency=low
+
+  * Initial support for the new stable (.DRAFT-less) conference interface.
+  * Fixes: NB#203663.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 17 Nov 2010 16:26:51 +0200
+
 ohm-plugins-misc (1:1.45) unstable; urgency=low
 
   * Better shave argument protection.
