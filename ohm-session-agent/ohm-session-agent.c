@@ -26,6 +26,7 @@ USA.
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
+#include <stdarg.h>
 
 #include <glib.h>
 #include <dbus/dbus.h>
@@ -46,11 +47,26 @@ USA.
 
 #define MAX_ARGS 32
 
-#define LOG_ERROR(fmt, args...) \
-    fprintf(stderr, "ohm-session-agent: error: "fmt"\n" , ## args)
-#define LOG_INFO(fmt, args...) \
-    fprintf(stderr, "ohm-session-agent: "fmt"\n" , ## args)
+#define LOG_ERROR(fmt, args...)                                             \
+    do {                                                                    \
+        if (log_mask & LOG_MASK_ERROR)                                      \
+            fprintf(stderr, "ohm-session-agent: error: "fmt"\n" , ## args); \
+    } while (0)
 
+#define LOG_INFO(fmt, args...)                                          \
+    do {                                                                \
+        if (log_mask & LOG_MASK_INFO)                                   \
+            fprintf(stderr, "ohm-session-agent: "fmt"\n" , ## args);    \
+    } while (0)
+
+
+enum {
+    LOG_MASK_ERROR   = 0x01,
+    LOG_MASK_WARNING = 0x02,
+    LOG_MASK_INFO    = 0x04,
+};
+
+static int log_mask = 0;
 
 static GMainLoop      *main_loop;
 static DBusConnection *sys_bus;
@@ -70,25 +86,84 @@ static int  ohm_notify_failure(void);
 static void restart_after(int);
 
 
-void
-print_usage(const char *argv0, int exit_code)
+
+static void
+print_usage(const char *argv0, int exit_code, const char *format, ...)
 {
-    printf("usage: %s [-n name] [-p path] [-s signal] [-a address] [-h]\n",
-           basename(argv0));
+    va_list ap;
+    
+    if (format && *format) {
+        va_start(ap, format);
+        vprintf(format, ap);
+        va_end(ap);
+    }
+    
+    printf("usage: %s [options]\n\n"
+           "The possible options are:\n"
+           "  -n, --name=NAME                     notify D-BUS <NAME>\n"
+           "  -p, --path=PATH                     notify D-BUS <PATH>\n"
+           "  -s, --signal=SIGNAL                 notify D-BUS <SIGNAL>\n"
+           "  -a, --address=ADDR                  notify <ADDRESS>\n"
+           "  -h, --help                          show help on usage\n"
+           "  -l, --log-level=LEVELS              set logging levels\n"
+           "      LEVELS is a comma separated list of info, error and warning\n"
+           "  -v, --verbose                       increase logging verbosity\n",
+           argv0);
 
     exit(exit_code);
+}
+
+
+static void parse_log_level(char *argv0, const char *level)
+{
+    const char *p;
+    
+    if (level == NULL) {
+        if (log_mask == 0)
+            log_mask = 1;
+        else {
+            log_mask <<= 1;
+            log_mask  |= 1;
+        }
+    }
+    else {
+        p = level;
+        while (p && *p) {
+#           define MATCHES(s, l) (!strcmp(s, l) ||              \
+                                  !strncmp(s, l",", sizeof(l",") - 1))
+            
+            if (MATCHES(p, "info"))
+                log_mask |= LOG_MASK_INFO;
+            else if (MATCHES(p, "error"))
+                log_mask |= LOG_MASK_ERROR;
+            else if (MATCHES(p, "warning"))
+                log_mask |= LOG_MASK_WARNING;
+            else {
+                print_usage(argv0, EINVAL, "invalid log level '%s'\n", p);
+                exit(1);
+            }
+
+            if ((p = strchr(p, ',')) != NULL)
+                p += 1;
+
+#           undef MATCHES
+        }
+    }
 }
 
 
 void
 parse_command_line(int argc, char **argv)
 {
+#define OPTIONS "n:p:s:a:l:vh"
     struct option options[] = {
-        { "name"   , required_argument, NULL, 'n' },
-        { "path"   , required_argument, NULL, 'p' },
-        { "signal" , required_argument, NULL, 's' },
-        { "address", required_argument, NULL, 'a' },
-        { "help"   , no_argument      , NULL, 'h' },
+        { "name"     , required_argument, NULL, 'n' },
+        { "path"     , required_argument, NULL, 'p' },
+        { "signal"   , required_argument, NULL, 's' },
+        { "address"  , required_argument, NULL, 'a' },
+        { "verbose"  , optional_argument, NULL, 'v' },
+        { "log-level", required_argument, NULL, 'l' },
+        { "help"     , no_argument      , NULL, 'h' },
         { NULL, 0, NULL, 0 }
     };
     
@@ -96,20 +171,22 @@ parse_command_line(int argc, char **argv)
     
     bus_address = getenv("DBUS_SESSION_BUS_ADDRESS");
 
-    while ((opt = getopt_long(argc, argv, "n:p:s:a:h", options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, OPTIONS, options, NULL)) != -1) {
         switch (opt) {
-        case 'h': print_usage(argv[0], 0);
+        case 'h': print_usage(argv[0], 0, "");
         case 'n': ohm_name    = optarg; break;
         case 'p': ohm_path    = optarg; break;
         case 's': ohm_signal  = optarg; break;
         case 'a': bus_address = optarg; break;
-        default:  print_usage(argv[0], EINVAL);
+        case 'v':
+        case 'l': parse_log_level(argv[0], optarg); break; 
+        default:  print_usage(argv[0], EINVAL, "invalid option '%c'", opt);
         }
     }
 
     if (bus_address == NULL) {
         LOG_ERROR("Failed to determine session DBUS address.");
-        print_usage(argv[0], EINVAL);
+        print_usage(argv[0], EINVAL, "");
     }
 }
 
