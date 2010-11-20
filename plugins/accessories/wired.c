@@ -136,9 +136,6 @@ static void  eci_cancel_update(void);
 
 static void find_device(const char *, input_dev_t *);
 
-static int fact_set_int   (OhmFact *fact, const char *name, int value);
-
-
 /*
  * devices of interest
  */
@@ -351,7 +348,6 @@ jack_connect(device_state_t *device)
 {
     if (!device->connected) {
         device->connected = 1;
-        fact_set_int(device->fact, "connected", 1);
     }
 }
 
@@ -364,7 +360,6 @@ jack_disconnect(device_state_t *device)
 {
     if (device->connected) {
         device->connected = 0;
-        fact_set_int(device->fact, "connected", 0);
     }
 }
 
@@ -680,26 +675,6 @@ release_facts(void)
             state->fact = NULL;
         }
     }
-}
-
-
-/********************
- * fact_set_int
- ********************/
-static int
-fact_set_int(OhmFact *fact, const char *name, int value)
-{
-    GValue *gval;
-
-    if (fact == NULL)
-        return FALSE;
-
-    if ((gval = ohm_value_from_int(value)) != NULL) {
-        ohm_fact_set(fact, name, gval);
-        return TRUE;
-    }
-    else
-        return FALSE;
 }
 
 
