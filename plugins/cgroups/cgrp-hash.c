@@ -316,6 +316,28 @@ proc_hash_lookup(cgrp_context_t *ctx, pid_t pid)
 
 
 /********************
+ * proc_hash_foreach
+ ********************/
+void
+proc_hash_foreach(cgrp_context_t *ctx,
+                  void (*callback)(cgrp_context_t *, cgrp_process_t *, void *),
+                  void *data)
+{
+    cgrp_process_t *process;
+    list_hook_t    *p, *n;
+    int             i;
+
+    if (ctx->proctbl != NULL) {
+        for (i = 0; i < PROC_BUCKETS; i++)
+            list_foreach(ctx->proctbl + i, p, n) {
+                process = list_entry(p, cgrp_process_t, proc_hook);
+                callback(ctx, process, data);
+            }
+    }
+}
+
+
+/********************
  * group_hash_init
  ********************/
 int

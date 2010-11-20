@@ -69,6 +69,9 @@ static void subscr_init(cgrp_context_t *ctx);
 static void subscr_exit(cgrp_context_t *ctx);
 static void subscr_notify(cgrp_context_t *ctx, int what, pid_t pid);
 
+static void process_remove(cgrp_context_t *ctx, cgrp_process_t *process);
+
+
 typedef struct {
     list_hook_t   hook;
     void        (*cb)(cgrp_context_t *, int, pid_t, void *);
@@ -100,6 +103,15 @@ proc_init(cgrp_context_t *ctx)
 }
 
 
+static void
+remove_process(cgrp_context_t *ctx, cgrp_process_t *process, void *data)
+{
+    (void)data;
+
+    process_remove(ctx, process);
+}
+
+
 /********************
  * proc_exit
  ********************/
@@ -112,6 +124,8 @@ proc_exit(cgrp_context_t *ctx)
 
     proc_unsubscribe();
     netlink_close();
+
+    proc_hash_foreach(ctx, remove_process, NULL);
 
     mypid = 0;
 }
@@ -761,7 +775,7 @@ process_get_ppid(cgrp_proc_attr_t *attr)
 /********************
  * process_remove
  ********************/
-void
+static void
 process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
 {
     if (process == ctx->active_process) {
