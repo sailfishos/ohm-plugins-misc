@@ -1,3 +1,17 @@
+ohm-plugins-misc (1:1.46) unstable; urgency=low
+
+  [ Krisztian Litkey ]
+  * Initial support for the new stable (.DRAFT-less) conference interface.
+  * Fixes: NB#203663.
+  * ohm-session-agent: added verbosity control, don't log by default.
+  * Fixes: NB#205597.
+  * Emit also the pid in apptrack notifications and responses.
+
+  [ Ismo Puustinen ]
+  * Do not set accessory facts twice. (Fixes: NB#201169)
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 19 Nov 2010 15:36:32 +0200
+
 ohm-plugins-misc (1:1.45) unstable; urgency=low
 
   * Better shave argument protection.
