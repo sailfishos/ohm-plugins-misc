@@ -20,6 +20,7 @@ USA.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include <glib.h>
 #include <dbus/dbus.h>
@@ -47,12 +48,14 @@ static DBusConnection *sys_conn;
 
 
 static void
-active_application(const char *binary, const char *group, const char *argv0)
+active_application(const char *binary, const char *group, const char *argv0,
+                   uint32_t pid)
 {
-    printf("currently active application: %s (group: %s, argv[0]: %s)\n",
+    printf("active application: %s (group: %s, argv[0]: %s, pid: %u)\n",
            binary[0] ? binary : "<none>",
            group[0]  ? group  : "<none>",
-           argv0[0]  ? argv0  : "<none>");
+           argv0[0]  ? argv0  : "<none>",
+           pid);
 }
 
 
@@ -62,6 +65,7 @@ subscribe_reply(DBusPendingCall *pcall, void *user_data)
 {
     DBusMessage *reply;
     const char  *binary, *group, *argv0;
+    uint32_t     pid;
 
     (void)user_data;
 
@@ -76,10 +80,11 @@ subscribe_reply(DBusPendingCall *pcall, void *user_data)
                                DBUS_TYPE_STRING, &binary,
                                DBUS_TYPE_STRING, &group,
                                DBUS_TYPE_STRING, &argv0,
+                               DBUS_TYPE_UINT32, &pid,
                                DBUS_TYPE_INVALID))
         fatal("failed to parse D-BUS reply message");
 
-    active_application(binary, group, argv0);
+    active_application(binary, group, argv0, pid);
     
     dbus_message_unref(reply);
     dbus_pending_call_unref(pcall);
@@ -113,7 +118,8 @@ static DBusHandlerResult
 apptrack_notification(DBusConnection *conn, DBusMessage *msg, void *user_data)
 {
     const char *binary, *group, *argv0;
-    
+    uint32_t    pid;
+
     (void)conn;
     (void)msg;
     (void)user_data;
@@ -125,10 +131,11 @@ apptrack_notification(DBusConnection *conn, DBusMessage *msg, void *user_data)
                                DBUS_TYPE_STRING, &binary,
                                DBUS_TYPE_STRING, &group,
                                DBUS_TYPE_STRING, &argv0,
+                               DBUS_TYPE_UINT32, &pid,
                                DBUS_TYPE_INVALID))
         fatal("failed to parse D-BUS apptrack notification");
     
-    active_application(binary, group, argv0);
+    active_application(binary, group, argv0, pid);
     
     return DBUS_HANDLER_RESULT_HANDLED;
 }

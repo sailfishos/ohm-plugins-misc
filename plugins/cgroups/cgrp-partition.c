@@ -51,6 +51,8 @@ static int discover_cgroupfs(cgrp_context_t *);
 static int mount_cgroupfs   (cgrp_context_t *);
 
 static int  open_control (cgrp_partition_t *, char *);
+static void close_control(int *);
+
 static int  write_control(int, char *, ...)     \
     __attribute__ ((format(printf, 2, 3)));
 
@@ -213,10 +215,10 @@ partition_del(cgrp_context_t *ctx, cgrp_partition_t *partition)
     
     part_hash_delete(ctx, partition->name);
     
-    close(partition->control.tasks);
-    close(partition->control.freeze);
-    close(partition->control.cpu);
-    close(partition->control.mem);
+    close_control(&partition->control.tasks);
+    close_control(&partition->control.freeze);
+    close_control(&partition->control.cpu);
+    close_control(&partition->control.mem);
 
     ctrl_setting_del(partition->settings);
 
@@ -486,9 +488,9 @@ partition_limit_rt(cgrp_partition_t *partition, int period, int runtime)
     else
         success = FALSE;
     
-    if (ctlper)
+    if (ctlper >= 0)
         close(ctlper);
-    if (ctlrun)
+    if (ctlrun >= 0)
         close(ctlrun);
     
     return success;
@@ -658,6 +660,19 @@ open_control(cgrp_partition_t *partition, char *control)
 
     snprintf(path, sizeof(path), "%s/%s", partition->path, control);
     return open(path, O_WRONLY);
+}
+
+
+/********************
+ * close_contol
+ ********************/
+static void
+close_control(int *fd)
+{
+    if (*fd >= 0) {
+        close(*fd);
+        *fd = -1;
+    }
 }
 
 

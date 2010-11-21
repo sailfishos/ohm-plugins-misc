@@ -111,7 +111,7 @@ OHM_PLUGIN_DESCRIPTION(
     "OHM media playback",             /* description */
     "0.0.1",                          /* version */
     "janos.f.kovacs@nokia.com",       /* author */
-    OHM_LICENSE_NON_FREE,             /* license */
+    OHM_LICENSE_LGPL,             /* license */
     plugin_init,                      /* initalize */
     plugin_destroy,                   /* destroy */
     NULL                              /* notify */

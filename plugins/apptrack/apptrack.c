@@ -21,6 +21,7 @@ USA.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include <dbus/dbus.h>
 
@@ -149,6 +150,8 @@ client_subscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
 {
     DBusMessage *reply;
     const char  *sender, *binary, *argv0, *group;
+    pid_t        pid;
+    uint32_t     u32pid;
     
     (void)user_data;
     
@@ -162,7 +165,7 @@ client_subscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
         binary = NULL;
         group  = NULL;
 
-        app_query(NULL, &binary, &argv0, &group);
+        app_query(&pid, &binary, &argv0, &group);
 
         if (binary == NULL)
             binary = "";
@@ -170,6 +173,7 @@ client_subscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
             argv0 = "";
         if (group == NULL)
             group = "";
+        u32pid = pid;
 
         if ((reply = dbus_message_new_method_return(msg)) == NULL) {
             OHM_ERROR("apptrack: failed to allocate D-BUS reply");
@@ -180,6 +184,7 @@ client_subscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
                                      DBUS_TYPE_STRING, &binary,
                                      DBUS_TYPE_STRING, &group,
                                      DBUS_TYPE_STRING, &argv0,
+                                     DBUS_TYPE_UINT32, &u32pid,
                                      DBUS_TYPE_INVALID))
             dbus_connection_send(conn, reply, NULL);
         else
@@ -226,9 +231,11 @@ client_unsubscribe(DBusConnection *conn, DBusMessage *msg, void *user_data)
  * client_notify
  ********************/
 static void
-client_notify(const char *binary, const char *group, const char *argv0)
+client_notify(const char *binary, const char *group, const char *argv0,
+              pid_t pid)
 {
     DBusMessage *msg;
+    uint32_t     u32pid;
 
     if ((msg = dbus_message_new_signal(APPTRACK_PATH, APPTRACK_INTERFACE,
                                        APPTRACK_NOTIFY)) == NULL) {
@@ -236,10 +243,12 @@ client_notify(const char *binary, const char *group, const char *argv0)
         return;
     }
 
+    u32pid = pid;
     if (dbus_message_append_args(msg,
                                  DBUS_TYPE_STRING, &binary,
                                  DBUS_TYPE_STRING, &group,
                                  DBUS_TYPE_STRING, &argv0,
+                                 DBUS_TYPE_UINT32, &u32pid,
                                  DBUS_TYPE_INVALID))
         dbus_connection_send(bus, msg, NULL);
     else
@@ -274,7 +283,7 @@ app_change_cb(pid_t pid, const char *binary, const char *argv0,
     if (group == NULL)
         group = "";
 
-    client_notify(binary, group, argv0);
+    client_notify(binary, group, argv0, pid);
 }
 
 
@@ -362,7 +371,7 @@ plugin_exit(OhmPlugin *plugin)
  *****************************************************************************/
 
 OHM_PLUGIN_DESCRIPTION("apptrack", "0.0.1", "krisztian.litkey@nokia.com",
-                       OHM_LICENSE_NON_FREE,
+                       OHM_LICENSE_LGPL,
                        plugin_init, plugin_exit, NULL);
 
 OHM_PLUGIN_REQUIRES_METHODS(apptrack, 3,

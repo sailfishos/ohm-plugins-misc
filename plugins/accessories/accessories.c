@@ -434,7 +434,7 @@ int dres_all(void)
 OHM_PLUGIN_DESCRIPTION("accessories",
                        "0.0.2",
                        "janos.f.kovacs@nokia.com",
-                       OHM_LICENSE_NON_FREE,
+                       OHM_LICENSE_LGPL,
                        plugin_init,
                        plugin_exit,
                        NULL);

@@ -688,7 +688,9 @@ int  proc_hash_insert(cgrp_context_t *, cgrp_process_t *);
 cgrp_process_t *proc_hash_remove(cgrp_context_t *, pid_t);
 void proc_hash_unhash(cgrp_context_t *, cgrp_process_t *);
 cgrp_process_t *proc_hash_lookup(cgrp_context_t *, pid_t);
-
+void proc_hash_foreach(cgrp_context_t *,
+                       void (*)(cgrp_context_t *, cgrp_process_t *, void *),
+                       void *);
 int  group_hash_init  (cgrp_context_t *);
 void group_hash_exit  (cgrp_context_t *);
 int  group_hash_insert(cgrp_context_t *, cgrp_group_t *);

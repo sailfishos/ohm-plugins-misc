@@ -192,7 +192,7 @@ static void plugin_exit(OhmPlugin *plugin)
 OHM_PLUGIN_DESCRIPTION("videoep",
                        "0.0.1",
                        "janos.f.kovacs@nokia.com",
-                       OHM_LICENSE_NON_FREE,
+                       OHM_LICENSE_LGPL,
                        plugin_init,
                        plugin_exit,
                        NULL);

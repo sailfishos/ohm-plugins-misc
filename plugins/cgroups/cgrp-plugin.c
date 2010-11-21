@@ -210,7 +210,7 @@ OHM_EXPORTABLE(void, cgrp_app_query, (pid_t *pid,
 OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        PLUGIN_VERSION,
                        "krisztian.litkey@nokia.com",
-                       OHM_LICENSE_NON_FREE, /* OHM_LICENSE_LGPL */
+                       OHM_LICENSE_LGPL, /* OHM_LICENSE_LGPL */
                        plugin_init, plugin_exit, NULL);
 
 

@@ -50,12 +50,14 @@ static void free_entry(gpointer ptr);
 
 void auth_init(OhmPlugin *plugin)
 {
-    char *default_str;
-    char *classes;
+    const char *default_str;
+    const char *classes;
     char *klass;
-    char *klass_configuration;
+    const char *klass_configuration;
     char *saveptr1, *saveptr2;
     configuration_entry *entry;
+    char class_buf[512];
+    char conf_buf[512];
 
     security_configuration = g_hash_table_new_full(g_str_hash, g_str_equal,
                                                    free_key, free_entry);
@@ -64,13 +66,14 @@ void auth_init(OhmPlugin *plugin)
 
     if ((default_str = ohm_plugin_get_param(plugin, "default")) != NULL) {
         if (!strcmp(default_str, "accept")) {
-          default_policy = auth_accept;
+            default_policy = auth_accept;
         }
         else if (!strcmp(default_str, "reject")) {
-          default_policy = auth_reject;
+            default_policy = auth_reject;
         }
         else {
-            OHM_ERROR("resource: invalid value for the default security policy: '%s'", default_str);
+            OHM_ERROR("resource: invalid value for the default security "
+                      "policy: '%s'", default_str);
         }
     }
 
@@ -80,22 +83,29 @@ void auth_init(OhmPlugin *plugin)
     if ((classes = ohm_plugin_get_param(plugin, "classes")) == NULL)
         OHM_INFO("resource: no security configuration provided");
     else {
-        klass = strtok_r(classes, ",", &saveptr1);
+        strncpy(class_buf, classes, sizeof(class_buf));
+        class_buf[sizeof(class_buf)-1] = '\0';
+
+        klass = strtok_r(class_buf, ",", &saveptr1);
         while (klass != NULL) {
 
-          if ((klass_configuration = ohm_plugin_get_param(plugin, klass)) == NULL)
-              OHM_INFO("resource: no security configuration provided for the class '%s'", klass);
+          if (!(klass_configuration = ohm_plugin_get_param(plugin, klass)))
+              OHM_INFO("resource: no security configuration provided "
+                       "for class '%s'", klass);
           else {
-              entry = g_malloc(sizeof(configuration_entry));
-              entry->method = g_strdup( strtok_r(klass_configuration, ":", &saveptr2) );
-              entry->arg    = g_strdup( strtok_r(NULL,                ":", &saveptr2) );
+              strncpy(conf_buf, klass_configuration, sizeof(conf_buf));
+              conf_buf[sizeof(conf_buf)-1] = '\0';
+
+              entry = malloc(sizeof(configuration_entry));
+              entry->method = strdup( strtok_r(conf_buf, ":", &saveptr2) );
+              entry->arg    = strdup( strtok_r(NULL,     ":", &saveptr2) );
 
               OHM_INFO("method: '%s', arg: '%s'", entry->method, entry->arg);
 
-              g_hash_table_insert(security_configuration, g_strdup(klass), entry);
+              g_hash_table_insert(security_configuration, strdup(klass),entry);
 
-              OHM_INFO("resource: security configuration for the class '%s' is %s",
-                        klass, klass_configuration);
+              OHM_INFO("resource: security configuration for the class '%s' "
+                       "is %s", klass, klass_configuration);
           }
 
           klass = strtok_r(NULL, ",", &saveptr1);
@@ -104,6 +114,15 @@ void auth_init(OhmPlugin *plugin)
 
     OHM_INFO("resource: security configuration table contains %d element(s)",
              g_hash_table_size(security_configuration));
+}
+
+void auth_exit(OhmPlugin *plugin) {
+
+    (void)plugin;
+
+    OHM_INFO("resource: destroying security configuration table");
+    
+    g_hash_table_destroy(security_configuration);
 }
 
 void auth_query(const char* klass, char** method, char** arg) {
@@ -132,16 +151,10 @@ static void free_key(gpointer ptr)
 static void free_entry(gpointer ptr)
 {
     configuration_entry *entry = (configuration_entry *)ptr;
-
+    
     g_free(entry->method);
     g_free(entry->arg);
     g_free(entry);
-}
-
-void auth_exit(OhmPlugin *plugin) {
-  OHM_INFO("resource: destroying security configuration table");
-
-  g_hash_table_destroy(security_configuration);
 }
 
 /*!
