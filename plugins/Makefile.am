@@ -71,6 +71,11 @@ if HAVE_SP_TIMESTAMP
 SUBDIRS += timestamp
 endif
 
+if BUILD_VIBRA
+SUBDIRS += \
+	vibra
+endif
+
 
 clean-local:
 	rm -f *~

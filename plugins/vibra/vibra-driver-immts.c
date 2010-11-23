@@ -31,7 +31,7 @@ USA.
 #define IMMTS_GAME         (VIBE_MAX_DEV_DEVICE_PRIORITY - 2)
 #define IMMTS_UI           (VIBE_MAX_DEV_DEVICE_PRIORITY - 1)
 #define IMMTS_EVENT        (VIBE_MAX_OEM_DEVICE_PRIORITY    )
-#define IMMTS_ALL           0x7fffffff
+#define IMMTS_ALL           MASK_RANGE(IMMTS_OTHER_MIN, IMMTS_EVENT)
 
 #define IMMTS_VOLUME_OFF    0
 #define IMMTS_VOLUME_MAX    10000
@@ -149,7 +149,7 @@ immts_enforce(vibra_context_t *ctx)
     if (!vibra_enable_priorities(dev, mask))
         OHM_ERROR("vibra: failed to enable/disable priorities");
 #else
-    muted = (mask == IMMTS_ALL);
+    muted = (mask == 0x0);
 
     if (!vibra_mute(dev, muted))
         OHM_ERROR("vibra: failed to %s vibra", muted ? "mute" : "unmute");    
