@@ -75,6 +75,9 @@ static void          removed_cb(void *, OhmFact *);
 static void          updated_cb(void *, OhmFact *, GQuark, gpointer);
 static char         *time_str(unsigned long long, char *, int);
 
+static guint         updated_id;
+static guint         inserted_id;
+static guint         removed_id;
 
 static void fsif_init(OhmPlugin *plugin)
 {
@@ -82,9 +85,29 @@ static void fsif_init(OhmPlugin *plugin)
 
     fs = ohm_fact_store_get_fact_store();
 
-    g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
-    g_signal_connect(G_OBJECT(fs), "inserted", G_CALLBACK(inserted_cb), NULL);
-    g_signal_connect(G_OBJECT(fs), "removed" , G_CALLBACK(removed_cb) , NULL);
+    updated_id  = g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
+    inserted_id = g_signal_connect(G_OBJECT(fs), "inserted", G_CALLBACK(inserted_cb), NULL);
+    removed_id  = g_signal_connect(G_OBJECT(fs), "removed" , G_CALLBACK(removed_cb) , NULL);
+}
+
+void fsif_exit(OhmPlugin *plugin)
+{
+    (void)plugin;
+
+    fs = ohm_fact_store_get_fact_store();
+
+    if (g_signal_handler_is_connected(G_OBJECT(fs), updated_id)) {
+        g_signal_handler_disconnect(G_OBJECT(fs), updated_id);
+        updated_id = 0;
+    }
+    if (g_signal_handler_is_connected(G_OBJECT(fs), inserted_id)) {
+        g_signal_handler_disconnect(G_OBJECT(fs), inserted_id);
+        inserted_id = 0;
+    }
+    if (g_signal_handler_is_connected(G_OBJECT(fs), removed_id)) {
+        g_signal_handler_disconnect(G_OBJECT(fs), removed_id);
+        removed_id = 0;
+    }
 }
 
 static int fsif_add_factstore_entry(char *name, fsif_field_t *fldlist)

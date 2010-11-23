@@ -67,7 +67,7 @@ static void plugin_init(OhmPlugin *plugin)
 
 static void plugin_destroy(OhmPlugin *plugin)
 {
-    (void)plugin;
+    fsif_exit(plugin);
 }
 
 
