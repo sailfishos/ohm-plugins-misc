@@ -27,6 +27,9 @@
 /* Build resource plugin ? */
 #undef BUILD_RESOURCE
 
+/* Build vibra plugin ? */
+#undef BUILD_VIBRA
+
 /* Build videoep plugin ? */
 #undef BUILD_VIDEOEP
 

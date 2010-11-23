@@ -604,6 +604,33 @@ else
     AC_MSG_NOTICE([authentication/authorization support is disabled])
 fi
 
+# Check if vibra plugin should be/can be built
+AC_ARG_ENABLE(vibra,
+              [  --enable-vibra        enable vibra plugin support],
+              enable_vibra=$enableval,enable_vibra=no)
+
+if test x$enable_vibra != xno;
+then
+    if test -f /usr/include/ImmVibeCore.h; then
+        enable_vibra=yes
+    else
+        AC_MSG_ERROR([*** missing immvibe headers])
+    fi
+fi
+
+AM_CONDITIONAL(BUILD_VIBRA, test x$enable_vibra = xyes)
+
+if test x$enable_vibra = xyes;
+then
+  AC_DEFINE([BUILD_VIBRA], 1, [Build vibra plugin ?])
+  AC_MSG_NOTICE([Vibra plugin WILL BE built])
+else
+  AC_MSG_NOTICE([Vibra plugin WILL NOT be built])
+fi
+
+AC_SUBST(BUILD_VIBRA)
+
+
 # shave
 SHAVE_INIT([build-aux], [enable])
 
