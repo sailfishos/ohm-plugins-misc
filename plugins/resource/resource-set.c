@@ -25,6 +25,8 @@ USA.
 #include <stdarg.h>
 #include <errno.h>
 
+#include <glib.h>
+
 #include "plugin.h"
 #include "resource-spec.h"
 #include "fsif.h"
@@ -43,6 +45,8 @@ USA.
 
 static resource_set_t  *hash_table[HASH_DIM];
 
+static gboolean idle_task(gpointer);
+
 static void enqueue_send_request(resource_set_t *, resource_set_field_id_t,
                                  uint32_t, uint32_t);
 static void dequeue_and_send(resource_set_t*,resource_set_field_id_t,uint32_t);
@@ -52,6 +56,7 @@ static int add_factstore_entry(resource_set_t *);
 static int delete_factstore_entry(resource_set_t *);
 static int update_factstore_flags(resource_set_t *);
 static int update_factstore_request(resource_set_t *);
+static int update_factstore_block(resource_set_t *);
 static int update_factstore_audio(resource_set_t *, resource_audio_stream_t *);
 
 static void add_to_hash_table(resource_set_t *);
@@ -132,6 +137,9 @@ void resource_set_destroy(resset_t *resset)
                 rs->specs = spec->any.next;
                 resource_spec_destroy(spec);
             }
+
+            if (rs->idle.srcid)
+                g_source_remove(rs->idle.srcid);
 
             destroy_queue(rs, resource_set_granted);
             destroy_queue(rs, resource_set_advice);
@@ -223,6 +231,7 @@ int resource_set_update_factstore(resset_t *resset, resource_set_update_t what)
             switch (what) {
             case update_flags:   success = update_factstore_flags(rs);   break;
             case update_request: success = update_factstore_request(rs); break;
+            case update_block:   success = update_factstore_block(rs);   break;
             default:             success = FALSE;                        break;
             }
         }
@@ -258,6 +267,45 @@ void resource_set_send_queued_changes(uint32_t manager_id, uint32_t txid)
     }
 }
 
+void resource_set_send_release_request(resource_set_t *rs)
+{
+    resset_t *resset;
+    resmsg_t  msg;
+
+    if (rs == NULL || (resset = rs->resset) == NULL) {
+        OHM_ERROR("resource: refuse to send release request: argument error");
+        return;
+    }
+
+    memset(&msg, 0, sizeof(msg));
+    msg.possess.type  = RESMSG_RELEASE;
+    msg.possess.id    = resset->id;
+    msg.possess.reqno = 0;
+
+    if (resproto_send_message(resset, &msg, NULL)) {
+        OHM_DEBUG(DBG_SET, "%s/%u (manager id %u) sent release request",
+                  resset->peer, resset->id, rs->manager_id);
+    }
+    else {
+        OHM_ERROR("resource: failed to send release request to %s/%u "
+                  "(manager id %u)", resset->peer, resset->id, rs->manager_id);
+    }
+}
+
+int resource_set_add_idle_task(resource_set_t *rs, resource_set_task_t task)
+{
+    int success;
+    if (rs->idle.srcid != 0)
+        success = FALSE;
+    else {
+        rs->idle.srcid = g_idle_add(idle_task, (gpointer)rs);
+        rs->idle.task  = task;
+
+        success = rs->idle.srcid ? TRUE : FALSE;
+    }
+
+    return success;
+}
 
 resource_set_t *resource_set_find(fsif_entry_t *entry)
 {
@@ -304,6 +352,17 @@ void resource_set_dump_message(resmsg_t *msg,resset_t *resset,const char *dir)
  * @}
  */
 
+static gboolean idle_task(gpointer data)
+{
+    resource_set_t *rs = (resource_set_t *)data;
+
+    if (rs && rs->idle.task)
+        rs->idle.task(rs);
+
+    return FALSE;
+}
+
+
 static void enqueue_send_request(resource_set_t          *rs,
                                  resource_set_field_id_t  what,
                                  uint32_t                 txid,
@@ -321,7 +380,7 @@ static void enqueue_send_request(resource_set_t          *rs,
         return;
     }
 
-    switch (what) {        
+    switch (what) {
     case resource_set_granted:  value=&rs->granted;  type="granted";   break;
     case resource_set_advice:   value=&rs->advice;   type="advice";    break;
     default:                                                           return;
@@ -461,6 +520,7 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("granted"    , rs->granted.factstore),
         INTEGER_FIELD ("advice"     , rs->advice.factstore ),
         STRING_FIELD  ("request"    , rs->request          ),
+        INTEGER_FIELD ("block"      , rs->block            ),
         INTEGER_FIELD ("reqno"      , 0                    ),
         STRING_FIELD  ("audiogr"    , audiogr              ),
         INVALID_FIELD
@@ -514,9 +574,8 @@ static int update_factstore_flags(resource_set_t *rs)
 
 static int update_factstore_request(resource_set_t *rs)
 {
-    static int reqno = 0;
-
-    int        success;
+    static int  reqno;
+    int         success;
 
     fsif_field_t  selist[]  = {
         INTEGER_FIELD("manager_id", rs->manager_id),
@@ -534,13 +593,30 @@ static int update_factstore_request(resource_set_t *rs)
     return success;
 }
 
+static int update_factstore_block(resource_set_t *rs)
+{
+    int success;
+
+    fsif_field_t  selist[]  = {
+        INTEGER_FIELD("manager_id", rs->manager_id),
+        INVALID_FIELD
+    };
+    fsif_field_t  fldlist[] = {
+        INTEGER_FIELD ("block"  , rs->block),
+        INVALID_FIELD
+    };
+
+    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                          selist, fldlist);
+
+    return success;
+}
+
 
 static int update_factstore_audio(resource_set_t          *rs,
                                   resource_audio_stream_t *audio)
 {
-    static int reqno = 0;
-
-    int        success;
+    int success;
 
     fsif_field_t  selist[]  = {
         INTEGER_FIELD("manager_id", rs->manager_id),

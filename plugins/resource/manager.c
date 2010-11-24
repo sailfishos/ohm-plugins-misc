@@ -53,12 +53,15 @@ OHM_IMPORTABLE(int, auth_request, (char *id_type,  void *id,
 static uint32_t     trans_id;
 static auth_data_t *auth_reqs;
 
+static void forced_auto_release(resource_set_t *);
+
 static void keyword_list(char *, char **, int);
 
 static void register_cb(int, char *, void *);
 static void granted_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void advice_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 static void request_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+static void block_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 
 static int  auth_request_create(resmsg_t *, resset_t *, void *);
 static void auth_request_destroy(auth_data_t *);
@@ -95,6 +98,7 @@ void manager_init(OhmPlugin *plugin)
     ADD_FIELD_WATCH("granted", granted_cb);
     ADD_FIELD_WATCH("advice" , advice_cb );
     ADD_FIELD_WATCH("request", request_cb);
+    ADD_FIELD_WATCH("block"  , block_cb  );
 
 #undef ADD_FIELD_WATCH
 }
@@ -154,7 +158,7 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
     resource_set_t  *rs     = resset->userdata;
     resmsg_record_t *record = &msg->record;
-    uint32_t         reqno  = record->reqno;
+ /* uint32_t         reqno  = record->reqno; */
     int32_t          errcod = 0;
     const char      *errmsg = "OK";
 
@@ -205,7 +209,7 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
 void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
     resource_set_t *rs     = resset->userdata;
-    uint32_t        reqno  = msg->any.reqno;
+ /* uint32_t        reqno  = msg->any.reqno; */
     int32_t         errcod = 0;
     const char     *errmsg = "OK";
     int             acquire;
@@ -257,7 +261,7 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
 void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
     resource_set_t *rs     = resset->userdata;
-    uint32_t        reqno  = msg->any.reqno;
+/*  uint32_t        reqno  = msg->any.reqno; */
     int32_t         errcod = 0;
     const char     *errmsg = "OK";
     int             release;
@@ -287,6 +291,11 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
             release = FALSE;
         }
 
+        if (rs->block) {
+            rs->block = 0;
+            resource_set_update_factstore(resset, update_block);
+        }
+
         if (release) {
             resource_set_update_factstore(resset, update_request);
             dresif_resource_request(rs->manager_id, resset->peer,
@@ -309,7 +318,7 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
 void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
     resource_set_t        *rs      = resset->userdata;
-    uint32_t               reqno   = msg->any.reqno;
+ /* uint32_t               reqno   = msg->any.reqno; */
     resmsg_audio_t        *audio   = &msg->audio;
     char                  *group   = audio->group;
     uint32_t               pid     = audio->pid;
@@ -350,6 +359,35 @@ void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
  * @}
  */
 
+static void forced_auto_release(resource_set_t *rs)
+{
+    static resmsg_t zeromsg;
+
+    resset_t *resset;
+
+    if (rs && (resset = rs->resset)) {
+        if (rs->block && rs->request && !strcmp(rs->request, "acquire")) {
+
+            OHM_DEBUG(DBG_MGR, "release resource set %s/%u (manager id %u)",
+                      resset->peer, resset->id, rs->manager_id);
+
+            transaction_start(rs, &zeromsg);
+
+            free(rs->request);
+            rs->request = strdup("release");
+            rs->block   = 0;
+
+            resource_set_update_factstore(resset, update_block);
+            resource_set_update_factstore(resset, update_request);
+
+            dresif_resource_request(rs->manager_id, resset->peer,
+                                    resset->id, "release");
+
+            transaction_end(rs);
+        }
+    }
+}
+
 static void keyword_list(char *str, char **list, int length)
 {
     char *p;
@@ -377,6 +415,8 @@ static void register_cb(int authorized, char *autherr, void *data)
     int32_t         errcod     = 0;
     const char     *errmsg     = "OK";
     resource_set_t *rs;
+
+    (void)autherr;
 
     if (!authreq->canceled) {
 
@@ -528,6 +568,44 @@ static void request_cb(fsif_entry_t *entry,
 
             free(rs->request);
             rs->request = strdup(request);
+        }
+    }
+}
+
+static void block_cb(fsif_entry_t *entry,
+                     char         *name,
+                     fsif_field_t *fld,
+                     void         *ud)
+{
+    int32_t         block;
+    resource_set_t *rs;
+    resset_t       *resset;
+
+    (void)name;
+    (void)ud;
+
+    if (fld->type != fldtype_integer) {
+        OHM_ERROR("resource: [%s] invalid field type: not integer",
+                  __FUNCTION__);
+        return;
+    }
+
+    block = fld->value.integer;
+
+    if ((rs = resource_set_find(entry))  && (resset = rs->resset)) {
+        if (block != rs->block) {
+            OHM_DEBUG(DBG_MGR,"resource set %s/%u (manager id %u) block "
+                      "changed: %d", resset->peer, resset->id, rs->manager_id,
+                      block);
+
+            if (block) {
+                if ((resset->mode & RESOURCE_AUTO_RELEASE) == 0)
+                    resource_set_send_release_request(rs);
+                else
+                    resource_set_add_idle_task(rs, forced_auto_release);
+            }
+
+            rs->block = block;
         }
     }
 }

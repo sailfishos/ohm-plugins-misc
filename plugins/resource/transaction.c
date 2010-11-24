@@ -142,7 +142,6 @@ int transaction_ref(uint32_t txid)
 int transaction_unref(uint32_t txid)
 {
     transaction_t *tx = find_transaction(txid);
-    uint32_t id;
     int success;
 
     if (tx == NULL || tx->refcnt <= 0)
@@ -209,7 +208,6 @@ static void complete_transaction(uint32_t txid)
 {
     transaction_t *tx;
     uint32_t       id;
-    int            success;
 
     if (txid == txread) {
         for (id = txread;  id <= txwrite;   id++)  {

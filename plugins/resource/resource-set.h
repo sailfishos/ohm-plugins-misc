@@ -32,6 +32,8 @@ typedef struct _OhmPlugin OhmPlugin;
 struct _OhmFact;
 union resource_spec_u;
 
+typedef void (*resource_set_task_t)(struct resource_set_s *);
+
 typedef enum {
     resource_set_unknown_field = 0,
     resource_set_granted,
@@ -70,17 +72,25 @@ typedef struct resource_set_s {
     resset_t                *resset;     /* link to libresource */
     union resource_spec_u   *specs;      /* resource specifications if any */
     char                    *request;    /* either 'acquire', 'release'  */
+    int32_t                  block;      /* manager forced release */
     resource_set_output_t    granted;    /* granted resources of this set */
     resource_set_output_t    advice;     /* advice on this resource set */
     resource_set_qhead_t     qhead;      /* queue for delayed responses */
     uint32_t                 reqno;
+    struct {
+        uint32_t            srcid;
+        resource_set_task_t task;
+    }                        idle;       /* idle task source ID (gmainloop) */
 } resource_set_t;
 
 typedef enum {
     update_nothing = 0,
     update_flags,
     update_request,
+    update_block,
 } resource_set_update_t;
+
+
 
 void resource_set_init(OhmPlugin *);
 
@@ -91,6 +101,8 @@ int  resource_set_update_factstore(resset_t *, resource_set_update_t);
 void resource_set_queue_change(resource_set_t *, uint32_t,
                                uint32_t, resource_set_field_id_t);
 void resource_set_send_queued_changes(uint32_t, uint32_t);
+void resource_set_send_release_request(resource_set_t *);
+int  resource_set_add_idle_task(resource_set_t *, resource_set_task_t);
 resource_set_t *resource_set_find(struct _OhmFact *);
 
 void resource_set_dump_message(resmsg_t *, resset_t *, const char *);

@@ -1,9 +1,12 @@
 ohm-plugins-misc (1:1.47) unstable; urgency=low
-
+  [Krisztian Litkey]
   * Enabled vibra plugin.
   * Vibra muting logic fix attempt: mute vibra only if all vibra groups are muted.
+  [Janos Kovacs]
+  * Support for forced release of resources (Fixes: NB#200601)
+  * Cosmetic changes in resource plugin to get rid of compiler warnings
 
- -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 24 Nov 2010 18:30:44 +0200
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sat, 20 Nov 2010 18:41:10 +0200
 
 ohm-plugins-misc (1:1.46) unstable; urgency=low
 
