@@ -258,11 +258,21 @@ static void destroy_all_atom(void)
     uint32_t    i;
 
     for (i = 0;  i < natom;  i++) {
-       atom = atoms[i];
+        atomcb_t *next;
+        atomcb_t *curr;
 
-       free((void *)atom->id);
-       free((void *)atom->name);
-       free((void *)atom);
+        atom = atoms[i];
+        next = atom->callback;
+
+        while (next) {
+            curr = next;
+            next = next->next;
+            free (curr);
+        }
+
+        free((void *)atom->id);
+        free((void *)atom->name);
+        free((void *)atom);
     }
 
     natom = 0;
