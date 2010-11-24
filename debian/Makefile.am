@@ -39,5 +39,8 @@ endif
 if BUILD_FMRADIO
 	echo "${libdir}/ohm/libohm_fmradio.so" >> $@
 endif
+if BUILD_VIBRA
+	echo "${libdir}/ohm/libohm_vibra.so" >> $@
+endif
 
 .PHONY: ohm-plugins-misc.install
