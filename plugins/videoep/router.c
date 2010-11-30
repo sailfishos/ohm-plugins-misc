@@ -379,7 +379,7 @@ static void config_device(char *device)
     else {
         char *outputs[] = {"TV"};
         
-        randr_crtc_set_mode(0, 1, "864x480");
+        randr_crtc_set_mode(0, 1, "854x480");
         randr_crtc_set_outputs(0, 1, 1,outputs);
     }
 }
