@@ -74,6 +74,7 @@ typedef void (*fsif_fact_watch_cb_t)(fsif_entry_t *, char *, fsif_fact_watch_e,
                                      void *);
 
 static void fsif_init(OhmPlugin *);
+static void fsif_exit(OhmPlugin *);
 static int  fsif_add_factstore_entry(char *, fsif_field_t *);
 static int  fsif_delete_factstore_entry(char *, fsif_field_t *);
 static int  fsif_update_factstore_entry(char *, fsif_field_t *,fsif_field_t *);

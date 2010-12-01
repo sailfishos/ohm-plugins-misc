@@ -40,6 +40,9 @@ USA.
 
 static OhmFactStore   *fs;
 static gulong          delayed_resolve;
+static gulong          updated_id;
+static gulong          inserted_id;
+static gulong          removed_id;
 static int             DBG_HAC;
 
 
@@ -47,6 +50,7 @@ static void hearing_aid_coil_connected(const char *);
 static gboolean delayed_resolve_cb(gpointer);
 
 static void factstore_init(void);
+static void factstore_exit(void);
 static const char *get_hearing_aid_coil_state(char *, int);
 static void updated_cb(void *, OhmFact *, GQuark, gpointer);
 static void inserted_cb(void *, OhmFact *);
@@ -69,6 +73,8 @@ void hearing_aid_coil_init(OhmPlugin *plugin, int dbg_hac)
 void hearing_aid_coil_exit(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    factstore_exit();
 
     if (delayed_resolve) {
         g_source_remove(delayed_resolve);
@@ -132,15 +138,34 @@ static void factstore_init(void)
 
     fs = ohm_fact_store_get_fact_store();
 
-    g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
-    g_signal_connect(G_OBJECT(fs), "inserted", G_CALLBACK(inserted_cb), NULL);
-    g_signal_connect(G_OBJECT(fs), "removed" , G_CALLBACK(removed_cb) , NULL);
+    updated_id  = g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
+    inserted_id = g_signal_connect(G_OBJECT(fs), "inserted", G_CALLBACK(inserted_cb), NULL);
+    removed_id  = g_signal_connect(G_OBJECT(fs), "removed" , G_CALLBACK(removed_cb) , NULL);
 
     if ((state = get_hearing_aid_coil_state(buf, sizeof(buf))) != NULL) {
         OHM_INFO("accessories: hearing aid coil state is %s", state);
         hearing_aid_coil_connected(state);
     }
 }
+
+static void factstore_exit(void)
+{
+    fs = ohm_fact_store_get_fact_store();
+
+    if (g_signal_handler_is_connected(G_OBJECT(fs), updated_id)) {
+        g_signal_handler_disconnect(G_OBJECT(fs), updated_id);
+        updated_id = 0;
+    }
+    if (g_signal_handler_is_connected(G_OBJECT(fs), inserted_id)) {
+        g_signal_handler_disconnect(G_OBJECT(fs), inserted_id);
+        inserted_id = 0;
+    }
+    if (g_signal_handler_is_connected(G_OBJECT(fs), removed_id)) {
+        g_signal_handler_disconnect(G_OBJECT(fs), removed_id);
+        removed_id = 0;
+    }
+}
+
 
 static const char *get_hearing_aid_coil_state(char *buf, int len)
 {

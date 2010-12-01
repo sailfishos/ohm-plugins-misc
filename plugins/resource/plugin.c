@@ -85,6 +85,7 @@ static void plugin_init(OhmPlugin *plugin)
 static void plugin_destroy(OhmPlugin *plugin)
 {
     auth_exit(plugin);
+    fsif_exit(plugin);
 }
 
 

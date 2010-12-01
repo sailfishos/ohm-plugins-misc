@@ -67,9 +67,9 @@ static void plugin_init(OhmPlugin *plugin)
 
 static void plugin_exit(OhmPlugin *plugin)
 {
-    (void)plugin;
-
     OHM_INFO("delay: exit ...");
+
+    fsif_exit(plugin);
 }
 
 
