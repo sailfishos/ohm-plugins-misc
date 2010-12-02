@@ -25,8 +25,7 @@ DEB_CONFIGURE_USER_FLAGS = --disable-static \
                            --disable-libplayback \
                            --disable-oldvideoep \
                            --enable-apptrack \
-                           --disable-swap-pressure \
-			   --enable-vibra
+                           --disable-swap-pressure
 
 include /usr/share/cdbs/1/rules/utils.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
