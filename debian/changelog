@@ -1,3 +1,11 @@
+ohm-plugins-misc (1:1.49) unstable; urgency=low
+
+  * Report XCB connection failure as a warning and only at most once per potential connection.
+  * Multiple session bus notifications turned to warnings.
+  * Fixes: NB#200279.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 03 Dec 2010 12:28:59 +0200
+
 ohm-plugins-misc (1:1.48) unstable; urgency=low
 
   * Change mode name 864x480 -> 854x460 (Fixes: NB#208035)
