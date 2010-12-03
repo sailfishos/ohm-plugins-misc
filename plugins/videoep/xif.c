@@ -214,6 +214,8 @@ static prop_query_t   prop_qry[PROPERTY_QUERY_DIM];
 static uint32_t       prop_idx;
 static randr_query_t  randr_qry[RANDR_QUERY_DIM];
 static uint32_t       randr_idx;
+static int            conn_warn = TRUE;
+
 
 static xif_t   *xif_create(const char *);
 static void     xif_destroy(xif_t *);
@@ -938,7 +940,10 @@ static int connect_to_xserver(xif_t *xif)
     xconn = xcb_connect(xif->display, NULL);
 
     if (xcb_connection_has_error(xconn)) {
-        OHM_ERROR("videoep: xcb connect failed");
+        if (conn_warn) {
+            OHM_WARNING("videoep: xcb connect failed");
+            conn_warn = FALSE;
+        }
         goto failed;
     }
 
@@ -980,6 +985,7 @@ static int connect_to_xserver(xif_t *xif)
 
     OHM_INFO("videoep: connected to X server %s. Number of screens %u",
              xif->display ? xif->display: "", xif->nscreen);
+    conn_warn = TRUE;
 
     return 0;
 
