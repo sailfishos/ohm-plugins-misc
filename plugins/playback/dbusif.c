@@ -348,8 +348,8 @@ dbusif_new_session(DBusConnection *c, DBusMessage *msg, void *data)
     }
 
     if (sess_conn != NULL) {
-        OHM_ERROR("Received session bus notification but already has a bus.");
-        OHM_ERROR("Ignoring session bus notification.");
+        OHM_WARNING("Received session bus notification but already has a bus.");
+        OHM_WARNING("Ignoring session bus notification.");
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
 

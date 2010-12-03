@@ -137,8 +137,8 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *conn,
         }
 
         if (sess_conn != NULL) {
-            OHM_ERROR("Got session bus notification but already has a bus.");
-            OHM_ERROR("Ignoring session bus notification.");
+            OHM_WARNING("Got session bus notification but already has a bus.");
+            OHM_WARNING("Ignoring session bus notification.");
             break;
         }
 
