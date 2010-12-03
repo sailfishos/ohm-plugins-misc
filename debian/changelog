@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.50) unstable; urgency=low
+
+  * Build vibra plugin only for armel target
+
+ -- Vladimir Zapolskiy <vladimir.zapolskiy@nokia.com>  Fri, 03 Dec 2010 10:39:42 +0200
+
 ohm-plugins-misc (1:1.49) unstable; urgency=low
 
   * Report XCB connection failure as a warning and only at most once per potential connection.
