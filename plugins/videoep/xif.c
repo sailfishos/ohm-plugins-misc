@@ -54,6 +54,9 @@ USA.
 #define PROPERTY_QUERY_DIM       QUEUE_DIM
 #define PROPERTY_QUERY_INDEX(i)  QUEUE_INDEX(i)
 
+#define MODE_CREATE_DIM          QUEUE_DIM
+#define MODE_CREATE_INDEX(i)     QUEUE_INDEX(i)
+
 #define RANDR_QUERY_DIM          QUEUE_DIM
 #define RANDR_QUERY_INDEX(i)     QUEUE_INDEX(i)
 
@@ -111,6 +114,12 @@ typedef struct xif_s {
     guint               timeout;
     uint32_t            nscreen;   /* number of screens */
     xcb_window_t        root[SCREEN_MAX];
+    struct {
+        double   hdpm;   /* horizontal dots / mm */
+        double   vdpm;   /* vertical   dots / mm */
+        uint16_t width;
+        uint16_t height;
+    }                   screen[SCREEN_MAX];
     rque_t              rque;      /* que for the pending requests */
     conncb_t           *conncb;    /* connection callbacks */
     structcb_t         *destcb;    /* window destroy callbacks */
@@ -135,6 +144,11 @@ typedef struct {
     void                 *usrdata;
 } prop_query_t;
 
+
+typedef struct {
+    int          busy;
+    const char  *name;
+} mode_create_t;
 
 typedef enum {
     query_unknown = 0,
@@ -199,9 +213,9 @@ typedef enum {
 } event_t;
 
 typedef struct {
-    int               present;
-    uint32_t          evbase;
-    uint32_t          errbase;
+    int       present;
+    uint32_t  evbase;
+    uint32_t  errbase;
 } extension_t;
 
 
@@ -212,6 +226,8 @@ static atom_query_t   atom_qry[ATOM_QUERY_DIM];
 static uint32_t       atom_idx;
 static prop_query_t   prop_qry[PROPERTY_QUERY_DIM];
 static uint32_t       prop_idx;
+static mode_create_t  mode_creat[MODE_CREATE_DIM];
+static uint32_t       mode_idx;
 static randr_query_t  randr_qry[RANDR_QUERY_DIM];
 static uint32_t       randr_idx;
 static int            conn_warn = TRUE;
@@ -233,6 +249,10 @@ static int  property_query(xif_t *, uint32_t, uint32_t, videoep_value_type_t,
 static void property_query_finish(xif_t *, void *, void *);
 
 static int  randr_check(xif_t *, extension_t *);
+static int  randr_set_screen_size(xif_t *, xcb_window_t, uint16_t,uint16_t,
+                                  uint32_t,uint32_t);
+static int  randr_create_mode(xif_t *, xcb_window_t, xif_mode_t *);
+static void randr_create_mode_finish(xif_t *, void *, void *);
 static int  randr_query_screen(xif_t *, xcb_window_t,
                                xif_screen_replycb_t, void *);
 static void randr_query_screen_finish(xif_t *, void *, void *);
@@ -749,6 +769,48 @@ int xif_property_query(uint32_t              window,
     return status;
 }
 
+int xif_create_mode(uint32_t screen_id, xif_mode_t *mode)
+{
+    int       status = -1;
+    uint32_t  rootwin;
+
+    if (xiface && randr.present && screen_id <= xiface->nscreen && mode) {
+        rootwin = xiface->root[screen_id];
+
+        if (mode->width > 0  &&  mode->height > 0) {
+            status = randr_create_mode(xiface, rootwin, mode);
+        }
+    }
+
+    return status;
+}
+
+int xif_screen_set_size(uint32_t rootwin, uint32_t width, uint32_t height,
+                        uint32_t mm_width, uint32_t mm_height)
+{
+    int status = -1;
+    uint32_t i;
+
+    if (rootwin && xiface && randr.present) {
+        for (i = 0;   i < xiface->nscreen;   i++) {
+            if (rootwin == xiface->root[i]) {
+                if (width  == xiface->screen[i].width && 
+                    height == xiface->screen[i].height  )
+                {
+                    status = 0;
+                }
+                else {
+                    status = randr_set_screen_size(xiface, rootwin,
+                                                   width, height,
+                                                   mm_width, mm_height);
+                }
+            }
+        }
+    }
+
+    return status;
+}
+
 int xif_screen_query(uint32_t win, xif_screen_replycb_t replycb, void *usrdata)
 {
     int status;
@@ -923,6 +985,8 @@ static int connect_to_xserver(xif_t *xif)
     xcb_screen_iterator_t si;
     xcb_screen_t         *scrn;
     conncb_t             *ccb;
+    double                hdpm;
+    double                vdpm;
 
 
     if (!xif) {
@@ -974,7 +1038,22 @@ static int connect_to_xserver(xif_t *xif)
             break;
         }
 
-        xif->root[xif->nscreen++] = scrn->root;
+        hdpm = (double)scrn->width_in_pixels
+                             /
+               (double)scrn->width_in_millimeters;
+
+        vdpm = (double)scrn->height_in_pixels
+                             /
+               (double)scrn->height_in_millimeters;
+
+        xif->root[xif->nscreen] = scrn->root;
+
+        xif->screen[xif->nscreen].hdpm   = hdpm;
+        xif->screen[xif->nscreen].vdpm   = vdpm;
+        xif->screen[xif->nscreen].width  = scrn->width_in_pixels;
+        xif->screen[xif->nscreen].height = scrn->height_in_pixels;
+
+        xif->nscreen++;
     }
 
     randr_check(xif, &randr);
@@ -1333,6 +1412,111 @@ static int randr_check(xif_t *xif, extension_t *ext)
     return 0;
 }
 
+static int randr_set_screen_size(xif_t        *xif,
+                                 xcb_window_t  rootwin,
+                                 uint16_t      width,
+                                 uint16_t      height,
+                                 uint32_t      mm_width,
+                                 uint32_t      mm_height)
+{
+    xcb_void_cookie_t ckie;
+
+    if (xif->xconn == NULL || xcb_connection_has_error(xif->xconn))
+        return -1;
+
+    ckie = xcb_randr_set_screen_size(xif->xconn, rootwin,
+                                     width,height, mm_width,mm_height);
+
+    if (xcb_connection_has_error(xif->xconn)) {
+        OHM_ERROR("videoep: failed to config RandR crtc");
+        return -1;
+    }
+
+    OHM_DEBUG(DBG_XCB, "setting screen of rootwin 0x%x size %ux%u pixels "
+              "(%lux%lu mm)", rootwin, width,height, mm_width,mm_height);
+
+    xcb_flush(xif->xconn);
+
+    return 0;    
+}
+
+static int randr_create_mode(xif_t *xif, xcb_window_t rwin, xif_mode_t *mode)
+{
+    mode_create_t                  *mc = mode_creat + mode_idx;
+    xcb_randr_create_mode_cookie_t  ckie;
+    xcb_randr_mode_info_t           info;
+    size_t                          namlen;
+
+    if (xif->xconn == NULL || xcb_connection_has_error(xif->xconn))
+        return -1;
+
+    if (rque_is_full(&xif->rque)) {
+        OHM_ERROR("videoep: xif request queue is full");
+        return -1;
+    }
+
+    if (mc->busy) {
+        OHM_ERROR("videoep: maximum number of pending mode cretation reached");
+        return -1;
+    }
+
+    namlen = strlen(mode->name);
+
+    memset(&info, 0, sizeof(info));
+    info.width       =  mode->width;
+    info.height      =  mode->height;
+    info.dot_clock   =  mode->clock;
+    info.hsync_start =  mode->hstart;
+    info.hsync_end   =  mode->hend;
+    info.htotal      =  mode->htotal;
+    info.hskew       =  mode->hskew;
+    info.vsync_start =  mode->vstart;
+    info.vsync_end   =  mode->vend;
+    info.vtotal      =  mode->vtotal;
+    info.name_len    =  namlen;
+    info.mode_flags  =  mode->flags;
+
+    ckie = xcb_randr_create_mode(xif->xconn, rwin, info, namlen, mode->name);
+
+    if (xcb_connection_has_error(xif->xconn)) {
+        OHM_ERROR("videoep: failed to create new mode '%s'", mode->name);
+        return -1;
+    }
+
+    mc->busy = TRUE;
+    mc->name = strdup(mode->name);
+
+    mode_idx = MODE_CREATE_INDEX(mode_idx + 1);
+
+    rque_append_request(&xif->rque, ckie.sequence,
+                        randr_create_mode_finish, mc);
+
+    xcb_flush(xif->xconn);
+
+    return 0;    
+
+}
+
+static void randr_create_mode_finish(xif_t *xif, void *reply_data, void *data)
+{
+    xcb_randr_create_mode_reply_t *reply = reply_data;
+    mode_create_t                 *mc    = data;
+
+    (void)xif;
+
+    if (!reply) {
+        OHM_DEBUG(DBG_XCB, "failed to create mode '%s' "
+                  "(perhaps it already exists)", mc->name);
+    }
+    else {
+        OHM_INFO("videoep: '%s' mode (0x%x) successfuly created",
+                 mc->name, reply->mode);
+
+        free((void *)mc->name);
+        mc->name = NULL;
+    }
+}
+
 static int randr_query_screen(xif_t                *xif,
                               xcb_window_t          window,
                               xif_screen_replycb_t  replycb,
@@ -1398,7 +1582,10 @@ static void randr_query_screen_finish(xif_t *xif, void *reply_data, void *data)
     char                                   *name;
     uint8_t                                *nbuf;
     int                                     namlen;
+    double                                  hdpm;
+    double                                  vdpm;
     int                                     i;
+    uint32_t                                j;
 
     (void)xif;
 
@@ -1445,6 +1632,13 @@ static void randr_query_screen_finish(xif_t *xif, void *reply_data, void *data)
             mode->flags  = minf->mode_flags;
         }
 
+        for (j = 0, hdpm = vdpm = 0;    j < xif->nscreen;    j++) {
+            if (sq->window == xif->root[j]) {
+                hdpm = xif->screen[j].hdpm;
+                vdpm = xif->screen[j].vdpm;
+            }
+        }
+
         memset(&st, 0, sizeof(st));
         st.window  = sq->window;
         st.tstamp  = reply->config_timestamp;
@@ -1454,6 +1648,8 @@ static void randr_query_screen_finish(xif_t *xif, void *reply_data, void *data)
         st.outputs = xcb_randr_get_screen_resources_outputs(reply);
         st.nmode   = nmode;
         st.modes   = modes;
+        st.hdpm    = hdpm;
+        st.vdpm    = vdpm;
 
         sq->replycb(&st, sq->usrdata);
 
@@ -1773,6 +1969,7 @@ static int  randr_event_handler(xif_t *xif, xcb_generic_event_t *ev)
     xif_crtc_t                              crtc;
     crtccb_t                               *ccb;
     outpcb_t                               *ocb;
+    int                                     i;
     int                                     handled = FALSE;
 
 
@@ -1780,7 +1977,19 @@ static int  randr_event_handler(xif_t *xif, xcb_generic_event_t *ev)
         handled = TRUE; 
         scrnev  = (xcb_randr_screen_change_notify_event_t *)ev;
 
-        OHM_DEBUG(DBG_XCB, "RandR screen change event on window ");
+        for (i = 0;  i < SCREEN_MAX;  i++) {
+            if (scrnev->root == xif->root[i]) {
+                OHM_DEBUG(DBG_XCB, "RandR screen change event on root 0x%x "
+                          "size %ux%u pixel (%ux%u mm)", scrnev->root,
+                          scrnev->width, scrnev->height,
+                          scrnev->mwidth, scrnev->mheight);
+
+                xif->screen[i].width  = scrnev->width;
+                xif->screen[i].height = scrnev->height;
+
+                break;
+            }
+        }
     }
     else if(ev->response_type == randr.evbase + XCB_RANDR_NOTIFY) {
         handled = TRUE;

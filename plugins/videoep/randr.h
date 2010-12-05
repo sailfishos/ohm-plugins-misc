@@ -31,7 +31,26 @@ USA.
 #define RANDR_PROPLIST_QUERIED    0x08
 #define RANDR_PROPERTIES_QUERIED  0x10
 
+#define POSITION_DONTCARE         (UINT32_MAX - 0)
+#define POSITION_APPEND           (UINT32_MAX - 1)
+
 typedef void (*randr_statecb_t)(int, void *);
+
+typedef struct randr_mode_def_s {
+    uint32_t    screen_id;
+    char       *name;
+    uint32_t    width;
+    uint32_t    height;
+    uint32_t    clock;
+    uint32_t    hstart;
+    uint32_t    hend;
+    uint32_t    htotal;
+    uint32_t    vstart;
+    uint32_t    vend;
+    uint32_t    vtotal;
+    uint32_t    hskew;
+    uint32_t    flags;
+} randr_mode_def_t;
 
 typedef struct randr_outprop_def_s {
     struct randr_outprop_def_s *next;
@@ -48,6 +67,8 @@ typedef struct {
     int                    ready;
     int                    sync;
     uint32_t               xid;
+    int32_t                reqx;
+    int32_t                reqy;
     int32_t                x;
     int32_t                y;
     uint32_t               width;
@@ -123,6 +144,8 @@ typedef struct randr_screen_s {
     int                    queried;
     uint32_t               rootwin;
     uint32_t               tstamp;
+    double                 hdpm;
+    double                 vdpm;
     int                    ncrtc;
     randr_crtc_t          *crtcs;
     int                    noutput;
@@ -142,11 +165,15 @@ void randr_exit(OhmPlugin *);
 int randr_add_state_callback(randr_statecb_t, void *);
 int randr_remove_state_callback(randr_statecb_t, void *);
 
+void randr_mode_create(randr_mode_def_t *);
+
+void randr_crtc_set_position(int, int, uint32_t,uint32_t);
 void randr_crtc_set_mode(int, int, char *);
 void randr_crtc_set_outputs(int, int, int, char **);
 
 void randr_output_define_property(char *,char *,char *,videoep_value_type_t); 
 void randr_output_change_property(char *, char *, void *);
+videoep_value_type_t randr_output_get_property_type(char *);
 
 void randr_synchronize(void);
 

@@ -1,7 +1,26 @@
+/*****************************************************************************/
+/*  Copyright (C) 2010 Nokia Corporation.                                    */
+/*                                                                           */
+/*  These OHM Modules are free software; you can redistribute                */
+/*  it and/or modify it under the terms of the GNU Lesser General Public     */
+/*  License as published by the Free Software Foundation                     */
+/*  version 2.1 of the License.                                              */
+/*                                                                           */
+/*  This library is distributed in the hope that it will be useful,          */
+/*  but WITHOUT ANY WARRANTY; without even the implied warranty of           */
+/*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU         */
+/*  Lesser General Public License for more details.                          */
+/*                                                                           */
+/*  You should have received a copy of the GNU Lesser General Public         */
+/*  License along with this library; if not, write to the Free Software      */
+/*  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 */
+/*  USA.                                                                     */
+/*****************************************************************************/
+
 %{
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
+/* #include <string.h> */
 
 #include "plugin.h"
 #include "config-private.h"
@@ -98,6 +117,12 @@ FIRST_SUCCESS         first-success
 FIRST_FAILURE         first-failure
 END                   end
 
+DEVICE                device
+OUT_SIGNAL            output-signal
+OUT_RATIO             output-ratio
+TYPE                  type
+SCREEN                screen
+CRTC                  crtc
 ROOT_WINDOW           root-window
 ROOT_WINDOW_ID        root-window-id
 ROOT_PROPERTY         root-property
@@ -106,11 +131,35 @@ APP_WINDOW            application-window
 APP_WINDOW_ID         application-window-id
 APP_PROPERTY          application-property
 WIN_PROPERTY          window-property
+OUT_PROPERTY          output-property
+XV_PROPERTY           xv-property
 WIN_ID                window-id
 VARIABLE              variable
 ATOM                  atom
 PROPERTY              property
 WINDOW                window
+OUTPUT                output
+INPUT                 input
+VIDEO                 video
+TARGET                target
+MODE                  mode
+POSITION              position
+DONTCARE              dontcare
+APPEND                append
+
+HSYNC_POSITIVE        hsync-positive
+HSYNC_NEGATIVE        hsync-negative
+VSYNC_POSITIVE        vsync-positive
+VSYNC_NEGATIVE        vsync-negative
+INTERLACE             interlace
+DOUBLE_SCAN           double-scan
+CSYNC                 csync
+CSYNC_POSITIVE        csync-positive
+CSYNC_NEGATIVE        csync-negative
+PIXEL_MULTIPLEX       pixel-multiplex
+DOUBLE_CLOCK          double-clock
+HALVE_CLOCK           halve-clock
+
 CARDINAL              cardinal
 STRING                string
 INTEGER               integer
@@ -143,6 +192,8 @@ PLUS                  \+
 MINUS                 \-
 ASTERISK              \*
 SLASH                 \/
+LOGICAL_OR            \|
+LOGICAL_AND           \&
 
 
 %%
@@ -164,6 +215,12 @@ SLASH                 \/
 {FIRST_FAILURE}         { VALUELESS_TOKEN (FIRST_FAILURE);     }
 {END}                   { VALUELESS_TOKEN (END);               }
 
+{DEVICE}                { VALUELESS_TOKEN (DEVICE);            }
+{OUT_SIGNAL}            { VALUELESS_TOKEN (OUT_SIGNAL);        }
+{OUT_RATIO}             { VALUELESS_TOKEN (OUT_RATIO);         }
+{TYPE}                  { VALUELESS_TOKEN (TYPE);              }
+{SCREEN}                { VALUELESS_TOKEN (SCREEN);            }
+{CRTC}                  { VALUELESS_TOKEN (CRTC);              }
 {ROOT_WINDOW}           { VALUELESS_TOKEN (ROOT_WINDOW);       }
 {ROOT_WINDOW_ID}        { VALUELESS_TOKEN (ROOT_WINDOW_ID);    }
 {ROOT_PROPERTY}         { VALUELESS_TOKEN (ROOT_PROPERTY);     }
@@ -172,11 +229,35 @@ SLASH                 \/
 {APP_WINDOW_ID}         { VALUELESS_TOKEN (APP_WINDOW_ID);     }
 {APP_PROPERTY}          { VALUELESS_TOKEN (APP_PROPERTY);      }
 {WIN_PROPERTY}          { VALUELESS_TOKEN (WIN_PROPERTY);      }
+{OUT_PROPERTY}          { VALUELESS_TOKEN (OUT_PROPERTY);      }
+{XV_PROPERTY}           { VALUELESS_TOKEN (XV_PROPERTY);       }
 {WIN_ID}                { VALUELESS_TOKEN (WIN_ID);            }
 {VARIABLE}              { VALUELESS_TOKEN (VARIABLE);          }
 {ATOM}                  { VALUELESS_TOKEN (ATOM);              }
 {PROPERTY}              { VALUELESS_TOKEN (PROPERTY);          }
 {WINDOW}                { VALUELESS_TOKEN (WINDOW);            }
+{OUTPUT}                { VALUELESS_TOKEN (OUTPUT);            }
+{INPUT}                 { VALUELESS_TOKEN (INPUT);             }
+{VIDEO}                 { VALUELESS_TOKEN (VIDEO);             }
+{TARGET}                { VALUELESS_TOKEN (TARGET);            }
+{MODE}                  { VALUELESS_TOKEN (MODE);              }
+{POSITION}              { VALUELESS_TOKEN (POSITION);          }
+{DONTCARE}              { VALUELESS_TOKEN (DONTCARE);          }
+{APPEND}                { VALUELESS_TOKEN (APPEND);            }
+
+{HSYNC_POSITIVE}        { VALUELESS_TOKEN (HSYNC_POSITIVE);    }
+{HSYNC_NEGATIVE}        { VALUELESS_TOKEN (HSYNC_NEGATIVE);    }
+{VSYNC_POSITIVE}        { VALUELESS_TOKEN (VSYNC_POSITIVE);    }
+{VSYNC_NEGATIVE}        { VALUELESS_TOKEN (VSYNC_NEGATIVE);    }
+{INTERLACE}             { VALUELESS_TOKEN (INTERLACE);         }
+{DOUBLE_SCAN}           { VALUELESS_TOKEN (DOUBLE_SCAN);       }
+{CSYNC}                 { VALUELESS_TOKEN (CSYNC);             }
+{CSYNC_POSITIVE}        { VALUELESS_TOKEN (CSYNC_POSITIVE);    }
+{CSYNC_NEGATIVE}        { VALUELESS_TOKEN (CSYNC_NEGATIVE);    }
+{PIXEL_MULTIPLEX}       { VALUELESS_TOKEN (PIXEL_MULTIPLEX);   }
+{DOUBLE_CLOCK}          { VALUELESS_TOKEN (DOUBLE_CLOCK);      }
+{HALVE_CLOCK}           { VALUELESS_TOKEN (HALVE_CLOCK);       }
+
 {CARDINAL}              { VALUELESS_TOKEN (CARDINAL);          }
 {STRING}                { VALUELESS_TOKEN (STRING);            }
 {INTEGER}               { VALUELESS_TOKEN (INTEGER);           }
@@ -209,6 +290,9 @@ SLASH                 \/
 {MINUS}                 { VALUELESS_TOKEN (MINUS);             }
 {ASTERISK}              { VALUELESS_TOKEN (ASTERISK);          }
 {SLASH}                 { VALUELESS_TOKEN (SLASH);             }
+{LOGICAL_OR}            { VALUELESS_TOKEN (LOGICAL_OR);        }
+{LOGICAL_AND}           { VALUELESS_TOKEN (LOGICAL_AND);       }
+
 
 
 %%
@@ -284,7 +368,7 @@ static void save_string(const char *string)
     static char *bufptr;
 
     const char  *src;
-    char        *quoted;
+    char         quoted;
 
     for (;;) {
         if (bufptr < ringbuf || bufptr >= ringbuf + sizeof(ringbuf))

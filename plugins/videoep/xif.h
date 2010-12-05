@@ -67,6 +67,8 @@ typedef struct {
     uint32_t   *outputs;
     int         nmode;
     xif_mode_t *modes;
+    double      hdpm;           /* horizontal  dots / millimeter */
+    double      vdpm;           /* vartical    dots / millimeter */
 } xif_screen_t;
 
 typedef struct {
@@ -145,6 +147,8 @@ uint32_t xif_root_window_query(uint32_t *, uint32_t);
 int      xif_atom_query(const char *, xif_atom_replycb_t, void *);
 int      xif_property_query(uint32_t, uint32_t, videoep_value_type_t,
                             uint32_t, xif_prop_replycb_t, void *);
+int      xif_create_mode(uint32_t, xif_mode_t *);
+int      xif_screen_set_size(uint32_t, uint32_t,uint32_t, uint32_t,uint32_t);
 int      xif_screen_query(uint32_t, xif_screen_replycb_t, void *);
 int      xif_crtc_query(uint32_t,uint32_t,uint32_t,
                         xif_crtc_replycb_t, void *);

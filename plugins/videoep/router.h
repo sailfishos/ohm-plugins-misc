@@ -31,6 +31,9 @@ typedef enum {
     router_seq_max
 } router_seq_type_t;
 
+
+
+struct randr_mode_def_s;
 struct router_sequence_s;
 
 /* hack to avoid multiple includes */

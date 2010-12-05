@@ -25,6 +25,22 @@ USA.
 #include "data-types.h"
 #include "tracker.h"
 #include "sequence.h"
+#include "router.h"
+
+typedef struct {
+    char *screen;
+    char *crtc;
+    char *x, *y;
+    char *mode;
+    char *outputs[256];
+    int   outputidx;
+} config_scrdef_t;
+
+typedef struct {
+    char *name;
+    videoep_value_type_t type;
+    char *value;
+} config_propdef_t;
 
 typedef enum {
     windef_unknow = 0,
@@ -41,6 +57,7 @@ typedef struct {
         }                 property;
     };
 } config_windef_t; 
+
 
 typedef struct {
     int  first;
