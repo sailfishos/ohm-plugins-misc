@@ -2,6 +2,9 @@ ohm-plugins-misc (1:1.51) unstable; urgency=low
 
   * videoep: video routing configuration comes from videoep.conf
   * Implemented: SWP#Plicy-539
+  * In notification/proxy.c prevent cl_hash_delete() crashing when the hash
+    chain were empty
+  * symptom cure for bug NB#201906
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sun, 05 Dec 2010 00:29:13 +0200
 
