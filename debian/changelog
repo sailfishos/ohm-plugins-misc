@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.51) unstable; urgency=low
+
+  * videoep: video routing configuration comes from videoep.conf
+  * Implemented: SWP#Plicy-539
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sun, 05 Dec 2010 00:29:13 +0200
+
 ohm-plugins-misc (1:1.50) unstable; urgency=low
 
   * Build vibra plugin only for armel target
