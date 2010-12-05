@@ -72,7 +72,7 @@ static void plugin_init(OhmPlugin *plugin)
     DBG_TRACK = DBG_ROUTE = TRUE;
     DBG_XCB = DBG_RANDR = DBG_XV = TRUE;
 
-    DBG_PARSE = DBG_RANDR = DBG_ROUTE = DBG_ACTION = TRUE;
+    DBG_RANDR = DBG_ROUTE = DBG_ACTION = TRUE;
 #endif
 
     mem_init(plugin);
