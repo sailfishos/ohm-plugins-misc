@@ -32,7 +32,11 @@ USA.
 #include "atom.h"
 #include "xif.h"
 
-#define SCREEN_MAX 4
+#define SCREEN_MAX  4
+#define MODE_MAX    16
+
+#define SYNCHRONIZE 0
+#define DRYRUN      1
 
 typedef struct statecb_slot_s {
     struct statecb_slot_s  *next;
@@ -42,10 +46,14 @@ typedef struct statecb_slot_s {
 
 static int                  connup;
 static int                  ready;
+static uint32_t             nmode;
+static randr_mode_def_t     modes[MODE_MAX];
 static int                  nscreen;
 static randr_screen_t       screens[SCREEN_MAX];
 static randr_outprop_def_t *outprops;
 static statecb_slot_t      *statecbs;
+static int32_t              crtc_x;
+static int32_t              crtc_y;
 
 static void connection_state(int, void *);
 
@@ -58,17 +66,21 @@ static void            screen_query(void);
 static void            screen_query_finish(xif_screen_t *, void *);
 static int             screen_check_if_ready(randr_screen_t *);
 static void            screen_synchronize(randr_screen_t *);
+static void            screen_set_size(randr_screen_t *, uint32_t, uint32_t);
 static randr_screen_t *screen_find_by_rootwin(uint32_t);
 
 static randr_crtc_t   *crtc_register(randr_screen_t *, uint32_t);
 static void            crtc_unregister(randr_crtc_t *);
 static void            crtc_reset(randr_crtc_t *);
+static void            crtc_disable(randr_crtc_t *);
 static void            crtc_query(uint32_t, uint32_t, uint32_t);
 static void            crtc_query_finish(xif_crtc_t *, void *);
 static void            crtc_changed(xif_crtc_t *, void *);
 static void            crtc_update(xif_crtc_t *, void *);
 static int             crtc_check_if_ready(randr_crtc_t *);
-static void            crtc_synchronize(randr_crtc_t *);
+static void            crtc_synchronize(randr_crtc_t *, int);
+static uint32_t        crtc_horizontal_position(randr_crtc_t *);
+static uint32_t        crtc_vertical_position(randr_crtc_t *);
 static randr_crtc_t   *crtc_find_by_id(randr_screen_t *, uint32_t);
 
 static randr_output_t *output_register(randr_screen_t *, uint32_t);
@@ -99,6 +111,7 @@ static void                  outprop_instance_update_value(uint32_t, uint32_t,
 static randr_outprop_inst_t *outprop_instance_find_by_name(randr_output_t *,
                                                            char *);
 
+static void            mode_create(void);
 static randr_mode_t   *mode_register(randr_screen_t *, xif_mode_t *);
 static void            mode_unregister(randr_mode_t *);
 static void            mode_reset(randr_mode_t *);
@@ -175,6 +188,41 @@ int randr_remove_state_callback(randr_statecb_t cb, void *data)
     }
 
     return -1;
+}
+
+void randr_mode_create(randr_mode_def_t *def)
+{
+    randr_mode_def_t *mode;
+
+    if (def && nmode < MODE_MAX - 1) {
+        if (connup)
+            OHM_ERROR("videoep: phase error at mode '%s' creation", def->name);
+        else {
+            mode = modes + nmode++;
+
+            *mode = *def;
+            mode->name = strdup(def->name);
+
+            OHM_DEBUG(DBG_RANDR, "saving mode definition '%s'", def->name);
+        }
+    }
+}
+
+void randr_crtc_set_position(int screen_id, int crtc_id, uint32_t x,uint32_t y)
+{
+    randr_screen_t *screen;
+    randr_crtc_t   *crtc;
+
+    if (screen_id >= 0 && screen_id < nscreen) {
+        screen = screens + screen_id;
+
+        if (crtc_id >=  0 && crtc_id < screen->ncrtc) {
+            crtc = screen->crtcs + crtc_id;
+
+            crtc->reqx = x;
+            crtc->reqy = y;
+        }
+    }
 }
 
 void randr_crtc_set_mode(int screen_id, int crtc_id, char *modname)
@@ -347,6 +395,18 @@ void randr_output_change_property(char *outnam, char *propnam, void *value)
     }
 }
 
+videoep_value_type_t randr_output_get_property_type(char *propid)
+{
+    randr_outprop_def_t  *def;
+
+    for (def = outprops;  def != NULL;  def = def->next) {
+        if (!strcmp(propid, def->id))
+            return def->type;
+    }
+
+    return videoep_unknown;
+}
+
 void randr_synchronize(void)
 {
     int i;
@@ -368,7 +428,8 @@ static void connection_state(int connection_is_up, void *data)
     if (connection_is_up) {
         if (!connup) {
             connup = TRUE;
-
+            
+            mode_create();
             screen_query();
         }
     }
@@ -424,6 +485,8 @@ static randr_screen_t *screen_register(xif_screen_t *xif_screen)
         randr_screen->queried = RANDR_SCREEN_QUERIED;
         randr_screen->rootwin = xif_screen->window;
         randr_screen->tstamp  = xif_screen->tstamp;
+        randr_screen->hdpm    = xif_screen->hdpm;
+        randr_screen->vdpm    = xif_screen->vdpm;
         
         for (i = 0;  i < xif_screen->ncrtc;  i++)
             crtc_register(randr_screen, xif_screen->crtcs[i]);
@@ -433,7 +496,6 @@ static randr_screen_t *screen_register(xif_screen_t *xif_screen)
         
         for (i = 0;  i < xif_screen->nmode;  i++)
             mode_register(randr_screen, xif_screen->modes + i);
-    
     }
 
     return randr_screen;
@@ -500,8 +562,9 @@ static void screen_query_finish(xif_screen_t *xif_screen, void *usrdata)
     (void)usrdata;
 
     if ((randr_screen = screen_register(xif_screen)) != NULL) {
-        OHM_DEBUG(DBG_RANDR, "screen query complete for rootwin 0x%x",
-                  xif_screen->window);
+        OHM_DEBUG(DBG_RANDR, "screen query complete for rootwin 0x%x "
+                  "(resolution  %lf,%lf dot/mm)", xif_screen->window,
+                  randr_screen->hdpm, randr_screen->vdpm);
     }    
 }
 
@@ -552,8 +615,32 @@ static void screen_synchronize(randr_screen_t *screen)
     for (i = 0;  i < screen->noutput;  i++)
         output_synchronize(screen->outputs + i);
 
-    for (i = 0;  i < screen->ncrtc;  i++)
-        crtc_synchronize(screen->crtcs + i);
+    for (i = 0, crtc_x = crtc_y = 0;  i < screen->ncrtc;  i++) {
+        crtc_synchronize(screen->crtcs + i, DRYRUN); /* sets crtc_[xy] */
+        crtc_disable(screen->crtcs + i);
+    }
+
+    screen_set_size(screen, crtc_x, crtc_y);
+
+    for (i = 0, crtc_x = crtc_y = 0;  i < screen->ncrtc;  i++)
+        crtc_synchronize(screen->crtcs + i, SYNCHRONIZE);
+}
+
+static void screen_set_size(randr_screen_t *screen, uint32_t w, uint32_t h)
+{
+    uint32_t mm_width;
+    uint32_t mm_height;
+
+    if (w > 0 && w <= UINT16_MAX && h > 0 && h <= UINT16_MAX) {
+        mm_width  = (double)w / screen->hdpm;
+        mm_height = (double)h / screen->vdpm;
+
+        OHM_DEBUG(DBG_RANDR, "Set screen (roowin 0x%x) size "
+                  "%lux%lu pixels %lux%lu mm",
+                  screen->rootwin, w,h, mm_width, mm_height);
+
+        xif_screen_set_size(screen->rootwin, w,h, mm_width,mm_height);
+    } 
 }
 
 
@@ -595,6 +682,8 @@ static randr_crtc_t *crtc_register(randr_screen_t *screen, uint32_t xid)
         if (crtc != NULL) {
             crtc->screen = screen;
             crtc->xid    = xid;
+            crtc->reqx   = POSITION_DONTCARE;
+            crtc->reqy   = POSITION_DONTCARE;
             
             crtc_query(screen->rootwin, xid, XCB_CURRENT_TIME);
         }
@@ -639,6 +728,27 @@ static void crtc_reset(randr_crtc_t *crtc)
     }
 }
 
+
+static void crtc_disable(randr_crtc_t *randr_crtc)
+{
+    randr_screen_t *screen = randr_crtc->screen;
+    xif_crtc_t      xif_crtc;
+
+    OHM_DEBUG(DBG_RANDR, "disabling crtc 0x%x on root window 0x%x",
+              randr_crtc->xid, screen->rootwin);
+
+    memset(&xif_crtc, 0, sizeof(xif_crtc));
+    xif_crtc.window   = screen->rootwin;
+    xif_crtc.xid      = randr_crtc->xid;
+
+    xif_crtc_config(screen->tstamp, &xif_crtc);
+
+    if (randr_crtc->width && randr_crtc->height &&
+        randr_crtc->mode  && randr_crtc->noutput)
+    {
+        randr_crtc->sync = TRUE;
+    }
+}
 
 static void crtc_query(uint32_t rootwin, uint32_t crtc, uint32_t tstamp)
 {
@@ -826,18 +936,22 @@ static int crtc_check_if_ready(randr_crtc_t *crtc)
     return crtc->ready;
 }
 
-static void crtc_synchronize(randr_crtc_t *randr_crtc)
+static void crtc_synchronize(randr_crtc_t *randr_crtc, int dryrun)
 {
     randr_screen_t *screen = randr_crtc->screen;
     xif_crtc_t      xif_crtc;
+    uint32_t        x, y;
+    int32_t         new_crtc_x, new_crtc_y;
     char            buf[256];
 
-    if (randr_crtc->sync) {
+    x = crtc_horizontal_position(randr_crtc);
+    y = crtc_vertical_position(randr_crtc);
 
+    if (randr_crtc->sync && !dryrun) {
+        
         OHM_DEBUG(DBG_RANDR, "synchronizing crtc 0x%x on root window 0x%x "
                   "position %d,%d size %ux%u mode 0x%x rotation %u outputs %s",
-                  randr_crtc->xid, screen->rootwin,
-                  randr_crtc->x, randr_crtc->y,
+                  randr_crtc->xid, screen->rootwin, x, y,
                   randr_crtc->width, randr_crtc->height,
                   randr_crtc->mode, randr_crtc->rotation,
                   print_xids(randr_crtc->noutput, randr_crtc->outputs,
@@ -847,8 +961,8 @@ static void crtc_synchronize(randr_crtc_t *randr_crtc)
         memset(&xif_crtc, 0, sizeof(xif_crtc));
         xif_crtc.window   = screen->rootwin;
         xif_crtc.xid      = randr_crtc->xid;
-        xif_crtc.x        = randr_crtc->x;
-        xif_crtc.y        = randr_crtc->y;
+        xif_crtc.x        = x;
+        xif_crtc.y        = y;
         xif_crtc.width    = randr_crtc->width;
         xif_crtc.height   = randr_crtc->height;
         xif_crtc.mode     = randr_crtc->mode;
@@ -860,6 +974,38 @@ static void crtc_synchronize(randr_crtc_t *randr_crtc)
 
         randr_crtc->sync = FALSE;
     }
+
+    if ((new_crtc_x = x + randr_crtc->width) > crtc_x)
+        crtc_x = new_crtc_x;
+
+    if ((new_crtc_y = y + randr_crtc->height) > crtc_y)
+        crtc_y = new_crtc_y;
+}
+
+static uint32_t crtc_horizontal_position(randr_crtc_t *crtc)
+{
+    uint32_t x;
+
+    switch (crtc->reqx) {
+    case POSITION_DONTCARE:  x = crtc->x;     break;
+    case POSITION_APPEND:    x = crtc_x;      break;
+    default:                 x = crtc->reqx;  break;
+    }
+
+    return x;
+}
+
+static uint32_t crtc_vertical_position(randr_crtc_t *crtc)
+{
+    uint32_t y;
+
+    switch (crtc->reqy) {
+    case POSITION_DONTCARE:  y = crtc->y;     break;
+    case POSITION_APPEND:    y = crtc_y;      break;
+    default:                 y = crtc->reqy;  break;
+    }
+
+    return y;
 }
 
 static randr_crtc_t *crtc_find_by_id(randr_screen_t *screen,uint32_t xid)
@@ -1425,6 +1571,36 @@ outprop_instance_find_by_name(randr_output_t *output, char *propname)
     }
 
     return NULL;
+}
+
+static void mode_create(void)
+{
+    randr_mode_def_t *randr_mode;
+    xif_mode_t        xif_mode;
+    uint32_t          i;
+
+    for (i = 0;  i < nmode;  i++) {
+        randr_mode = modes + i;
+        
+        memset(&xif_mode, 0, sizeof(xif_mode));
+        xif_mode.name    =  randr_mode->name;
+        xif_mode.width   =  randr_mode->width;
+        xif_mode.height  =  randr_mode->height;
+        xif_mode.clock   =  randr_mode->clock;
+        xif_mode.hstart  =  randr_mode->hstart;
+        xif_mode.hend    =  randr_mode->hend;
+        xif_mode.htotal  =  randr_mode->htotal;
+        xif_mode.vstart  =  randr_mode->vstart;
+        xif_mode.vend    =  randr_mode->vend;
+        xif_mode.vtotal  =  randr_mode->vtotal;
+        xif_mode.hskew   =  randr_mode->hskew;
+        xif_mode.flags   =  randr_mode->flags;
+
+        xif_create_mode(randr_mode->screen_id, &xif_mode);
+
+        OHM_DEBUG(DBG_RANDR, "creating mode '%s' (size %ux%u)",
+                  xif_mode.name, xif_mode.width, xif_mode.height);
+    }
 }
 
 

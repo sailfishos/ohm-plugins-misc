@@ -34,8 +34,10 @@ USA.
 
 #define CARD_MAX 512
 
+
 typedef enum {
     function_unknown = -1,
+    function_crtc_set_position,
     function_crtc_set_mode,
     function_crtc_set_outputs,
     function_output_change_property,
@@ -48,6 +50,14 @@ typedef enum {
 typedef struct {
     FUNCTION_COMMON;
 } function_any_t;
+
+typedef struct {
+    FUNCTION_COMMON;    
+    int                       screen_id;
+    int                       crtc_id;
+    uint32_t                  x;
+    uint32_t                  y;
+} crtc_set_position_t;
 
 typedef struct {
     FUNCTION_COMMON;    
@@ -74,6 +84,7 @@ typedef struct {
 
 typedef union function_u {
     function_any_t            any;
+    crtc_set_position_t       crtc_set_position;
     crtc_set_mode_t           crtc_set_mode;
     crtc_set_outputs_t        crtc_set_outputs_t;
     output_change_property_t  output_change_property;
@@ -104,9 +115,12 @@ static void execute_sequence(router_seq_type_t, const char *);
 
 static function_type_t function_name_to_type(const char *);
 
+static char *sequence_type_str(router_seq_type_t);
+
 static int               integer_arg(const char *, int *);
 static char             *string_arg(const char *, int *);
 static char            **string_array_arg(char **, int, int *);
+static uint32_t          position_arg(const char *, int *);
 static videoep_value_t   value_arg(const char *, videoep_value_type_t, int *);
 
 static char *print_string_array(int, char **, char *, int);
@@ -130,41 +144,6 @@ void router_init(OhmPlugin *plugin)
 #endif
 
     randr_add_state_callback(randr_state, NULL);
-
-    /****************  Temporary *******************/
-    {
-        sequence_t *seq;
-
-        atom_create("normal", "4:3" );
-        atom_create("wide"  , "16:9");
-        atom_create("pal"   , "PAL" );
-        atom_create("ntsc"  , "NTSC");
-
-        randr_output_define_property("TV", "ratio",
-                                     "TVAspectRatio", videoep_atom);
-        randr_output_define_property("TV", "signal",
-                                     "SignalProperties", videoep_atom);
-
-
-        if ((seq = router_sequence_create(router_seq_signal, "pal"))) {
-            router_sequence_add_function(seq, "output_change_property",
-                                         "TV", "signal", videoep_atom, "pal");
-        }
-        if ((seq = router_sequence_create(router_seq_signal, "ntsc"))) {
-            router_sequence_add_function(seq, "output_change_property",
-                                         "TV", "signal", videoep_atom, "ntsc");
-        }
-
-        if ((seq = router_sequence_create(router_seq_ratio, "normal"))) {
-            router_sequence_add_function(seq, "output_change_property",
-                                         "TV", "ratio", videoep_atom,"normal");
-        }
-        if ((seq = router_sequence_create(router_seq_ratio, "wide"))) {
-            router_sequence_add_function(seq, "output_change_property",
-                                         "TV", "ratio", videoep_atom, "wide");
-        }
-    }
-    /*************  End of Temporary****************/
 }
 
 void router_exit(OhmPlugin *plugin)
@@ -181,14 +160,15 @@ void router_exit(OhmPlugin *plugin)
 struct router_sequence_s *router_sequence_create(router_seq_type_t type,
                                                  char             *id)
 {
+    sequence_t *head = (sequence_t *)(sequences + type);
+    sequence_t *seq  = NULL;
     sequence_t *last;
-    sequence_t *seq = NULL;
 
     if (type >= 0 && type < router_seq_max && id != NULL) {
-        for (last = (sequence_t *)(sequences + type);
-             last->next != NULL;
-             last = last->next)
-            ;
+        for (last = head;   last->next != NULL;   last = last->next) {
+            if (last != head && !strcmp(id, last->id))
+                return NULL;
+        }
 
         if ((seq = malloc(sizeof(sequence_t))) != NULL) {
             memset(seq, 0, sizeof(sequence_t));
@@ -207,6 +187,7 @@ int router_sequence_add_function(sequence_t *seq, char *name, ...)
     function_t               *func;
     function_t               *last;
     va_list                   ap;
+    crtc_set_position_t      *cpos;
     crtc_set_mode_t          *cmode;
     crtc_set_outputs_t       *cout;
     output_change_property_t *chprop;
@@ -233,6 +214,13 @@ int router_sequence_add_function(sequence_t *seq, char *name, ...)
     va_start(ap, name);
 
     switch (type) {
+    case function_crtc_set_position:
+        cpos = &func->crtc_set_position;
+        cpos->screen_id = integer_arg(va_arg(ap, char *), &success);
+        cpos->crtc_id   = integer_arg(va_arg(ap, char *), &success);
+        cpos->x         = position_arg(va_arg(ap, char *), &success);
+        cpos->y         = position_arg(va_arg(ap, char *), &success);
+        break;
     case function_crtc_set_mode:
         cmode = &func->crtc_set_mode;
         cmode->screen_id = integer_arg(va_arg(ap, char *), &success);
@@ -268,6 +256,9 @@ int router_sequence_add_function(sequence_t *seq, char *name, ...)
 
     if (func != NULL) {
         switch (func->any.type) {
+        case function_crtc_set_position:
+            cpos = &func->crtc_set_position;
+            break;
         case function_crtc_set_mode:
             cmode = &func->crtc_set_mode;
             free(cmode->modname);
@@ -372,16 +363,7 @@ static void randr_state(int ready, void *data)
 
 static void config_device(char *device)
 {
-    if (!strcmp(device, "builtin")) {
-        randr_crtc_set_mode(0, 1, NULL);
-        randr_crtc_set_outputs(0, 1, 0,NULL);
-    }
-    else {
-        char *outputs[] = {"TV"};
-        
-        randr_crtc_set_mode(0, 1, "854x480");
-        randr_crtc_set_outputs(0, 1, 1,outputs);
-    }
+    execute_sequence(router_seq_device, device);
 }
 
 static void config_tvstd(char *tvstd)
@@ -410,6 +392,7 @@ static void execute_sequence(router_seq_type_t type, const char *id)
 {
     sequence_t               *seq;
     function_t               *func;
+    crtc_set_position_t      *cpos;
     crtc_set_mode_t          *cmode;
     crtc_set_outputs_t       *cout;
     output_change_property_t *chprop;
@@ -422,6 +405,15 @@ static void execute_sequence(router_seq_type_t type, const char *id)
 
                 for (func = seq->funcs;  func;  func = func->any.next) {
                     switch (func->any.type) {
+
+                    case function_crtc_set_position:
+                        cpos = &func->crtc_set_position;
+                        OHM_DEBUG(DBG_ROUTE, "   randr_crtc_set_position("
+                                  "%d, %d, %lu,%lu)", cpos->screen_id,
+                                  cpos->crtc_id, cpos->x, cpos->y);
+                        randr_crtc_set_position(cpos->screen_id, cpos->crtc_id,
+                                                cpos->x, cpos->y);
+                        break;
 
                     case function_crtc_set_mode:
                         cmode = &func->crtc_set_mode;
@@ -476,6 +468,7 @@ static function_type_t function_name_to_type(const char *name)
     } fdef_t;
 
     static fdef_t fdefs[] = {
+        {"crtc_set_position"     , function_crtc_set_position     },
         {"crtc_set_mode"         , function_crtc_set_mode         },
         {"crtc_set_outputs"      , function_crtc_set_outputs      },
         {"output_change_property", function_output_change_property},
@@ -492,6 +485,16 @@ static function_type_t function_name_to_type(const char *name)
     }
 
     return function_unknown;
+}
+
+static char *sequence_type_str(router_seq_type_t type)
+{
+    switch (type) {
+    case router_seq_device:  return "device";
+    case router_seq_signal:  return "signal";
+    case router_seq_ratio:   return "ratio";
+    default:                 return "<unknown>";
+    }
 }
 
 static int integer_arg(const char *str, int *success)
@@ -519,8 +522,10 @@ static char *string_arg(const char *str, int *success)
 {
     char *arg = NULL;
 
-    if (!str || !(arg = strdup(str)))
-        *success = FALSE;
+    if (str) {
+        if ((arg = strdup(str)) == NULL)
+            *success = FALSE;
+    }
 
     return arg;
 }
@@ -530,17 +535,45 @@ static char **string_array_arg(char **strs, int nstr, int *success)
     int    i;
     char **arr = NULL;
 
-    if (!strs || nstr <= 0 || !(arr = malloc(nstr * sizeof(char *))))
-        *success = FALSE;
-    else {
-        memset(arr, 0, nstr * sizeof(char *));
-        for (i = 0;  i < nstr;  i++) {
-            if (!strs[i] || !(arr[i] = strdup(strs[i])))
-                *success = FALSE;
+    if (strs && nstr > 0) {
+        if ((arr = malloc(nstr * sizeof(char *))) == NULL)
+            *success = FALSE;
+        else {
+            memset(arr, 0, nstr * sizeof(char *));
+            for (i = 0;  i < nstr;  i++) {
+                if (!strs[i] || !(arr[i] = strdup(strs[i])))
+                    *success = FALSE;
+            }
         }
     }
 
     return arr;
+}
+
+static uint32_t position_arg(const char *str, int *success)
+{    
+    char *e;
+    unsigned long int val;
+    uint32_t arg = 0;
+    
+    if (!str || !str[0])
+        *success = FALSE;
+    else {
+        if (!strcmp(str, "append"))
+            arg = POSITION_APPEND;
+        else if (!strcmp(str, "dontcare"))
+            arg = POSITION_DONTCARE;
+        else {
+            val = strtoul(str, &e, 10);
+
+            if (*e)
+                *success = FALSE;
+            else
+                arg = val;
+        }
+    }
+
+    return arg;
 }
 
 static videoep_value_t value_arg(const char           *str,
