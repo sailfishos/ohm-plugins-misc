@@ -513,19 +513,22 @@ static void cl_hash_delete(proxy_t *proxy)
 
     if (proxy != NULL) {
         idx = cl_hash_index(proxy->client);
-        if ((prev = clhashtbl[idx]) == proxy) {
-            clhashtbl[idx] = proxy->clnext;
-            proxy->clnext = NULL;
-        }
-        else {
-            while (prev->clnext != NULL) {
-                if (prev->clnext == proxy) {
-                    prev->clnext  = proxy->clnext;
-                    proxy->clnext = NULL;
-                    return;
-                }
 
-                prev = prev->clnext;
+        if ((prev = clhashtbl[idx]) != NULL) {
+            if (prev == proxy) {
+                clhashtbl[idx] = proxy->clnext;
+                proxy->clnext = NULL;
+            }
+            else {
+                while (prev->clnext != NULL) {
+                    if (prev->clnext == proxy) {
+                        prev->clnext  = proxy->clnext;
+                        proxy->clnext = NULL;
+                        return;
+                    }
+
+                    prev = prev->clnext;
+                }
             }
         }
     }
