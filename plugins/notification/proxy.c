@@ -145,7 +145,6 @@ static int create_and_send_status_to_client(proxy_t *, uint32_t);
 static int stop_if_loose_resources(proxy_t *, uint32_t);
 static int premature_stop(proxy_t *);
 static int playback_partial_end(proxy_t *);
-static int fake_backend_timeout(proxy_t *);
 
 static uint32_t play_status(proxy_t *, uint32_t);
 
@@ -239,7 +238,7 @@ int proxy_playback_request(const char *what,    /* eg. ringtone, alarm, etc */
         }
         else {
             success = resource_set_acquire(type, rset_regular, mand, opt,
-                                           grant_handler, proxy);
+                                           grant_handler, (void *) proxy->id);
             if (!success) {
                 strncpy(err, "recource acquisition failed", DBUS_DESCBUF_LEN);
                 err[DBUS_DESCBUF_LEN-1] = '\0';
@@ -421,24 +420,31 @@ static void proxy_destroy(proxy_t *proxy)
             longlive_stop_request(proxy->type);
 
         timeout_destroy(proxy);
-        resource_set_release(proxy->type, rset_regular, grant_handler, proxy);
 
         id_hash_delete(proxy);
         cl_hash_delete(proxy);
 
-        if (!cl_hash_lookup_client(proxy->client))
-            dbusif_monitor_client(proxy->client, FALSE);
+        dbusif_monitor_client(proxy->client, FALSE);
 
         free((void *)proxy->client);
+        proxy->client = NULL;
+
+        /* Remove the proxy from the hashes before releasing the
+         * resources -- this means that the proxy is no longer found
+         * from the hash if resouce handler for some strange reason
+         * decides to offer the resources back to it. */
+        resource_set_release(proxy->type, rset_regular, grant_handler, (void *) proxy->id);
+
         dbusif_free_data(proxy->data);
 
-        if (proxy->event)
+        if (proxy->event) {
             free(proxy->event);
+            proxy->event = NULL;
+        }
 
         free(proxy);
     }
 }
-
 
 static void id_hash_add(proxy_t *proxy)
 {
@@ -626,11 +632,17 @@ static uint32_t timeout_handler(proxy_t *proxy)
 
 static void grant_handler(uint32_t granted, void *void_proxy)
 {
-    proxy_t  *proxy = void_proxy;
+    proxy_t  *proxy;
+    uint32_t  proxid = (uint32_t) void_proxy;
     char      buf[256];
 
-    if (proxy == NULL)
+    /* check if the pointer is still valid -- we are maintaining a list
+     * of all existing proxies */
+    if ((proxy = id_hash_lookup(proxid)) == NULL) {
+        OHM_DEBUG(DBG_PROXY, "resource library is trying to grant resources"
+                " to an already destroyed proxy, hmm...");
         return;
+    }
 
     OHM_DEBUG(DBG_PROXY, "granted regular resources %s",
               resmsg_res_str(granted, buf, sizeof(buf)));
@@ -715,6 +727,9 @@ static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
     proxy_state_t  state   = proxy->state;
     int            killed  = FALSE;
     uint32_t       status;
+
+    /* this function can only be called with a good proxy pointer -- it
+     * is the job of the caller to verify that */
 
     OHM_DEBUG(DBG_PROXY, "proxy %s/%d received '%s' event in '%s' state",
               proxy->client,type, event_str(ev), state_str(state));
@@ -1110,15 +1125,8 @@ static int premature_stop(proxy_t *proxy)
 static int playback_partial_end(proxy_t *proxy)
 {
     timeout_destroy(proxy);
-    resource_set_release(proxy->type, rset_regular, grant_handler,proxy);
+    resource_set_release(proxy->type, rset_regular, grant_handler, (void *) proxy->id);
     proxy->state = state_longlive;
-
-    return TRUE;
-}
-
-static int fake_backend_timeout(proxy_t *proxy)
-{
-    timeout_create(proxy, 0);
 
     return TRUE;
 }
