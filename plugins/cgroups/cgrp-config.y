@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <errno.h>
 #include <dirent.h>
 #include <regex.h>
 #include <sched.h>
@@ -1012,6 +1013,11 @@ time_unit: /* use default units */ {
 int
 config_parse_config(cgrp_context_t *ctx, char *path)
 {
+    if (access(path, F_OK) != 0 && errno == ENOENT) {
+        OHM_WARNING("cgrp: no configuration file found");
+        return TRUE;
+    }
+
     lexer_reset(START_FULL_PARSER);
 
     if (!lexer_push_input(path))
