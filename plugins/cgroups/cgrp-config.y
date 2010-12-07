@@ -1212,6 +1212,11 @@ config_monitor_init(cgrp_context_t *ctx)
     while (*end == '/' && end > dir)
         *end-- = '\0';
 
+    if ((access(dir, F_OK) != 0 && errno == ENOENT)) {
+        OHM_WARNING("cgrp: non-existing add-on rule directory '%s'", dir);
+        return FALSE;
+    }
+
     if ((ctx->addonwd = inotify_init()) < 0) {
         OHM_ERROR("cgrp: failed to create inotify watch for addon rules");
         return FALSE;
