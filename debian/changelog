@@ -1,3 +1,11 @@
+ohm-plugins-misc (1:1.52) unstable; urgency=low
+
+  * Default to 0.0.0 instead of UNKNOWN as a version.
+  * Check and warn about missing add-on rule directory.
+  * Give a warning but don't bail out on missing configuration file.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 08 Dec 2010 20:43:58 +0200
+
 ohm-plugins-misc (1:1.51) unstable; urgency=low
 
   * videoep: video routing configuration comes from videoep.conf
