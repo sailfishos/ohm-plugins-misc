@@ -40,7 +40,7 @@ USA.
 #define OUR_NAME          "org.freedesktop.ohm_session_agent"
 
 #define OHM_SESSION_NAME  "org.maemo.Playback.Manager"
-#define SESSION_TIMEOUT   (30 * 1000)
+#define SESSION_TIMEOUT   5
 
 #define DBUS_ADMIN_INTERFACE "org.freedesktop.DBus"
 #define DBUS_ADMIN_PATH      "/org/freedesktop/DBus"
@@ -77,7 +77,7 @@ static const char     *ohm_signal = OHM_DBUS_SIGNAME;
 static const char     *bus_address;
 static guint           chkid;
 static char           *saved_argv[MAX_ARGS + 1];
-
+static guint           timeout    = SESSION_TIMEOUT;
 
 static DBusHandlerResult name_owner_changed(DBusConnection *, DBusMessage *,
                                             void *);
@@ -104,6 +104,8 @@ print_usage(const char *argv0, int exit_code, const char *format, ...)
            "  -p, --path=PATH                     notify D-BUS <PATH>\n"
            "  -s, --signal=SIGNAL                 notify D-BUS <SIGNAL>\n"
            "  -a, --address=ADDR                  notify <ADDRESS>\n"
+           "  -t, --timeout=TIMEOUT               wait <TIMEOUT> seconds for ohm\n"
+           "                                      connection to the session bus\n"
            "  -h, --help                          show help on usage\n"
            "  -l, --log-level=LEVELS              set logging levels\n"
            "      LEVELS is a comma separated list of info, error and warning\n"
@@ -155,12 +157,13 @@ static void parse_log_level(char *argv0, const char *level)
 void
 parse_command_line(int argc, char **argv)
 {
-#define OPTIONS "n:p:s:a:l:vh"
+#define OPTIONS "n:p:s:a:t:l:vh"
     struct option options[] = {
         { "name"     , required_argument, NULL, 'n' },
         { "path"     , required_argument, NULL, 'p' },
         { "signal"   , required_argument, NULL, 's' },
         { "address"  , required_argument, NULL, 'a' },
+        { "timeout"  , required_argument, NULL, 't' },
         { "verbose"  , optional_argument, NULL, 'v' },
         { "log-level", required_argument, NULL, 'l' },
         { "help"     , no_argument      , NULL, 'h' },
@@ -178,6 +181,7 @@ parse_command_line(int argc, char **argv)
         case 'p': ohm_path    = optarg; break;
         case 's': ohm_signal  = optarg; break;
         case 'a': bus_address = optarg; break;
+        case 't': timeout = (guint)strtoul(optarg, NULL, 10); break;
         case 'v':
         case 'l': parse_log_level(argv[0], optarg); break; 
         default:  print_usage(argv[0], EINVAL, "invalid option '%c'", opt);
@@ -304,7 +308,7 @@ session_check_cancel(void)
 void
 session_check_schedule(void)
 {
-    chkid = g_timeout_add_full(G_PRIORITY_DEFAULT, SESSION_TIMEOUT,
+    chkid = g_timeout_add_full(G_PRIORITY_DEFAULT, timeout * 1000,
                                session_check, NULL, NULL);
 }
 
@@ -420,9 +424,11 @@ name_owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
         LOG_INFO("OHM is up.");
         ohm_notify();
     }
-    else if (old_owner[0] != '\0' && new_owner[0] == '\0')
+    else if (old_owner[0] != '\0' && new_owner[0] == '\0') {
         LOG_INFO("OHM is down.");
-    
+        session_check_cancel();
+    }
+
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
@@ -482,7 +488,7 @@ restart_after(int delay)
     
     check_session_address("/tmp/dbus-info");
     
-    LOG_INFO("restarting after %d seconds", delay);
+    LOG_INFO("restarting after %d seconds", delay + 1);
     sleep(delay);
     
     for (fd = 3; fd < 4096; fd++)
