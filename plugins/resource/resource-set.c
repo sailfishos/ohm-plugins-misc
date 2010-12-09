@@ -416,6 +416,7 @@ static void dequeue_and_send(resource_set_t          *rs,
     resource_set_output_t *value;
     resource_set_qhead_t  *qhead;
     resource_set_queue_t  *qentry;
+    int32_t                block;
     resmsg_t               msg;
     char                   buf[128];
 
@@ -431,6 +432,7 @@ static void dequeue_and_send(resource_set_t          *rs,
     }
 
     qhead = &value->queue;
+    block = rs->block;
 
     /*
      * we assume that the queue contains strictly monoton increasing txid's
@@ -442,25 +444,35 @@ static void dequeue_and_send(resource_set_t          *rs,
 
         if (qentry->txid == txid) {
             if (qentry->reqno || value->client != qentry->value) {
-                memset(&msg, 0, sizeof(msg));
-                msg.notify.type  = type;
-                msg.notify.id    = resset->id;
-                msg.notify.reqno = qentry->reqno;
-                msg.notify.resrc = qentry->value;
-                
-                if (resproto_send_message(resset, &msg, NULL)) {
-                    value->client = qentry->value;
-
-                    OHM_DEBUG(DBG_SET, "%s/%u (manager_id %u) dequed and sent "
-                              "%s value %s",  resset->peer, resset->id,
+                if (block && type == RESMSG_GRANT) {
+                    OHM_DEBUG(DBG_SET, "%s/%u (manager_id %u) dequed but not "
+                              "sent %s value %s", resset->peer, resset->id,
                               rs->manager_id, resmsg_type_str(type),
-                              resmsg_res_str(value->client, buf, sizeof(buf)));
+                              resmsg_res_str(value->client,buf,sizeof(buf)));
                 }
                 else {
-                    OHM_ERROR("resource: failed to send %s message to "
-                              "%s/%u (manager id %u)", resmsg_type_str(type),
-                              resset->peer, resset->id, rs->manager_id);
-                }
+                    memset(&msg, 0, sizeof(msg));
+                    msg.notify.type  = type;
+                    msg.notify.id    = resset->id;
+                    msg.notify.reqno = qentry->reqno;
+                    msg.notify.resrc = qentry->value;
+                
+                    if (resproto_send_message(resset, &msg, NULL)) {
+                        value->client = qentry->value;
+
+                        OHM_DEBUG(DBG_SET, "%s/%u (manager_id %u) dequed and "
+                                  "sent %s value %s", resset->peer, resset->id,
+                                  rs->manager_id, resmsg_type_str(type),
+                                  resmsg_res_str(value->client,buf,sizeof(buf))
+                                 );
+                    }
+                    else {
+                        OHM_ERROR("resource: failed to send %s message to "
+                                  "%s/%u (manager id %u)",
+                                  resmsg_type_str(type), resset->peer,
+                                  resset->id, rs->manager_id);
+                    }
+                } /* if !block */
             }
         }
         else {
