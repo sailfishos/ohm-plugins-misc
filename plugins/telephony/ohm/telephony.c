@@ -477,7 +477,7 @@ bus_exit(void)
     bus_del_match("signal", TP_CHANNEL_CONF, CHANNEL_MERGED, NULL);
     bus_del_match("signal", TP_CHANNEL_CONF, CHANNEL_REMOVED, NULL);
     bus_del_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_ADDED, NULL);
-    bus_add_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_REMOVED, NULL);
+    bus_del_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_REMOVED, NULL);
     
     dbus_connection_unref(bus);
     bus = NULL;
