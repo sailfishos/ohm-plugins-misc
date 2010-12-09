@@ -1,7 +1,5 @@
 etc/ohm/plugins.d/*
 usr/bin/ohm-session-agent
-usr/share/ohm-session-agent/*
-usr/share/dbus-1/services/*.service
 #usr/lib/mission-control/*
 #usr/lib/ohm/libohm_dvfs.so
 usr/lib/ohm/libohm_gconf.so
