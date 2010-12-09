@@ -1,4 +1,4 @@
-ohm-plugins-misc (1:1.52) unstable; urgency=low
+ohm-plugins-misc (1:1.53) unstable; urgency=low
 	
   * resource: do not send grant's for block'ed resource set with no AutoRelease
   * Fixes: NB#208351
