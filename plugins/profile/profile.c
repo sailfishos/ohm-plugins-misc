@@ -106,7 +106,7 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
     }
 
     if (!strcmp(address, "<failure>")) {
-        OHM_INFO("telephony: got session bus failure notification, "
+        OHM_INFO("profile: got session bus failure notification, "
                  "exiting");
         ohm_restart(10);
     }
