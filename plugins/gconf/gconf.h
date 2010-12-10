@@ -48,8 +48,12 @@ USA.
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-plugin-debug.h>
+#include <ohm/ohm-plugin-log.h>
 
 #define GCONF_STRING_DELIMITER ";"
+
+#define DBUS_INTERFACE_POLICY   "com.nokia.policy"
+#define DBUS_POLICY_NEW_SESSION "NewSession"
 
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
 
