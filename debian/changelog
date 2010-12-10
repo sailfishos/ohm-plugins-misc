@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.56) unstable; urgency=low
+
+  * install check_profile test again, needed for automatic testing
+
+ -- Vladimir Zapolskiy <vladimir.zapolskiy@nokia.com>  Fri, 10 Dec 2010 19:18:36 +0200
+
 ohm-plugins-misc (1:1.55) unstable; urgency=low
 
   * disable check_profile test from compilation and installation
