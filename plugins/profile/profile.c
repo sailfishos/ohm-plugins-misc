@@ -105,7 +105,12 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
 
-    
+    if (!strcmp(address, "<failure>")) {
+        OHM_INFO("telephony: got session bus failure notification, "
+                 "exiting");
+        ohm_restart(10);
+    }
+
     if (bus_conn != NULL) {
         OHM_INFO("profile: received new session bus address \"%s\".", address);
         dbus_connection_unref(bus_conn);

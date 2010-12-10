@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=org.maemo.Playback.Manager
-Exec=/usr/share/ohm-session-agent/start-session-agent.sh
