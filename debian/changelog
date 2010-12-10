@@ -2,7 +2,6 @@ ohm-plugins-misc (1:1.55) unstable; urgency=low
 
   * disable check_profile test from compilation and installation
   * remove ohm-session-agent scripts from installation
-  * Fixes: NB#210304
   * Fixes: NB#210124
 
  -- Vladimir Zapolskiy <vladimir.zapolskiy@nokia.com>  Fri, 10 Dec 2010 12:00:15 +0200
