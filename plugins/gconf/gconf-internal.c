@@ -52,8 +52,6 @@ static gboolean update_fact(gconf_plugin *plugin, GConfEntry *entry)
     val =  gconf_entry_get_value(entry);
     list = ohm_fact_store_get_facts_by_name(plugin->fs, GCONF_FACT);
 
-    /* printf("Creating / updating fact for key '%s'.\n", key); */
-
     for (e = list; e != NULL; e = g_slist_next(e)) {
         OhmFact *tmp = (OhmFact *) e->data;
         GValue *gval = ohm_fact_get(tmp, "key");
@@ -142,8 +140,6 @@ void notify(GConfClient *client, guint id, GConfEntry *entry, gpointer user_data
 
     key = gconf_entry_get_key(entry);
 
-    /* printf("Notify called for key '%s'.\n", key); */
-
     for (e = plugin->observers; e != NULL; e = g_slist_next(e)) {
         observer *obs = e->data;
         if (!strcmp(key, obs->key)) {
@@ -201,12 +197,164 @@ static void free_observer(observer *obs)
     return;
 }
 
+static char * get_directory_from_key(const char *key)
+{
+    int len;
+    char *last = strrchr(key, '/');
+    char *dir = NULL;
+
+    if (last == NULL) {
+        goto error;
+    }
+    len = last - key;
+
+    if (len == 0) {
+        return strdup("/");
+    }
+
+    dir = malloc(len+1);
+    if (dir == NULL) {
+        goto error;
+    }
+    strncpy(dir, key, len);
+    dir[len] = '\0';
+
+    return dir;
+
+error:
+    free(dir);
+    return NULL;
+}
+
+
+static int is_child_directory(const gchar *child, const gchar *parent)
+{
+    /* return true if the directory is a child or is exactly the same
+     * directory */
+    gchar *p_iter, *c_iter;
+    int is_child = TRUE;
+
+    p_iter = (gchar *) parent;
+    c_iter = (gchar *) child;
+
+    while (is_child) {
+        if (*p_iter == '\0') {
+            /* see if the parent directory is complete */
+            if (*c_iter == '\0' || *c_iter == '/') {
+                break;
+            }
+            else {
+                /* /foo/bar vs. /foo/barbar */
+                is_child = FALSE;
+            }
+        }
+        else if (*c_iter == '\0' || *p_iter != *c_iter) {
+            is_child = FALSE;
+        }
+        p_iter++;
+        c_iter++;
+    }
+
+    return is_child;
+}
+static GSList * listened_directories(GSList *observers)
+{
+    /* get a list of directories */
+    GSList *directories = NULL, *i, *j;
+    observer *obs = NULL;
+
+    for (i = observers; i != NULL; i = g_slist_next(i)) {
+        gchar *dir;
+        obs = (observer *) i->data;
+        dir = get_directory_from_key(obs->key);
+        if (dir) {
+            directories = g_slist_prepend(directories, dir);
+        }
+    }
+
+    for (i = directories; i != NULL; i = g_slist_next(i)) {
+        int is_child = FALSE;
+        for (j = directories; j != NULL; j = g_slist_next(j)) {
+            if (j != i) {
+                is_child = is_child_directory(i->data, j->data);
+                if (is_child) {
+                    break;
+                }
+            }
+        }
+        if (is_child) {
+
+            /* filter out the directories that are the direct descendents of
+             * other directories */
+            g_free(i->data);
+            directories = g_slist_delete_link(directories, i);
+
+            /* Start from the beginning: this appears to be a limitation
+             * of g_slist */
+            i = directories;
+        }
+    }
+
+    return directories;
+}
+
+static void recalculate_directories(gconf_plugin *plugin)
+{
+
+    GSList *new_dirs = NULL, *e = NULL, *f = NULL;
+
+    new_dirs = listened_directories(plugin->observers);
+
+    /* Calculate the difference between the original listened
+     * directories and the new ones. By first subscribing to new
+     * directories and then unsubscribing from old directories, we hope
+     * to remove the risk of a race condition when a key is changed
+     * before the new subscribtions. The API says that there can't be
+     * overlapping directories subscribed, though, but this appears to
+     * work. */
+
+    /* first subscribe to new ones */
+
+    for (e = new_dirs; e != NULL; e = g_slist_next(e)) {
+        gboolean found = FALSE;
+        for (f = plugin->watched_dirs; f != NULL; f = g_slist_next(f)) {
+            if (strcmp((gchar *) f->data, (gchar *) e->data) == 0) {
+                found = TRUE;
+                break;
+            }
+        }
+        if (!found) {
+            gconf_client_add_dir(plugin->client, e->data, GCONF_CLIENT_PRELOAD_NONE, NULL);
+            OHM_DEBUG(DBG_GCONF, "Add dir '%s' to be listened", (gchar *) e->data);
+        }
+    }
+
+    /* then unsubscribe from old ones */
+
+    for (e = plugin->watched_dirs; e != NULL; e = g_slist_next(e)) {
+        gboolean found = FALSE;
+        for (f = new_dirs; f != NULL; f = g_slist_next(f)) {
+            if (strcmp((gchar *) f->data, (gchar *) e->data) == 0) {
+                found = TRUE;
+                break;
+            }
+        }
+        if (!found) {
+            gconf_client_remove_dir(plugin->client, e->data, NULL);
+            OHM_DEBUG(DBG_GCONF, "Remove dir '%s' from being listened", (gchar *) e->data);
+        }
+        g_free(e->data);
+    }
+
+    g_slist_free(plugin->watched_dirs);
+    plugin->watched_dirs = new_dirs;
+
+    return;
+}
+
 void deinit_gconf(gconf_plugin *plugin)
 {
     GSList *e = NULL, *list;
-    
-    /* stop listening to the keys */
-    gconf_client_remove_dir(plugin->client, "/", NULL);
     
     /* free the observers */
 
@@ -217,17 +365,6 @@ void deinit_gconf(gconf_plugin *plugin)
 
     /* free the facts */
 
-#if 0
-
-    list = ohm_fact_store_get_facts_by_name(plugin->fs, GCONF_FACT);
-    for (e = list; e != NULL; e = n) {
-        OhmFact *fact = (OhmFact *) e->data;
-        n = g_slist_next(e);
-
-        ohm_fact_store_remove(plugin->fs, fact);
-    }
-#else
-    
     list = ohm_fact_store_get_facts_by_name(plugin->fs, GCONF_FACT);
 
     while (list) {
@@ -239,10 +376,16 @@ void deinit_gconf(gconf_plugin *plugin)
         list = ohm_fact_store_get_facts_by_name(plugin->fs, GCONF_FACT);
 
     }
-#endif
 
     g_slist_free(plugin->observers);
     plugin->observers = NULL;
+
+    /* stop watching all the directories that were being watched */
+    for (e = plugin->watched_dirs; e != NULL; e = g_slist_next(e)) {
+        gconf_client_remove_dir(plugin->client, e->data, NULL);
+        g_free(e->data);
+    }
+    g_slist_free(plugin->watched_dirs);
 
     g_object_unref(plugin->client);
     g_free(plugin);
@@ -250,11 +393,13 @@ void deinit_gconf(gconf_plugin *plugin)
     return;
 }
 
+
 gboolean observe(gconf_plugin *plugin, const gchar *key)
 {
     GSList *e = NULL;
     observer *obs = NULL;
     GConfEntry *entry = NULL;
+
     
     /* see if we are already observing the key */
 
@@ -262,15 +407,8 @@ gboolean observe(gconf_plugin *plugin, const gchar *key)
         obs = e->data;
         if (!strcmp(key, obs->key)) {
             obs->refcount++;
-            /* printf("refcount for '%s' is now %i\n", key, obs->refcount); */
             return TRUE;
         }
-    }
-    
-    if (plugin->observers == NULL) {
-        /* start listening to the root dir */
-        OHM_DEBUG(DBG_GCONF, "Starting listening to / dir\n");
-        gconf_client_add_dir(plugin->client, "/", GCONF_CLIENT_PRELOAD_NONE, NULL);
     }
     
     /* create the initial fact */
@@ -296,10 +434,14 @@ gboolean observe(gconf_plugin *plugin, const gchar *key)
     obs->key = g_strdup(key);
     obs->refcount = 1;
 
+    plugin->observers = g_slist_prepend(plugin->observers, obs);
+
+    /* recalculate the watched directory set: this enables the key
+     * notification */
+    recalculate_directories(plugin);
+
     obs->notify = gconf_client_notify_add(plugin->client, key, notify, plugin, NULL, NULL);
     OHM_DEBUG(DBG_GCONF, "Requested notify for key '%s (id %u)'\n", key, obs->notify);
-
-    plugin->observers = g_slist_prepend(plugin->observers, obs);
 
     return TRUE;
 }
@@ -342,17 +484,15 @@ gboolean unobserve(gconf_plugin *plugin, const gchar *key)
                     }
                 }
 
+                /* recalculate the watched directory set */
+                recalculate_directories(plugin);
+
                 free_observer(obs);
                 obs = NULL;
             }
             ret = TRUE;
             break;
         }
-    }
-    
-    if (plugin->observers == NULL) {
-        /* stop listening to the root dir if no-one is interested */
-        gconf_client_remove_dir(plugin->client, "/", NULL);
     }
     
     return ret;
