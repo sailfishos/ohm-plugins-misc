@@ -1078,7 +1078,8 @@ config_parse_addons(cgrp_context_t *ctx)
         
         for (p = base; *p == '/'; p++)
             ;
-        strcpy(glob, p);
+        strncpy(glob, p, sizeof(glob) - 1);
+        glob[sizeof(glob) - 1] = '\0';
 
         while (*base == '/' && base > path)
             base--;
@@ -1206,7 +1207,9 @@ config_monitor_init(cgrp_context_t *ctx)
     if (!CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_MONITOR))
         return TRUE;
 
-    strcpy(dir, ctx->options.addon_rules);
+    strncpy(dir, ctx->options.addon_rules, sizeof(dir) - 1);
+    dir[sizeof(dir) - 1] = '\0';
+    
     if ((end = strrchr(dir, '/')) == NULL)
         return FALSE;
     while (*end == '/' && end > dir)

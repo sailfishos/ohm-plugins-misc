@@ -383,6 +383,7 @@ static int profile_load_state(void)
     /* create new fact and populate it with saved fields */
     if ((fact = ohm_fact_new(FACTSTORE_PROFILE)) == NULL) {
         printf("%s: creating %s failed\n", __FUNCTION__, FACTSTORE_PROFILE);
+        fclose(fp);
         return ENOMEM;
     }
     
