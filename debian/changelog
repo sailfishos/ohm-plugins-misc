@@ -1,8 +1,12 @@
 ohm-plugins-misc (1:1.56) unstable; urgency=low
 
+  [ Vladimir Zapolskiy ]
   * install check_profile test again, needed for automatic testing
 
- -- Vladimir Zapolskiy <vladimir.zapolskiy@nokia.com>  Fri, 10 Dec 2010 19:18:36 +0200
+  [ Ismo Puustinen ]
+  * GConf directory granularity improved. (Fixes: NB#210108)
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 15 Dec 2010 11:48:01 +0200
 
 ohm-plugins-misc (1:1.55) unstable; urgency=low
 
