@@ -154,12 +154,15 @@ action_del(cgrp_action_t *actions)
 int
 action_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
 {
-    int   type = action->type;
-    char *t    = "";;
+    int   type;
+    char *t;
     int   n, len;
 
     n = len = 0;
+    t = "";
     while (action != NULL && n >= 0) {
+        type = action->type;
+        
         if (CGRP_ACTION_UNKNOWN < type && type < CGRP_ACTION_MAX) {
             n = fprintf(fp, "%s", t);
             if (actions[type].print != NULL)
@@ -174,6 +177,7 @@ action_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
         
         action  = action->any.next;
         len    += n;
+        t       = "; ";
     }
     
     return n;
@@ -191,7 +195,6 @@ action_exec(cgrp_context_t *ctx, cgrp_proc_attr_t *attr, cgrp_action_t *action)
     
     success = TRUE;
     while (action != NULL) {
-
         type = action->type;
 
         if (CGRP_ACTION_UNKNOWN < type && type < CGRP_ACTION_MAX) {
