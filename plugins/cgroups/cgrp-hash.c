@@ -463,6 +463,28 @@ part_hash_foreach(cgrp_context_t *ctx, GHFunc func, void *data)
     g_hash_table_foreach(ctx->parttbl, func, data);
 }
 
+
+/********************
+ * part_hash_find_by_path
+ ********************/
+static gboolean
+has_path(gpointer keyp, gpointer valp, gpointer user_data)
+{
+    cgrp_partition_t *part = (cgrp_partition_t *)valp;
+    const char       *path = (const char *)user_data;
+
+    (void)keyp;
+
+    return !strcmp(part->path, path);
+}
+
+
+cgrp_partition_t *
+part_hash_find_by_path(cgrp_context_t *ctx, const char *path)
+{
+    return g_hash_table_find(ctx->parttbl, has_path, (gpointer)path);
+}
+
 /* 
  * Local Variables:
  * c-basic-offset: 4
