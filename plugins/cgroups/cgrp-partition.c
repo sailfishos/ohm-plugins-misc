@@ -112,21 +112,29 @@ partition_exit(cgrp_context_t *ctx)
 /********************
  * partition_add_root
  ********************/
-int
+cgrp_partition_t *
 partition_add_root(cgrp_context_t *ctx)
 {
-    cgrp_partition_t root;
+    cgrp_partition_t *part;
+    cgrp_partition_t  root;
+    char             *path;
 
-    memset(&root, 0, sizeof(root));
-    root.name      = "root";
-    root.path      = ctx->actual_mount ? ctx->actual_mount : ctx->desired_mount;
-    root.limit.cpu = CGRP_NO_LIMIT;
-    root.limit.mem = CGRP_NO_LIMIT;
+    path = ctx->actual_mount ? ctx->actual_mount : ctx->desired_mount;
 
-    if ((ctx->root = partition_add(ctx, &root)) == NULL)
-        return FALSE;
-    else
-        return TRUE;
+    if ((part = part_hash_lookup(ctx, "root")    ) != NULL ||
+        (part = part_hash_find_by_path(ctx, path)) != NULL)
+        ctx->root = part;
+    else {
+        memset(&root, 0, sizeof(root));
+        root.name      = "root";
+        root.path      = path;
+        root.limit.cpu = CGRP_NO_LIMIT;
+        root.limit.mem = CGRP_NO_LIMIT;
+
+        ctx->root = partition_add(ctx, &root);
+    }
+
+    return ctx->root;
 }
 
 
