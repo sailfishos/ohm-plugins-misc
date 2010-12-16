@@ -515,9 +515,8 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
     }
 
     if (!strcmp(address, "<failure>")) {
-        OHM_INFO("telephony: got session bus failure notification, "
-                 "exiting");
-        ohm_restart(10);
+        OHM_INFO("telephony: got session bus failure notification, ignoring.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;                 
     }
 
     if (bus != NULL) {
