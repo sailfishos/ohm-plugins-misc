@@ -137,8 +137,8 @@ static DBusHandlerResult bus_new_session(DBusConnection *c,
 
     if (!strcmp(address, "<failure>")) {
         OHM_INFO("GConf: got session bus failure notification, "
-                 "exiting");
-        ohm_restart(10);
+                 "requesting a restart");
+        ohm_restart(0);
     }
 
     if (gconf_plugin_p == NULL) {
