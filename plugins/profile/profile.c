@@ -105,13 +105,16 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
 
-#ifndef __TEST__
     if (!strcmp(address, "<failure>")) {
-        OHM_INFO("profile: got session bus failure notification, "
-                 "exiting");
-        ohm_restart(10);
-    }
+        OHM_INFO("profile: got session bus failure notification");
+#ifndef __TEST__
+        OHM_INFO("profile: requesting ohm restart");
+        ohm_restart(0);
+#else
+        OHM_INFO("profile: ignoring");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 #endif
+    }
 
     if (bus_conn != NULL) {
         OHM_INFO("profile: received new session bus address \"%s\".", address);
