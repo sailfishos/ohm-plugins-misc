@@ -133,7 +133,7 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *conn,
         if (!strcmp(address, "<failure>")) {
             OHM_INFO("resource: got session bus failure notification, "
                      "exiting");
-            ohm_restart(10);
+            ohm_restart(0);
         }
 
         if (sess_conn != NULL) {
