@@ -60,6 +60,7 @@ static msg_queue_t       *msg_que;       /* queued messages */
 
 static void system_bus_init(void);
 static void session_bus_init(const char *);
+static void session_bus_cleanup(void);
 
 static DBusHandlerResult info(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult method(DBusConnection *, DBusMessage *, void *);
@@ -74,6 +75,7 @@ static DBusMessage *mute_get_message(DBusMessage *);
 static void send_message(bus_type_t, DBusMessage *, int);
 static void queue_message(bus_type_t, DBusMessage *);
 static void queue_flush(void);
+static void queue_purge(bus_type_t);
 
 
 /*! \addtogroup pubif
@@ -133,30 +135,25 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *conn,
 
         if (!success) {
             if (!dbus_error_is_set(&error))
-                OHM_ERROR("Failed to parse session bus notification.");
+                OHM_ERROR("media: malformed session bus notification.");
             else {
-                OHM_ERROR("Failed to parse session bus notification: %s.",
+                OHM_ERROR("media: malformed session bus notification: %s.",
                           error.message);
                 dbus_error_free(&error);
             }
             break;
         }
-                         
-        if (!strcmp(address, "<failure>")) {
-            OHM_INFO("media: got session bus failure notification, "
-                     "exiting");
-            ohm_restart(10);
-        }
 
-        if (sess_conn != NULL) {
-            OHM_WARNING("Got session bus notification but already has a bus.");
-            OHM_WARNING("Ignoring session bus notification.");
+        if (!strcmp(address, "<failure>")) {
+            OHM_INFO("media: got session bus failure notification, ignoring");
             break;
         }
 
-        OHM_INFO("media: got session bus notification with address '%s'",
-                 address);
-    
+        OHM_INFO("media: got new session bus address '%s'", address);
+
+        if (sess_conn != NULL)
+            session_bus_cleanup();
+        
         session_bus_init(address);
 
     } while(0);
@@ -353,9 +350,10 @@ static void session_bus_init(const char *addr)
             success = FALSE;
 
             if (!dbus_error_is_set(&err))
-                OHM_ERROR("Can't get D-Bus connection");
+                OHM_ERROR("media: can't get session bus connection");
             else {
-                OHM_ERROR("Can't get D-Bus connection: %s", err.message);
+                OHM_ERROR("media: can't get session bus connection: %s",
+                          err.message);
                 dbus_error_free(&err);
             }
         }
@@ -368,16 +366,17 @@ static void session_bus_init(const char *addr)
             success = FALSE;
 
             if (!dbus_error_is_set(&err))
-                OHM_ERROR("Can't connect to D-Bus %s", addr);
+                OHM_ERROR("media: can't connect to session bus %s", addr);
             else {
-                OHM_ERROR("Can't connect to D-Bus %s (%s)", addr, err.message);
+                OHM_ERROR("media: can't connect to session bus %s (%s)",
+                          addr, err.message);
                 dbus_error_free(&err);
             }
         }
     }
 
     if (!success)
-        OHM_ERROR("delayed connection to D-Bus session bus failed");
+        OHM_ERROR("media: delayed connection to session bus failed");
     else {
         /*
          * Notes:
@@ -417,10 +416,36 @@ static void session_bus_init(const char *addr)
             exit(1);
         }
 
-        OHM_INFO("media: successfully connected to D-Bus session bus");
+        OHM_INFO("media: successfully connected to session bus");
     }
 }
 
+
+static void session_bus_cleanup(void)
+{
+    DBusError error;
+    
+    if (sess_conn != NULL) {
+        OHM_INFO("media: cleaning up session bus connection");
+        
+        dbus_error_init(&error);
+
+        dbus_bus_release_name(sess_conn, DBUS_MEDIA_MANAGER_INTERFACE, &error);
+
+        if (dbus_error_is_set(&error)) {
+            dbus_error_free(&error);
+            dbus_error_init(&error);
+        }
+        
+        dbus_connection_unregister_object_path(sess_conn,
+                                               DBUS_MEDIA_MANAGER_PATH);
+        
+        queue_purge(DBUS_BUS_SESSION);
+        
+        dbus_connection_unref(sess_conn);
+        sess_conn = NULL;
+    }
+}
 
 
 static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg, void *ud)
@@ -735,7 +760,6 @@ static void queue_message(bus_type_t bus, DBusMessage *msg)
 static void queue_flush(void)
 {
     msg_queue_t *entry, *next;
-    DBusConnection *conn;
 
     for (entry = msg_que;   entry;   entry = next) {
         next = entry->next;
@@ -746,6 +770,38 @@ static void queue_flush(void)
     } /* for */
 
     msg_que = NULL;
+}
+
+
+static void queue_purge(bus_type_t bus)
+{
+    msg_queue_t *prev, *entry, *next;
+    
+    entry   = msg_que;
+    msg_que = prev = NULL;
+    
+
+    while (entry != NULL) {
+        next = entry->next;        
+        
+        if (entry->bus == bus) {
+            if (msg_que == NULL)
+                msg_que = entry->next;
+            else
+                prev->next = entry->next;
+
+            dbus_message_unref(entry->msg);
+            free(entry);
+        }
+        else {
+            if (msg_que == NULL)
+                msg_que = entry;
+
+            prev = entry;
+        }
+        
+        entry = next;
+    }
 }
 
 
