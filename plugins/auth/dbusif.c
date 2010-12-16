@@ -44,6 +44,7 @@ static DBusConnection *sess_conn;  /* D-Bus session bus */
 
 static void system_bus_init(void);
 static void session_bus_init(const char *);
+static void session_bus_cleanup();
 
 static void pid_queried(DBusPendingCall *, void *);
 
@@ -98,16 +99,12 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *syscon,
         }
                          
         if (!strcmp(address, "<failure>")) {
-            OHM_INFO("auth: got session bus failure notification, exiting");
-            ohm_restart(10);
-        }
-
-        if (sess_conn != NULL) {
-            OHM_ERROR("auth: got session bus notification but "
-                      "already has a bus.");
-            OHM_ERROR("auth: ignoring session bus notification.");
+            OHM_INFO("auth: got session bus failure notification, ignoring");
             break;
         }
+
+        if (sess_conn != NULL)
+            session_bus_cleanup();
 
         OHM_INFO("auth: got session bus notification with address '%s'",
                  address);
@@ -247,7 +244,23 @@ static void session_bus_init(const char *addr)
     }
 
     if (!success)
-        OHM_ERROR("delayed connection to D-Bus session bus failed");
+        OHM_ERROR("auth: delayed connection to session bus failed");
+}
+
+
+static void session_bus_cleanup(void)
+{
+    OHM_INFO("auth: cleaning up session bus connection");
+
+    if (sess_conn != NULL) {
+        /*
+         * Notes: Hmm... we could keep track of all pending queries
+         *     on the session bus and dbus_pending_call_cancel them
+         *     here. Currently we let them fail by timing out.
+         */
+        dbus_connection_unref(sess_conn);
+        sess_conn = NULL;
+    }
 }
 
 
