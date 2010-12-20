@@ -33,62 +33,105 @@ USA.
 #include <dbus/dbus-glib-lowlevel.h>
 
 
-#define OHM_DBUS_NAME     "org.freedesktop.ohm"
-#define OHM_DBUS_PATH     "/com/nokia/policy"
-#define OHM_DBUS_SIGNAME  "NewSession"
-#define OHM_DBUS_POLICYIF "com.nokia.policy"
-#define OUR_NAME          "org.freedesktop.ohm_session_agent"
-
-#define OHM_SESSION_NAME  "org.maemo.Playback.Manager"
-#define SESSION_TIMEOUT   5
+/* these defaults are for ohmd */
+#define OHM_DBUS_NAME        "org.freedesktop.ohm"
+#define OHM_DBUS_PATH        "/com/nokia/policy"
+#define OHM_DBUS_SIGNAME     "NewSession"
+#define OHM_DBUS_POLICYIF    "com.nokia.policy"
+#define OHM_SESSION_NAME     "org.maemo.Playback.Manager"
 
 #define DBUS_ADMIN_INTERFACE "org.freedesktop.DBus"
 #define DBUS_ADMIN_PATH      "/org/freedesktop/DBus"
+#define DBUS_OWNER_CHANGED   "NameOwnerChanged"
 
-#define MAX_ARGS 32
+#define OUR_NAME             "org.freedesktop.ohm_session_agent"
 
-#define LOG_ERROR(fmt, args...)                                             \
-    do {                                                                    \
-        if (log_mask & LOG_MASK_ERROR)                                      \
-            fprintf(stderr, "ohm-session-agent: error: "fmt"\n" , ## args); \
+/* these are in seconds */
+#define MINIMAL_NOTIFY    1            /* minimal notification interval */
+#define DEFAULT_NOTIFY    3            /* default notification interval */
+
+#define MINIMAL_FAILURE  10            /* minimal failure check interval */
+#define DEFAULT_FAILURE  10            /* default failure check interval */
+
+#define DEFAULT_MESSAGE  "aupP"        /* address, user, pid, our pid */
+
+
+#define LOG_ERROR(fmt, args...)                                         \
+    do {                                                                \
+        if (log_mask & LOG_MASK_ERROR)                                  \
+            fprintf(stdout, "ohm-session-agent: E: "fmt"\n" , ## args); \
+    } while (0)
+
+#define LOG_WARNING(fmt, args...)                                       \
+    do {                                                                \
+        if (log_mask & LOG_MASK_WARNING)                                \
+            fprintf(stdout, "ohm-session-agent: W: "fmt"\n" , ## args); \
     } while (0)
 
 #define LOG_INFO(fmt, args...)                                          \
     do {                                                                \
         if (log_mask & LOG_MASK_INFO)                                   \
-            fprintf(stderr, "ohm-session-agent: "fmt"\n" , ## args);    \
+            fprintf(stdout, "ohm-session-agent: I: "fmt"\n" , ## args); \
     } while (0)
+
+#define DEBUG(fmt, args...)                                             \
+    do {                                                                \
+        if (log_mask & LOG_MASK_DEBUG)                                  \
+            fprintf(stdout, "ohm-session-agent: D: "fmt"\n" , ## args); \
+    } while (0)
+
 
 
 enum {
     LOG_MASK_ERROR   = 0x01,
     LOG_MASK_WARNING = 0x02,
     LOG_MASK_INFO    = 0x04,
+    LOG_MASK_DEBUG   = 0x08,
 };
 
 static int log_mask = 0;
 
-static GMainLoop      *main_loop;
-static DBusConnection *sys_bus;
-static DBusConnection *sess_bus;
-static const char     *ohm_name   = OHM_DBUS_NAME;
-static const char     *ohm_path   = OHM_DBUS_PATH;
-static const char     *ohm_signal = OHM_DBUS_SIGNAME;
-static const char     *bus_address;
-static guint           chkid;
-static char           *saved_argv[MAX_ARGS + 1];
-static guint           timeout    = SESSION_TIMEOUT;
 
-static DBusHandlerResult name_owner_changed(DBusConnection *, DBusMessage *,
-                                            void *);
+typedef struct {
+    /* configurable parameters */
+    const char     *peer_name;           /* peer name on the system bus */
+    const char     *peer_check;          /*      name on the session bus */
+    const char     *peer_path;           /*      path on the system bus */
+    const char     *peer_iface;          /*      interface on the system bus */
+    const char     *peer_signal;         /*      notification signal */
+    const char     *address;             /* session bus address */
+    const char     *msgspec;             /* message content specifier */
 
-static int  ohm_notify_failure(void);
-static void restart_after(int);
+    /* peer state tracking */
+    int             running;             /* peer is up (on the system bus) */
+    int             session;             /* peer is on the session bus too */
+
+    /* notification parameters */
+    guint           notify_timer;       /* notification timer */
+    int             notify_tries;       /* notification attempts */
+    int             ival_notif;         /* notification interval (in seconds) */
+    int             ival_fail;          /* timeout for peer on the bus */
+    
+    /* */
+    GMainLoop      *mainloop;           /* main loop */
+    DBusConnection *sys_conn;           /* system D-BUS connection */
+    DBusConnection *sess_conn;          /* session D-BUS connection */
+} osa_state_t;
 
 
+typedef enum {
+    PEER_SYSTEM_DOWN  = 0,              /* peer off the system bus */
+    PEER_SYSTEM_UP,                     /* peer on the system bus */
+    PEER_SESSION_DOWN,                  /* peer off the session bus */
+    PEER_SESSION_UP                     /* peer on the session bus */
+} peer_state_t;
 
-static void
-print_usage(const char *argv0, int exit_code, const char *format, ...)
+
+DBusHandlerResult owner_changed(DBusConnection *, DBusMessage *, void *);
+void peer_state_change(osa_state_t *osa, peer_state_t state);
+
+
+void print_usage(const char *argv0, int exit_code, const char *format, ...)
 {
     va_list ap;
     
@@ -100,16 +143,21 @@ print_usage(const char *argv0, int exit_code, const char *format, ...)
     
     printf("usage: %s [options]\n\n"
            "The possible options are:\n"
-           "  -n, --name=NAME                     notify D-BUS <NAME>\n"
-           "  -p, --path=PATH                     notify D-BUS <PATH>\n"
-           "  -s, --signal=SIGNAL                 notify D-BUS <SIGNAL>\n"
-           "  -a, --address=ADDR                  notify <ADDRESS>\n"
-           "  -t, --timeout=TIMEOUT               wait <TIMEOUT> seconds for ohm\n"
-           "                                      connection to the session bus\n"
-           "  -h, --help                          show help on usage\n"
-           "  -l, --log-level=LEVELS              set logging levels\n"
+           "  -n, --name=NAME                peer name on system bus\n"
+           "  -c, --check=NAME               peer name on session bus\n"
+           "  -i, --interface=INTERFACE      peer notify D-BUS interface\n"
+           "  -p, --path=PATH                peer notify D-BUS path\n"
+           "  -s, --signal=SIGNAL            peer notify D-BUS signal\n"
+           "  -a, --address=ADDR             session bus address to send\n"
+           "  -I, --interval=SECONDS         notify this often until peer\n"
+           "                                 appears on the bus\n"
+           "  -f, --failure=SECONDS          send failure notification to \n"
+           "                                 peer after this timeout\n"
+           "  -l, --log-level=LEVELS         set logging levels\n"
            "      LEVELS is a comma separated list of info, error and warning\n"
-           "  -v, --verbose                       increase logging verbosity\n",
+           "  -v, --verbose                  increase logging verbosity\n"
+           "  -d, --debug                    enable debug printouts\n"
+           "  -h, --help                     show help on usage\n",
            argv0);
 
     exit(exit_code);
@@ -131,7 +179,7 @@ static void parse_log_level(char *argv0, const char *level)
     else {
         p = level;
         while (p && *p) {
-#           define MATCHES(s, l) (!strcmp(s, l) ||              \
+#           define MATCHES(s, l) (!strcmp(s, l) ||                      \
                                   !strncmp(s, l",", sizeof(l",") - 1))
             
             if (MATCHES(p, "info"))
@@ -154,367 +202,455 @@ static void parse_log_level(char *argv0, const char *level)
 }
 
 
-void
-parse_command_line(int argc, char **argv)
+const char *check_message(const char *msg)
 {
-#define OPTIONS "n:p:s:a:t:l:vh"
+    const char *p;
+    
+    if (msg && *msg) {
+        for (p = msg; *p; p++) {
+            switch (*p) {
+            case 'a':          /* session bus address */
+            case 'u':          /* session bus user name */
+            case 'p':          /* session bus pid */
+            case 'P':          /* our pid */
+                break;
+            default:
+                LOG_WARNING("Invalid content specifier '%c' in '%s'.", *p, msg);
+                goto fallback;
+            }
+        }
+        DEBUG("using message specifier '%s'", msg);
+        return msg;
+    }
+    
+ fallback:
+    LOG_WARNING("Falling back to '%s'.", DEFAULT_MESSAGE);
+    return DEFAULT_MESSAGE;
+}
+
+
+void parse_command_line(osa_state_t *osa, int argc, char **argv)
+{
+#define OPTIONS "n:c:p:i:s:a:I:f:l:m:vh"
     struct option options[] = {
         { "name"     , required_argument, NULL, 'n' },
+        { "check"    , required_argument, NULL, 'c' },
         { "path"     , required_argument, NULL, 'p' },
+        { "interface", required_argument, NULL, 'i' },
         { "signal"   , required_argument, NULL, 's' },
         { "address"  , required_argument, NULL, 'a' },
-        { "timeout"  , required_argument, NULL, 't' },
+        { "interval" , required_argument, NULL, 'I' },
+        { "failure"  , required_argument, NULL, 'f' },
         { "verbose"  , optional_argument, NULL, 'v' },
         { "log-level", required_argument, NULL, 'l' },
+        { "message"  , required_argument, NULL, 'm' },
         { "help"     , no_argument      , NULL, 'h' },
         { NULL, 0, NULL, 0 }
     };
-    
+
     int opt;
-    
-    bus_address = getenv("DBUS_SESSION_BUS_ADDRESS");
 
     while ((opt = getopt_long(argc, argv, OPTIONS, options, NULL)) != -1) {
         switch (opt) {
-        case 'h': print_usage(argv[0], 0, "");
-        case 'n': ohm_name    = optarg; break;
-        case 'p': ohm_path    = optarg; break;
-        case 's': ohm_signal  = optarg; break;
-        case 'a': bus_address = optarg; break;
-        case 't': timeout = (guint)strtoul(optarg, NULL, 10); break;
+        case 'n': osa->peer_name   = optarg;                         break;
+        case 'c': osa->peer_check  = optarg;                         break;
+        case 'p': osa->peer_path   = optarg;                         break;
+        case 'i': osa->peer_iface  = optarg;                         break;
+        case 's': osa->peer_signal = optarg;                         break;
+        case 'a': osa->address     = optarg;                         break;
+        case 'I': osa->ival_notif  = (int)strtoul(optarg, NULL, 10); break;
+        case 'f': osa->ival_fail   = (int)strtoul(optarg, NULL, 10); break;
+        case 'm': osa->msgspec     = check_message(optarg);          break;
         case 'v':
-        case 'l': parse_log_level(argv[0], optarg); break; 
+        case 'l': parse_log_level(argv[0], optarg);                  break;
+        case 'h': print_usage(argv[0], 0, "");
         default:  print_usage(argv[0], EINVAL, "invalid option '%c'", opt);
         }
     }
 
-    if (bus_address == NULL) {
-        LOG_ERROR("Failed to determine session DBUS address.");
-        print_usage(argv[0], EINVAL, "");
+}
+
+
+void mainloop_init(osa_state_t *osa)
+{
+    osa->mainloop = g_main_loop_new(NULL, FALSE);
+
+    if (osa->mainloop == NULL) {
+        LOG_ERROR("Failed to create mainloop.");
+        exit(1);
     }
 }
 
 
-void
-bus_connect(void)
+void mainloop_exit(osa_state_t *osa)
+{
+    g_main_loop_quit(osa->mainloop);
+    g_main_loop_unref(osa->mainloop);
+}
+
+
+void mainloop_run(osa_state_t *osa)
+{
+    g_main_loop_run(osa->mainloop);
+}
+
+
+void bus_connect(osa_state_t *osa)
 {
     DBusError  error;
     char      *name;
     int        flags, status;
-    char       filter[1024];
-        
+    char       rule[1024];
+
     dbus_error_init(&error);
 
-    if ((sys_bus  = dbus_bus_get(DBUS_BUS_SYSTEM , &error)) == NULL) {
-        if (dbus_error_is_set(&error)) {
-            LOG_ERROR("Failed to connect to system DBUS (%s).", error.message);
-            dbus_error_free(&error);
-        }
-        else
-            LOG_ERROR("Failed to connect to system DBUS.");
-        
-        restart_after(3);
+    if ((osa->sys_conn  = dbus_bus_get(DBUS_BUS_SYSTEM , &error)) == NULL ||
+        (osa->sess_conn = dbus_bus_get(DBUS_BUS_SESSION, &error)) == NULL) {
+        LOG_ERROR("Failed to connect to %s D-BUS (%s).",
+                  osa->sys_conn ? "session" : "system",
+                  dbus_error_is_set(&error) ? error.message : "unknown reason");
+        exit(1);
     }
-
-    if ((sess_bus = dbus_bus_get(DBUS_BUS_SESSION, &error)) == NULL) {
-        if (dbus_error_is_set(&error)) {
-            LOG_ERROR("Failed to connect to session DBUS (%s).", error.message);
-            dbus_error_free(&error);
-        }
-        else
-            LOG_ERROR("Failed to connect to session DBUS.");
     
-        restart_after(3);
-    }
+    dbus_connection_setup_with_g_main(osa->sys_conn , NULL);
+    dbus_connection_setup_with_g_main(osa->sess_conn, NULL);
 
-    dbus_connection_setup_with_g_main(sys_bus, NULL);
-    dbus_connection_setup_with_g_main(sess_bus, NULL);
-    
     name   = OUR_NAME;
     flags  = DBUS_NAME_FLAG_DO_NOT_QUEUE;
-    status = dbus_bus_request_name(sess_bus, name, flags, &error);
+    status = dbus_bus_request_name(osa->sess_conn, name, flags, &error);
 
     if (status == DBUS_REQUEST_NAME_REPLY_EXISTS) {
-        LOG_ERROR("Name already taken, another instance already running.");
+        LOG_ERROR("Name taken, another instance already running.");
         exit(0);
     }
 
     if (status != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-        if (dbus_error_is_set(&error)) {
-            LOG_ERROR("Failed to acquire name %s (%s).", name, error.message);
-            dbus_error_free(&error);
-        }
-        else
-            LOG_ERROR("Failed to acquire name %s.", name);
-        
+        LOG_ERROR("Failed to acquire D-BUS name %s (%s).", name,
+                  dbus_error_is_set(&error) ? error.message : "unknown reason");
+        exit(1);
+    }
+    
+    
+    if (!dbus_connection_add_filter(osa->sys_conn, owner_changed, osa, NULL)) {
+        LOG_ERROR("Failed to install system D-BUS filter.");
         exit(1);
     }
 
-
-    if (!dbus_connection_add_filter(sys_bus, name_owner_changed, NULL, NULL)) {
-        LOG_ERROR("Failed to install DBUS filter.");
-        exit(1);
-    }
-
-    snprintf(filter, sizeof(filter),
+    snprintf(rule, sizeof(rule),
              "type='signal',sender='%s',interface='%s',member='%s',path='%s',"
              "arg0='%s'", DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
-             "NameOwnerChanged", DBUS_ADMIN_PATH, OHM_DBUS_NAME);
-    dbus_bus_add_match(sys_bus, filter, &error);
-    
+             DBUS_OWNER_CHANGED, DBUS_ADMIN_PATH, osa->peer_name);
+    dbus_bus_add_match(osa->sys_conn, rule, &error);
+
     if (dbus_error_is_set(&error)) {
-        LOG_ERROR("Failed add match \"%s\" (%s).", filter, error.message);
+        LOG_ERROR("Failed to install system D-BUS match rule \"%s\" (%s).",
+                  rule, error.message);
+        exit(1);
+    }
+    
+    
+    if (!dbus_connection_add_filter(osa->sess_conn, owner_changed, osa, NULL)) {
+        LOG_ERROR("Failed to install session D-BUS filter.");
         exit(1);
     }
 
+    snprintf(rule, sizeof(rule),
+             "type='signal',sender='%s',interface='%s',member='%s',path='%s',"
+             "arg0='%s'", DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
+             DBUS_OWNER_CHANGED, DBUS_ADMIN_PATH, osa->peer_check);
+    dbus_bus_add_match(osa->sess_conn, rule, &error);
 
-    LOG_INFO("Connected to DBUS...");
-}
-
-
-gboolean
-session_check(gpointer dummy)
-{
-    DBusError error;
-    
-    (void)dummy;
-    
-    dbus_error_init(&error);
-    
-    if (dbus_bus_name_has_owner(sess_bus, OHM_SESSION_NAME, &error))
-        LOG_INFO("OHM appeared on the session bus.");
-    else {
-        LOG_INFO("OHM did not appear on the session bus.");
-        dbus_error_free(&error);
-        ohm_notify_failure();
-        restart_after(3);
+    if (dbus_error_is_set(&error)) {
+        LOG_ERROR("Failed to install session D-BUS match rule \"%s\" (%s).",
+                  rule, error.message);
+        exit(1);
     }
-
-    chkid = 0;
-    return FALSE;
+    
+    LOG_INFO("Connected to system and session D-BUSes.");
 }
 
 
-void
-session_check_cancel(void)
+int notify_peer(osa_state_t *osa, int failure)
 {
-    if (chkid != 0) {
-        g_source_remove(chkid);
-        chkid = 0;
-    }
-}
-
-
-void
-session_check_schedule(void)
-{
-    chkid = g_timeout_add_full(G_PRIORITY_DEFAULT, timeout * 1000,
-                               session_check, NULL, NULL);
-}
-
-
-int
-ohm_notify(void)
-{
-    DBusMessage *msg;
-    const char  *path      = OHM_DBUS_PATH;
-    const char  *interface = OHM_DBUS_POLICYIF;
-    const char  *signame   = OHM_DBUS_SIGNAME;
-
-    if ((msg = dbus_message_new_signal(path, interface, signame)) == NULL)
-        goto fail;
+    const char    *interface = osa->peer_iface;
+    const char    *signame   = osa->peer_signal;
+    const char    *path      = osa->peer_path;
+    const char    *address   = failure ? "<failure>" : osa->address;
+    DBusMessage   *msg;
+    const char    *spec, *ptr;
+    dbus_uint32_t  pid;
+    void          *arg;
+    int            type;
     
-    if (!dbus_message_set_destination(msg, OHM_DBUS_NAME))
-        goto fail;
     
-    if (!dbus_message_append_args(msg, DBUS_TYPE_STRING, &bus_address,
-                                  DBUS_TYPE_INVALID))
-        goto fail;
-    
-    if (!dbus_connection_send(sys_bus, msg, NULL))
-        goto fail;
-    
-    dbus_message_unref(msg);
-    LOG_INFO("Session DBUS notification sent to OHM.");
+    DEBUG("sending %s notification (%s) to peer",
+          failure ? "failure" : "address", osa->msgspec);
 
-    session_check_cancel();
-    session_check_schedule();
+    if ((msg = dbus_message_new_signal(path, interface, signame)) != NULL) {
+        if (!dbus_message_set_destination(msg, osa->peer_name)) {
+            LOG_ERROR("Failed to construct notification D-BUS message.");
+            dbus_message_unref(msg);
+            return FALSE;
+        }
 
-    return TRUE;
-    
- fail:
-    LOG_ERROR("Failed to send session DBUS notification.");
-    if (msg != NULL)
+        for (spec = osa->msgspec; *spec; spec++) {
+            switch (*spec) {
+            case 'a':
+                type = DBUS_TYPE_STRING;
+                arg  = &address;
+                DEBUG("a=%s", address);
+                break;
+            case 'u':
+                if ((ptr = getenv("USER")) == NULL || !*ptr)
+                    ptr = "<unknown user>";
+                type = DBUS_TYPE_STRING;
+                arg  = &ptr;
+                DEBUG("u=%s", ptr);
+                break;
+            case 'p':
+                if ((ptr = getenv("DBUS_SESSION_BUS_PID")) != NULL)
+                    pid = (dbus_uint32_t)strtoul(ptr, NULL, 10);
+                else
+                    pid = 0;
+                type = DBUS_TYPE_UINT32;
+                arg  = &pid;
+                DEBUG("p=%d", pid);
+                break;
+            case 'P':
+                pid  = (dbus_uint32_t)getpid();
+                type = DBUS_TYPE_UINT32;
+                arg  = &pid;
+                DEBUG("P=%d", pid);
+                break;
+            default:
+                continue;
+            }
+            
+            if (!dbus_message_append_args(msg, type, arg, DBUS_TYPE_INVALID)) {
+                LOG_ERROR("Failed to construct D-BUS message.");
+                dbus_message_unref(msg);
+                return FALSE;
+            }
+        }
+        
+        if (!dbus_connection_send(osa->sys_conn, msg, NULL)) {
+            LOG_ERROR("Failed to send D-BUS message.");
+            return FALSE;
+        }
+        
         dbus_message_unref(msg);
-    
-    return FALSE;
-}
+    }
 
-
-static int
-ohm_notify_failure(void)
-{
-    DBusMessage *msg;
-    const char  *path      = OHM_DBUS_PATH;
-    const char  *interface = OHM_DBUS_POLICYIF;
-    const char  *signame   = OHM_DBUS_SIGNAME;
-    const char  *failure   = "<failure>";
-
-    if ((msg = dbus_message_new_signal(path, interface, signame)) == NULL)
-        goto fail;
-    
-    if (!dbus_message_set_destination(msg, OHM_DBUS_NAME))
-        goto fail;
-    
-    if (!dbus_message_append_args(msg, DBUS_TYPE_STRING, &failure,
-                                  DBUS_TYPE_INVALID))
-        goto fail;
-    
-    if (!dbus_connection_send(sys_bus, msg, NULL))
-        goto fail;
-    
-    dbus_message_unref(msg);
-    LOG_INFO("Session DBUS failure notification sent to OHM.");
-
+    LOG_INFO("%s notification sent to peer.", failure ? "failure" : "address");
     return TRUE;
-    
- fail:
-    LOG_ERROR("Failed to send session DBUS failure notification.");
-    if (msg != NULL)
-        dbus_message_unref(msg);
-    
-    return FALSE;
 }
 
 
-void
-ohm_notify_if_running(void)
+DBusHandlerResult owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
 {
-    DBusError error;
+    osa_state_t *osa    = (osa_state_t *)data;
+    const char  *member = dbus_message_get_member(msg);
+    const char  *which, *name, *before, *after;
+    int          up;
 
-    dbus_error_init(&error);
-    
-    if (dbus_bus_name_has_owner(sys_bus, OHM_DBUS_NAME, &error)) {
-        LOG_INFO("OHM is already up.");
-        ohm_notify();
-    }
-    else {
-        LOG_INFO("OHM is down.");
-        dbus_error_free(&error);
-    }
-}
-
-
-static DBusHandlerResult
-name_owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
-{
-    const char *name, *old_owner, *new_owner;
-
-    (void)c;
     (void)data;
+    
+    if (member == NULL || strcmp(member, DBUS_OWNER_CHANGED))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     if (!dbus_message_get_args(msg, NULL,
                                DBUS_TYPE_STRING, &name,
-                               DBUS_TYPE_STRING, &old_owner,
-                               DBUS_TYPE_STRING, &new_owner,
+                               DBUS_TYPE_STRING, &before,
+                               DBUS_TYPE_STRING, &after,
                                DBUS_TYPE_INVALID))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    which = (c == osa->sys_conn ? "system" : "session");
+
+    DEBUG("%s: %s(%s, %s, %s)", which, member, name, before, after);
     
-    if (old_owner[0] == '\0' && new_owner[0] != '\0') {
-        LOG_INFO("OHM is up.");
-        ohm_notify();
+    if ((!before || !*before) && (after && *after)) {
+        DEBUG("%s: %s came on the bus", which, name);
+        up = TRUE;
     }
-    else if (old_owner[0] != '\0' && new_owner[0] == '\0') {
-        LOG_INFO("OHM is down.");
-        session_check_cancel();
+    else if ((before && *before) && (!after || !*after)) {
+        DEBUG("%s: %s went off the bus", which, name);
+        up = FALSE;
+    }
+    else {
+        LOG_WARNING("Ignoring fuzzy state change:");
+        LOG_WARNING("  %s(name:'%s', before:'%s', after:'%s')",
+                    member,
+                    name   ? name   : "",
+                    before ? before : "",
+                    after  ? after  : "");
+        
+        return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    if (c == osa->sys_conn && !strcmp(name, osa->peer_name))
+        peer_state_change(osa, up ? PEER_SYSTEM_UP : PEER_SYSTEM_DOWN);
+    else if (c == osa->sess_conn && !strcmp(name, osa->peer_check))
+        peer_state_change(osa, up ? PEER_SESSION_UP : PEER_SESSION_DOWN);
+    
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 
-static void
-save_args(int argc, char **argv)
+gboolean notify_callback(gpointer ptr)
 {
-    char exe[64];
-    int  i;
+    osa_state_t *osa = (osa_state_t *)ptr;
 
-    if (argc > MAX_ARGS)
-        argc = MAX_ARGS;
+    if (osa->notify_tries * osa->ival_notif < osa->ival_fail) {
+        notify_peer(osa, FALSE);
+        osa->notify_tries++;
+    }
+    else {
+        notify_peer(osa, TRUE);
+        osa->notify_tries = 0;
+    }
 
-    sprintf(exe, "/proc/%u/exe", getpid());
-    saved_argv[0] = strdup(argv[0]);
-
-    for (i = 1; i < argc; i++)
-        saved_argv[i] = strdup(argv[i]);
-    saved_argv[i] = NULL;
+    return TRUE;
 }
 
 
-static void
-check_session_address(char *path)
+void start_notification(osa_state_t *osa)
 {
-#define VAR "DBUS_SESSION_BUS_ADDRESS="
+    if (!osa->notify_timer) {
+        DEBUG("starting peer notification");
+        osa->notify_timer = g_timeout_add_full(G_PRIORITY_DEFAULT,
+                                               osa->ival_notif * 1000,
+                                               notify_callback, osa, NULL);
+    }
+}
 
-    FILE *fp;
-    char  var[1024], *nl, *addr;
-    int   len;
 
-    if ((fp = fopen(path, "r")) == NULL)
+void stop_notification(osa_state_t *osa)
+{
+    if (osa->notify_timer) {
+        DEBUG("stopping peer notification");
+        g_source_remove(osa->notify_timer);
+        osa->notify_timer = 0;
+        osa->notify_tries = 0;
+    }
+}
+
+
+void peer_state_change(osa_state_t *osa, peer_state_t state)
+{
+    switch (state) {
+    case PEER_SYSTEM_DOWN:
+        LOG_INFO("peer has been stopped.");
+        osa->running = FALSE;
+        break;
+        
+    case PEER_SYSTEM_UP:
+        LOG_INFO("peer has been started.");
+        osa->running = TRUE;
+        break;
+        
+    case PEER_SESSION_DOWN:
+        LOG_INFO("peer went off the session bus.");
+        osa->session = FALSE;
+        break;
+
+    case PEER_SESSION_UP:
+        LOG_INFO("peer came on the session bus.");
+        osa->session = TRUE;
+        break;
+    }
+    
+    if (!osa->running)
         return;
     
-    while (fgets(var, sizeof(var), fp) != NULL) {
-        if ((nl = strchr(var, '\n')) != NULL)
-            *nl = '\0';
-        
-        len = sizeof(VAR) - 1;
-        if (!strncmp(var, VAR, len)) {
-            addr = var + len;
-            var[len-1] = '\0';
-            LOG_INFO("Using DBUS session address \"%s\".", addr);
-            setenv(var, addr, TRUE);
-            break;
-        }
-    }
-
-    fclose(fp);
+    if (!osa->session)
+        start_notification(osa);
+    else
+        stop_notification(osa);
 }
 
 
-static void
-restart_after(int delay)
+int check_name(DBusConnection *conn, const char *name)
 {
-    int fd;
-    
-    check_session_address("/tmp/dbus-info");
-    
-    LOG_INFO("restarting after %d seconds", delay + 1);
-    sleep(delay);
-    
-    for (fd = 3; fd < 4096; fd++)
-        close(fd);
-    
-    sleep(1);
-    execv(saved_argv[0], saved_argv);
+    DBusError error;
+
+    dbus_error_init(&error);
+
+    if (dbus_bus_name_has_owner(conn, name, &error))
+        return TRUE;
+    else {
+        dbus_error_free(&error);
+        return FALSE;
+    }
 }
 
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
-    save_args(argc, argv);
-    parse_command_line(argc, argv);
-    
-    if ((main_loop = g_main_loop_new(NULL, FALSE)) == NULL) {
-        LOG_ERROR("Failed to initialize main loop.");
-        exit(1);
-    }
+    osa_state_t osa;
 
-    bus_connect();
-    ohm_notify_if_running();
-    g_main_loop_run(main_loop);
+    memset(&osa, 0, sizeof(osa));
+
+    osa.peer_name   = OHM_DBUS_NAME;
+    osa.peer_check  = OHM_SESSION_NAME;
+    osa.peer_path   = OHM_DBUS_PATH;
+    osa.peer_iface  = OHM_DBUS_POLICYIF;
+    osa.peer_signal = OHM_DBUS_SIGNAME;
+    osa.address     = getenv("DBUS_SESSION_BUS_ADDRESS");
+    osa.msgspec     = DEFAULT_MESSAGE;
+
+    osa.running     = FALSE;
+    osa.session     = FALSE;
+
+    osa.ival_notif  = DEFAULT_NOTIFY;
+    osa.ival_fail   = DEFAULT_FAILURE;
     
-    g_main_loop_unref(main_loop);
+    parse_command_line(&osa, argc, argv);
+    
+    if (osa.ival_notif < MINIMAL_NOTIFY)
+        osa.ival_notif = MINIMAL_NOTIFY;
+    if (osa.ival_fail  < MINIMAL_FAILURE)
+        osa.ival_fail  = MINIMAL_FAILURE;
+
+    if (osa.ival_fail < 3 * osa.ival_notif) {
+        osa.ival_fail = 3 * osa.ival_notif;
+        LOG_WARNING("Adjusted failure check interval to %d seconds.",
+                    osa.ival_fail);
+    }
+    
+    if (osa.address == NULL) {
+        LOG_ERROR("Failed to determine session DBUS address.");
+        print_usage(argv[0], EINVAL, "");
+    }
+    
+    
+    DEBUG("      session address: %s", osa.address);
+    DEBUG("notification interval: %d", osa.ival_notif);
+    DEBUG("  fail check interval: %d", osa.ival_fail);
+    DEBUG("    message specifier: %s", osa.msgspec);
+    
+    mainloop_init(&osa);
+
+    bus_connect(&osa);
+    
+    osa.running = check_name(osa.sys_conn, osa.peer_name);
+    osa.session = check_name(osa.sess_conn, osa.peer_check);
+
+    if (osa.running)
+        peer_state_change(&osa, PEER_SYSTEM_UP);
+    else
+        peer_state_change(&osa, PEER_SYSTEM_DOWN);
+
+    if (osa.session)
+        peer_state_change(&osa, PEER_SESSION_UP);
+    else {
+        peer_state_change(&osa, PEER_SESSION_DOWN);
+
+        if (osa.running)
+            notify_peer(&osa, FALSE);
+    }
+    
+    mainloop_run(&osa);
     
     LOG_INFO("Exiting.");
              
