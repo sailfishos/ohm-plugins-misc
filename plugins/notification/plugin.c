@@ -35,6 +35,7 @@ USA.
 
 
 int DBG_PROXY, DBG_LLIV, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
+static unsigned int id;
 
 OHM_DEBUG_PLUGIN(notification,
     OHM_DEBUG_FLAG("proxy"       , "proxy functions"        , &DBG_PROXY  ),
@@ -45,10 +46,9 @@ OHM_DEBUG_PLUGIN(notification,
     OHM_DEBUG_FLAG("rule"        , "prolog interface"       , &DBG_RULE   )
 );
 
-
-static void plugin_init(OhmPlugin *plugin)
+static int init_cb(void *data)
 {
-    OHM_DEBUG_INIT(notification);
+    OhmPlugin *plugin = (OhmPlugin *) data;
 
     dbusif_init(plugin);
     ruleif_init(plugin);
@@ -56,6 +56,19 @@ static void plugin_init(OhmPlugin *plugin)
     proxy_init(plugin);
     longlive_init(plugin);
     subscription_init(plugin);
+
+    id = 0;
+
+    /* run this only once */
+    return 0;
+}
+
+static void plugin_init(OhmPlugin *plugin)
+{
+    OHM_DEBUG_INIT(notification);
+
+    /* Delay the initialization until the main loop is up and running */
+    id = g_idle_add(init_cb, plugin);
 
 #if 0
     DBG_PROXY = DBG_LLIV = DBG_RESRC = DBG_DBUS = DBG_RULE = TRUE;
@@ -65,6 +78,10 @@ static void plugin_init(OhmPlugin *plugin)
 static void plugin_destroy(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    if (id) {
+        g_source_remove(id);
+    }
 }
 
 
@@ -73,7 +90,7 @@ OHM_PLUGIN_DESCRIPTION(
     "OHM notification proxy",         /* description */
     "0.0.1",                          /* version */
     "janos.f.kovacs@nokia.com",       /* author */
-    OHM_LICENSE_LGPL,             /* license */
+    OHM_LICENSE_LGPL,                 /* license */
     plugin_init,                      /* initalize */
     plugin_destroy,                   /* destroy */
     NULL                              /* notify */
