@@ -89,7 +89,7 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUSIF_BOOLEAN_ARG(n,v)  (char*)n, (int)'b', (uint32_t)((v)?TRUE:FALSE)
 #define DBUSIF_ARGLIST_END       NULL, (int)0, (void *)0 
 
-
+void dbusif_configure(OhmPlugin *);
 void dbusif_init(OhmPlugin *);
 DBusHandlerResult dbusif_session_notification(DBusConnection *,
                                               DBusMessage *, void *);
