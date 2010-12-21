@@ -47,6 +47,7 @@ typedef struct {
     uint32_t      (*function)(DBusMessage *, char *, char *);
 } handler_t;
 
+static int             configured;
 static int             systembus;  /* wheter to use system or session bus */
 static DBusConnection *conn;       /* D-Bus system/session bus */
 static int             timeout;    /* message timeoutin msec */
@@ -94,10 +95,16 @@ static uint32_t update_handler(DBusMessage *, char *, char *);
  *  @{
  */
 
-void dbusif_init(OhmPlugin *plugin)
+
+void dbusif_configure(OhmPlugin *plugin)
 {
     get_parameters(plugin);
+}
 
+
+void dbusif_init(OhmPlugin *plugin)
+{
+    (void)plugin;
     system_bus_init();
 }
 
@@ -470,6 +477,9 @@ static void get_parameters(OhmPlugin *plugin)
     const char *bus_str;
     const char *timeout_str;
     char       *e;
+
+    if (configured)
+        return;
     
     if ((bus_str = ohm_plugin_get_param(plugin, "dbus-bus")) == NULL)
         systembus = TRUE;
@@ -504,8 +514,8 @@ static void get_parameters(OhmPlugin *plugin)
     }
 
     OHM_INFO("notification: D-Bus message timeout is %dmsec", timeout);
-
     
+    configured = TRUE;
 }
 
 

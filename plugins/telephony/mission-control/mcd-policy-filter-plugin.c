@@ -134,14 +134,14 @@ owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
     if ((prev && prev[0]) && (!curr || !curr[0])) {
         INFO("policy interface at %s went down", prev);
         policy_down = 1;
-        return DBUS_HANDLER_RESULT_HANDLED;
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
     
     if ((!prev || !prev[0]) && (curr && curr[0])) {
         INFO("policy interface came up at %s", curr);
         policy_down = 0;
         /* XXX TODO: should we determine and send current list of calls ? */
-        return DBUS_HANDLER_RESULT_HANDLED;
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
     
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;

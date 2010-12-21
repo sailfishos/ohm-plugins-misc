@@ -67,6 +67,8 @@ static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(notification);
 
+    dbusif_configure(plugin);
+
     /* Delay the initialization until the main loop is up and running */
     id = g_idle_add(init_cb, plugin);
 
