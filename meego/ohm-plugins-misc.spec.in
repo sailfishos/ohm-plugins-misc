@@ -1,0 +1,59 @@
+Summary: A miscallaneous set of Nokia OHM plugins
+Name: ohm-plugins-misc
+Version: ##__VERSION__##
+Release: 0
+License: LGPLv2.1
+Group: System Environment/Daemons
+URL: http://meego.gitorious.org/maemo-multimedia/ohm-plugins-misc
+Source0: %{name}-%{version}.tar.gz
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
+BuildRequires: pkgconfig(glib-2.0)
+BuildRequires: pkgconfig(x11-xcb)
+BuildRequires: pkgconfig(dbus-glib-1)
+BuildRequires: pkgconfig(check)
+#BuildRequires: kernel-headers
+BuildRequires: pkgconfig(gconf-2.0)
+BuildRequires: pkgconfig(bluez)
+BuildRequires: pkgconfig(libresource0)
+BuildRequires: bison
+BuildRequires: flex
+BuildRequires: pkgconfig(ohm)
+BuildRequires: pkgconfig(libdres)
+Requires: ohm
+Requires: ohm-plugin-core
+
+%description
+A miscallaneous set of OHM plugins by Nokia.
+
+%prep
+%setup -q
+
+%build
+./autogen.sh
+%configure --disable-static   \
+           --enable-apptrack  \
+	   --enable-telephony \
+           --enable-videoep   \
+	   --disable-notification      # for now (excluded from basic ruleset)
+
+make
+
+%install
+rm -rf $RPM_BUILD_ROOT
+%make_install
+# FIXME: install maemo-specific files distro-conditionally
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/X11/Xsession.post/55ohm-session-agent
+rm -f $RPM_BUILD_ROOT%{_libdir}/ohm/*.la
+rm -f $RPM_BUILD_ROOT%{_libdir}/ohm/libohm_call_test.so
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files
+%defattr(-,root,root,-)
+%{_libdir}/ohm/libohm_*.so
+%{_bindir}/ohm-session-agent
+%config %{_sysconfdir}/ohm/plugins.d/*.ini
+%{_datadir}/dbus-1/services/*
+%attr(755,root,root) %{_datadir}/ohm-session-agent/start-session-agent.sh
+%doc README COPYING INSTALL AUTHORS NEWS ChangeLog 
