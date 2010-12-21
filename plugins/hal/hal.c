@@ -200,7 +200,7 @@ DBusHandlerResult hald_change(DBusConnection *c, DBusMessage *msg,
     }
 
     OHM_DEBUG(DBG_HAL, "< hald_change");
-    return DBUS_HANDLER_RESULT_HANDLED;
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 OHM_PLUGIN_DESCRIPTION("hal",
