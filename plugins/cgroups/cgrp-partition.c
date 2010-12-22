@@ -122,12 +122,15 @@ partition_add_root(cgrp_context_t *ctx)
     path = ctx->actual_mount ? ctx->actual_mount : ctx->desired_mount;
 
     if ((part = part_hash_lookup(ctx, "root")    ) != NULL ||
-        (part = part_hash_find_by_path(ctx, path)) != NULL)
+        (path && ((part = part_hash_find_by_path(ctx, path)) != NULL)))
         ctx->root = part;
     else {
         memset(&root, 0, sizeof(root));
         root.name      = "root";
-        root.path      = path;
+        if (path)
+            root.path      = path;
+        else
+            root.path      = "/syspart";
         root.limit.cpu = CGRP_NO_LIMIT;
         root.limit.mem = CGRP_NO_LIMIT;
 
