@@ -18,17 +18,18 @@ USA.
 *************************************************************************/
 
 
-#ifndef __HEARING_AID_COIL_H__
-#define __HEARING_AID_COIL_H__
+#ifndef __GCONF_TRIGGERS_H__
+#define __GCONF_TRIGGERS_H__
 
 #include <ohm/ohm-plugin.h>
 
 
-#define FACT_NAME_GCONF        "com.nokia.policy.gconf"
-#define GCONF_PATH             "/system/telecoil/enable"
+#define FACT_NAME_GCONF         "com.nokia.policy.gconf"
+#define GCONF_HAC_PATH          "/system/telecoil/enable"
+#define GCONF_UNC_PATH          "/system/unc/enable"
 
 
-void hearing_aid_coil_init(OhmPlugin *plugin, int dbg_hac);
-void hearing_aid_coil_exit(OhmPlugin *plugin);
+void gconf_triggers_init(OhmPlugin *plugin, int dbg_mode);
+void gconf_triggers_exit(OhmPlugin *plugin);
 
-#endif /* __HEARING_AID_COIL_H__ */
+#endif /* __GCONF_TRIGGERS_H__ */
