@@ -1,0 +1,10 @@
+
+      <environments>
+        <scratchbox>false</scratchbox>
+        <hardware>true</hardware>    
+      </environments>
+
+    </set>
+  </suite>
+</testdefinition>
+

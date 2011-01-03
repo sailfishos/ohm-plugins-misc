@@ -631,6 +631,25 @@ fi
 AC_SUBST(BUILD_VIBRA)
 
 
+# variables to generate tests.xml
+PROFILE_TESTS_XML=no
+if test x$has_libprofile = xtrue;
+then
+  PROFILE_TESTS_XML=yes
+fi
+AC_SUBST(PROFILE_TESTS_XML)
+
+SIGNALING_TESTS_XML=yes
+AC_SUBST(SIGNALING_TESTS_XML)
+
+HAL_TESTS_XML=no
+if test $enable_hal = yes
+then
+  HAL_TESTS_XML=yes
+fi
+AC_SUBST(HAL_TESTS_XML)
+
+
 # shave
 SHAVE_INIT([build-aux], [enable])
 
@@ -669,7 +688,8 @@ AC_CONFIG_FILES([build-aux/shave
 		 plugins/apptrack/Makefile
 		 plugins/fmradio/Makefile
 		 ohm-session-agent/Makefile
- 		 doc/Makefile])
+ 		 doc/Makefile
+ 		 tests/Makefile])
 
 # plugins/telephony/mission-control/Makefile
 

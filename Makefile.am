@@ -5,7 +5,7 @@ DOCSUBDIR =
 endif !PD_SUPPORT
 
 EXTRA_DIST = autogen.sh build-aux/git-version-gen
-SUBDIRS    = plugins ohm-session-agent $(DOCSUBDIR)
+SUBDIRS    = plugins ohm-session-agent tests $(DOCSUBDIR)
 
 SUBDIRS   += debian
 MAINTAINTERCLEANFILES = Makefile.in

@@ -1,0 +1,2 @@
+      <case name="signaling-tests" type="Functional" level="Component" subfeature="Ohm plugins" description="Signaling tests" timeout="15"><step expected_result="0">/usr/lib/ohm-plugins-tests/check_signaling</step></case>
+
