@@ -22,6 +22,7 @@ USA.
 #define __OHM_PLUGIN_CGRP_H__
 
 #include <stdio.h>
+#include <stdint.h>
 
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-plugin-log.h>
@@ -309,13 +310,73 @@ struct cgrp_stmt_s {
 
 
 /*
+ * events
+ */
+
+typedef enum {
+    CGRP_EVENT_UNKNOWN = 0,
+    CGRP_EVENT_FORCE,                       /* force classification */
+    CGRP_EVENT_FORK,                        /* new process forked */
+    CGRP_EVENT_EXEC,                        /* new image executed */
+    CGRP_EVENT_EXIT,                        /* process exited */
+    CGRP_EVENT_UID,                         /* user ID changed */
+    CGRP_EVENT_GID,                         /* group ID changed */
+    CGRP_EVENT_SID,                         /* session ID changed */
+    CGRP_EVENT_NAME,                        /* process name changed */
+} cgrp_event_type_t;
+
+
+typedef union cgrp_event_u cgrp_event_t;
+
+#define CGRP_EVENT_COMMON                                               \
+    cgrp_event_type_t type;                 /* event type */            \
+    pid_t             pid;                  /* affected task */         \
+    pid_t             tgid                  /*   and process */
+
+typedef struct {
+    CGRP_EVENT_COMMON;
+} cgrp_event_any_t;
+
+typedef struct {
+    CGRP_EVENT_COMMON;
+    pid_t ppid;                             /* parent process */
+} cgrp_event_fork_t;
+
+typedef struct {
+    CGRP_EVENT_COMMON;
+    uint32_t rid;                           /* real uid/gid */
+    uint32_t eid;                           /* effective uid/gid */
+} cgrp_event_id_t;
+
+union cgrp_event_u {
+    cgrp_event_any_t  any;                  /* any event */
+    cgrp_event_fork_t fork;                 /* new process forked */
+    cgrp_event_any_t  exec;                 /* new image executed */
+    cgrp_event_id_t   id;                   /* process uid/gid changed */
+    cgrp_event_any_t  exit;                 /* process exited */
+    cgrp_event_any_t  sid;                  /* session id changed */
+    cgrp_event_any_t  name;                 /* process name changed */
+};
+
+
+/*
  * a process definition
  */
 
+typedef struct cgrp_rule_s cgrp_rule_t;
+
+struct cgrp_rule_s {
+    int          event_mask;                /* cgrp_event_type_t mask */
+    gid_t       *gids;                      /* matching user ids */
+    uid_t       *uids;                      /* matching group ids */
+    cgrp_stmt_t *statements;                /* classification statements */
+    cgrp_rule_t *next;                      /* more rules or NULL */
+};
+
+
 typedef struct {
     char          *binary;                  /* path to binary */
-    int            renice;                  /* XXX temporary renicing kludge */
-    cgrp_stmt_t   *statements;              /* classification statements */
+    cgrp_rule_t   *rules;                   /* classification rules */
 } cgrp_procdef_t;
 
 
@@ -324,7 +385,8 @@ typedef struct {
  */
 
 typedef struct {
-    pid_t         pid;                      /* process id */
+    pid_t         pid;                      /* task id */
+    pid_t         tgid;                     /* process id */
     char         *binary;                   /* path to binary */
     char         *argv0;                    /* argv[0] if needed */
     cgrp_group_t *group;                    /* current group */
@@ -341,6 +403,7 @@ typedef enum {
     CGRP_PROC_NAME,                         /* process name */
     CGRP_PROC_TYPE,                         /* process type */
     CGRP_PROC_PPID,                         /* process parent binary */
+    CGRP_PROC_TGID,                         /* process pid (thread group id) */
     CGRP_PROC_EUID,                         /* effective user ID */
     CGRP_PROC_EGID,                         /* effective group ID */
     CGRP_PROC_RECLASSIFY,                   /* being reclassified ? */
@@ -358,7 +421,8 @@ typedef enum {
 
 typedef struct {
     cgrp_mask_t        mask;                /* attribute mask */
-    pid_t              pid;                 /* process id */
+    pid_t              pid;                 /* task id */
+    pid_t              tgid;                /* process id */
     pid_t              ppid;                /* parent process id */
     char              *binary;              /* path to binary */
     char               name[CGRP_COMM_LEN]; /* task_struct.comm */
@@ -371,22 +435,6 @@ typedef struct {
     int                reclassify;          /* reclassification count */
     int                byargvx;             /* classifying by argv[x] */
 } cgrp_proc_attr_t;
-
-
-
-#if 0
-
-/*
- * a hash table
- */
-
-typedef struct {
-    list_hook_t *buckets;                   /* hash buckets */
-    int          nbucket;                   /* number of buckets */
-    list_hook_t  entries;                   /* hash table entries */
-} cgrp_hash_table_t;
-
-#endif
 
 
 /*
@@ -490,7 +538,7 @@ typedef struct {
     int               ngroup;               /* number of groups */
     cgrp_procdef_t   *procdefs;             /* process definitions */
     int               nprocdef;             /* number of process definitions */
-    cgrp_procdef_t   *fallback;             /* fallback process definition */
+    cgrp_rule_t      *fallback;             /* fallback classification rules */
     cgrp_procdef_t   *addons;               /* add-on rules */
     int               naddon;               /* number of add-on rules */
     int               addonwd;              /* addon watch descriptor */
@@ -505,6 +553,7 @@ typedef struct {
     GHashTable       *grouptbl;             /* lookup table of groups */
     GHashTable       *parttbl;              /* lookup table of partitions */
     list_hook_t      *proctbl;              /* lookup table of processes */
+    int               event_mask;           /* CGRP_EVENT_'s of interest */
 
     cgrp_process_t   *active_process;       /* currently active process */
     cgrp_group_t     *active_group;         /* currently active group */
@@ -557,6 +606,8 @@ char  **process_get_argv   (cgrp_proc_attr_t *, int);
 uid_t   process_get_euid   (cgrp_proc_attr_t *);
 gid_t   process_get_egid   (cgrp_proc_attr_t *);
 pid_t   process_get_ppid   (cgrp_proc_attr_t *);
+pid_t   process_get_tgid   (cgrp_proc_attr_t *);
+
 
 cgrp_proc_type_t process_get_type(cgrp_proc_attr_t *);
 
@@ -626,8 +677,9 @@ int  addon_reload(cgrp_context_t *);
 
 void procdef_dump(cgrp_context_t *, FILE *);
 void procdef_print(cgrp_context_t *, cgrp_procdef_t *, FILE *);
-cgrp_action_t *rule_eval(cgrp_context_t *,
-                         cgrp_procdef_t *, cgrp_proc_attr_t *);
+cgrp_rule_t   *rule_lookup(cgrp_context_t *, char *, cgrp_event_t *);
+cgrp_rule_t   *addon_lookup(cgrp_context_t *, char *, cgrp_event_t *);
+cgrp_action_t *rule_eval(cgrp_context_t *, cgrp_rule_t *, cgrp_proc_attr_t *);
 
 
 /* cgrp-classify.c */
@@ -635,8 +687,13 @@ int  classify_init  (cgrp_context_t *);
 void classify_exit  (cgrp_context_t *);
 int  classify_config(cgrp_context_t *);
 int  classify_reconfig(cgrp_context_t *);
+int  classify_event(cgrp_context_t *, cgrp_event_t *);
 int  classify_by_binary(cgrp_context_t *, pid_t, int);
 int  classify_by_argvx(cgrp_context_t *, cgrp_proc_attr_t *, int);
+int  classify_by_parent(cgrp_context_t *, pid_t, pid_t, pid_t);
+int  classify_by_rules(cgrp_context_t *, cgrp_event_t *,
+                       cgrp_process_t *, cgrp_proc_attr_t *);
+
 
 
 void classify_schedule(cgrp_context_t *, pid_t, unsigned int, int);

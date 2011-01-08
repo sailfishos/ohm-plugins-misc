@@ -60,19 +60,19 @@ int
 procdef_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
 {
     cgrp_procdef_t *procdef;
+    cgrp_rule_t    *rule;
 
+    for (rule = pd->rules; rule != NULL; rule = rule->next)
+        ctx->event_mask |= rule->event_mask;
+    
     if (!strcmp(pd->binary, "*")) {
         if (ctx->fallback != NULL) {
             OHM_ERROR("cgrp: multiple fallback process definitions");
             return FALSE;
         }
         else {
-            if (!ALLOC_OBJ(ctx->fallback)) {
-                OHM_ERROR("cgrp: failed to allocate fallback "
-                          "process definition");
-                return FALSE;
-            }
-            procdef = ctx->fallback;
+            ctx->fallback = pd->rules;
+            return TRUE;
         }
     }
     else {
@@ -84,9 +84,8 @@ procdef_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
         procdef = ctx->procdefs + ctx->nprocdef++;
     }
 
-    procdef->binary     = STRDUP(pd->binary);
-    procdef->renice     = pd->renice;
-    procdef->statements = pd->statements;
+    procdef->binary = STRDUP(pd->binary);
+    procdef->rules  = pd->rules;
 
     if (procdef->binary == NULL) {
         OHM_ERROR("cgrp: failed to add %sprocess definition",
@@ -105,7 +104,8 @@ int
 addon_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
 {
     cgrp_procdef_t *procdef;
-
+    cgrp_rule_t    *rule;
+    
     if (!strcmp(pd->binary, "*")) {
         OHM_ERROR("cgrp: ignoring fallback addon rule ");
         return TRUE;
@@ -118,10 +118,12 @@ addon_add(cgrp_context_t *ctx, cgrp_procdef_t *pd)
 
     procdef = ctx->addons + ctx->naddon++;
 
-    procdef->binary     = STRDUP(pd->binary);
-    procdef->renice     = pd->renice;
-    procdef->statements = pd->statements;
+    procdef->binary = STRDUP(pd->binary);
+    procdef->rules  = pd->rules;
 
+    for (rule = procdef->rules; rule != NULL; rule = rule->next)
+        ctx->event_mask |= rule->event_mask;
+    
     if (procdef->binary == NULL) {
         OHM_ERROR("cgrp: failed to add addon process definition %s",
                   pd->binary);
@@ -173,11 +175,22 @@ addon_reload(cgrp_context_t *ctx)
 void
 procdef_purge(cgrp_procdef_t *procdef)
 {
+    cgrp_rule_t *rule, *next;
+    
     FREE(procdef->binary);
-    statement_free_all(procdef->statements);
+    procdef->binary = NULL;
+    
+    rule = procdef->rules;
+    while (rule != NULL) {
+        next = rule->next;
 
-    procdef->binary     = NULL;
-    procdef->statements = NULL;
+        statement_free_all(rule->statements);        
+        FREE(rule->uids);
+        FREE(rule->gids);
+        FREE(rule);
+     
+        rule = next;
+    }
 }
 
 
@@ -187,9 +200,34 @@ procdef_purge(cgrp_procdef_t *procdef)
 void
 procdef_dump(cgrp_context_t *ctx, FILE *fp)
 {
-    int i;
-    
+#define EVENT(evt, name) [CGRP_EVENT_##evt] = name
+
+    int         i;
+    const char *events[] = {
+        EVENT(UNKNOWN, "unknown"),
+        EVENT(FORCE  , "force"),
+        EVENT(FORK   , "fork"),
+        EVENT(EXEC   , "execed"),
+        EVENT(EXIT   , "exit"),
+        EVENT(UID    , "user-change"),
+        EVENT(GID    , "group-change"),
+        EVENT(SID    , "session-change"),
+        EVENT(NAME   , "name"),
+        NULL
+    }, *t;
+#undef EVENT
+
     fprintf(fp, "# process classification rules\n");
+    fprintf(fp, "# event_mask: 0x%x (", ctx->event_mask);
+    t = "";
+    for (i = 1; events[i] != NULL; i++) {
+        if (ctx->event_mask & (1 << i)) {
+            fprintf(fp, "%s%s", t, events[i]);
+            t = ", ";
+        }
+    }
+    fprintf(fp, ")\n");
+    
     for (i = 0; i < ctx->nprocdef; i++) {
         procdef_print(ctx, ctx->procdefs + i, fp);
         fprintf(fp, "\n");
@@ -203,13 +241,10 @@ procdef_dump(cgrp_context_t *ctx, FILE *fp)
 
     if (ctx->fallback != NULL) {
         fprintf(fp, "# fallback classification rule\n");
-        procdef_print(ctx, ctx->fallback, fp);
+        fprintf(fp, "[rule *]\n");
+        statements_print(ctx, ctx->fallback->statements, fp);
+        fprintf(fp, "\n");
     }
-
-#if 0
-    fprintf(fp, "# addon hash table\n");
-    addon_hash_dump(ctx, fp);
-#endif
 }
 
 
@@ -219,35 +254,150 @@ procdef_dump(cgrp_context_t *ctx, FILE *fp)
 void
 procdef_print(cgrp_context_t *ctx, cgrp_procdef_t *procdef, FILE *fp)
 {
-#if 0
-    cgrp_procdef_t *rule;
-    char           *type;
-#endif
+    cgrp_rule_t *rule;
+    int          e, i;
+
+#define EVENT(type, name) [CGRP_EVENT_##type] = name
+    const char *events[] = {
+        EVENT(UNKNOWN, "unknown"),
+        EVENT(FORCE  , "force"),
+        EVENT(FORK   , "fork"),
+        EVENT(EXEC   , "execed"),
+        EVENT(EXIT   , "exit"),
+        EVENT(UID    , "user-change"),
+        EVENT(GID    , "group-change"),
+        EVENT(SID    , "session-change"),
+        EVENT(NAME   , "name-change"),
+        NULL
+    }, *t;
+#undef EVENT
+
 
     (void)ctx;
 
     fprintf(fp, "[rule '%s']\n", procdef->binary);
-    if (procdef->renice)
-        fprintf(fp, "renice %d\n", procdef->renice);
-    statements_print(ctx, procdef->statements, fp);
 
-#if 0
-    if ((rule = rule_hash_lookup(ctx, procdef->binary)) != NULL)
-        type = "basic";
-    else if ((rule = addon_hash_lookup(ctx, procdef->binary)) != NULL)
-        type = "addon";
-    else
-        type = NULL;
+    for (rule = procdef->rules; rule != NULL; rule = rule->next) {
+        t = "";
+        fprintf(fp, "<");
+        for (e = 1; events[e] != NULL; e++) {
+            if (rule->event_mask & (1 << e)) {
+                fprintf(fp, "%s%s", t, events[e]);
+                t = ", ";
 
-    if (type != NULL) {
-        fprintf(fp, "# %s rule: [rule '%s']\n", type, rule->binary);
-        if (rule->renice)
-            fprintf(fp, "renice %d\n", rule->renice);
+                switch (e) {
+                case CGRP_EVENT_GID:
+                    if (rule->gids != NULL) {
+                        t = " ";
+                        for (i = 0; rule->gids[i] != 0; i++) {
+                            fprintf(fp, "%s%u", t, rule->gids[i]);
+                            t = ", ";
+                        }
+                    }
+                    else
+                        fprintf(fp, " *");
+                    break;
+                case CGRP_EVENT_UID:
+                    if (rule->uids != NULL) {
+                        t = " ";
+                        for (i = 0; rule->uids[i] != 0; i++) {
+                            fprintf(fp, "%s%u", t, rule->uids[i]);
+                            t = ", ";
+                        }
+                    }
+                    else
+                        fprintf(fp, " *");
+                    break;
+                default:
+                    break;
+                }
+                t = ", ";
+            }
+        }
+        fprintf(fp, "> {\n");
         statements_print(ctx, rule->statements, fp);
+        fprintf(fp, "}\n");
     }
+}
+
+
+/********************
+ * rule_lookup
+ ********************/
+cgrp_rule_t *
+rule_lookup(cgrp_context_t *ctx, char *binary, cgrp_event_t *event)
+{
+    cgrp_procdef_t    *procdef;
+    cgrp_event_type_t  type;
+    cgrp_rule_t       *r;
+    int                mask, i;
+
+    if ((procdef = rule_hash_lookup(ctx, binary)) == NULL)
+        return NULL;
+    
+    if (event == NULL || event->any.type == CGRP_EVENT_FORCE)
+        type = CGRP_EVENT_EXEC;
     else
-        fprintf(fp, "# no hashed rule\n");
-#endif
+        type = event->any.type;
+
+    mask = 1 << type;
+    
+    for (r = procdef->rules; r != NULL; r = r->next) {
+        if (!(r->event_mask & mask))
+            continue;
+        
+        switch (type) {
+        case CGRP_EVENT_EXEC:
+        case CGRP_EVENT_FORCE:
+            return r;
+
+        case CGRP_EVENT_GID:
+            if (r->gids != NULL) {
+                for (i = 0; r->gids[i] != 0; i++)
+                    if (r->gids[i] == event->id.eid)
+                        return r;
+                return NULL;
+            }
+            else
+                return r;
+
+        case CGRP_EVENT_UID:
+            if (r->uids != NULL) {
+                for (i = 0; r->uids[i] != 0; i++)
+                    if (r->uids[i] == event->id.eid)
+                        return r;
+                return NULL;
+            }
+            else
+                return r;
+            
+        default:
+            return NULL;
+        }
+    }
+    
+    return NULL;
+}
+
+
+/********************
+ * addon_lookup
+ ********************/
+cgrp_rule_t *
+addon_lookup(cgrp_context_t *ctx, char *binary, cgrp_event_t *event)
+{
+    cgrp_procdef_t *procdef;
+
+    (void)event;
+    
+    /*
+     * Notes: currently we do not allow/support event-specific add-on rules
+     */
+
+    if ((procdef = addon_hash_lookup(ctx, binary)) == NULL)
+        return NULL;
+    else
+        return procdef->rules;
 }
 
 
@@ -255,7 +405,7 @@ procdef_print(cgrp_context_t *ctx, cgrp_procdef_t *procdef, FILE *fp)
  * rule_eval
  ********************/
 cgrp_action_t *
-rule_eval(cgrp_context_t *ctx, cgrp_procdef_t *rule, cgrp_proc_attr_t *procattr)
+rule_eval(cgrp_context_t *ctx, cgrp_rule_t *rule, cgrp_proc_attr_t *procattr)
 {
     cgrp_stmt_t *stmt;
 

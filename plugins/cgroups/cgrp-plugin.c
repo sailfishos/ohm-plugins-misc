@@ -107,6 +107,8 @@ plugin_init(OhmPlugin *plugin)
     config_print(ctx, stdout);
 #endif
 
+    ctx->event_mask |= (CGRP_EVENT_EXEC | CGRP_EVENT_EXIT);
+
     process_scan_proc(ctx);
 
     config_monitor_init(ctx);

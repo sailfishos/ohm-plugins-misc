@@ -76,6 +76,9 @@
 /* Have PROC_EVENT_NAME support ? */
 #undef HAVE_PROC_EVENT_NAME
 
+/* Have PROC_EVENT_SID support ? */
+#undef HAVE_PROC_EVENT_SID
+
 /* Define to 1 if your system has a GNU libc compatible `realloc' function,
    and to 0 otherwise. */
 #undef HAVE_REALLOC

@@ -270,65 +270,77 @@ proc_recv(unsigned char *buf, size_t bufsize, int block)
 static inline void
 proc_dump_event(struct proc_event *event)
 {
-    struct fork_proc_event *fork;
-    struct exec_proc_event *exec;
-    struct id_proc_event   *id;
-    struct exit_proc_event *exit;
-#ifdef HAVE_PROC_EVENT_NAME 
-    struct name_proc_event *name;
-#endif
-   const char             *action;
-    
-
+    if (!OHM_DEBUG_ENABLED(DBG_EVENT))
+       return;
+   
     switch (event->what) {
-    case PROC_EVENT_FORK:
-        fork = &event->event_data.fork;
-        if (fork->child_tgid == fork->parent_tgid)
-            action = "new thread";
-        else
-            action = "forked";
-        OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has %s <pid %u/%u>", 
-                  fork->parent_pid, fork->parent_tgid,
-                  action, fork->child_pid, fork->child_tgid);
-        break;
+    case PROC_EVENT_FORK: {
+        struct fork_proc_event *e = &event->event_data.fork;
         
-    case PROC_EVENT_EXEC:
-        exec = &event->event_data.exec;
-        OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has exec'd a new binary",
-                  exec->process_pid, exec->process_tgid);
-        break;
-
-    case PROC_EVENT_UID:
-        id = &event->event_data.id;
-        OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has now new UID <ruid: %u, euid: %u>",
-                  id->process_pid, id->process_tgid,
-                  id->r.ruid, id->e.euid);
-        break;
-
-    case PROC_EVENT_GID:
-        id = &event->event_data.id;
-        OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has now new GID <rgid: %u, egid: %u>",
-                  id->process_pid, id->process_tgid,
-                  id->r.rgid, id->e.egid);
-        break;
-        
-    case PROC_EVENT_EXIT:
-        exit = &event->event_data.exit;
-        if (exit->process_pid == exit->process_tgid)
-            OHM_DEBUG(DBG_EVENT, "<pid %u> has exited (ec: %u)",
-                      exit->process_pid, exit->exit_code);
+        if (e->child_tgid != e->child_pid)
+            OHM_DEBUG(DBG_EVENT, "process %u has a new thread %u",
+                      e->child_tgid, e->child_pid);
         else
-            OHM_DEBUG(DBG_EVENT, "<pid %u> has lost thread <%u> (ec: %u)",
-                      exit->process_tgid, exit->process_pid, exit->exit_code);
+            OHM_DEBUG(DBG_EVENT, "process %u has forked new process %u",
+                      e->parent_tgid, e->child_tgid);
         break;
+    }
+        
+    case PROC_EVENT_EXEC: {
+        struct exec_proc_event *e = &event->event_data.exec;
+        
+        OHM_DEBUG(DBG_EVENT, "task %u/%u has execed a new image",
+                  e->process_tgid, e->process_pid);
+        break;
+    }
+
+    case PROC_EVENT_UID: {
+        struct id_proc_event *e = &event->event_data.id;
+        
+        OHM_DEBUG(DBG_EVENT, "task %u/%u set user id <r:%u/e:%u>",
+                  e->process_tgid, e->process_pid, e->r.ruid, e->e.euid);
+        break;
+    }
+
+    case PROC_EVENT_GID: {
+        struct id_proc_event *e = &event->event_data.id;
+
+        OHM_DEBUG(DBG_EVENT, "task %u/%u set group id <r:%u/e:%u>",
+                  e->process_tgid, e->process_pid, e->r.rgid, e->e.egid);
+        break;
+    }
+
+#ifdef HAVE_PROC_EVENT_SID
+    case PROC_EVENT_SID: {
+        struct sid_proc_event *e = &event->event_data.sid;
+
+        OHM_DEBUG(DBG_EVENT, "task %u/%u has created a new session",
+                  e->process_tgid, e->process_pid);
+        break;
+    }
+#endif
+        
+    case PROC_EVENT_EXIT: {
+        struct exit_proc_event *e = &event->event_data.exit;
+        
+        if (e->process_pid == e->process_tgid)
+            OHM_DEBUG(DBG_EVENT, "process %u has exited (status: %u)",
+                      e->process_tgid, e->exit_code);
+        else
+            OHM_DEBUG(DBG_EVENT, "process %u has lost thread %u (status: %u)",
+                      e->process_tgid, e->process_pid, e->exit_code);
+        break;
+    }
 
 #ifdef HAVE_PROC_EVENT_NAME
-    case PROC_EVENT_NAME:
-        name = &event->event_data.name;
-        if (name->process_pid == name->process_tgid)
-            OHM_DEBUG(DBG_EVENT, "<pid %u/%u> has changed name",
-                      name->process_pid, name->process_tgid);
+    case PROC_EVENT_NAME: {
+        struct name_proc_event *e = &event->event_data.name;
+    
+        if (e->process_pid == name->process_tgid)
+            OHM_DEBUG(DBG_EVENT, "process %u has changed its process name",
+                      e->process_tgid);
         break;
+    }
 #endif
         
     case PROC_EVENT_NONE:
@@ -349,37 +361,83 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 {
     cgrp_context_t    *ctx = (cgrp_context_t *)data;
     unsigned char      buf[EVENT_BUF_SIZE];
-    struct proc_event *event;
+    struct proc_event *pevt;
+    cgrp_event_t       event;
 
     (void)chnl;
     
     if (mask & G_IO_IN) {
-        while ((event = proc_recv(buf, sizeof(buf), FALSE)) != NULL) {
-            proc_dump_event(event);
-            switch (event->what) {
-            case PROC_EVENT_FORK:
-                classify_by_binary(ctx, event->event_data.fork.child_pid, 0);
-                subscr_notify(ctx,
-                              event->what, event->event_data.fork.child_pid);
+        while ((pevt = proc_recv(buf, sizeof(buf), FALSE)) != NULL) {
+
+            proc_dump_event(pevt);
+
+            switch (pevt->what) {
+            case PROC_EVENT_FORK: {
+                struct fork_proc_event *e = &pevt->event_data.fork;
+
+                event.fork.type = CGRP_EVENT_FORK;
+                if (e->child_tgid == e->child_pid) {  /* a child process */
+                    event.fork.pid  = e->child_pid;
+                    event.fork.tgid = e->child_tgid;
+                    event.fork.ppid = e->parent_tgid;
+                }
+                else {                                /* a new thread */
+                    event.fork.pid  = e->child_pid;
+                    event.fork.tgid = e->child_tgid;
+                    event.fork.ppid = e->child_tgid;
+                }
+            }
+                subscr_notify(ctx, pevt->what, event.fork.pid);
                 break;
+
             case PROC_EVENT_EXEC:
-                classify_by_binary(ctx,event->event_data.exec.process_pid, 0);
+                event.exec.type = CGRP_EVENT_EXEC;
+                event.exec.pid  = pevt->event_data.exec.process_pid;
+                event.exec.tgid = pevt->event_data.exec.process_tgid;
                 break;
+
             case PROC_EVENT_UID:
+                event.id.type = CGRP_EVENT_UID;
+                event.id.pid  = pevt->event_data.id.process_pid;
+                event.id.tgid = pevt->event_data.id.process_tgid;
+                event.id.rid  = pevt->event_data.id.r.ruid;
+                event.id.eid  = pevt->event_data.id.e.euid;
                 break;
+
             case PROC_EVENT_GID:
+                event.id.type = CGRP_EVENT_GID;
+                event.id.pid  = pevt->event_data.id.process_pid;
+                event.id.tgid = pevt->event_data.id.process_tgid;
+                event.id.rid  = pevt->event_data.id.r.rgid;
+                event.id.eid  = pevt->event_data.id.e.egid;
                 break;
+
             case PROC_EVENT_EXIT:
-                process_remove_by_pid(ctx, event->event_data.exit.process_pid);
+                event.any.type = CGRP_EVENT_EXIT;
+                event.any.pid  = pevt->event_data.exit.process_pid;
+                event.any.tgid = pevt->event_data.exit.process_tgid;
                 break;
+             
+#ifdef HAVE_PROC_EVENT_SID
+            case PROC_EVENT_SID:
+                event.any.type = CGRP_EVENT_SID;
+                event.any.pid  = pevt->event_data.sid.process_pid;
+                event.any.tgid = pevt->event_data.sid.process_tgid;
+                break;
+#endif
+
 #ifdef HAVE_PROC_EVENT_NAME
             case PROC_EVENT_NAME:
-                classify_by_binary(ctx,event->event_data.name.process_pid, 0);
+                event.any.type = CGRP_EVENT_NAME;
+                event.any.pid  = pevt->event_data.name.process_id;
+                event.any.tgid = pevt->event_data.name.process_tgid;
                 break;
 #endif
             default:
-                break;
+                continue;
             }
+
+            classify_event(ctx, &event);
         }
     }
     
@@ -473,26 +531,48 @@ netlink_close(void)
 int
 process_scan_proc(cgrp_context_t *ctx)
 {
-    struct dirent *de;
-    DIR           *dp;
-    pid_t          pid;
+    struct dirent *pe, *te;
+    DIR           *pd, *td;
+    pid_t          pid, tid;
+    char           task[256];
 
-    if ((dp = opendir("/proc")) == NULL) {
+
+    if ((pd = opendir("/proc")) == NULL) {
         OHM_ERROR("cgrp: failed to open /proc directory");
         return FALSE;
     }
 
-    while ((de = readdir(dp)) != NULL) {
-        if (de->d_name[0] < '1'  || de->d_name[0] > '9' || de->d_type != DT_DIR)
+    while ((pe = readdir(pd)) != NULL) {
+        if (pe->d_name[0] < '1' || pe->d_name[0] > '9' || pe->d_type != DT_DIR)
             continue;
 
-        OHM_DEBUG(DBG_CLASSIFY, "discovering process <%s>", de->d_name);
-
-        pid = (pid_t)strtoul(de->d_name, NULL, 10);
+        OHM_DEBUG(DBG_CLASSIFY, "discovering process <%s>", pe->d_name);
+        
+        pid = (pid_t)strtoul(pe->d_name, NULL, 10);
         classify_by_binary(ctx, pid, 0);
+
+        snprintf(task, sizeof(task), "/proc/%u/task", pid);
+        if ((td = opendir(task)) == NULL)
+            continue;                              /* assume it's gone */
+        
+        while ((te = readdir(td)) != NULL) {
+            if (te->d_name[0] < '1' || te->d_name[0] > '9' ||
+                te->d_type != DT_DIR)
+                continue;
+            
+            tid = (pid_t)strtoul(te->d_name, NULL, 10);
+            if (proc_hash_lookup(ctx, tid) != NULL)
+                continue;
+
+            OHM_DEBUG(DBG_CLASSIFY, "discovering task <%s>", te->d_name);
+            
+            classify_by_binary(ctx, tid, 0);
+        }
+        
+        closedir(td);
     }
 
-    closedir(dp);
+    closedir(pd);
 
     return TRUE;
 }
@@ -773,6 +853,79 @@ process_get_ppid(cgrp_proc_attr_t *attr)
 
 
 /********************
+ * process_get_tgid
+ ********************/
+static inline char *find_status_field(char *buf, const char *name)
+{
+    const char *p;
+    char       *field;
+    int         next;
+    
+    next  = TRUE;
+    field = buf;
+    
+    while (*field) {
+        while (!next && *field)
+            next = (*field++ == '\n');
+
+        if (!next)
+            return NULL;
+
+        if (*field != *name) {
+            next = FALSE;
+            field++;
+            continue;
+        }
+        
+        for (p = name; *p == *field && *p; p++, field++)
+            ;
+        
+        if (!*p) {
+            while (*field == ' ' || *field == '\t')
+                field++;
+            return field;
+        }
+
+        next = (*field == '\n');
+    }
+    
+    return NULL;
+}
+
+
+pid_t
+process_get_tgid(cgrp_proc_attr_t *attr)
+{
+    char path[64], buf[512], *p;
+    int  fd, size;
+
+    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_TGID))
+        return attr->tgid;
+    
+    sprintf(path, "/proc/%u/status", attr->pid);
+    if ((fd = open(path, O_RDONLY)) < 0)
+        return (pid_t)-1;
+    
+    size = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+
+    if (size <= 0)
+        return (pid_t)-1;
+    
+    buf[size] = '\0';
+    
+    if ((p = find_status_field(buf, "Tgid:")) != NULL) {
+        attr->tgid = (pid_t)strtoul(p, NULL, 10);
+        CGRP_SET_MASK(attr->mask, CGRP_PROC_TGID);
+    }
+    else
+        attr->tgid = (pid_t)-1;
+    
+    return attr->tgid;
+}
+
+
+/********************
  * process_remove
  ********************/
 static void
@@ -834,7 +987,8 @@ process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
         ctx->active_process = process;
         ctx->active_group   = process ? process->group : NULL;
 
-        OHM_DEBUG(DBG_ACTION, "active process: %u (%s), active group: %s",
+        OHM_DEBUG(DBG_ACTION, "active process: %u/%u (%s), active group: %s",
+                  ctx->active_process ? ctx->active_process->tgid   : 0,
                   ctx->active_process ? ctx->active_process->pid    : 0,
                   ctx->active_process ? ctx->active_process->binary : "<none>",
                   ctx->active_group   ? ctx->active_group->name     : "<none>");

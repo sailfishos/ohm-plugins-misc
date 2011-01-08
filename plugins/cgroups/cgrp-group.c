@@ -194,7 +194,13 @@ group_print(cgrp_context_t *ctx, cgrp_group_t *group, FILE *fp)
         list_foreach(&group->processes, p, n) {
             process = list_entry(p, cgrp_process_t, group_hook);
             
-            fprintf(fp, "  process %u (%s)\n", process->pid, process->binary);
+            if (process->tgid != process->pid)
+                fprintf(fp, "  %s %u/%u (%s)\n",
+                        process->tgid == process->pid ? "process" : "thread ",
+                        process->tgid, process->pid, process->binary);
+            else
+                fprintf(fp, "  process %u (%s)\n", process->tgid,
+                        process->binary);
         }
     }
 }
@@ -213,8 +219,8 @@ group_add_process(cgrp_context_t *ctx,
     if (group == old)
         return TRUE;
     
-    OHM_DEBUG(DBG_ACTION, "adding process %u (%s) to group '%s'",
-              process->pid, process->binary, group->name);
+    OHM_DEBUG(DBG_ACTION, "adding task %u/%u (%s) to group '%s'",
+              process->tgid, process->pid, process->binary, group->name);
     
     if (old != NULL) {
         list_delete(&process->group_hook);
@@ -289,8 +295,8 @@ group_set_priority(cgrp_group_t *group, int priority)
         process = list_entry(p, cgrp_process_t, group_hook);
         result  = process_set_priority(process, priority);
 
-        OHM_DEBUG(DBG_ACTION, "setting priority of process %u (%s) to %d: %s",
-                  process->pid, process->binary, priority,
+        OHM_DEBUG(DBG_ACTION, "setting priority of task %u/%u (%s) to %d: %s",
+                  process->tgid, process->pid, process->binary, priority,
                   result ? "OK" : "FAILED");
 
         success &= result;

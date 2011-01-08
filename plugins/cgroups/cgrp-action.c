@@ -300,7 +300,8 @@ action_group_exec(cgrp_context_t *ctx,
     }
     else {
         if (ALLOC_OBJ(process) != NULL) {
-            process->pid = attr->pid;
+            process->pid  = attr->pid;
+            process->tgid = attr->tgid;
             list_init(&process->proc_hook);
             list_init(&process->group_hook);
             process->binary = STRDUP(attr->binary);

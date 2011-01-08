@@ -536,7 +536,27 @@ fi
 AC_SUBST(BUILD_FMRADIO)
 
 
-# Check for PROC_EVENT_NAME kernel process connector event.
+# Check for PROC_EVENT_{SID,NAME} kernel process connector events.
+AC_MSG_CHECKING([for PROC_EVENT_SID connector event])
+AC_COMPILE_IFELSE([
+#include <linux/cn_proc.h>
+
+int main(int argc, char **argv)
+{
+    return PROC_EVENT_SID;
+}], [has_proc_event_sid=yes],
+    [has_proc_event_sid=no])
+
+AC_MSG_RESULT($has_proc_event_sid)
+
+if test x$has_proc_event_sid = xyes;
+then
+  AC_DEFINE([HAVE_PROC_EVENT_SID], 1, [Have PROC_EVENT_SID support ?])
+fi
+
+AM_CONDITIONAL(HAVE_PROC_EVENT_SID, test "x$has_proc_event_sid" = "xyes")
+AC_SUBST(HAVE_PROC_EVENT_SID)
+
 AC_MSG_CHECKING([for PROC_EVENT_NAME connector event])
 AC_COMPILE_IFELSE([
 #include <linux/cn_proc.h>

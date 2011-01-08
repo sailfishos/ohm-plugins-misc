@@ -53,15 +53,16 @@ static char rule_group[256];
     cgrp_partition_t *parts;
     cgrp_group_t      group;
     cgrp_group_t     *groups;
-    cgrp_procdef_t    rule;
-    cgrp_procdef_t   *rules;
+    cgrp_procdef_t    procdef;
+    cgrp_procdef_t   *procdefs;
+    cgrp_rule_t      *rules;
+    cgrp_rule_t       rule;
     cgrp_stmt_t      *stmt;
     cgrp_expr_t      *expr;
     cgrp_action_t    *action;
     cgrp_prop_type_t  prop;
     cgrp_value_t      value;
     cgrp_context_t    ctx;
-    int               renice;
     s64_t             time;
     cgrp_ctrl_setting_t *ctrl_settings;
 }
@@ -81,8 +82,12 @@ static char rule_group[256];
 %type <group>    group_properties
 %type <group>    group_description
 %type <group>    group_partition
-%type <rule>     rule
-%type <string>   rule_path
+%type <procdef>  procdef
+%type <rules>    rules
+%type <rules>    rule
+%type <rules>    rule_events
+%type <rule>     rule_event
+%type <string>   procdef_path
 %type <stmt>     rule_statements
 %type <stmt>     rule_statement
 %type <expr>     expr
@@ -92,7 +97,6 @@ static char rule_group[256];
 %type <value>    value
 %type <string>   group_name
 %type <string>   string
-%type <renice>   optional_renice
 %type <time>     time_unit
 %type <time>     time_usec
 %type <uint32>   schedule_priority
@@ -155,13 +159,15 @@ static char rule_group[256];
 %token TOKEN_ASTERISK "*"
 %token TOKEN_HEADER_OPEN "["
 %token TOKEN_HEADER_CLOSE "]"
-
+%token TOKEN_CURLY_OPEN   "{"
+%token TOKEN_CURLY_CLOSE  "}"
 %token TOKEN_AND       "&&"
 %token TOKEN_OR        "||"
 %token TOKEN_NOT       "!"
 %token TOKEN_EQUAL     "=="
 %token TOKEN_NOTEQ     "!="
 %token TOKEN_LESS      "<"
+%token TOKEN_GREATER   ">"
 %token TOKEN_IMPLIES   "=>"
 %token TOKEN_SEMICOLON ";"
 %token TOKEN_COLON     ":"
@@ -177,9 +183,9 @@ static char rule_group[256];
 %%
 
 configuration: START_FULL_PARSER 
-                 global_section partition_section group_section rule_section
+                 global_section partition_section group_section procdef_section
     | START_ADDON_PARSER
-                 rule_section
+                 procdef_section
     ;
 
 /*****************************************************************************
@@ -634,39 +640,198 @@ group_fact: KEYWORD_EXPORT_FACT
  *                             *** rule section ***                          *
  *****************************************************************************/
 
-rule_section: rule
-    | rule_section rule
-    | rule_section error {
+procdef_section: procdef
+    | procdef_section procdef
+    | procdef_section error {
           OHM_ERROR("cgrp: failed to parse rule section near token '%s'",
 	            cgrpyylval.any.token);
           exit(1);
     }
     ;
 
-rule: "[" KEYWORD_RULE rule_path "]" "\n" optional_renice rule_statements {
-        cgrp_procdef_t rule;
+procdef: "[" KEYWORD_RULE procdef_path "]" "\n" 
+         optional_renice rules {
+        cgrp_procdef_t procdef;
 
-        rule.binary     = $3.value;
-	rule.renice     = $6;
-        rule.statements = $7;
+        procdef.binary = $3.value;
+        procdef.rules  = $7;
 
         if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES))
-            addon_add(ctx, &rule);
+            addon_add(ctx, &procdef);
         else {
-            if (!procdef_add(ctx, &rule))
+            if (!procdef_add(ctx, &procdef))
                 YYABORT;
         }
     }
     ;
 
-optional_renice: /* empty */    { $$ = 0;  }
-    | KEYWORD_RENICE TOKEN_SINT { $$ = $2.value; }
+optional_renice: /* empty */
+    | KEYWORD_RENICE TOKEN_SINT {
+          OHM_WARNING("cgrp: static renice not supported any more.");
+      }
     ;
 
-rule_path: TOKEN_PATH          { $$ = $1; }
+procdef_path: TOKEN_PATH       { $$ = $1; }
     |      TOKEN_STRING        { $$ = $1; }
     |      TOKEN_ASTERISK      { $$.value = "*"; }
     ;
+
+
+rules: rule {
+          $$ = $1;
+      }
+    |  rules newline rule optional_newline {
+          cgrp_rule_t *r;
+
+          for (r = $1; r->next != NULL; r = r->next)
+              ;
+          r->next = $3;
+          $$      = $1;
+       }
+    ;
+
+
+optional_newline: /* empty */
+    | "\n"
+    ;
+
+newline: "\n"
+    ;
+
+rule: "<" rule_events ">" optional_newline 
+      "{" optional_newline rule_statements optional_newline "}" {
+          $2->statements = $7;
+          $$ = $2;
+      }
+    | rule_statements {
+          cgrp_rule_t *rule;
+
+          if (ALLOC_OBJ(rule) == NULL) {
+              OHM_ERROR("cgrp: failed to allocate new rule");
+              exit(1);
+          }
+
+          rule->event_mask = (1 << CGRP_EVENT_EXEC);
+          rule->statements = $1;
+
+          $$ = rule;
+      }
+    ;
+
+rule_events: rule_event {
+       cgrp_rule_t *rule;
+
+       if (ALLOC_OBJ(rule) == NULL) {
+           OHM_ERROR("cgrp: failed to allocate new rule");
+           exit(1);
+       }
+
+       rule->event_mask = $1.event_mask;
+       
+       if ($1.event_mask & (1 << CGRP_EVENT_GID)) {
+           gid_t gid;
+           
+           gid = (gid_t)$1.gids;
+           if ((rule->gids = ALLOC_ARR(gid_t, 2)) == NULL) {
+               OHM_ERROR("cgrp: failed to allocate new group id");
+               exit(1);
+           }
+
+           rule->gids[0] = gid;
+           rule->gids[1] = 0;
+       }
+       else if ($1.event_mask & (1 << CGRP_EVENT_UID)) {
+           uid_t uid;
+
+           uid = (uid_t)$1.uids;
+           if ((rule->uids = ALLOC_ARR(uid_t, 2)) == NULL) {
+               OHM_ERROR("cgrp: failed to allocate new user id");
+               exit(1);
+           }
+
+           rule->uids[0] = uid;
+           rule->uids[1] = 0;
+       }
+       
+       $$ = rule;
+ }
+    | rule_events "," rule_event {
+       if (!($3.event_mask & ((1 << CGRP_EVENT_GID) | (1 << CGRP_EVENT_UID)))) {
+           $1->event_mask |= $3.event_mask;
+           $$ = $1;
+       }
+       else {
+           if ($3.event_mask & (1 << CGRP_EVENT_GID)) {
+               int n;
+
+               n = 0;
+               if ($1->gids != NULL)
+                   while ($1->gids[n] != 0)
+                       n++;
+
+               if (REALLOC_ARR($1->gids, n, n + 2) == NULL) {
+                   OHM_ERROR("cgrp: failed to allocate new group id");
+                   exit(1);
+               }
+
+               $1->gids[n]     = (gid_t)$3.gids;
+               $1->gids[n+1]   = 0;
+               $1->event_mask |= 1 << CGRP_EVENT_GID;
+           }
+           else { /* $3->event_mask & (1 << CGRP_EVENT_UID) */
+               int n;
+
+               n = 0;
+               if ($1->uids != NULL)
+                   while ($1->uids[n] != 0)
+                       n++;
+
+               if (REALLOC_ARR($1->uids, n, n + 2) == NULL) {
+                   OHM_ERROR("cgrp: failed to allocate new user id");
+                   exit(1);
+               }
+
+               $1->uids[n]     = (uid_t)$3.uids;
+               $1->uids[n+1]   = 0;
+               $1->event_mask |= 1 << CGRP_EVENT_UID;
+           }
+       }
+
+       $$ = $1;
+    }
+    ;
+
+rule_event: TOKEN_IDENT {
+          memset(&$$, 0, sizeof($$));
+
+          if (!strcmp($1.value, "execed"))
+              $$.event_mask = (1 << CGRP_EVENT_EXEC);
+          else if (!strcmp($1.value, "session-change"))
+              $$.event_mask = (1 << CGRP_EVENT_SID);
+          else if (!strcmp($1.value, "name-change"))
+              $$.event_mask = (1 << CGRP_EVENT_NAME);
+          else {
+              OHM_ERROR("cgrp: invalid rule event '%s'", $1.value);
+              YYABORT;
+          }
+      }
+    | TOKEN_IDENT TOKEN_UINT {
+          memset(&$$, 0, sizeof($$));
+
+          if (!strcmp($1.value, "group-change")) {
+              $$.event_mask = (1 << CGRP_EVENT_GID);
+              $$.gids       = (gid_t *)$2.value;
+          }
+          else if (!strcmp($1.value, "user-change")) {
+              $$.event_mask = (1 << CGRP_EVENT_UID);
+              $$.uids       = (uid_t *)$2.value;
+          }
+          else {
+              OHM_ERROR("cgrp: invalid rule event '%s'", $1.value);
+              YYABORT;
+          }
+      }
+    ;    
 
 rule_statements: rule_statement "\n" {
         $$ = $1;
@@ -761,7 +926,8 @@ value: TOKEN_STRING {
     ;
 
 
-rule: "[" KEYWORD_CLASSIFY group_name "]" { strcpy(rule_group, $3.value); } "\n"
+procdef: "[" KEYWORD_CLASSIFY group_name "]" 
+         { strcpy(rule_group, $3.value); } "\n"
            simple_rule_list               { rule_group[0] = '\0'; }
     ;
 
@@ -775,7 +941,8 @@ simple_rule_list: simple_rule "\n"
     ;
 
 simple_rule: path {
-        cgrp_procdef_t  rule;
+        cgrp_procdef_t  procdef;
+	cgrp_rule_t    *rule;
         cgrp_stmt_t    *stmt;
 	cgrp_action_t  *action;
 	cgrp_group_t   *group = group_find(ctx, rule_group);
@@ -799,14 +966,21 @@ simple_rule: path {
         stmt->expr    = NULL;
         stmt->actions = action;
 
-        rule.binary     = $1.value;
-	rule.renice     = 0;
-        rule.statements = stmt;
+        if (ALLOC_OBJ(rule) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate rule");
+            statement_free_all(stmt);
+	    YYABORT;
+        }
+	rule->event_mask = (1 << CGRP_EVENT_EXEC);
+	rule->statements = stmt;
+
+        procdef.binary = $1.value;
+        procdef.rules  = rule;
 
         if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES))
-            addon_add(ctx, &rule);
+            addon_add(ctx, &procdef);
         else {
-            if (!procdef_add(ctx, &rule))
+            if (!procdef_add(ctx, &procdef))
                 YYABORT;
         }
     }
@@ -938,21 +1112,9 @@ string: TOKEN_IDENT  { $$ = $1; }
 
 
 path: TOKEN_PATH {
-#if 0  /* hmm... */
-          if ($1.value[0] != '/') {
-              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
-              exit(1);
-          }
-#endif
           $$ = $1;
     }
     | TOKEN_STRING {
-#if 0 /* hmm... allow anything if quoted (we also classify by WRT IDs etc.) */
-          if ($1.value[0] != '/') {
-              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
-              exit(1);
-          }
-#endif
           $$ = $1;
     }
     ;
@@ -1287,9 +1449,6 @@ cgrpyyerror(cgrp_context_t *ctx, const char *msg)
 
     OHM_ERROR("parse error: %s near line %d in file %s", msg,
               lexer_line(), lexer_file());
-#if 0
-    exit(1);                              /* XXX would be better not to */
-#endif
 }
 
 

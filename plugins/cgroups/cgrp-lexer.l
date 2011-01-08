@@ -95,7 +95,7 @@ typedef enum {
     TOKEN_TYPE_EOL,                            /* end of line */
 } token_type_t;
 
-static lexer_t lexer /* = { .debug = 1 }*/;
+static lexer_t lexer = { .debug = 0 };
 static int     lexer_start_token;              /* parser selector token */
 static int     lexer_noinclude;                /* disable includes */
 
@@ -676,18 +676,21 @@ KEYWORD_CGROUP_CONTROL    cgroup-control
 
 HEADER_OPEN            \[
 HEADER_CLOSE           \]
+CURLY_OPEN             \{
+CURLY_CLOSE            \}
 
 ARG                    arg[0-9]+
 
 EQUAL                  ==
 NOTEQ                  !=
-LESS                   <
 AND                    &&
 OR                     \|\|
 NOT                    \!
 IMPLIES                =>
 SEMICOLON              ;
 COLON                  :
+LESS                   <
+GREATER                >
 
 ASTERISK               \*
 PATH                   (\/([a-zA-Z_]([a-zA-Z0-9_\.-]*)*))+
@@ -793,6 +796,10 @@ ESCAPE		       \\
 {EQUAL}                     { PASS_TOKEN(EQUAL);               }
 {NOTEQ}                     { PASS_TOKEN(NOTEQ);               }
 {LESS}                      { PASS_TOKEN(LESS);                }
+{GREATER}                   { PASS_TOKEN(GREATER);             }
+{CURLY_OPEN}                { PASS_TOKEN(CURLY_OPEN);          }
+{CURLY_CLOSE}               { PASS_TOKEN(CURLY_CLOSE);         }
+
 {AND}                       { PASS_TOKEN(AND);                 }
 {OR}                        { PASS_TOKEN(OR);                  }
 {NOT}                       { PASS_TOKEN(NOT);                 }
