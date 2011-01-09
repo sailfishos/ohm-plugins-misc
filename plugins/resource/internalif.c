@@ -41,6 +41,8 @@ void internalif_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    ENTER;
+
     res_conn = resproto_init(RESPROTO_ROLE_MANAGER,
                              RESPROTO_TRANSPORT_INTERNAL,
                              internalif_timer_add,
@@ -59,6 +61,8 @@ void internalif_init(OhmPlugin *plugin)
 
         OHM_INFO("resource: resource loopback protocol initialized");
     }
+
+    LEAVE;
 }
 
 

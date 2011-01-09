@@ -100,11 +100,20 @@ void fsif_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    ENTER;
+
     fs = ohm_fact_store_get_fact_store();
 
-    updated_id  = g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
-    inserted_id = g_signal_connect(G_OBJECT(fs), "inserted", G_CALLBACK(inserted_cb), NULL);
-    removed_id  = g_signal_connect(G_OBJECT(fs), "removed" , G_CALLBACK(removed_cb) , NULL);
+    updated_id  = g_signal_connect(G_OBJECT(fs), "updated" ,
+                                   G_CALLBACK(updated_cb) , NULL);
+
+    inserted_id = g_signal_connect(G_OBJECT(fs), "inserted",
+                                   G_CALLBACK(inserted_cb), NULL);
+
+    removed_id  = g_signal_connect(G_OBJECT(fs), "removed" ,
+                                   G_CALLBACK(removed_cb) , NULL);
+
+    LEAVE;
 }
 
 void fsif_exit(OhmPlugin *plugin)

@@ -49,9 +49,13 @@ static FILE *mfile;
 void mem_init(OhmPlugin *plugin)
 {
     const char *path;
+    
+    ENTER;
 
     path  = ohm_plugin_get_param(plugin, "memtrace");
     mfile = path ? fopen(path, "w+") : NULL;
+
+    LEAVE;
 }
 
 void mem_exit(OhmPlugin *plugin)

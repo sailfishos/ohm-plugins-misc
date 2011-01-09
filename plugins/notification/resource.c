@@ -106,6 +106,8 @@ void resource_init(OhmPlugin *plugin)
     int   failed = FALSE;
 
     (void)plugin;
+
+    ENTER;
  
     ohm_module_find_method("resource.restimer_add",
 			   &timer_add_signature,
@@ -146,6 +148,8 @@ void resource_init(OhmPlugin *plugin)
         exit(1);    
 
     verbose = TRUE;
+
+    LEAVE;
 }
 
 int resource_set_acquire(resource_set_id_t    id,

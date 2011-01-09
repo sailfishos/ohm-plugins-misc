@@ -47,12 +47,16 @@ void resolver_init(OhmPlugin *plugin)
 
     (void)plugin;
 
+    ENTER;
+
     ohm_module_find_method(name, &signature, (void *)&resolve);
 
     if (resolve == NULL)
         OHM_INFO("videoep: can't find method '%s'. resolving disabled", name);
     else
         OHM_INFO("videoep: resolving enabled");
+
+    LEAVE;
 }
 
 void resolver_exit(OhmPlugin *plugin)

@@ -52,6 +52,10 @@ static void        destroy_execdefs(int, exec_def_t *);
 void sequence_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
 void sequence_exit(OhmPlugin *plugin)

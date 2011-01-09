@@ -97,6 +97,7 @@ void longlive_init(OhmPlugin *plugin)
 
     (void)plugin;
 
+    ENTER;
 
     for (i = 0;  i < rset_id_max;  i++) {
         longlive = longlives + i;
@@ -113,6 +114,8 @@ void longlive_init(OhmPlugin *plugin)
         longlive->type = i;
         longlive->name = name;
     }
+
+    LEAVE;
 }
 
 int longlive_playback_request(int type, uint32_t resources)

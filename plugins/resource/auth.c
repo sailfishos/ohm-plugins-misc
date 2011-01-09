@@ -59,6 +59,8 @@ void auth_init(OhmPlugin *plugin)
     char class_buf[512];
     char conf_buf[512];
 
+    ENTER;
+
     security_configuration = g_hash_table_new_full(g_str_hash, g_str_equal,
                                                    free_key, free_entry);
 
@@ -114,6 +116,8 @@ void auth_init(OhmPlugin *plugin)
 
     OHM_INFO("resource: security configuration table contains %d element(s)",
              g_hash_table_size(security_configuration));
+
+    LEAVE;
 }
 
 void auth_exit(OhmPlugin *plugin) {

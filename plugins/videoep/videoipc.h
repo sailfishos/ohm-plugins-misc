@@ -18,29 +18,24 @@ USA.
 *************************************************************************/
 
 
-#ifndef __OHM_VIDEOEP_MEM_H__
-#define __OHM_VIDEOEP_MEM_H__
+#ifndef __OHM_VIDEOEP_VIDEOIPC_H__
+#define __OHM_VIDEOEP_VIDEOIPC_H__
+
+#include <stdint.h>
+#include <sys/types.h>
+
 
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
 
-#ifdef BUILTIN_MEMORY_TRACE
-#define malloc(s)   mem_malloc(__FILE__, __LINE__, s)
-#define calloc(n,s) mem_calloc(__FILE__, __LINE__, n, s)
-#define strdup(s)   mem_strdup(__FILE__, __LINE__, s)
-#define free(m)     mem_free(__FILE__, __LINE__, m)
-#endif
-
-void mem_init(OhmPlugin *);
-void mem_exit(OhmPlugin *);
-
-void *mem_malloc(const char *, int, size_t);
-void *mem_calloc(const char *, int, size_t, size_t);
-char *mem_strdup(const char *, int, const char *);
-void  mem_free(const char *, int, void *);
+void videoipc_init(OhmPlugin *);
+void videoipc_exit(OhmPlugin *);
+void videoipc_update_start(void);
+void videoipc_update_end(void);
+void videoipc_update_section(uint32_t, pid_t *, int);
 
 
-#endif /* __OHM_VIDEOEP_MEM_H__ */
+#endif /* __OHM_VIDEOEP_VIDEOIPC_H__ */
 
 /* 
  * Local Variables:

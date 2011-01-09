@@ -159,6 +159,8 @@ int      xif_output_property_query(uint32_t, uint32_t, uint32_t,
                                    xif_outprop_replycb_t, void *);
 int      xif_output_property_change(uint32_t,uint32_t, videoep_value_type_t,
                                     uint32_t, void *);
+int      xif_send_client_message(uint32_t, uint32_t, int, videoep_value_type_t,
+                                 uint32_t, void *);
 
 int xif_crtc_config(uint32_t, xif_crtc_t *);
 
