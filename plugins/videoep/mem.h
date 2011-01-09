@@ -24,11 +24,12 @@ USA.
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
 
+#ifdef BUILTIN_MEMORY_TRACE
 #define malloc(s)   mem_malloc(__FILE__, __LINE__, s)
 #define calloc(n,s) mem_calloc(__FILE__, __LINE__, n, s)
 #define strdup(s)   mem_strdup(__FILE__, __LINE__, s)
 #define free(m)     mem_free(__FILE__, __LINE__, m)
-
+#endif
 
 void mem_init(OhmPlugin *);
 void mem_exit(OhmPlugin *);

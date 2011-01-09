@@ -921,7 +921,82 @@ int xif_output_property_change(uint32_t                output,
     return status;
 }
 
+int xif_send_client_message(uint32_t              window,
+                            uint32_t              msgid,
+                            int                   propagate,
+                            videoep_value_type_t  type,
+                            uint32_t              length,
+                            void                 *data)
+{
+#define MAXLEN(t) \
+    sizeof(((xcb_client_message_data_t *)0)->data##t) / sizeof(uint##t##_t)
 
+    xcb_void_cookie_t ckie;
+    xcb_client_message_event_t ev;
+    uint8_t   format;
+    uint32_t  maxlen;
+    uint32_t  size;
+    int       status = -1;
+
+    if (window && msgid && length && data && xiface) {
+        if (xiface->xconn && !xcb_connection_has_error(xiface->xconn)) {
+
+            switch (type) {
+
+            case videoep_atom:
+            case videoep_card:
+            case videoep_window:
+            case videoep_unsignd:
+            case videoep_integer:
+                format = 32;
+                maxlen = MAXLEN(32);
+                break;
+
+            case videoep_string:
+                format = 8;
+                maxlen = MAXLEN(8);
+                break;
+ 
+            default:
+                format = 0;
+                maxlen = 0;
+                break;
+            }
+
+            if (format) {
+                size = (length > maxlen ? maxlen : length) * format;
+                
+                memset(&ev, 0, sizeof(ev));
+                ev.response_type = XCB_CLIENT_MESSAGE;
+                ev.format = format;
+                ev.window = window;
+                ev.type   = msgid;
+                memcpy(&ev.data, data, size);
+
+                ckie = xcb_send_event(xiface->xconn, propagate,
+                                      window, 0, (char *)&ev);
+
+                if (xcb_connection_has_error(xiface->xconn)) {
+                    OHM_DEBUG(DBG_XCB, "can't send client message to "
+                              "window 0x%x", window);
+                }
+                else {
+                    status = 0;
+                    
+                    OHM_DEBUG(DBG_XCB, "sent client message to "
+                              "window 0x%x", window);
+
+                    xcb_flush(xiface->xconn);
+                }
+
+            } 
+        }
+    }
+
+    return status;
+
+#undef MAXLEN
+}                            
 
 
 int xif_crtc_config(uint32_t cfgtime, xif_crtc_t *crtc)
