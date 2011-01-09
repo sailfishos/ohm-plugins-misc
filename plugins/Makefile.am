@@ -26,6 +26,10 @@ if BUILD_VIDEOEP
 SUBDIRS += videoep
 endif
 
+if BUILD_DSPEP
+SUBDIRS += dspep
+endif
+
 if BUILD_HAL
 SUBDIRS += hal
 endif
