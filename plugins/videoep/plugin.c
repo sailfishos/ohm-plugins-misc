@@ -35,9 +35,10 @@ USA.
 #include "tracker.h"
 #include "router.h"
 #include "action.h"
+#include "videoipc.h"
 #include "config.h"
 
-int DBG_SCAN, DBG_PARSE, DBG_ACTION;
+int DBG_SCAN, DBG_PARSE, DBG_ACTION, DBG_IPC;
 int DBG_XCB, DBG_ATOM, DBG_WIN, DBG_PROP, DBG_RANDR;
 int DBG_EXEC, DBG_FUNC, DBG_SEQ, DBG_RESOLV;
 int DBG_TRACK, DBG_ROUTE, DBG_XV;
@@ -46,6 +47,7 @@ OHM_DEBUG_PLUGIN(video,
     OHM_DEBUG_FLAG("scan"    , "config.file scanner"  , &DBG_SCAN  ),
     OHM_DEBUG_FLAG("parse"   , "config.file parser"   , &DBG_PARSE ),
     OHM_DEBUG_FLAG("action"  , "Video policy actions" , &DBG_ACTION),
+    OHM_DEBUG_FLAG("ipc"     , "videoipc to Xserver"  , &DBG_IPC   ),
     OHM_DEBUG_FLAG("xcb"     , "Xcb protocol"         , &DBG_XCB   ),
     OHM_DEBUG_FLAG("dres"    , "resolver interface"   , &DBG_RESOLV),
     OHM_DEBUG_FLAG("atom"    , "X atoms"              , &DBG_ATOM  ),
@@ -89,6 +91,7 @@ static void plugin_init(OhmPlugin *plugin)
     tracker_init(plugin);
     router_init(plugin);
     action_init(plugin);
+    videoipc_init(plugin);
     config_init(plugin);
 
     if (config_parse_file(NULL) < 0) {
@@ -106,6 +109,7 @@ static void plugin_exit(OhmPlugin *plugin)
 {
     mem_exit(plugin);
     config_exit(plugin);
+    videoipc_exit(plugin);
     action_exit(plugin);
     router_exit(plugin);
     tracker_exit(plugin);

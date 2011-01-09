@@ -347,6 +347,13 @@ then
         has_xcb_all=no
     fi
 
+    if test x$enable_oldvideoep = xno; then
+        PKG_CHECK_MODULES(VIDEOIPC, videoipc,
+	                  [], [VIDEOIPC_CFLAGS=-DNO_VIDEOIPC])
+	AC_SUBST(VIDEOIPC_CFLAGS)
+	AC_SUBST(VIDEOIPC_LIBS)
+    fi
+
     if test x$enable_videoep = xauto;
     then
         if test x$has_xcb_all = xyes;

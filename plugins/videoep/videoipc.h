@@ -18,36 +18,24 @@ USA.
 *************************************************************************/
 
 
-#ifndef __OHM_VIDEOEP_PLUGIN_H__
-#define __OHM_VIDEOEP_PLUGIN_H__
+#ifndef __OHM_VIDEOEP_VIDEOIPC_H__
+#define __OHM_VIDEOEP_VIDEOIPC_H__
 
-#include <glib.h>
-#include <glib-object.h>
-#include <gmodule.h>
-#include <ohm/ohm-plugin.h>
-#include <ohm/ohm-plugin-log.h>
-#include <ohm/ohm-plugin-debug.h>
-
-#include "mem.h"
-
-#define EXPORT __attribute__ ((visibility ("default")))
-#define HIDE   __attribute__ ((visibility ("hidden")))
-
-#ifdef  G_MODULE_EXPORT
-#undef  G_MODULE_EXPORT
-#define G_MODULE_EXPORT EXPORT
-#endif
-
-#define DIM(a)   (sizeof(a) / sizeof(a[0]))
+#include <stdint.h>
+#include <sys/types.h>
 
 
-extern int DBG_SCAN, DBG_PARSE, DBG_ACTION, DBG_IPC;
-extern int DBG_XCB, DBG_ATOM, DBG_WIN, DBG_PROP, DBG_RANDR;
-extern int DBG_EXEC, DBG_FUNC, DBG_SEQ, DBG_RESOLV;
-extern int DBG_TRACK, DBG_ROUTE, DBG_XV;
+/* hack to avoid multiple includes */
+typedef struct _OhmPlugin OhmPlugin;
+
+void videoipc_init(OhmPlugin *);
+void videoipc_exit(OhmPlugin *);
+void videoipc_update_start(void);
+void videoipc_update_end(void);
+void videoipc_update_section(uint32_t, pid_t *, int);
 
 
-#endif /* __OHM_VIDEOEP_PLUGIN_H__ */
+#endif /* __OHM_VIDEOEP_VIDEOIPC_H__ */
 
 /* 
  * Local Variables:

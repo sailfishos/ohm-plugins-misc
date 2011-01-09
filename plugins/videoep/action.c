@@ -20,6 +20,7 @@ USA.
 
 /*! \defgroup pubif Public Interfaces */
 
+#include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,13 +29,21 @@ USA.
 #include <errno.h>
 
 #include <ohm/ohm-fact.h>
+#include <policy/videoipc.h>
 
 #include "plugin.h"
 #include "action.h"
 #include "xif.h"
 #include "router.h"
+#include "videoipc.h"
 
 #define STRUCT_OFFSET(s,m) ((char *)&(((s *)0)->m) - (char *)0)
+
+/* in this module we need this to be signed */
+#ifdef  DIM
+#undef  DIM
+#define DIM(a) (int)(sizeof(a) / sizeof(a[0]))
+#endif
 
 OHM_IMPORTABLE(gboolean , unregister_ep, (GObject *ep));
 OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri, gchar **interested));
@@ -70,6 +79,15 @@ typedef struct {                /* video routing data structure */
     char         *ratio;
 } route_t;
 
+typedef struct {                /* xxx_user (eg. xvideo_user) data structure */
+    int           pid;
+} user_t;
+
+typedef struct {
+    int    npid;
+    pid_t  pids[256];
+} user_list_t;
+
 static OhmFactStore *factstore;
 static GObject      *conn;
 static gulong        decision_id;
@@ -77,12 +95,15 @@ static gulong        keychange_id;
 static char         *device;
 static char         *tvstd;
 static char         *ratio;
+static user_list_t   xvuser;
+
 
 static void decision_signal_cb(GObject *,GObject *,internal_ep_cb_t,gpointer);
 static void key_change_signal_cb(GObject *, GObject *, gpointer);
 
 static gboolean transaction_parser(GObject *, GObject *, gpointer);
 static int route_action(void *);
+static int xvuser_action(void *);
 static int action_parser(actdsc_t *);
 static int get_args(OhmFact *, argdsc_t *, void *);
 
@@ -190,9 +211,15 @@ static gboolean transaction_parser(GObject *conn,
         { argtype_invalid ,     NULL       ,                 0               }
     };
 
+    static argdsc_t  xvuser_args [] = {
+        { argtype_integer ,   "pid"        ,  STRUCT_OFFSET(user_t, pid)     },
+        { argtype_invalid ,   NULL         ,              0                  }
+    };
+
     static actdsc_t  actions[] = {
-        { PREFIX "video_route", route_action, route_args, sizeof(route_t) },
-        {          NULL       ,     NULL    ,    NULL   ,      0          }
+        { PREFIX "video_route", route_action , route_args , sizeof(route_t) },
+        { PREFIX "xvideo_user", xvuser_action, xvuser_args, sizeof(user_t)  },
+        {          NULL       ,     NULL     ,    NULL    ,      0          }
     };
     
     guint      txid;
@@ -212,6 +239,8 @@ static gboolean transaction_parser(GObject *conn,
 
     if (!strcmp(signal, "video_actions")) {
 
+        memset(&xvuser, 0, sizeof(xvuser));
+
         OHM_DEBUG(DBG_ACTION, "txid: %d", txid);
 
         for (entry = list;    entry != NULL;    entry = g_slist_next(entry)) {
@@ -222,6 +251,11 @@ static gboolean transaction_parser(GObject *conn,
                     success &= action_parser(action);
             }
         }
+        
+        videoipc_update_start();
+        videoipc_update_section(VIDEOIPC_XVIDEO_SECTION,
+                                xvuser.pids, xvuser.npid);
+        videoipc_update_end();
     }
 
     g_free(signal);
@@ -263,6 +297,27 @@ static int route_action(void *data)
                       tvstd ? tvstd : "<null>", ratio ? ratio : "<null>");
             success = router_new_setup(device, tvstd, ratio);
         }
+    }
+
+    return success;
+}
+
+static int xvuser_action(void *data)
+{
+
+    user_t *user    = data;
+    int     success = FALSE;
+
+    OHM_DEBUG(DBG_ACTION, "Got xvideo user '%u'", user->pid);
+
+    if (xvuser.npid < DIM(xvuser.pids)) {
+        xvuser.pids[xvuser.npid++] = (pid_t)user->pid;
+        success = TRUE;
+    }
+    else {
+        OHM_ERROR("videoep: number of xvideo users exceeds "
+                  "the internally allowed maximum (%d)", DIM(xvuser.pids));
+        success = FALSE;
     }
 
     return success;
