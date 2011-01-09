@@ -21,6 +21,8 @@ USA.
 #ifndef __OHM_RESOURCE_DBUSIF_H__
 #define __OHM_RESOURCE_DBUSIF_H__
 
+#include <sys/types.h>
+
 /* D-Bus names */
 #define DBUS_ADMIN_NAME                "org.freedesktop.DBus"
 #define DBUS_MANAGER_NAME              "org.maemo.resource.manager"
@@ -41,6 +43,9 @@ USA.
 #define DBUS_POLICY_NEW_SESSION_SIGNAL  "NewSession"
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL  "NameOwnerChanged"
 #define DBUS_NOTIFY_SIGNAL              "Notify"
+#define DBUS_QUERY_PID_METHOD           "GetConnectionUnixProcessID"
+
+typedef void (*dbusif_pid_query_cb_t)(pid_t, void *);
 
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
@@ -49,6 +54,7 @@ typedef struct _OhmPlugin OhmPlugin;
 void dbusif_init(OhmPlugin *);
 DBusHandlerResult dbusif_session_notification(DBusConnection *, DBusMessage *,
                                               void *);
+void dbusif_query_pid(char *, dbusif_pid_query_cb_t, void *);
 
 #endif /* __OHM_RESOURCE_DBUSIF_H__ */
 

@@ -31,6 +31,13 @@ USA.
 #include "dbusif.h"
 #include "manager.h"
 
+typedef struct {
+    char                  *addr;
+    dbusif_pid_query_cb_t  func;
+    void                  *data;
+} query_t;
+
+
 static DBusConnection   *sys_conn;       /* connection for D-Bus system bus */
 static DBusConnection   *sess_conn;      /* connection for D-Bus session bus */
 static int               timeout;        /* message timeout in msec */
@@ -40,6 +47,7 @@ static resconn_t        *res_conn;       /* resource manager connection */
 static void system_bus_init(void);
 static void session_bus_init(const char *);
 static void res_conn_setup(DBusConnection *);
+static void pid_queried(DBusPendingCall *, void *);
 
 
 
@@ -153,6 +161,57 @@ DBusHandlerResult dbusif_session_notification(DBusConnection *conn,
 }
 
 
+void dbusif_query_pid(char *addr, dbusif_pid_query_cb_t func, void *data)
+{
+    DBusConnection  *conn  = use_system_bus ? sys_conn : sess_conn;
+    query_t         *query = NULL;
+    DBusMessage     *msg;
+    DBusPendingCall *pend;
+    int              success;
+
+    if (func != NULL) {
+
+        do { /* not a loop */
+            if (!conn || !(query = malloc(sizeof(query_t))))
+                break;
+
+            memset(query, 0, sizeof(query_t));
+            query->addr = strdup(addr);
+            query->func = func;
+            query->data = data;
+
+            msg = dbus_message_new_method_call(DBUS_ADMIN_NAME,
+                                               DBUS_ADMIN_PATH,
+                                               DBUS_ADMIN_INTERFACE,
+                                               DBUS_QUERY_PID_METHOD);
+            if (!msg)
+                break;
+
+            success = dbus_message_append_args(msg,
+                                               DBUS_TYPE_STRING, &addr,
+                                               DBUS_TYPE_INVALID);
+
+            if (!success                                                    ||
+                !dbus_connection_send_with_reply(conn, msg, &pend, -1)      ||
+                !dbus_pending_call_set_notify(pend, pid_queried, query,NULL)  )
+                break;
+
+            dbus_message_unref(msg);
+
+            OHM_DEBUG(DBG_DBUS, "quering PID for address %s on %s bus",
+                      query->addr, use_system_bus ? "system" : "session");
+            
+            return;
+        } while (0);
+
+        if (query) {
+            free(query->addr);
+            free(query);
+        }
+    
+        func(0, data);
+    }
+}
 
 
 /*!
@@ -258,6 +317,66 @@ static void res_conn_setup(DBusConnection *conn)
     resproto_set_handler(res_conn, RESMSG_ACQUIRE   , manager_acquire   );
     resproto_set_handler(res_conn, RESMSG_RELEASE   , manager_release   );
     resproto_set_handler(res_conn, RESMSG_AUDIO     , manager_audio     );
+}
+
+static void pid_queried(DBusPendingCall *pend, void *data)
+{
+    query_t       *query   = (query_t *)data;
+    int            success = FALSE;
+    dbus_uint32_t  pid     = 0;
+    const char    *error   = "";
+    DBusMessage   *reply   = NULL;
+    const char    *str;
+
+    do { /* not a loop */
+        if ((reply = dbus_pending_call_steal_reply(pend)) == NULL) {
+            error = "NoReplyMessage";
+            break;
+        }
+
+        if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+            if ((str = dbus_message_get_error_name(reply)) == NULL)
+                error = "UnknownError";
+            else {
+                for (error = str + strlen(str);  error > str;   error--) {
+                    if (*error == '.') {
+                        error++;
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+
+
+        success = dbus_message_get_args(reply, NULL,
+                                        DBUS_TYPE_UINT32, &pid,
+                                        DBUS_TYPE_INVALID);
+
+        if (success)
+            error = "OK";
+
+    } while(0);
+
+
+    if (success) {
+        OHM_DEBUG(DBG_DBUS, "pid query succeeded: %s -> %u", query->addr, pid);
+    }
+    else {
+        OHM_DEBUG(DBG_DBUS, "pid query for %s failed: %s", query->addr, error);
+    }
+
+    query->func(pid, query->data);
+
+    if (reply)
+        dbus_message_unref(reply);
+
+    dbus_pending_call_unref(pend);
+
+    if (query) {
+        free(query->addr);
+        free(query);
+    }
 }
 
 /* 

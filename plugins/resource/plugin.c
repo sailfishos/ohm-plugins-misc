@@ -78,7 +78,7 @@ static void plugin_init(OhmPlugin *plugin)
 
 #if 0    
     DBG_MGR = DBG_SET = DBG_DBUS = DBG_INTERNAL = DBG_DRES =
-        DBG_FS = DBG_QUE = DBG_TRANSACT = DBG_MEDIA = TRUE;
+        DBG_FS = DBG_QUE = DBG_TRANSACT = DBG_MEDIA = DBG_AUTH = TRUE;
 #endif
 }
 
