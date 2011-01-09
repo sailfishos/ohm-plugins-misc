@@ -106,7 +106,7 @@ void videoipc_update_section(uint32_t mask, pid_t *pids, int npid)
     maxpid = VIDEOIPC_MAX_##sec##_USERS;                               \
     idxptr = &ipc->sec##users.idx;                                     \
     oldidx = *idxptr;                                                  \
-    newidx = (oldidx + 1 >= maxpid) ? 0 : oldidx + 1;                  \
+    newidx = (oldidx+1 >= DIM(ipc->sec##users.set)) ? 0 : oldidx+1;    \
     oldset = (videoipc_set_t *)&ipc->sec##users.set[oldidx];           \
     newset = (videoipc_set_t *)&ipc->sec##users.set[newidx];
 
@@ -135,12 +135,12 @@ void videoipc_update_section(uint32_t mask, pid_t *pids, int npid)
         }
 
         if (npid != oldset->npid || memcmp(pids, oldset->pids, npid)) {
-            OHM_DEBUG(DBG_IPC, "%s section in videoipc shared memory updated"
+            OHM_DEBUG(DBG_IPC, "%s section in videoipc shared memory updated. "
                       "New index is %u", secnam, newidx);
 
             newset->time = update.time;
             newset->npid = npid;
-            memcpy(newset->pids, pids, npid);
+            memcpy(newset->pids, pids, npid * sizeof(pid_t));
             
             *idxptr = newidx;
 
@@ -300,7 +300,7 @@ static int send_message(uint32_t mask)
     if (!mask)
         success = TRUE;
     else {
-        if (msgtyp == ATOM_INVALID_VALUE  || xif_root_window_query(&rwin, 1) ||
+        if (msgtyp == ATOM_INVALID_VALUE  || !xif_root_window_query(&rwin,1) ||
             xif_send_client_message(rwin,msgtyp,0,videoep_unsignd,1,&mask) < 0)
         {
             OHM_ERROR("videoep: can't send videoipc notification to Xserver");

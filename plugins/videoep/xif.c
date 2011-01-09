@@ -972,7 +972,7 @@ int xif_send_client_message(uint32_t              window,
             }
 
             if (format) {
-                size = (length > maxlen ? maxlen : length) * format;
+                size = (length > maxlen ? maxlen : length) * (format / 8);
                 
                 memset(&ev, 0, sizeof(ev));
                 ev.response_type = XCB_CLIENT_MESSAGE;

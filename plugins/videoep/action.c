@@ -385,8 +385,8 @@ static int get_args(OhmFact *fact, argdsc_t *argdsc, void *args)
             break;
 
         case argtype_integer:
-            if (G_VALUE_TYPE(gv) == G_TYPE_LONG)
-                *(long *)vptr = g_value_get_long(gv);
+            if (G_VALUE_TYPE(gv) == G_TYPE_INT)
+                *(int *)vptr = g_value_get_int(gv);
             break;
 
         case argtype_unsigned:
