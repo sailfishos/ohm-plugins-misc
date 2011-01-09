@@ -25,6 +25,7 @@ DEB_CONFIGURE_USER_FLAGS = --disable-static \
                            --enable-telephony \
                            --disable-libplayback \
                            --disable-oldvideoep \
+                           --enable-dspep \
                            --enable-apptrack \
                            --disable-swap-pressure
 
