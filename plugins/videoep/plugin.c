@@ -38,34 +38,55 @@ USA.
 #include "videoipc.h"
 #include "config.h"
 
-int DBG_SCAN, DBG_PARSE, DBG_ACTION, DBG_IPC;
+int DBG_INIT, DBG_SCAN, DBG_PARSE, DBG_ACTION, DBG_IPC;
 int DBG_XCB, DBG_ATOM, DBG_WIN, DBG_PROP, DBG_RANDR;
 int DBG_EXEC, DBG_FUNC, DBG_SEQ, DBG_RESOLV;
 int DBG_TRACK, DBG_ROUTE, DBG_XV;
 
 OHM_DEBUG_PLUGIN(video,
-    OHM_DEBUG_FLAG("scan"    , "config.file scanner"  , &DBG_SCAN  ),
-    OHM_DEBUG_FLAG("parse"   , "config.file parser"   , &DBG_PARSE ),
-    OHM_DEBUG_FLAG("action"  , "Video policy actions" , &DBG_ACTION),
-    OHM_DEBUG_FLAG("ipc"     , "videoipc to Xserver"  , &DBG_IPC   ),
-    OHM_DEBUG_FLAG("xcb"     , "Xcb protocol"         , &DBG_XCB   ),
-    OHM_DEBUG_FLAG("dres"    , "resolver interface"   , &DBG_RESOLV),
-    OHM_DEBUG_FLAG("atom"    , "X atoms"              , &DBG_ATOM  ),
-    OHM_DEBUG_FLAG("window"  , "X windows"            , &DBG_WIN   ),
-    OHM_DEBUG_FLAG("property", "X properties"         , &DBG_PROP  ),
-    OHM_DEBUG_FLAG("randr"   , "XRandR"               , &DBG_RANDR ),
-    OHM_DEBUG_FLAG("exec"    , "executables"          , &DBG_EXEC  ),
-    OHM_DEBUG_FLAG("function", "functions"            , &DBG_FUNC  ),
-    OHM_DEBUG_FLAG("sequence", "sequences"            , &DBG_SEQ   ),
-    OHM_DEBUG_FLAG("tracker" , "application tracker"  , &DBG_TRACK ),
-    OHM_DEBUG_FLAG("router"  , "video routing"        , &DBG_ROUTE ),
-    OHM_DEBUG_FLAG("xvideo"  , "X Video"              , &DBG_XV    )
+    OHM_DEBUG_FLAG( "init"    , "init sequence"        , &DBG_INIT   ),
+    OHM_DEBUG_FLAG( "scan"    , "config.file scanner"  , &DBG_SCAN   ),
+    OHM_DEBUG_FLAG( "parse"   , "config.file parser"   , &DBG_PARSE  ),
+    OHM_DEBUG_FLAG( "action"  , "Video policy actions" , &DBG_ACTION ),
+    OHM_DEBUG_FLAG( "ipc"     , "videoipc to Xserver"  , &DBG_IPC    ),
+    OHM_DEBUG_FLAG( "xcb"     , "Xcb protocol"         , &DBG_XCB    ),
+    OHM_DEBUG_FLAG( "dres"    , "resolver interface"   , &DBG_RESOLV ),
+    OHM_DEBUG_FLAG( "atom"    , "X atoms"              , &DBG_ATOM   ),
+    OHM_DEBUG_FLAG( "window"  , "X windows"            , &DBG_WIN    ),
+    OHM_DEBUG_FLAG( "property", "X properties"         , &DBG_PROP   ),
+    OHM_DEBUG_FLAG( "randr"   , "XRandR"               , &DBG_RANDR  ),
+    OHM_DEBUG_FLAG( "exec"    , "executables"          , &DBG_EXEC   ),
+    OHM_DEBUG_FLAG( "function", "functions"            , &DBG_FUNC   ),
+    OHM_DEBUG_FLAG( "sequence", "sequences"            , &DBG_SEQ    ),
+    OHM_DEBUG_FLAG( "tracker" , "application tracker"  , &DBG_TRACK  ),
+    OHM_DEBUG_FLAG( "router"  , "video routing"        , &DBG_ROUTE  ),
+    OHM_DEBUG_FLAG( "xvideo"  , "X Video"              , &DBG_XV     )
 );
 
+
+void plugin_print_timestamp(const char *function, const char *phase)
+{
+    struct timeval tv;
+    struct tm      tm;
+    char           tstamp[64];
+
+    if (DBG_INIT) {
+        gettimeofday(&tv, NULL);
+        localtime_r(&tv.tv_sec, &tm);
+        snprintf(tstamp, sizeof(tstamp), "%d:%d:%d.%06ld",
+                 tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
+    
+        printf("%s %s videoep/%s\n", tstamp, phase, function);
+    }
+}
 
 static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(video);
+
+    DBG_INIT = FALSE;
+
+    ENTER;
 
 #if 0
     DBG_SCAN = DBG_PARSE = DBG_ACTION = TRUE;
@@ -103,6 +124,7 @@ static void plugin_init(OhmPlugin *plugin)
 
     xif_connect_to_xserver();
 
+    LEAVE;
 }
 
 static void plugin_exit(OhmPlugin *plugin)

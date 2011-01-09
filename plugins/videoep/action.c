@@ -123,6 +123,8 @@ void action_init(OhmPlugin *plugin)
 
     (void)plugin;
 
+    ENTER;
+
     ohm_module_find_method(register_name,
                            &register_signature,
                            (void *)&register_ep);
@@ -152,6 +154,8 @@ void action_init(OhmPlugin *plugin)
             OHM_INFO("videoep: video routing enabled");
         }
     }
+
+    LEAVE;
 }
 
 void action_exit(OhmPlugin *plugin)

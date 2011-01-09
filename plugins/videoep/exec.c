@@ -48,6 +48,10 @@ void exec_init(OhmPlugin *plugin)
 void exec_exit(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
 int exec_definition_setup(exec_def_t     *exdef,

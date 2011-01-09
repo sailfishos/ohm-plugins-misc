@@ -121,8 +121,12 @@ static int lookup_rules(void)
 void ruleif_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
     
     lookup_rules();
+
+    LEAVE;
 }
 
 int ruleif_notification_request(const char *what, ...)

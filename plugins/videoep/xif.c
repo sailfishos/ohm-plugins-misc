@@ -292,8 +292,12 @@ void xif_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    ENTER;
+
     xiface = xif_create(":0");
     sigpipe_init();
+
+    LEAVE;
 }
 
 void xif_exit(OhmPlugin *plugin)
@@ -360,6 +364,8 @@ int xif_connect_to_xserver(void)
 {
     int  status = -1;
 
+    ENTER;
+
     if (xiface) {
         status = 0;
 
@@ -371,6 +377,8 @@ int xif_connect_to_xserver(void)
             }
         }
     }
+
+    LEAVE;
 
     return status;
 }

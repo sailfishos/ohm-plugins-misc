@@ -44,26 +44,47 @@ static const char *OHM_VAR(internalif_timer_del,_SIGNATURE) =
     "void(void *timer)";
 
 
-int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
+int DBG_INIT, DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
 int DBG_DRES, DBG_FS, DBG_QUE, DBG_TRANSACT, DBG_MEDIA, DBG_AUTH;
 
 OHM_DEBUG_PLUGIN(resource,
-    OHM_DEBUG_FLAG("manager" , "resource manager"   , &DBG_MGR     ),
-    OHM_DEBUG_FLAG("set"     , "resource set"       , &DBG_SET     ),
-    OHM_DEBUG_FLAG("dbus"    , "D-Bus interface"    , &DBG_DBUS    ),
-    OHM_DEBUG_FLAG("internal", "internal interface" , &DBG_INTERNAL),
-    OHM_DEBUG_FLAG("dres"    , "dres interface"     , &DBG_DRES    ),
-    OHM_DEBUG_FLAG("fact"    , "factstore interface", &DBG_FS      ),
-    OHM_DEBUG_FLAG("queue"   , "queued requests"    , &DBG_QUE     ),
-    OHM_DEBUG_FLAG("transact", "transactions"       , &DBG_TRANSACT),
-    OHM_DEBUG_FLAG("media"   , "media"              , &DBG_MEDIA   ),
-    OHM_DEBUG_FLAG("auth"    , "security"           , &DBG_AUTH    )
+    OHM_DEBUG_FLAG( "init"    , "init sequence"      , &DBG_INIT     ),
+    OHM_DEBUG_FLAG( "manager" , "resource manager"   , &DBG_MGR      ),
+    OHM_DEBUG_FLAG( "set"     , "resource set"       , &DBG_SET      ),
+    OHM_DEBUG_FLAG( "dbus"    , "D-Bus interface"    , &DBG_DBUS     ),
+    OHM_DEBUG_FLAG( "internal", "internal interface" , &DBG_INTERNAL ),
+    OHM_DEBUG_FLAG( "dres"    , "dres interface"     , &DBG_DRES     ),
+    OHM_DEBUG_FLAG( "fact"    , "factstore interface", &DBG_FS       ),
+    OHM_DEBUG_FLAG( "queue"   , "queued requests"    , &DBG_QUE      ),
+    OHM_DEBUG_FLAG( "transact", "transactions"       , &DBG_TRANSACT ),
+    OHM_DEBUG_FLAG( "media"   , "media"              , &DBG_MEDIA    ),
+    OHM_DEBUG_FLAG( "auth"    , "security"           , &DBG_AUTH     )
 );
 
+
+void plugin_print_timestamp(const char *function, const char *phase)
+{
+    struct timeval tv;
+    struct tm      tm;
+    char           tstamp[64];
+
+    if (DBG_INIT) {
+        gettimeofday(&tv, NULL);
+        localtime_r(&tv.tv_sec, &tm);
+        snprintf(tstamp, sizeof(tstamp), "%d:%d:%d.%06ld",
+                 tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
+    
+        printf("%s %s resource/%s\n", tstamp, phase, function);
+    }
+}
 
 static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(resource);
+
+    DBG_INIT = FALSE;
+
+    ENTER;
 
     timestamp_init(plugin);
     dbusif_init(plugin);
@@ -80,6 +101,8 @@ static void plugin_init(OhmPlugin *plugin)
     DBG_MGR = DBG_SET = DBG_DBUS = DBG_INTERNAL = DBG_DRES =
         DBG_FS = DBG_QUE = DBG_TRANSACT = DBG_MEDIA = DBG_AUTH = TRUE;
 #endif
+
+    LEAVE;
 }
 
 static void plugin_destroy(OhmPlugin *plugin)

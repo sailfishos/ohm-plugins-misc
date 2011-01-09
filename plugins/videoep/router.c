@@ -137,6 +137,8 @@ void router_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    ENTER;
+
     device = strdup("builtin");
 #if 0
     tvstd  = strdup("pal");
@@ -144,6 +146,8 @@ void router_init(OhmPlugin *plugin)
 #endif
 
     randr_add_state_callback(randr_state, NULL);
+
+    LEAVE;
 }
 
 void router_exit(OhmPlugin *plugin)

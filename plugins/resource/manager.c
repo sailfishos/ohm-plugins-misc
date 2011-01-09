@@ -97,6 +97,8 @@ void manager_init(OhmPlugin *plugin)
     char *name      = "auth.request";
     char *signature = (char *)auth_request_SIGNATURE; 
 
+    ENTER;
+
     ohm_module_find_method(name, &signature, (void *)&auth_request);
 
     if (auth_request == NULL) {
@@ -108,6 +110,8 @@ void manager_init(OhmPlugin *plugin)
     ADD_FIELD_WATCH("advice" , advice_cb );
     ADD_FIELD_WATCH("request", request_cb);
     ADD_FIELD_WATCH("block"  , block_cb  );
+
+    LEAVE;
 
 #undef ADD_FIELD_WATCH
 }

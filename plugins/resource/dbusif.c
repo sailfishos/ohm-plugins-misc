@@ -63,6 +63,8 @@ void dbusif_init(OhmPlugin *plugin)
     const char *timeout_str;
     char       *e;
 
+    ENTER;
+
     if ((bus_str = ohm_plugin_get_param(plugin, "dbus-bus")) == NULL)
         use_system_bus = TRUE;
     else {
@@ -103,6 +105,8 @@ void dbusif_init(OhmPlugin *plugin)
      */
     
     system_bus_init();
+
+    LEAVE;
 }
 
 

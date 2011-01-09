@@ -72,6 +72,10 @@ static resource_set_t *find_in_hash_table(uint32_t);
 void resource_set_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
 resource_set_t *resource_set_create(pid_t client_pid, resset_t *resset)
