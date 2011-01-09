@@ -1,3 +1,14 @@
+ohm-plugins-misc (1:1.59) unstable; urgency=low
+
+  * PID support in resource sets
+  * dspep plugin
+  * Fixes: NB#210941
+  * videoep support for xvideo usage control
+  * timestamping at initialization of notification, resource
+    and videoep plugins
+
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sun, 09 Jan 2011 04:29:13 +0200
+
 ohm-plugins-misc (1:1.58) unstable; urgency=low
 
   * More reliable handling of the session bus restart.
