@@ -49,7 +49,7 @@ SUBDIRS +=           \
         notification
 endif
 
-if HAVE_LIBPROFILE
+if BUILD_PROFILE
 SUBDIRS += profile
 endif
 
