@@ -27,7 +27,7 @@ endif
 if BUILD_NOTIFICATION
 	echo "${libdir}/ohm/libohm_notification.so" >> $@
 endif
-if HAVE_LIBPROFILE
+if BUILD_PROFILE
 	echo "${libdir}/ohm/libohm_profile.so" >> $@
 endif
 if BUILD_TELEPHONY
