@@ -1,0 +1,2 @@
+      <case name="profile-tests" type="Functional" level="Component" subfeature="Ohm plugins" description="Profile tests" timeout="15"><step expected_result="0">/usr/lib/ohm-plugins-tests/check_profile</step></case>
+

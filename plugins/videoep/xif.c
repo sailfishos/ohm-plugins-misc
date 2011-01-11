@@ -2191,8 +2191,8 @@ static gboolean xio_cb(GIOChannel *ch, GIOCondition cond, gpointer data)
 
 static void xevent_cb(xif_t *xif, xcb_generic_event_t *ev)
 {
-    xcb_destroy_notify_event_t             *destev;
-    xcb_property_notify_event_t            *propev;
+    xcb_destroy_notify_event_t  *destev;
+    xcb_property_notify_event_t *propev;
     uint32_t    window;
     uint32_t    id;
     propcb_t   *pcb;
@@ -2223,7 +2223,6 @@ static void xevent_cb(xif_t *xif, xcb_generic_event_t *ev)
             pcb->callback(window, id, pcb->usrdata);
         }
         break;
-
 
     default:
         if (!randr_event_handler(xif, ev)) {

@@ -1,0 +1,69 @@
+Source: ohm-plugins-misc
+Section: utils
+Priority: optional
+Maintainer: Resource Policy Team <resource-policy@projects.maemo.org>
+Standards-Version: 3.8.0
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libxcb-render0-dev, libsp-timestamp-dev, flex, libbluetooth3-dev, check, automake, autoconf, libcreds2-dev, libimmvibe-dev [armel]
+
+Package: ohm-plugins-misc
+Architecture: any
+Depends: ${shlibs:Depends}, ohm (>= 1:1.0), libohm-plugin-core0 (>= 1:1.0), osso-mission-control, libdres0 (>= 1:1.0), libprofile0 (>= 0.0.10), policy-settings, libcontextprovider0 (>= 0.5.8), libcreds2, libimmvibe0 [armel]
+Conflicts: policy-settings-rx51, policy-settings-rx51-text (<< 0.4.6), policy-settings (<< 1:1.12)
+XB-GIT-ID: ${Git-Id}
+Description: Nokia policy OHM plugins.
+ Nokia policy plugins for OHM.
+ .
+ Nokia policy plugins for OHM.
+
+Package: ohm-plugins-misc-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: ohm-plugins-misc (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for OHM miscallaneous plugins.
+ Debug symbols for OHM miscallaneous plugins.
+
+Package: ohm-plugin-console
+Architecture: any
+Depends: ${shlibs:Depends}, ohm (>= 1:1.0), libohm-plugin-core0 (>= 1:1.0)
+XB-GIT-ID: ${Git-Id}
+Description: OHM debug console plugin.
+ This package contains a very simple interactive debug console for OHM.
+ .
+ This package contains a very simple interactive debug console for OHM.
+
+Package: ohm-plugin-console-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: ohm-plugin-console (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for OHM console plugin.
+ Debug symbols for OHM console plugin.
+
+Package: ohm-plugin-timestamp
+Architecture: any
+Depends: ${shlibs:Depends}, ohm, libohm-plugin-core0, libsp-timestamp1
+XB-GIT-ID: ${Git-Id}
+Description: OHM plugin for sp-timestamp.
+ This package contains a trivial plugin that simply wraps sp-timestamp.
+
+Package: ohm-plugin-timestamp-dbg
+Priority: extra
+Section: utils
+Architecture: any
+Depends: ohm-plugin-timestamp (= ${binary:Version})
+XB-GIT-ID: ${Git-Id}
+Description: Debug symbols for OHM timestamping plugin.
+ Debug symbols for OHM timestamping plugin.
+
+Package: ohm-plugins-tests
+Section: misc
+Depends: ci-testing, ${shlibs:Depends}
+XB-Maemo-CI-Packages: ohm-plugins-misc
+XB-Maemo-CI-Stage: fast, staging, acceptance, validation
+Architecture: any
+Description: ohm-plugins-misc tests package
+ This package contains tests which can be used in CI environment
+

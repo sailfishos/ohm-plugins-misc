@@ -653,6 +653,7 @@ SHAVE_INIT([build-aux], [enable])
 
 AC_CONFIG_FILES([build-aux/shave
 		 build-aux/shave-libtool
+		 debian/Makefile
 		 Makefile
                  plugins/Makefile
 		 plugins/auth/Makefile
@@ -685,7 +686,8 @@ AC_CONFIG_FILES([build-aux/shave
 		 plugins/apptrack/Makefile
 		 plugins/fmradio/Makefile
 		 ohm-session-agent/Makefile
- 		 doc/Makefile])
+ 		 doc/Makefile
+ 		 tests/Makefile])
 
 # plugins/telephony/mission-control/Makefile
 

@@ -1,0 +1,2 @@
+      <case name="hal-tests" type="Functional" level="Component" subfeature="Ohm plugins" description="HAL tests" timeout="15"><step expected_result="0">/usr/lib/ohm-plugins-tests/check_hal</step></case>
+
