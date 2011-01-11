@@ -24,6 +24,9 @@
 /* Build playback plugin ? */
 #undef BUILD_PLAYBACK
 
+/* Build profile plugin ? */
+#undef BUILD_PROFILE
+
 /* Build resource plugin ? */
 #undef BUILD_RESOURCE
 
