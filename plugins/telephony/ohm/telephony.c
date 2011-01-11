@@ -3386,10 +3386,9 @@ call_activate(call_t *call, const char *action, event_t *event)
     
     (void)action;
     
-    OHM_INFO("ACTIVATE %s.", short_path(call->path));
+    OHM_INFO("ACTIVATE (%s) %s.", action, short_path(call->path));
     
-    if (call == event->any.call && event->any.state == STATE_ACTIVE) {
-        
+    if (call == event->any.call && event->any.state == STATE_ACTIVE) {        
         if (event->type == EVENT_CALL_ACCEPT_REQUEST) {
             if (tp_accept(call) != 0) {
                 accept_call_reply(event->call.req, "failed to accept call");
@@ -3448,10 +3447,17 @@ call_activate(call_t *call, const char *action, event_t *event)
             run_hook(HOOK_CALL_ACTIVE);
     }
     else {
-        if (tp_hold(call, FALSE) != 0) {
-            OHM_ERROR("Failed to disconnect call %s.", call->path);
-            return EIO;
+        if (!strcmp(action, "cmtautoactivate"))
+            OHM_INFO("Letting CMT reactivate call %s.", short_path(call->path));
+        else {
+            if (tp_hold(call, FALSE) != 0) {
+                OHM_ERROR("Failed to disconnect call %s.", call->path);
+                return EIO;
+            }
         }
+
+        call->state = STATE_ACTIVE;
+        policy_call_update(call, UPDATE_STATE);
     }
 
     return 0;
@@ -3491,16 +3497,17 @@ call_action(call_t *call, const char *action, event_t *event)
         const char  *action;
         int        (*handler)(call_t *, const char *, event_t *);
     } handlers[] = {
-        { "peerhungup"  , call_hungup     },
-        { "localhungup" , call_hungup     },
-        { "disconnected", call_disconnect },
-        { "busy"        , call_disconnect },
-        { "onhold"      , call_hold       },
-        { "autohold"    , call_hold       },
-        { "cmtautohold" , call_hold       },
-        { "active"      , call_activate   },
-        { "created"     , call_create     },
-        { NULL, NULL }
+        { "peerhungup"     , call_hungup     },
+        { "localhungup"    , call_hungup     },
+        { "disconnected"   , call_disconnect },
+        { "busy"           , call_disconnect },
+        { "onhold"         , call_hold       },
+        { "autohold"       , call_hold       },
+        { "cmtautohold"    , call_hold       },
+        { "active"         , call_activate   },
+        { "cmtautoactivate", call_activate   },
+        { "created"        , call_create     },
+        { NULL             , NULL }
     }, *h;
     
     for (h = handlers; h->action; h++)
