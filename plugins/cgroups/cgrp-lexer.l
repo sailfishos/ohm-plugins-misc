@@ -664,6 +664,7 @@ KEYWORD_RECLASS_AFTER     reclassify-after
 KEYWORD_RECLASSIFY        reclassify-count
 KEYWORD_CLASSIFY_ARGVX    classify-by-argv[0-9]+
 KEYWORD_CLASSIFY          classify
+KEYWORD_NO_OP             no-op
 KEYWORD_EXPORT_GROUPS     export-group-facts
 KEYWORD_EXPORT_PARTITIONS export-partition-facts
 KEYWORD_EXPORT_FACT       export-fact
@@ -688,6 +689,7 @@ OR                     \|\|
 NOT                    \!
 IMPLIES                =>
 SEMICOLON              ;
+COMMA                  ,
 COLON                  :
 LESS                   <
 GREATER                >
@@ -779,6 +781,7 @@ ESCAPE		       \\
 {KEYWORD_RECLASSIFY}        { PASS_KEYWORD(RECLASSIFY);        }
 {KEYWORD_CLASSIFY}          { PASS_KEYWORD(CLASSIFY);          }
 {KEYWORD_CLASSIFY_ARGVX}    { PASS_KEYWORD(CLASSIFY_ARGVX);    }
+{KEYWORD_NO_OP}             { PASS_KEYWORD(NO_OP);             }
 {KEYWORD_EXPORT_GROUPS}     { PASS_KEYWORD(EXPORT_GROUPS);     }
 {KEYWORD_EXPORT_PARTITIONS} { PASS_KEYWORD(EXPORT_PARTITIONS); }
 {KEYWORD_EXPORT_FACT}       { PASS_KEYWORD(EXPORT_FACT);       }
@@ -805,6 +808,7 @@ ESCAPE		       \\
 {NOT}                       { PASS_TOKEN(NOT);                 }
 {IMPLIES}                   { PASS_TOKEN(IMPLIES);             }
 {SEMICOLON}                 { PASS_TOKEN(SEMICOLON);           }
+{COMMA}                     { PASS_TOKEN(COMMA);               }
 {COLON}                     { PASS_TOKEN(COLON);               }
 
 {ASTERISK}                  { PASS_TOKEN(ASTERISK);            }

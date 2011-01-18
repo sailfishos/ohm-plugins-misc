@@ -310,7 +310,7 @@ classify_by_parent(cgrp_context_t *ctx, pid_t pid, pid_t tgid, pid_t ppid)
  ********************/
 int
 classify_by_rules(cgrp_context_t *ctx, cgrp_event_t *event,
-                  cgrp_process_t *process, cgrp_proc_attr_t *procattr)
+                  cgrp_process_t *process, cgrp_proc_attr_t *attr)
 {
     cgrp_rule_t   *rule;
     cgrp_action_t *actions;
@@ -320,18 +320,18 @@ classify_by_rules(cgrp_context_t *ctx, cgrp_event_t *event,
     OHM_DEBUG(DBG_CLASSIFY, "classifying process <%u> by rules for event 0x%x",
               event->any.pid, event->any.type);
     
-    if ((rule = rule_lookup(ctx, procattr->binary, event))  == NULL &&
-        (rule = addon_lookup(ctx, procattr->binary, event)) == NULL &&
-        (rule = ctx->fallback)                              == NULL)
+    if ((rule = rule_lookup(ctx, attr->binary, event))  == NULL &&
+        (rule = addon_lookup(ctx, attr->binary, event)) == NULL &&
+        (rule = ctx->fallback)                          == NULL)
         return FALSE;
     
-    if ((actions = rule_eval(ctx, rule, procattr)) == NULL)
+    if ((actions = rule_eval(ctx, rule, attr)) == NULL)
         if (rule != ctx->fallback && ctx->fallback != NULL)
-            actions = rule_eval(ctx, ctx->fallback, procattr);
+            actions = rule_eval(ctx, ctx->fallback, attr);
     
     if (actions != NULL) {
-        procattr_dump(procattr);
-        return action_exec(ctx, procattr, actions);
+        procattr_dump(attr);
+        return action_exec(ctx, attr, actions);
     }
 
     return FALSE;

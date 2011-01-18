@@ -28,6 +28,8 @@
 #include <dirent.h>
 #include <regex.h>
 #include <sched.h>
+#include <pwd.h>
+#include <grp.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/inotify.h>
@@ -39,6 +41,15 @@
 int        cgrpyylex  (void);
 void       cgrpyyerror(cgrp_context_t *, const char *);
 extern int lexer_start_token;
+
+static int add_gid(cgrp_rule_t *, gid_t);
+static int add_grp(cgrp_rule_t *, const char *);
+static int lookup_gid(const char *, gid_t *);
+
+static int add_uid(cgrp_rule_t *, uid_t);
+static int add_usr(cgrp_rule_t *, const char *);
+static int lookup_uid(const char *, uid_t *);
+
 
 static char rule_group[256];
 
@@ -95,7 +106,6 @@ static char rule_group[256];
 %type <expr>     prop_expr
 %type <prop>     prop
 %type <value>    value
-%type <string>   group_name
 %type <string>   string
 %type <time>     time_unit
 %type <time>     time_usec
@@ -109,13 +119,13 @@ static char rule_group[256];
 %type <action> action_schedule
 %type <action> action_renice
 %type <action> action_ignore
+%type <action> action_no_op
 
 %type <ctrl_settings> cgroup_control_settings
 %type <ctrl_settings> cgroup_control_setting
-%type <string> cgroup_control_name
 %type <string> cgroup_control_path
-%type <string> control_setting
 %type <string> control_value
+%type <string> string_or_wildcard
 %type <ctrl_settings> optional_partition_controls
 %type <ctrl_settings> partition_controls
 %type <ctrl_settings> partition_control
@@ -145,6 +155,7 @@ static char rule_group[256];
 %token KEYWORD_RECLASSIFY
 %token KEYWORD_RECLASS_AFTER
 %token KEYWORD_CLASSIFY
+%token KEYWORD_NO_OP
 %token KEYWORD_EXPORT_GROUPS
 %token KEYWORD_EXPORT_PARTITIONS
 %token KEYWORD_EXPORT_FACT
@@ -170,6 +181,7 @@ static char rule_group[256];
 %token TOKEN_GREATER   ">"
 %token TOKEN_IMPLIES   "=>"
 %token TOKEN_SEMICOLON ";"
+%token TOKEN_COMMA     ","
 %token TOKEN_COLON     ":"
 
 %token <uint32> TOKEN_ARG
@@ -367,7 +379,7 @@ optional_monitor: /* empty */ {
 cgroup_control: KEYWORD_CGROUP_CONTROL cgroup_control_def
     ;
 
-cgroup_control_def: cgroup_control_name cgroup_control_path 
+cgroup_control_def: string cgroup_control_path 
                     cgroup_control_settings {
           cgrp_ctrl_t *ctrl, **p;
 
@@ -386,10 +398,6 @@ cgroup_control_def: cgroup_control_name cgroup_control_path
     }
     ;
 
-cgroup_control_name: TOKEN_IDENT  { $$ = $1; }
-    |                TOKEN_STRING { $$ = $1; }
-    ;
-
 cgroup_control_path: TOKEN_STRING { $$ = $1; }
     ;
 
@@ -406,7 +414,7 @@ cgroup_control_settings: cgroup_control_setting {
     }
     ;
 
-cgroup_control_setting: control_setting TOKEN_COLON control_value {
+cgroup_control_setting: string TOKEN_COLON control_value {
           cgrp_ctrl_setting_t *setting;
 
           if (ALLOC_OBJ(setting) == NULL) {
@@ -418,10 +426,6 @@ cgroup_control_setting: control_setting TOKEN_COLON control_value {
           setting->value = STRDUP($3.value);
           $$             = setting;
     }
-    ;
-
-control_setting: TOKEN_IDENT  { $$ = $1; }
-    |            TOKEN_STRING { $$ = $1; }
     ;
 
 control_value: TOKEN_IDENT { $$ = $1; }
@@ -680,7 +684,7 @@ procdef_path: TOKEN_PATH       { $$ = $1; }
 rules: rule {
           $$ = $1;
       }
-    |  rules newline rule optional_newline {
+    |  rules optional_newline rule optional_newline {
           cgrp_rule_t *r;
 
           for (r = $1; r->next != NULL; r = r->next)
@@ -726,35 +730,23 @@ rule_events: rule_event {
            exit(1);
        }
 
-       rule->event_mask = $1.event_mask;
-       
        if ($1.event_mask & (1 << CGRP_EVENT_GID)) {
-           gid_t gid;
-           
-           gid = (gid_t)$1.gids;
-           if ((rule->gids = ALLOC_ARR(gid_t, 2)) == NULL) {
-               OHM_ERROR("cgrp: failed to allocate new group id");
-               exit(1);
-           }
-
-           rule->gids[0] = gid;
-           rule->gids[1] = 0;
+           if ($1.ngid == 0)                       /* wildcard group */
+               add_grp(rule, "*");
+           else
+               add_gid(rule, (gid_t)$1.gids);
        }
        else if ($1.event_mask & (1 << CGRP_EVENT_UID)) {
-           uid_t uid;
-
-           uid = (uid_t)$1.uids;
-           if ((rule->uids = ALLOC_ARR(uid_t, 2)) == NULL) {
-               OHM_ERROR("cgrp: failed to allocate new user id");
-               exit(1);
-           }
-
-           rule->uids[0] = uid;
-           rule->uids[1] = 0;
+           if ($1.nuid == 0)                       /* wildcard user */
+               add_usr(rule, "*");
+           else
+               add_uid(rule, (uid_t)$1.uids);
        }
+       else
+           rule->event_mask = $1.event_mask;
        
        $$ = rule;
- }
+    }
     | rule_events "," rule_event {
        if (!($3.event_mask & ((1 << CGRP_EVENT_GID) | (1 << CGRP_EVENT_UID)))) {
            $1->event_mask |= $3.event_mask;
@@ -762,38 +754,16 @@ rule_events: rule_event {
        }
        else {
            if ($3.event_mask & (1 << CGRP_EVENT_GID)) {
-               int n;
-
-               n = 0;
-               if ($1->gids != NULL)
-                   while ($1->gids[n] != 0)
-                       n++;
-
-               if (REALLOC_ARR($1->gids, n, n + 2) == NULL) {
-                   OHM_ERROR("cgrp: failed to allocate new group id");
-                   exit(1);
-               }
-
-               $1->gids[n]     = (gid_t)$3.gids;
-               $1->gids[n+1]   = 0;
-               $1->event_mask |= 1 << CGRP_EVENT_GID;
+               if ($3.ngid == 0)                      /* wildcard group */
+                   add_grp($1, "*");
+               else
+                   add_gid($1, (gid_t)$3.gids);
            }
            else { /* $3->event_mask & (1 << CGRP_EVENT_UID) */
-               int n;
-
-               n = 0;
-               if ($1->uids != NULL)
-                   while ($1->uids[n] != 0)
-                       n++;
-
-               if (REALLOC_ARR($1->uids, n, n + 2) == NULL) {
-                   OHM_ERROR("cgrp: failed to allocate new user id");
-                   exit(1);
-               }
-
-               $1->uids[n]     = (uid_t)$3.uids;
-               $1->uids[n+1]   = 0;
-               $1->event_mask |= 1 << CGRP_EVENT_UID;
+               if ($3.nuid == 0)                      /* wildcard user */
+                   add_usr($1, "*");
+               else
+                   add_uid($1, (uid_t)$3.uids);
            }
        }
 
@@ -821,17 +791,66 @@ rule_event: TOKEN_IDENT {
           if (!strcmp($1.value, "group-change")) {
               $$.event_mask = (1 << CGRP_EVENT_GID);
               $$.gids       = (gid_t *)$2.value;
+              $$.ngid       = 1;
           }
           else if (!strcmp($1.value, "user-change")) {
               $$.event_mask = (1 << CGRP_EVENT_UID);
               $$.uids       = (uid_t *)$2.value;
+              $$.nuid       = 1;
           }
           else {
               OHM_ERROR("cgrp: invalid rule event '%s'", $1.value);
               YYABORT;
           }
       }
-    ;    
+    | TOKEN_IDENT string_or_wildcard {
+          const char *name = $2.value;
+
+          memset(&$$, 0, sizeof($$));
+
+          if (!strcmp($1.value, "group-change")) {
+              $$.event_mask = (1 << CGRP_EVENT_GID);
+
+              if (!strcmp(name, "*")) {
+                  $$.gids = NULL;
+                  $$.ngid = 0;                     /* wildcard */
+              }
+              else {
+                  if (lookup_gid(name, (gid_t *)&$$.gids))
+                      $$.ngid = 1;
+                  else {
+                      OHM_ERROR("cgrp: ignoring unknown group '%s'", name);
+                      $$.event_mask = 0;
+                  }
+              }
+          }
+          else if (!strcmp($1.value, "user-change")) {
+              $$.event_mask = (1 << CGRP_EVENT_UID);
+
+              if (!strcmp(name, "*")) {
+                  $$.uids = NULL;
+                  $$.nuid = 0;                     /* wildcard */
+              }
+              else {
+                  if (lookup_uid(name, (uid_t *)&$$.uids))
+                      $$.nuid = 1;
+                  else {
+                      OHM_ERROR("cgrp: ignoring unknown user '%s'", name);
+                      $$.event_mask = 0;
+                  }
+              }
+          }
+          else {
+              OHM_ERROR("cgrp: invalid rule event '%s'", $1.value);
+              YYABORT;
+          }
+      }
+    ;
+
+
+string_or_wildcard: string { $$       = $1;  }
+   |    TOKEN_ASTERISK     { $$.value = "*"; }
+   ;
 
 rule_statements: rule_statement "\n" {
         $$ = $1;
@@ -926,7 +945,7 @@ value: TOKEN_STRING {
     ;
 
 
-procdef: "[" KEYWORD_CLASSIFY group_name "]" 
+procdef: "[" KEYWORD_CLASSIFY string "]" 
          { strcpy(rule_group, $3.value); } "\n"
            simple_rule_list               { rule_group[0] = '\0'; }
     ;
@@ -1000,9 +1019,10 @@ action: action_group          { $$ = $1; }
     |   action_schedule       { $$ = $1; }
     |   action_renice         { $$ = $1; }
     |   action_ignore         { $$ = $1; }
+    |   action_no_op          { $$ = $1; }
     ;
 
-action_group: KEYWORD_GROUP group_name {
+action_group: KEYWORD_GROUP string {
 	cgrp_action_t *action;
 	cgrp_group_t  *group = group_find(ctx, $2.value);
 
@@ -1088,8 +1108,17 @@ action_ignore: KEYWORD_IGNORE {
     }
     ;
 
-group_name: TOKEN_STRING { $$ = $1; }
-    | TOKEN_IDENT        { $$ = $1; }
+action_no_op: KEYWORD_NO_OP {
+        cgrp_action_t *action;
+
+        action = action_noop_new();
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new no-op action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
     ;
 
 schedule_priority: /* empty */ { $$.value = 0; }
@@ -1111,12 +1140,8 @@ string: TOKEN_IDENT  { $$ = $1; }
     ;
 
 
-path: TOKEN_PATH {
-          $$ = $1;
-    }
-    | TOKEN_STRING {
-          $$ = $1;
-    }
+path: TOKEN_PATH   { $$ = $1; }
+    | TOKEN_STRING { $$ = $1; }
     ;
 
 
@@ -1450,6 +1475,145 @@ cgrpyyerror(cgrp_context_t *ctx, const char *msg)
     OHM_ERROR("parse error: %s near line %d in file %s", msg,
               lexer_line(), lexer_file());
 }
+
+
+/********************
+ * gid/uid routines
+ ********************/
+
+static int
+add_gid(cgrp_rule_t *rule, gid_t gid)
+{
+    if ((rule->event_mask & (1 << CGRP_EVENT_GID)) && rule->ngid == 0)
+        return TRUE;
+
+    if (REALLOC_ARR(rule->gids, rule->ngid, rule->ngid + 1) != NULL) {
+        rule->event_mask |= (1 << CGRP_EVENT_GID);
+        rule->gids[rule->ngid++] = gid;
+        
+        return TRUE;
+    }
+    else {
+        OHM_ERROR("cgrp: failed to allocate new group id for rule events");
+        
+        return FALSE;
+    }
+}
+
+
+static int
+add_grp(cgrp_rule_t *rule, const char *name)
+{
+    gid_t gid;
+    
+    if ((rule->event_mask & (1 << CGRP_EVENT_GID)) && rule->ngid == 0)
+        return TRUE;
+
+    if (!strcmp(name, "*")) {
+        if (rule->gids != NULL) {
+            FREE(rule->gids);
+            rule->gids = NULL;
+        }
+
+        rule->ngid        = 0;                 /* mark as wildcard group */
+        rule->event_mask |= (1 << CGRP_EVENT_GID);
+        
+        return TRUE;
+    }
+    else {
+        if (!lookup_gid(name, &gid)) {
+            OHM_ERROR("cgrp: failed to find group ID for '%s'", name);
+
+            return FALSE;
+        }
+ 
+        return add_gid(rule, gid);
+    }
+}
+
+
+static int
+lookup_gid(const char *name, gid_t *gid)
+{
+    size_t       size = sysconf(_SC_GETGR_R_SIZE_MAX);
+    struct group grp, *found;
+    char         buf[size];
+    
+    if (getgrnam_r(name, &grp, buf, size, &found) != 0 || !found)
+        return FALSE;
+    else {
+        *gid = grp.gr_gid;
+        return TRUE;
+    }
+}
+
+
+static int
+add_uid(cgrp_rule_t *rule, uid_t uid)
+{
+    if ((rule->event_mask & (1 << CGRP_EVENT_UID)) && rule->nuid == 0)
+        return TRUE;
+
+    if (REALLOC_ARR(rule->uids, rule->nuid, rule->nuid + 1) != NULL) {
+        rule->event_mask |= (1 << CGRP_EVENT_UID);
+        rule->gids[rule->nuid++] = uid;
+        
+        return TRUE;
+    }
+    else {
+        OHM_ERROR("cgrp: failed to allocate new user id for rule events");
+        
+        return FALSE;
+    }
+}
+
+
+static int
+add_usr(cgrp_rule_t *rule, const char *name)
+{
+    uid_t uid;
+    
+    if ((rule->event_mask & (1 << CGRP_EVENT_UID)) && rule->nuid == 0)
+        return TRUE;
+
+    if (!strcmp(name, "*")) {
+        if (rule->uids != NULL) {
+            FREE(rule->uids);
+            rule->uids = NULL;
+        }
+
+        rule->nuid        = 0;                  /* mark as wildcard user */
+        rule->event_mask |= (1 << CGRP_EVENT_UID);
+        
+        return TRUE;
+    }
+    else {
+        if (!lookup_uid(name, &uid)) {
+            OHM_ERROR("cgrp: failed to find user ID for '%s'", name);
+
+            return FALSE;
+        }
+    
+        return add_uid(rule, uid);
+    }
+}
+
+
+static int
+lookup_uid(const char *name, uid_t *uid)
+{
+    size_t        size = sysconf(_SC_GETPW_R_SIZE_MAX);
+    struct passwd usr, *found;
+    char          buf[size];
+
+    if (getpwnam_r(name, &usr, buf, size, &found) != 0 || !found)
+        return FALSE;
+    else {
+        *uid = usr.pw_uid;
+        return TRUE;
+    }
+}
+
 
 
 /* 

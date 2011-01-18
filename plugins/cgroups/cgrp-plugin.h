@@ -164,6 +164,7 @@ typedef enum {
     CGRP_ACTION_RECLASSIFY,                 /* reclassify after a delay */
     CGRP_ACTION_CLASSIFY_ARGV0,             /* classify by argv[0] */
     CGRP_ACTION_IGNORE,                     /* apply the default rules */
+    CGRP_ACTION_NOOP,                       /* no-op action */
     CGRP_ACTION_MAX,
 } cgrp_action_type_t;
 
@@ -367,8 +368,10 @@ typedef struct cgrp_rule_s cgrp_rule_t;
 
 struct cgrp_rule_s {
     int          event_mask;                /* cgrp_event_type_t mask */
-    gid_t       *gids;                      /* matching user ids */
-    uid_t       *uids;                      /* matching group ids */
+    gid_t       *gids;                      /* matching group ids */
+    int          ngid;                      /* number of group ids */
+    uid_t       *uids;                      /* matching user ids */
+    int          nuid;                      /* number of user ids */
     cgrp_stmt_t *statements;                /* classification statements */
     cgrp_rule_t *next;                      /* more rules or NULL */
 };
@@ -677,7 +680,9 @@ int  addon_reload(cgrp_context_t *);
 
 void procdef_dump(cgrp_context_t *, FILE *);
 void procdef_print(cgrp_context_t *, cgrp_procdef_t *, FILE *);
-cgrp_rule_t   *rule_lookup(cgrp_context_t *, char *, cgrp_event_t *);
+cgrp_rule_t *rule_lookup(cgrp_context_t *, char *, cgrp_event_t *);
+cgrp_rule_t *rule_find  (cgrp_rule_t *, cgrp_event_t *);
+
 cgrp_rule_t   *addon_lookup(cgrp_context_t *, char *, cgrp_event_t *);
 cgrp_action_t *rule_eval(cgrp_context_t *, cgrp_rule_t *, cgrp_proc_attr_t *);
 
@@ -713,8 +718,7 @@ cgrp_action_t *action_schedule_new(char *, int);
 cgrp_action_t *action_renice_new  (int);
 cgrp_action_t *action_classify_new(int);
 cgrp_action_t *action_ignore_new  (void);
-
-
+cgrp_action_t *action_noop_new    (void);
 
 
 /* cgrp-ep.c */

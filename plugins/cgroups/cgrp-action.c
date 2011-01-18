@@ -86,6 +86,7 @@ ACTION_FUNCTIONS(schedule);
 ACTION_FUNCTIONS(renice);
 ACTION_FUNCTIONS(classify);
 ACTION_FUNCTIONS(ignore);
+ACTION_FUNCTIONS(noop);
 
 
 /*
@@ -97,7 +98,8 @@ static action_handler_t actions[] = {
     ACTION(SCHEDULE  , schedule_exec, schedule_print, schedule_del),
     ACTION(RENICE    , renice_exec  , renice_print  , renice_del),
     ACTION(RECLASSIFY, classify_exec, classify_print, classify_del),
-    ACTION(IGNORE    , ignore_exec  , ignore_print  , ignore_del)
+    ACTION(IGNORE    , ignore_exec  , ignore_print  , ignore_del),
+    ACTION(NOOP      , noop_exec    , noop_print    , noop_del)
 };
 
 
@@ -620,6 +622,68 @@ action_ignore_exec(cgrp_context_t *ctx,
 
     if (process != NULL)
         OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: ignored", attr->pid, attr->binary);
+    
+    return TRUE;
+}
+
+
+
+
+/*
+ * noop
+ */
+
+/********************
+ * action_noop_new
+ ********************/
+cgrp_action_t *
+action_noop_new(void)
+{
+    cgrp_action_any_t *action;
+
+    if (ALLOC_OBJ(action) != NULL)
+        action->type = CGRP_ACTION_NOOP;
+
+    return (cgrp_action_t *)action;
+}
+
+
+/********************
+ * action_noop_del
+ ********************/
+void
+action_noop_del(cgrp_action_t *action)
+{
+    FREE(action);
+}
+
+
+/********************
+ * action_noop_print
+ ********************/
+int
+action_noop_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
+{
+    (void)ctx;
+    (void)action;
+    
+    return fprintf(fp, "no-op");
+}
+
+
+/********************
+ * action_noop_exec
+ ********************/
+int
+action_noop_exec(cgrp_context_t *ctx,
+                 cgrp_proc_attr_t *attr, cgrp_action_t *action)
+{
+    cgrp_process_t *process = proc_hash_lookup(ctx, attr->pid);
+
+    (void)action;
+
+    if (process != NULL)
+        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: no-op", attr->pid, attr->binary);
     
     return TRUE;
 }
