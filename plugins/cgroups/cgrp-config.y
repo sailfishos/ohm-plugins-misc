@@ -165,6 +165,7 @@ static char rule_group[256];
 %token KEYWORD_IOQLEN_NOTIFY
 %token KEYWORD_SWAP_PRESSURE
 %token KEYWORD_ADDON_RULES
+%token KEYWORD_ALWAYS_FALLBACK
 
 %token TOKEN_EOL "\n"
 %token TOKEN_ASTERISK "*"
@@ -218,6 +219,9 @@ global_option: KEYWORD_EXPORT_GROUPS "\n" {
     }
     | KEYWORD_EXPORT_PARTITIONS "\n" {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
+    }
+    | KEYWORD_ALWAYS_FALLBACK "\n" {
+          CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_ALWAYS_FALLBACK);
     }
     | iowait_notify "\n"
     | ioqlen_notify "\n"
@@ -654,7 +658,7 @@ procdef_section: procdef
     ;
 
 procdef: "[" KEYWORD_RULE procdef_path "]" "\n" 
-         optional_renice rules {
+         optional_renice rules optional_newline {
         cgrp_procdef_t procdef;
 
         procdef.binary = $3.value;
@@ -945,7 +949,7 @@ value: TOKEN_STRING {
     ;
 
 
-procdef: "[" KEYWORD_CLASSIFY string "]" 
+procdef: "[" KEYWORD_CLASSIFY string "]"
          { strcpy(rule_group, $3.value); } "\n"
            simple_rule_list               { rule_group[0] = '\0'; }
     ;

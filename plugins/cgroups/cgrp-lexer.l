@@ -339,6 +339,9 @@ lexer_push_input(char *path)
 {
     lexer_input_t *input;
     
+    if (getenv("CGRP_LEXER_DEBUG") != NULL)
+        lexer.debug = TRUE;
+    
     if (strchr(path, '*') || strchr(path, '?'))
         input = lexer_open_glob(path);
     else
@@ -674,6 +677,7 @@ KEYWORD_IOQLEN_NOTIFY     ioqlen-notify
 KEYWORD_SWAP_PRESSURE     swap-pressure
 KEYWORD_ADDON_RULES       addon-rules
 KEYWORD_CGROUP_CONTROL    cgroup-control
+KEYWORD_ALWAYS_FALLBACK   always-fallback
 
 HEADER_OPEN            \[
 HEADER_CLOSE           \]
@@ -791,6 +795,7 @@ ESCAPE		       \\
 {KEYWORD_IOQLEN_NOTIFY}     { PASS_KEYWORD(IOQLEN_NOTIFY);     }
 {KEYWORD_SWAP_PRESSURE}     { PASS_KEYWORD(SWAP_PRESSURE);     }
 {KEYWORD_ADDON_RULES}       { PASS_KEYWORD(ADDON_RULES);       }
+{KEYWORD_ALWAYS_FALLBACK}   { PASS_KEYWORD(ALWAYS_FALLBACK);   }
 
 {HEADER_OPEN}               { PASS_TOKEN(HEADER_OPEN);         }
 {HEADER_CLOSE}              { PASS_TOKEN(HEADER_CLOSE);        }

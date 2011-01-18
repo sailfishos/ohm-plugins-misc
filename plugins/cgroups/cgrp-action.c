@@ -290,36 +290,24 @@ int
 action_group_exec(cgrp_context_t *ctx,
                   cgrp_proc_attr_t *attr, cgrp_action_t *action)
 {
-    cgrp_action_group_t *group;
-    cgrp_process_t      *process;
+    cgrp_group_t   *group;
+    cgrp_process_t *process;
 
-    group   = &action->group;
-    process = proc_hash_remove(ctx, attr->pid);
+    group   = action->group.group;
+    process = proc_hash_lookup(ctx, attr->pid);
 
-    if (process != NULL) {
-        FREE(process->binary);
-        process->binary = STRDUP(attr->binary);
-    }
-    else {
-        if (ALLOC_OBJ(process) != NULL) {
-            process->pid  = attr->pid;
-            process->tgid = attr->tgid;
-            list_init(&process->proc_hook);
-            list_init(&process->group_hook);
-            process->binary = STRDUP(attr->binary);
-        }
-    }
-
-    if (process == NULL || process->binary == NULL) {
-        FREE(process);
-        OHM_ERROR("cgrp: failed to allocate new process");
+    if (process == NULL)
+        process = process_create(ctx, attr);
+    
+    if (process == NULL) {
+        OHM_ERROR("cgrp: failed to assign process %u to group %s",
+                  attr->pid, group->name);
         return FALSE;
     }
     
     OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid, process->binary,
-              group->group->name);
-    group_add_process(ctx, group->group, process);
-    proc_hash_insert(ctx, process);
+              group->name);
+    group_add_process(ctx, group, process);
 
     return TRUE;
 }
@@ -540,10 +528,10 @@ action_classify_exec(cgrp_context_t *ctx,
     int             count, delay, argn;
 
     if (action->classify.delay > 0) {
-        count = attr->reclassify;
+        count = attr->retry;
         delay = action->classify.delay;
 
-        if (attr->reclassify < CGRP_RECLASSIFY_MAX) {
+        if (attr->retry < CGRP_RECLASSIFY_MAX) {
             OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: classify #%d after %u msecs",
                       attr->pid, attr->binary, count, delay);
 

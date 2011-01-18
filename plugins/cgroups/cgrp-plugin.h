@@ -392,6 +392,7 @@ typedef struct {
     pid_t         tgid;                     /* process id */
     char         *binary;                   /* path to binary */
     char         *argv0;                    /* argv[0] if needed */
+    char         *argvx;                    /* classified by this arg */
     cgrp_group_t *group;                    /* current group */
     list_hook_t   proc_hook;                /* hook to process table */
     list_hook_t   group_hook;               /* hook to group */
@@ -435,8 +436,9 @@ typedef struct {
     int                argc;                /* number of arguments */
     uid_t              euid;                /* effective user id */
     gid_t              egid;                /* effective group id */
-    int                reclassify;          /* reclassification count */
+    int                retry;               /* reclassification attempts */
     int                byargvx;             /* classifying by argv[x] */
+    cgrp_process_t    *process;
 } cgrp_proc_attr_t;
 
 
@@ -453,6 +455,7 @@ enum {
     CGRP_FLAG_MOUNT_CPUSET,
     CGRP_FLAG_ADDON_RULES,
     CGRP_FLAG_ADDON_MONITOR,
+    CGRP_FLAG_ALWAYS_FALLBACK
 };
 
 
@@ -614,6 +617,8 @@ pid_t   process_get_tgid   (cgrp_proc_attr_t *);
 
 cgrp_proc_type_t process_get_type(cgrp_proc_attr_t *);
 
+cgrp_process_t *process_create(cgrp_context_t *, cgrp_proc_attr_t *);
+void process_remove(cgrp_context_t *, cgrp_process_t *);
 int process_ignore(cgrp_context_t *, cgrp_process_t *);
 int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
@@ -696,8 +701,7 @@ int  classify_event(cgrp_context_t *, cgrp_event_t *);
 int  classify_by_binary(cgrp_context_t *, pid_t, int);
 int  classify_by_argvx(cgrp_context_t *, cgrp_proc_attr_t *, int);
 int  classify_by_parent(cgrp_context_t *, pid_t, pid_t, pid_t);
-int  classify_by_rules(cgrp_context_t *, cgrp_event_t *,
-                       cgrp_process_t *, cgrp_proc_attr_t *);
+int  classify_by_rules(cgrp_context_t *, cgrp_event_t *, cgrp_proc_attr_t *);
 
 
 

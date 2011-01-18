@@ -195,12 +195,16 @@ group_print(cgrp_context_t *ctx, cgrp_group_t *group, FILE *fp)
             process = list_entry(p, cgrp_process_t, group_hook);
             
             if (process->tgid != process->pid)
-                fprintf(fp, "  %s %u/%u (%s)\n",
+                fprintf(fp, "  %s %u/%u (%s%s%s)\n",
                         process->tgid == process->pid ? "process" : "thread ",
-                        process->tgid, process->pid, process->binary);
+                        process->tgid, process->pid, process->binary,
+                        process->argvx ?            "," : "",
+                        process->argvx ? process->argvx : "");
             else
-                fprintf(fp, "  process %u (%s)\n", process->tgid,
-                        process->binary);
+                fprintf(fp, "  process %u (%s%s%s)\n", process->tgid,
+                        process->binary,
+                        process->argvx ?            "," : "",
+                        process->argvx ? process->argvx : "");
         }
     }
 }

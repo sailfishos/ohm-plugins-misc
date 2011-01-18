@@ -88,127 +88,38 @@ classify_reconfig(cgrp_context_t *ctx)
 
 
 /********************
- * classify_process
+ * classify_by_parent
  ********************/
 int
-classify_process(cgrp_context_t *ctx,
-                 cgrp_process_t *process, cgrp_proc_attr_t *procattr)
+classify_by_parent(cgrp_context_t *ctx, pid_t pid, pid_t tgid, pid_t ppid)
 {
-    cgrp_rule_t   *rule;
-    cgrp_action_t *actions;
-    
-    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u>",
-              procattr->reclassify ? "re" : "", process->pid);
-    
-    /* we ignore processes with no matching rule */
-    if ((rule = rule_lookup(ctx,  procattr->binary, NULL)) == NULL &&
-        (rule = addon_lookup(ctx, procattr->binary, NULL)) == NULL &&
-        (rule = ctx->fallback)                             == NULL)
-        return 0;
-    
-    /* try binary-specific rules */
-    if ((actions = rule_eval(ctx, rule, procattr)) != NULL) {
-        procattr_dump(procattr);
-        return action_exec(ctx, procattr, actions);
-    }
-    
-    /* then fallback rule if any */
-    if (rule != ctx->fallback && ctx->fallback != NULL)
-        if ((actions = rule_eval(ctx, ctx->fallback, procattr)) != NULL) {
-            procattr_dump(procattr);
-            return action_exec(ctx, procattr, actions);
+    cgrp_process_t   *parent, *process;
+    cgrp_proc_attr_t  attr;
+
+
+    if ((parent = proc_hash_lookup(ctx, ppid)) != NULL) {
+        attr.pid    = pid;
+        attr.tgid   = tgid;
+        attr.binary = parent->binary;
+
+        CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
+        CGRP_SET_MASK(attr.mask, CGRP_PROC_BINARY);
+        
+        process = process_create(ctx, &attr);
+        
+        if (process == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new process");
+            return FALSE;
         }
-    
-    return 0;
-}
 
+        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s",
+                  process->pid, process->binary, parent->group->name);
+        group_add_process(ctx, parent->group, process);
 
-/********************
- * classify_by_binary
- ********************/
-int
-classify_by_binary(cgrp_context_t *ctx, pid_t pid, int reclassify)
-{
-    cgrp_process_t    process;
-    cgrp_proc_attr_t  procattr;
-    cgrp_event_t      event;
-    char             *argv[CGRP_MAX_ARGS];
-    char              args[CGRP_MAX_CMDLINE];
-    char              cmdl[CGRP_MAX_CMDLINE];
-    char              bin[PATH_MAX];
-    
-    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by binary",
-              reclassify ? "re" : "", pid);
-    
-    memset(&process,  0, sizeof(process));
-    memset(&procattr, 0, sizeof(procattr));
-    
-    process.pid    = pid;
-    process.binary = bin;
-    bin[0]         = '\0';
-
-    procattr.binary  = process.binary;
-    procattr.pid     = process.pid;
-    procattr.argv    = argv;
-    argv[0]          = args;
-    procattr.cmdline = cmdl;
-
-    procattr.reclassify = reclassify;
-
-    if (!process_get_binary(&procattr))
-        return -ENOENT;                       /* we assume it's gone already */
-
-    process_get_tgid(&procattr);
-    process.tgid = procattr.tgid;
-
-    event.exec.type = CGRP_EVENT_EXEC;
-    event.exec.pid  = process.pid;
-    event.exec.tgid = process.tgid;
-
-    return classify_by_rules(ctx, &event, &process, &procattr);
-}
-
-
-/********************
- * classify_by_argvx
- ********************/
-int
-classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *procattr, int argn)
-{
-    cgrp_process_t process;
-    cgrp_event_t   event;
-
-    if (procattr->byargvx) {
-        OHM_ERROR("cgrp: classify-by-argvx loop for process <%u>",
-                  procattr->pid);
-        return -EINVAL;
-    }
-    
-    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by argv%d",
-              procattr->reclassify ? "re" : "", procattr->pid, argn);
-
-    memset(&process, 0, sizeof(process));
-    
-    if (process_get_argv(procattr, CGRP_MAX_ARGS) == NULL)
-        return -ENOENT;                       /* we assume it's gone already */
-
-    if (argn >= procattr->argc) {
-        OHM_WARNING("cgrp: classify-by-argv%d found only %d arguments",
-                    argn, procattr->argc);
-        procattr->binary = "<none>";          /* force fallback-rule */
+        return TRUE;
     }
     else
-        procattr->binary = procattr->argv[argn];
-    
-    procattr->byargvx = TRUE;    
-    
-    process.pid    = procattr->pid;
-    process.binary = procattr->binary;
-    
-    event.exec.type = CGRP_EVENT_EXEC;
-    event.exec.pid  = process.pid;
-
-    return classify_by_rules(ctx, &event, &process, procattr);
+        return FALSE;
 }
 
 
@@ -218,14 +129,15 @@ classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *procattr, int argn)
 int
 classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
 {
-    cgrp_process_t    process;
-    cgrp_proc_attr_t  procattr;
+    cgrp_proc_attr_t  attr;
     char             *argv[CGRP_MAX_ARGS];
     char              args[CGRP_MAX_CMDLINE];
     char              cmdl[CGRP_MAX_CMDLINE];
     char              bin[PATH_MAX];
-
-
+    
+    OHM_DEBUG(DBG_CLASSIFY, "classification event 0x%x for <%u/%u>",
+              event->any.type, event->any.tgid, event->any.pid);
+    
     switch (event->any.type) {
     case CGRP_EVENT_FORK:
         if (classify_by_parent(ctx, event->fork.pid, event->fork.tgid,
@@ -237,28 +149,32 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
     case CGRP_EVENT_EXEC:
     case CGRP_EVENT_UID:
     case CGRP_EVENT_GID:
+    case CGRP_EVENT_SID:
+    case CGRP_EVENT_NAME:
         if ((ctx->event_mask & (1 << event->any.type)) == 0)
             return TRUE;
         
-        memset(&process,  0, sizeof(process));
-        memset(&procattr, 0, sizeof(procattr));
-    
-        process.pid    = event->any.pid;
-        process.tgid   = event->any.tgid;
-        process.binary = bin;
+        memset(&attr, 0, sizeof(attr));
         bin[0]         = '\0';
+    
+        attr.binary  = bin;
+        attr.pid     = event->any.pid;
+        attr.tgid    = event->any.tgid;
+        attr.argv    = argv;
+        argv[0]      = args;
+        attr.cmdline = cmdl;
+        attr.process = proc_hash_lookup(ctx, attr.pid);
 
-        procattr.binary  = process.binary;
-        procattr.pid     = process.pid;
-        procattr.tgid    = process.tgid;
-        procattr.argv    = argv;
-        argv[0]          = args;
-        procattr.cmdline = cmdl;
-
-        if (!process_get_binary(&procattr))
+        if (!process_get_binary(&attr))
             return FALSE;                   /* we assume it's gone already */
-        else
-            return classify_by_rules(ctx, event, &process, &procattr);
+        else {
+            if (event->any.type == CGRP_EVENT_EXEC && attr.process != NULL) {
+                FREE(attr.process->binary);
+                attr.process->binary = STRDUP(attr.binary);
+            }
+
+            return classify_by_rules(ctx, event, &attr);
+        }
         
     case CGRP_EVENT_EXIT:
         process_remove_by_pid(ctx, event->any.pid);
@@ -271,33 +187,93 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
 
 
 /********************
- * classify_by_parent
+ * classify_by_binary
  ********************/
 int
-classify_by_parent(cgrp_context_t *ctx, pid_t pid, pid_t tgid, pid_t ppid)
+classify_by_binary(cgrp_context_t *ctx, pid_t pid, int reclassify)
 {
-    cgrp_process_t *parent, *process;
+    cgrp_proc_attr_t  attr;
+    cgrp_event_t      event;
+    char             *argv[CGRP_MAX_ARGS];
+    char              args[CGRP_MAX_CMDLINE];
+    char              cmdl[CGRP_MAX_CMDLINE];
+    char              bin[PATH_MAX];
+    
+    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by binary",
+              reclassify ? "re" : "", pid);
+    
+    memset(&attr, 0, sizeof(attr));
+    bin[0]  = '\0';
+    argv[0] = args;
+    
+    attr.pid     = pid;
+    attr.binary  = bin;
+    attr.argv    = argv;
+    attr.cmdline = cmdl;
+    attr.retry   = reclassify;
+    attr.process = proc_hash_lookup(ctx, pid);
+    
+    if (attr.process != NULL) {
+        attr.binary = attr.process->binary;
+        attr.tgid   = attr.process->tgid;
+        CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
+        CGRP_SET_MASK(attr.mask, CGRP_PROC_BINARY);
+    }
+    else {
+        if (!process_get_binary(&attr))
+            return -ENOENT;                  /* we assume it's gone already */
 
-    if ((parent = proc_hash_lookup(ctx, ppid)) != NULL) {
-        if (ALLOC_OBJ(process) != NULL) {
-            list_init(&process->proc_hook);
-            list_init(&process->group_hook);
-            process->pid    = pid;
-            process->tgid   = tgid;
-            process->binary = STRDUP(parent->binary);
-        }
+        process_get_tgid(&attr);
+    }
 
-        if (process == NULL || process->binary == NULL) {
-            OHM_ERROR("cgrp: failed to allocate new process");
-            FREE(process);
-            return FALSE;
-        }
+    event.exec.type = CGRP_EVENT_EXEC;
+    event.exec.pid  = attr.pid;
+    event.exec.tgid = attr.tgid;
 
-        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s",
-                  process->pid, process->binary, parent->group->name);
-            
-        group_add_process(ctx, parent->group, process);
-        proc_hash_insert(ctx, process);
+    return classify_by_rules(ctx, &event, &attr);
+}
+
+
+/********************
+ * classify_by_argvx
+ ********************/
+int
+classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *attr, int argn)
+{
+    cgrp_event_t event;
+
+    if (attr->byargvx) {
+        OHM_ERROR("cgrp: classify-by-argvx loop for process <%u>", attr->pid);
+        return -EINVAL;
+    }
+    
+    OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by argv%d",
+              attr->retry ? "re" : "", attr->pid, argn);
+
+    if (process_get_argv(attr, CGRP_MAX_ARGS) == NULL)
+        return -ENOENT;                       /* we assume it's gone already */
+
+    if (argn >= attr->argc) {
+        OHM_WARNING("cgrp: classify-by-argv%d found only %d arguments",
+                    argn, attr->argc);
+        attr->binary = "<none>";          /* force fallback-rule */
+    }
+    else
+        attr->binary = attr->argv[argn];
+    
+    attr->byargvx = TRUE;    
+    
+    event.exec.type = CGRP_EVENT_EXEC;
+    event.exec.pid  = attr->pid;
+    event.exec.tgid = attr->tgid;
+
+    if (classify_by_rules(ctx, &event, attr)) {
+        if (attr->process == NULL)
+            attr->process = proc_hash_lookup(ctx, attr->pid);
+        
+        if (attr->process != NULL && attr->process->argvx == NULL)
+            attr->process->argvx = STRDUP(attr->binary);
+        
         return TRUE;
     }
     else
@@ -309,31 +285,66 @@ classify_by_parent(cgrp_context_t *ctx, pid_t pid, pid_t tgid, pid_t ppid)
  * classify_by_rules
  ********************/
 int
-classify_by_rules(cgrp_context_t *ctx, cgrp_event_t *event,
-                  cgrp_process_t *process, cgrp_proc_attr_t *attr)
+classify_by_rules(cgrp_context_t *ctx,
+                  cgrp_event_t *event, cgrp_proc_attr_t *attr)
 {
-    cgrp_rule_t   *rule;
-    cgrp_action_t *actions;
+    cgrp_procdef_t *def;
+    cgrp_rule_t    *rules;
+    cgrp_action_t  *actions;
 
-    (void)process;
-    
     OHM_DEBUG(DBG_CLASSIFY, "classifying process <%u> by rules for event 0x%x",
               event->any.pid, event->any.type);
+
+    /*
+     * The basic algorithm here is roughly the following:
+     *
+     *   1) Find classification primary classification rules by binary path.
+     *
+     *   2) If no primary rules were found
+     *      a) give up if the triggering event is *-ID or name change and
+     *         we are not configured to always use fallback rules,
+     *      b) otherwise take the fallback rules.
+     *
+     *   3) If any rules were found
+     *      3.1) Evaluate them to find actions to execute.
+     *
+     *      3.2) If no actions were found and we still have fallback rules
+     *           evaluate fallback rules to find actions to execute.
+     *
+     *      3.3) If any actions were found execute them.
+     */
     
-    if ((rule = rule_lookup(ctx, attr->binary, event))  == NULL &&
-        (rule = addon_lookup(ctx, attr->binary, event)) == NULL &&
-        (rule = ctx->fallback)                          == NULL)
-        return FALSE;
+    if ((def = rule_hash_lookup(ctx, attr->binary))  != NULL ||
+        (def = addon_hash_lookup(ctx, attr->binary)) != NULL)
+        rules = rule_find(def->rules, event);
+    else
+        rules = NULL;
     
-    if ((actions = rule_eval(ctx, rule, attr)) == NULL)
-        if (rule != ctx->fallback && ctx->fallback != NULL)
-            actions = rule_eval(ctx, ctx->fallback, attr);
-    
-    if (actions != NULL) {
-        procattr_dump(attr);
-        return action_exec(ctx, attr, actions);
+    if (rules == NULL) {
+        if (!CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ALWAYS_FALLBACK) &&
+            (event->any.type == CGRP_EVENT_GID ||
+             event->any.type == CGRP_EVENT_UID ||
+             event->any.type == CGRP_EVENT_SID ||
+             event->any.type == CGRP_EVENT_NAME)) {
+            OHM_DEBUG(DBG_CLASSIFY, "no matching rule, omitting fallback.");
+            return TRUE;
+        }
+        else
+            rules = ctx->fallback;
     }
 
+    if (rules != NULL) {
+        actions = rule_eval(ctx, rules, attr);
+
+        if (actions == NULL && rules != ctx->fallback && ctx->fallback != NULL)
+            actions = rule_eval(ctx, ctx->fallback, attr);
+
+        if (actions != NULL) {
+            procattr_dump(attr);
+            return action_exec(ctx, attr, actions);
+        }
+    }
+    
     return FALSE;
 }
 

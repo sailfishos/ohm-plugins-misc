@@ -380,6 +380,10 @@ rule_find(cgrp_rule_t *rules, cgrp_event_t *event)
             else
                 return r;
             break;
+        
+        case CGRP_EVENT_SID:
+        case CGRP_EVENT_NAME:
+            return r;
             
         default:
             return NULL;

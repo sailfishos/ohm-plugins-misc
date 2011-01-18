@@ -69,8 +69,6 @@ static void subscr_init(cgrp_context_t *ctx);
 static void subscr_exit(cgrp_context_t *ctx);
 static void subscr_notify(cgrp_context_t *ctx, int what, pid_t pid);
 
-static void process_remove(cgrp_context_t *ctx, cgrp_process_t *process);
-
 
 typedef struct {
     list_hook_t   hook;
@@ -925,10 +923,39 @@ process_get_tgid(cgrp_proc_attr_t *attr)
 }
 
 
+
+/********************
+ * process_create
+ ********************/
+cgrp_process_t *
+process_create(cgrp_context_t *ctx, cgrp_proc_attr_t *attr)
+{
+    cgrp_process_t *process;
+
+    if (ALLOC_OBJ(process) != NULL) {
+        list_init(&process->proc_hook);
+        list_init(&process->group_hook);
+        
+        process->pid  = attr->pid;
+        process->tgid = attr->tgid;
+        
+        if ((process->binary = STRDUP(attr->binary)) != NULL)
+            proc_hash_insert(ctx, process);
+        else {
+            process_remove(ctx, process);
+            process = NULL;
+        }
+    }
+
+    return process;
+}
+
+
+
 /********************
  * process_remove
  ********************/
-static void
+void
 process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
 {
     if (process == ctx->active_process) {
