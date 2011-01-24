@@ -46,15 +46,14 @@ typedef struct {
 } immts_group_t;
 
 
-
+static int vibra_init(void);
 static int vibra_open(void);
-static void vibra_close(VibeInt32);
-static int vibra_auth(VibeInt32, const char *);
-static int vibra_set_priority(VibeInt32, int);
+static void vibra_close(void);
+static int vibra_auth(void);
 #ifdef VIBE_DEVPROPTYPE_PRIORITY_MASK
-static int vibra_enable_priorities(VibeInt32, uint32_t);
+static int vibra_enable_priorities(uint32_t);
 #endif
-static int vibra_mute(VibeInt32, int);
+static int vibra_mute(int);
 
 
 
@@ -71,8 +70,9 @@ static immts_group_t immts_groups[] = {
 };
 
 
-static VibeInt32 dev = VIBE_INVALID_DEVICE_HANDLE_VALUE;
-
+static int         imm_initialized;
+static VibeInt32   imm_dev = VIBE_INVALID_DEVICE_HANDLE_VALUE;
+static const char *imm_key;
 
 
 
@@ -83,28 +83,11 @@ static VibeInt32 dev = VIBE_INVALID_DEVICE_HANDLE_VALUE;
 void
 immts_init(vibra_context_t *ctx, OhmPlugin *plugin)
 {
-    const char *key;
-
     (void)ctx;
 
+    imm_key = ohm_plugin_get_param(plugin, "immts-license-key");
 
-    key = ohm_plugin_get_param(plugin, "immts-license-key");
-    dev = vibra_open();
-
-    if (dev == VIBE_INVALID_DEVICE_HANDLE_VALUE) {
-        OHM_ERROR("vibra: failed to open vibra device");
-        return;
-    }
-    
-    if (!vibra_auth(dev, key)) {
-        OHM_ERROR("vibra: failed to authenticate to vibra server");
-        return;
-    }
-
-    if (!vibra_set_priority(dev, VIBE_MAX_OEM_DEVICE_PRIORITY)) {
-        OHM_ERROR("vibra: failed to set OEM vibra client priority");
-        return;
-    }
+    vibra_init();
 }
 
 
@@ -116,8 +99,7 @@ immts_exit(vibra_context_t *ctx)
 {
     (void)ctx;
 
-    vibra_close(dev);
-    dev = VIBE_INVALID_DEVICE_HANDLE_VALUE;
+    vibra_close();
 }
 
 
@@ -131,6 +113,13 @@ immts_enforce(vibra_context_t *ctx)
     uint32_t       mask;
     int            status, muted;
 
+    if (imm_dev == VIBE_INVALID_DEVICE_HANDLE_VALUE) {
+        vibra_init();
+
+        if (imm_dev == VIBE_INVALID_DEVICE_HANDLE_VALUE)
+            return TRUE;
+    }
+    
     mask = IMMTS_ALL;
     for (group = ctx->groups; group->name != NULL; group++) {
         if (group->enabled) {
@@ -146,18 +135,44 @@ immts_enforce(vibra_context_t *ctx)
     OHM_INFO("vibra: new priority enable mask: 0x%x", mask);
     
 #ifdef VIBE_DEVPROPTYPE_PRIORITY_MASK
-    if (!vibra_enable_priorities(dev, mask))
+    if (!vibra_enable_priorities(mask))
         OHM_ERROR("vibra: failed to enable/disable priorities");
 #else
     muted = (mask == 0x0);
 
-    if (!vibra_mute(dev, muted))
-        OHM_ERROR("vibra: failed to %s vibra", muted ? "mute" : "unmute");    
+    if (!vibra_mute(muted)) {
+        vibra_close();
+        OHM_ERROR("vibra: failed to %s vibra", muted ? "mute" : "unmute");
+    }
 #endif
     
     status = TRUE;
 
     return status;
+}
+
+
+/********************
+ * vibra_init
+ ********************/
+static int
+vibra_init(void)
+{
+    static int retry = TRUE;
+
+    if (retry) {
+        if (!vibra_open())
+            return FALSE;
+        
+        if (!vibra_auth()) {
+            retry = FALSE;
+            return FALSE;
+        }
+        else
+            return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 
@@ -168,21 +183,33 @@ static int
 vibra_open(void)
 {
     VibeStatus status;
-    VibeInt32  device;
+    
+    if (!imm_initialized) {
+        status = ImmVibeInitialize(VIBE_CURRENT_VERSION_NUMBER);
 
-    status = ImmVibeInitialize(VIBE_CURRENT_VERSION_NUMBER);
-    if (VIBE_FAILED(status)) {
-        OHM_ERROR("vibra: failed to initialize vibra library");
-        return VIBE_INVALID_DEVICE_HANDLE_VALUE;
+        if (VIBE_FAILED(status)) {
+            OHM_WARNING("vibra: failed to initialize vibra library (error %d)",
+                        status);
+
+            return FALSE;
+        }
+        else
+            imm_initialized = TRUE;
     }
     
-    status = ImmVibeOpenDevice(0, &device);
+    status = ImmVibeOpenDevice(0, &imm_dev);
+    
     if (VIBE_FAILED(status)) {
-        OHM_ERROR("vibra: failed to open vibra device");
-        return VIBE_INVALID_DEVICE_HANDLE_VALUE;
+        imm_dev = VIBE_INVALID_DEVICE_HANDLE_VALUE;
+        OHM_WARNING("vibra: failed to open vibra device (error %d)", status);
+        
+        return FALSE;
     }
+    else {
+        OHM_INFO("vibra: successfully initialized vibra library");
 
-    return device;
+        return TRUE;
+    }
 }
 
 
@@ -190,12 +217,15 @@ vibra_open(void)
  * vibra_close
  ********************/
 static void
-vibra_close(VibeInt32 device)
+vibra_close(void)
 {
-    if (device != VIBE_INVALID_DEVICE_HANDLE_VALUE)
-        ImmVibeCloseDevice(device);
+    if (imm_dev != VIBE_INVALID_DEVICE_HANDLE_VALUE) {
+        ImmVibeCloseDevice(imm_dev);
+        imm_dev = VIBE_INVALID_DEVICE_HANDLE_VALUE;
+    }
     
     ImmVibeTerminate();
+    imm_initialized = FALSE;
 }
 
 
@@ -203,40 +233,36 @@ vibra_close(VibeInt32 device)
  * vibra_auth
  ********************/
 static int
-vibra_auth(VibeInt32 device, const char *key)
+vibra_auth(void)
 {
     VibeInt32  property;
     VibeStatus status;
+    int        priority;
 
-    if (key == NULL)
+
+    if (imm_key == NULL)
         return FALSE;
     
     property = VIBE_DEVPROPTYPE_LICENSE_KEY;
-    status   = ImmVibeSetDevicePropertyString(device, property, key);
+    status   = ImmVibeSetDevicePropertyString(imm_dev, property, imm_key);
 
-    if (VIBE_FAILED(status))
+    if (VIBE_FAILED(status)) {
+        OHM_WARNING("vibra: failed to authenticate (error %d)", status);
         return FALSE;
-    else
-        return TRUE;
-}
+    }
 
-
-/********************
- * vibra_set_priority
- ********************/
-static int
-vibra_set_priority(VibeInt32 device, int priority)
-{
-    VibeInt32  property;
-    VibeStatus status;
-    
     property = VIBE_DEVPROPTYPE_PRIORITY;
-    status   = ImmVibeSetDevicePropertyInt32(device, property, priority);
+    priority = VIBE_MAX_OEM_DEVICE_PRIORITY;
+    status   = ImmVibeSetDevicePropertyInt32(imm_dev, property, priority);
 
-    if (VIBE_FAILED(status))
+    if (VIBE_FAILED(status)) {
+        OHM_WARNING("vibra: failed to set OEM device priority");
         return FALSE;
-    else
+    }
+    else {
+        OHM_INFO("vibra: sucessfully authenticated");
         return TRUE;
+    }
 }
 
 
@@ -254,7 +280,7 @@ vibra_enable_priorities(VibeInt32 device, uint32_t mask)
     OHM_INFO("vibra: new ToucSense priority mask: 0x%x", mask);
 
     property = VIBE_DEVPROPTYPE_ENABLE_PRIORITIES;
-    status   = ImmVibeSetDevicePropertyInt32(device, property, mask);
+    status   = ImmVibeSetDevicePropertyInt32(imm_dev, property, mask);
 
     if (VIBE_FAILED(status))
         return FALSE;
@@ -268,14 +294,14 @@ vibra_enable_priorities(VibeInt32 device, uint32_t mask)
  * vibra_mute
  ********************/
 static int
-vibra_mute(VibeInt32 device, int muted)
+vibra_mute(int muted)
 {
     VibeInt32  property, volume;
     VibeStatus status;
     
     property = VIBE_DEVPROPTYPE_MASTERSTRENGTH;
     volume   = muted ? IMMTS_VOLUME_OFF : IMMTS_VOLUME_MAX;
-    status   = ImmVibeSetDevicePropertyInt32(device, property, volume);
+    status   = ImmVibeSetDevicePropertyInt32(imm_dev, property, volume);
 
     if (VIBE_FAILED(status))
         return FALSE;
