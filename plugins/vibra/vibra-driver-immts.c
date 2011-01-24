@@ -31,7 +31,7 @@ USA.
 #define IMMTS_GAME         (VIBE_MAX_DEV_DEVICE_PRIORITY - 2)
 #define IMMTS_UI           (VIBE_MAX_DEV_DEVICE_PRIORITY - 1)
 #define IMMTS_EVENT        (VIBE_MAX_OEM_DEVICE_PRIORITY    )
-#define IMMTS_ALL           MASK_RANGE(IMMTS_OTHER_MIN, IMMTS_EVENT)
+#define IMMTS_FULL          MASK_RANGE(IMMTS_OTHER_MIN, IMMTS_EVENT)
 
 #define IMMTS_VOLUME_OFF    0
 #define IMMTS_VOLUME_MAX    10000
@@ -60,21 +60,31 @@ static int vibra_mute(int);
 #define VIBRA_GROUP(_type, _name, _mask) \
     [_type] = { .name = _name, .mask = _mask }
 
+#define IMMTS_MASK_OTHER  MASK_RANGE(IMMTS_OTHER_MIN, IMMTS_OTHER_MAX)
+#define IMMTS_MASK_GAME   MASK_VALUE(IMMTS_GAME)
+#define IMMTS_MASK_UI     MASK_VALUE(IMMTS_UI)
+#define IMMTS_MASK_EVENT  MASK_VALUE(IMMTS_EVENT)
+#define IMMTS_MASK_ALL   (IMMTS_MASK_OTHER |                            \
+                          IMMTS_MASK_GAME  |IMMTS_MASK_UI | IMMTS_MASK_EVENT)
+
 static immts_group_t immts_groups[] = {
-    VIBRA_GROUP(VIBRA_GROUP_OTHER, "other",
-                MASK_RANGE(IMMTS_OTHER_MIN, IMMTS_OTHER_MAX)),
-    VIBRA_GROUP(VIBRA_GROUP_GAME , "game" , MASK_VALUE(IMMTS_GAME)),
-    VIBRA_GROUP(VIBRA_GROUP_UI   , "ui"   , MASK_VALUE(IMMTS_UI)),
-    VIBRA_GROUP(VIBRA_GROUP_EVENT, "event", MASK_VALUE(IMMTS_EVENT)),
+    VIBRA_GROUP(VIBRA_GROUP_OTHER, "other", IMMTS_MASK_OTHER),
+    VIBRA_GROUP(VIBRA_GROUP_GAME , "game" , IMMTS_MASK_GAME),
+    VIBRA_GROUP(VIBRA_GROUP_UI   , "ui"   , IMMTS_MASK_UI),
+    VIBRA_GROUP(VIBRA_GROUP_EVENT, "event", IMMTS_MASK_EVENT),
     { NULL, 0 }
 };
 
 
+enum {
+    MUTE_WHEN_ANY = 0,               /* mute when any group is muted */
+    MUTE_WHEN_ALL                    /* mute when all groups are muted */
+};
+
 static int         imm_initialized;
-static VibeInt32   imm_dev = VIBE_INVALID_DEVICE_HANDLE_VALUE;
 static const char *imm_key;
-
-
+static VibeInt32   imm_dev  = VIBE_INVALID_DEVICE_HANDLE_VALUE;
+static int         imm_mute = MUTE_WHEN_ANY;
 
 
 /********************
@@ -83,10 +93,21 @@ static const char *imm_key;
 void
 immts_init(vibra_context_t *ctx, OhmPlugin *plugin)
 {
+    const char *when;
+    
     (void)ctx;
 
     imm_key = ohm_plugin_get_param(plugin, "immts-license-key");
+    when    = ohm_plugin_get_param(plugin, "immts-off-when");
 
+    if (when == NULL || !strcmp(when, "any") || strcmp(when, "all"))
+        imm_mute = MUTE_WHEN_ANY;
+    else
+        imm_mute = MUTE_WHEN_ALL;
+
+    OHM_INFO("vibra: mute when: %s group is muted",
+             imm_mute == MUTE_WHEN_ANY ? "any" : "every");
+    
     vibra_init();
 }
 
@@ -111,7 +132,7 @@ immts_enforce(vibra_context_t *ctx)
 {
     vibra_group_t *group;
     uint32_t       mask;
-    int            status, muted;
+    int            muted;
 
     if (imm_dev == VIBE_INVALID_DEVICE_HANDLE_VALUE) {
         vibra_init();
@@ -120,7 +141,7 @@ immts_enforce(vibra_context_t *ctx)
             return TRUE;
     }
     
-    mask = IMMTS_ALL;
+    mask = IMMTS_MASK_ALL;
     for (group = ctx->groups; group->name != NULL; group++) {
         if (group->enabled) {
             OHM_INFO("vibra: vibra group %s is now enabled", group->name);
@@ -132,23 +153,23 @@ immts_enforce(vibra_context_t *ctx)
         }
     }
     
-    OHM_INFO("vibra: new priority enable mask: 0x%x", mask);
+    OHM_INFO("vibra: new priority mask: 0x%x", mask);
     
 #ifdef VIBE_DEVPROPTYPE_PRIORITY_MASK
     if (!vibra_enable_priorities(mask))
         OHM_ERROR("vibra: failed to enable/disable priorities");
 #else
-    muted = (mask == 0x0);
+    muted = (((imm_mute == MUTE_WHEN_ANY) && mask != IMMTS_MASK_ALL) ||
+             ((imm_mute == MUTE_WHEN_ALL) && mask == 0x0));
 
     if (!vibra_mute(muted)) {
         vibra_close();
-        OHM_ERROR("vibra: failed to %s vibra", muted ? "mute" : "unmute");
+        vibra_init();
+        vibra_mute(muted);
     }
 #endif
     
-    status = TRUE;
-
-    return status;
+    return TRUE;
 }
 
 
@@ -158,14 +179,14 @@ immts_enforce(vibra_context_t *ctx)
 static int
 vibra_init(void)
 {
-    static int retry = TRUE;
+    static int disabled = FALSE;
 
-    if (retry) {
+    if (!disabled) {
         if (!vibra_open())
             return FALSE;
         
         if (!vibra_auth()) {
-            retry = FALSE;
+            disabled = TRUE;
             return FALSE;
         }
         else
@@ -188,8 +209,7 @@ vibra_open(void)
         status = ImmVibeInitialize(VIBE_CURRENT_VERSION_NUMBER);
 
         if (VIBE_FAILED(status)) {
-            OHM_WARNING("vibra: failed to initialize vibra library (error %d)",
-                        status);
+            OHM_WARNING("vibra: failed to initialize (error %d)", status);
 
             return FALSE;
         }
@@ -201,12 +221,12 @@ vibra_open(void)
     
     if (VIBE_FAILED(status)) {
         imm_dev = VIBE_INVALID_DEVICE_HANDLE_VALUE;
-        OHM_WARNING("vibra: failed to open vibra device (error %d)", status);
+        OHM_WARNING("vibra: failed to open (error %d)", status);
         
         return FALSE;
     }
     else {
-        OHM_INFO("vibra: successfully initialized vibra library");
+        OHM_INFO("vibra: initialized");
 
         return TRUE;
     }
@@ -256,11 +276,11 @@ vibra_auth(void)
     status   = ImmVibeSetDevicePropertyInt32(imm_dev, property, priority);
 
     if (VIBE_FAILED(status)) {
-        OHM_WARNING("vibra: failed to set OEM device priority");
+        OHM_WARNING("vibra: failed to set OEM priority");
         return FALSE;
     }
     else {
-        OHM_INFO("vibra: sucessfully authenticated");
+        OHM_INFO("vibra: authenticated");
         return TRUE;
     }
 }
@@ -277,7 +297,7 @@ vibra_enable_priorities(VibeInt32 device, uint32_t mask)
     VibeStatus status;
 
 
-    OHM_INFO("vibra: new ToucSense priority mask: 0x%x", mask);
+    OHM_INFO("vibra: new priority mask: 0x%x", mask);
 
     property = VIBE_DEVPROPTYPE_ENABLE_PRIORITIES;
     status   = ImmVibeSetDevicePropertyInt32(imm_dev, property, mask);
@@ -303,10 +323,14 @@ vibra_mute(int muted)
     volume   = muted ? IMMTS_VOLUME_OFF : IMMTS_VOLUME_MAX;
     status   = ImmVibeSetDevicePropertyInt32(imm_dev, property, volume);
 
-    if (VIBE_FAILED(status))
+    if (VIBE_FAILED(status)) {
+        OHM_WARNING("vibra: failed to %smute (%d)", muted ? "" : "un", status);
         return FALSE;
-    else
+    }
+    else {
+        OHM_INFO("vibra: %smuted", muted ? "" : "un");
         return TRUE;
+    }
 }
 
 
