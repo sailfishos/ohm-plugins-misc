@@ -1,10 +1,15 @@
 ohm-plugins-misc (1:1.60) unstable; urgency=low
 
+  [ Krisztian Litkey ]
   * Vibra: configurable vibra on/off logic, better diagostic messages.
   * Vibra: don't give up on vibra so easily, try to reinitialize on demand.
   * Fixes: NB#213226.
 
- -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 25 Jan 2011 00:59:26 +0200
+  [ Ismo Puustinen ]
+  * Refactor info signal handling in media plugin.
+  * Fixes: NB#190553
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 25 Jan 2011 15:43:24 +0200
 
 ohm-plugins-misc (1:1.59) unstable; urgency=low
 
