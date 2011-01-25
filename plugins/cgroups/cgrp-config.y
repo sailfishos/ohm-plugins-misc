@@ -38,6 +38,10 @@
 #include "cgrp-parser-types.h"
 #include "mm.h"  
 
+#define ALL_PRIO "all"
+#define LOW_PRIO "lowered"
+#define NO_PRIO  "none"
+
 int        cgrpyylex  (void);
 void       cgrpyyerror(cgrp_context_t *, const char *);
 extern int lexer_start_token;
@@ -166,6 +170,7 @@ static char rule_group[256];
 %token KEYWORD_SWAP_PRESSURE
 %token KEYWORD_ADDON_RULES
 %token KEYWORD_ALWAYS_FALLBACK
+%token KEYWORD_PRESERVE_PRIO
 
 %token TOKEN_EOL "\n"
 %token TOKEN_ASTERISK "*"
@@ -222,6 +227,23 @@ global_option: KEYWORD_EXPORT_GROUPS "\n" {
     }
     | KEYWORD_ALWAYS_FALLBACK "\n" {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_ALWAYS_FALLBACK);
+    }
+    | KEYWORD_PRESERVE_PRIO TOKEN_IDENT "\n" {
+          char *what = $2.value;
+          int   prio;
+
+          if      (!strcmp(what, ALL_PRIO)) prio = CGRP_PRIO_ALL;
+          else if (!strcmp(what, LOW_PRIO)) prio = CGRP_PRIO_LOW;
+          else if (!strcmp(what, NO_PRIO )) prio = CGRP_PRIO_NONE;
+          else {
+              OHM_ERROR("cgrp: invalid %s setting '%s'",
+                        "preserve-priority", what);
+              OHM_ERROR("cgrp: allowed settings are: '%s', '%s', '%s'",
+                        ALL_PRIO, LOW_PRIO, NO_PRIO);
+              prio = CGRP_PRIO_LOW;
+          }
+          
+          ctx->options.prio_preserve = prio;
     }
     | iowait_notify "\n"
     | ioqlen_notify "\n"
@@ -1464,6 +1486,35 @@ config_monitor_exit(cgrp_context_t *ctx)
 void
 config_print(cgrp_context_t *ctx, FILE *fp)
 {
+    const char *prio;
+    int         flags;
+
+    flags = ctx->options.flags;
+
+    if (flags) {
+        fprintf(fp, "# global configuration flags:\n");
+        
+        if (CGRP_TST_FLAG(flags, CGRP_FLAG_GROUP_FACTS))
+            fprintf(fp, "export-group-facts\n");
+
+        if (CGRP_TST_FLAG(flags, CGRP_FLAG_PART_FACTS))
+            fprintf(fp, "export-partition-facts\n");
+
+        if (CGRP_TST_FLAG(flags, CGRP_FLAG_ALWAYS_FALLBACK))
+            fprintf(fp, "always-fallback\n");
+
+        switch (ctx->options.prio_preserve) {
+        case CGRP_PRIO_ALL:  prio = ALL_PRIO; break;
+        case CGRP_PRIO_LOW:  prio = LOW_PRIO; break;
+        case CGRP_PRIO_NONE: prio = NO_PRIO;  break;
+        default:             prio = "<?>";  break;
+        }            
+
+        fprintf(fp, "preserve-priority %s\n", prio);
+    }
+    
+    /* XXX TODO: add dumping all other options, too... */
+
     ctrl_dump(ctx, fp);
     partition_dump(ctx, fp);
     group_dump(ctx, fp);

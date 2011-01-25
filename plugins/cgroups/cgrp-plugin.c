@@ -69,6 +69,16 @@ plugin_init(OhmPlugin *plugin)
         exit(1);
     }
     
+    /*
+     * Notes:
+     *   By default we preserve priorities of processes that voluntarily
+     *   lower their own priority (increase their nice level). They are
+     *   typically doing it in an attempt to ask for forgiveness for sins
+     *   they are about to commit and their desire for self-control is
+     *   both understandable and safe to honour.
+     */
+    ctx->options.prio_preserve = CGRP_PRIO_LOW;
+
     if (!ep_init(ctx, signaling_register))
         plugin_exit(plugin);
 

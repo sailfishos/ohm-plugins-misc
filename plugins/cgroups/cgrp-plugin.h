@@ -394,6 +394,7 @@ typedef struct {
     char         *argv0;                    /* argv[0] if needed */
     char         *argvx;                    /* classified by this arg */
     cgrp_group_t *group;                    /* current group */
+    int           flags;                    /* misc. process flags */
     list_hook_t   proc_hook;                /* hook to process table */
     list_hook_t   group_hook;               /* hook to group */
 } cgrp_process_t;
@@ -459,9 +460,17 @@ enum {
 };
 
 
+enum {
+    CGRP_PRIO_LOW  = -1,                    /* honour lowered priorities */
+    CGRP_PRIO_NONE =  0,                    /* overwrite all priorities */
+    CGRP_PRIO_ALL  =  1,                    /* honour all priorities */
+};
+
+
 typedef struct {
     int   flags;
     char *addon_rules;                      /* add-on rule pattern */
+    int   prio_preserve;                    /* priority preservation */
 } cgrp_options_t;
 
 
@@ -614,6 +623,8 @@ gid_t   process_get_egid   (cgrp_proc_attr_t *);
 pid_t   process_get_ppid   (cgrp_proc_attr_t *);
 pid_t   process_get_tgid   (cgrp_proc_attr_t *);
 
+int proc_stat_parse(int, char *, pid_t *, int *, cgrp_proc_type_t *);
+
 
 cgrp_proc_type_t process_get_type(cgrp_proc_attr_t *);
 
@@ -623,7 +634,7 @@ int process_ignore(cgrp_context_t *, cgrp_process_t *);
 int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
 int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
-int process_set_priority(cgrp_process_t *, int);
+int process_set_priority(cgrp_process_t *, int, int);
 void procattr_dump(cgrp_proc_attr_t *);
 
 void proc_notify(cgrp_context_t *,
@@ -669,7 +680,7 @@ void group_print(cgrp_context_t *, cgrp_group_t *, FILE *);
 
 int  group_add_process(cgrp_context_t *, cgrp_group_t *, cgrp_process_t *);
 int  group_del_process(cgrp_process_t *);
-int  group_set_priority(cgrp_group_t *, int);
+int  group_set_priority(cgrp_group_t *, int, int);
 
 
 /* cgrp_procdef.c */

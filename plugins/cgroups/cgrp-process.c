@@ -749,13 +749,15 @@ process_get_egid(cgrp_proc_attr_t *attr)
 
 
 /********************
- * process_get_type
+ * proc_stat_parse
  ********************/
-cgrp_proc_type_t
-process_get_type(cgrp_proc_attr_t *attr)
+int
+proc_stat_parse(int pid, char *bin, pid_t *ppidp, int *nicep,
+                cgrp_proc_type_t *typep)
 {
 #define FIELD_NAME    1
 #define FIELD_PPID    3
+#define FIELD_NICE   18
 #define FIELD_VMSIZE 22
 #define FIND_FIELD(n) do {                               \
         for ( ; nfield < (n) && size > 0; p++, size--) { \
@@ -763,60 +765,80 @@ process_get_type(cgrp_proc_attr_t *attr)
                 nfield++;                                \
         }                                                \
         if (nfield != (n))                               \
-            return CGRP_PROC_UNKNOWN;                    \
+            return FALSE;                                \
     } while (0)
     
-    char  path[64], stat[1024], *p, *e;
-    char *bin, *ppid, *vmsz;
+    char  path[64], stat[1024], *p, *e, *namep;
     int   fd, size, len, nfield;
 
-    if (CGRP_TST_MASK(attr->mask, CGRP_PROC_TYPE))
-        return attr->type;
-    
-    sprintf(path, "/proc/%u/stat", attr->pid);
+    sprintf(path, "/proc/%u/stat", pid);
     if ((fd = open(path, O_RDONLY)) < 0)
-        return CGRP_PROC_UNKNOWN;
+        return FALSE;
     
     size = read(fd, stat, sizeof(stat) - 1);
     close(fd);
     
     if (size <= 0)
-        return CGRP_PROC_UNKNOWN;
+        return FALSE;
 
     stat[size] = '\0';
     p          = stat;
     nfield     = 0;
 
-    FIND_FIELD(FIELD_NAME);
-    bin = p;
-    if (*bin == '(')
-        bin++;
-    for (e = bin; *e != ')' && *e != ' ' && *e; e++)
-        ;
-    if (*e == ')')
-        e--;
-    if (e >= bin) {
-        len = e - bin + 1;
-        if (len > CGRP_COMM_LEN - 1)
-            len = CGRP_COMM_LEN - 1;
-        strncpy(attr->name, bin, len);
-        attr->name[len] = '\0';
+    if (bin != NULL) {
+        FIND_FIELD(FIELD_NAME);
+        namep = p;
+        if (*namep == '(')
+            namep++;
+        for (e = namep; *e != ')' && *e != ' ' && *e; e++)
+            ;
+        if (*e == ')')
+            e--;
+        if (e >= namep) {
+            len = e - namep + 1;
+            if (len > CGRP_COMM_LEN - 1)
+                len = CGRP_COMM_LEN - 1;
+            strncpy(bin, namep, len);
+            bin[len] = '\0';
+        }
     }
-    CGRP_SET_MASK(attr->mask, CGRP_PROC_NAME);
-
-
-    FIND_FIELD(FIELD_PPID);
-    ppid = p;
     
-    FIND_FIELD(FIELD_VMSIZE);
-    vmsz = p;
+    if (ppidp != NULL) {
+        FIND_FIELD(FIELD_PPID);
+        *ppidp = (pid_t)strtoul(p, NULL, 10);
+    }
+    
+    if (nicep != NULL) {
+        FIND_FIELD(FIELD_NICE);
+        *nicep = (int)strtol(p, NULL, 10);
+    }
 
-    attr->ppid  = (pid_t)strtoul(ppid, NULL, 10);
-    attr->type  = (*vmsz == '0') ? CGRP_PROC_KERNEL : CGRP_PROC_USER;
+    if (typep != NULL) {
+        FIND_FIELD(FIELD_VMSIZE);
+        *typep = (*p == '0') ? CGRP_PROC_KERNEL : CGRP_PROC_USER;
+    }
+
+    return TRUE;
+}
+
+
+/********************
+ * process_get_type
+ ********************/
+cgrp_proc_type_t
+process_get_type(cgrp_proc_attr_t *attr)
+{
+    int nice;
+    
+    if (!proc_stat_parse(attr->pid,
+                         attr->name, &attr->ppid, &nice, &attr->type))
+        return CGRP_PROC_UNKNOWN;
+
+    CGRP_SET_MASK(attr->mask, CGRP_PROC_NAME);
     CGRP_SET_MASK(attr->mask, CGRP_PROC_PPID);
     CGRP_SET_MASK(attr->mask, CGRP_PROC_TYPE);
 
-    
+
     /*
      * Notes: if the buffer is not NULL, we expect it to point to a valid
      *     buffer of at least PATH_MAX bytes. This is used during process
@@ -1042,11 +1064,32 @@ process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
  * process_set_priority
  ********************/
 int
-process_set_priority(cgrp_process_t *process, int priority)
+process_set_priority(cgrp_process_t *process, int priority, int preserve)
 {
-    int status;
+    int prio, status;
+
+    switch (preserve) {
+    case CGRP_PRIO_LOW:
+        preserve = (prio = getpriority(PRIO_PROCESS, process->pid) > 0);
+        break;
+        
+    case CGRP_PRIO_NONE:
+        preserve = FALSE;
+        break;
+
+    case CGRP_PRIO_ALL:
+        preserve = TRUE;
+        break;
+    }
+
+    OHM_DEBUG(DBG_ACTION, "%u/%u (%s), %sing priority (req: %d)",
+              process->tgid, process->pid, process->binary,
+              preserve ? "preserv" : "overrid", priority);
     
-    status = setpriority(PRIO_PROCESS, process->pid, priority);
+    if (preserve)
+        status = 0;
+    else
+        status = setpriority(PRIO_PROCESS, process->pid, priority);
     
     return status == 0 || errno == ESRCH;
 }
