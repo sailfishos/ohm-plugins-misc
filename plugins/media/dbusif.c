@@ -62,7 +62,6 @@ static void system_bus_init(void);
 static void session_bus_init(const char *);
 static void session_bus_cleanup(void);
 
-static DBusHandlerResult info(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult method(DBusConnection *, DBusMessage *, void *);
 
 static DBusMessage *privacy_req_message(DBusMessage *);
@@ -297,11 +296,6 @@ void dbusif_send_audio_stream_info(char          *oper,
 
 static void system_bus_init(void)
 {
-    static char *filter =
-        "type='signal',"
-        "interface='" DBUS_POLICY_DECISION_INTERFACE "',"
-        "member='"    DBUS_INFO_SIGNAL               "'";
-
     DBusError   err;
 
     dbus_error_init(&err);
@@ -313,20 +307,6 @@ static void system_bus_init(void)
             OHM_ERROR("Can't get system D-Bus connection");
         exit(1);
     }
-
-    if (!dbus_connection_add_filter(sys_conn, info,NULL, NULL)) {
-        OHM_ERROR("Can't add filter 'info'");
-        exit(1);
-    }
-
-    dbus_bus_add_match(sys_conn, filter, &err);
-
-    if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
-        dbus_error_free(&err);
-        exit(1);
-    }
-
 }
 
 
@@ -448,7 +428,7 @@ static void session_bus_cleanup(void)
 }
 
 
-static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg, void *ud)
+DBusHandlerResult dbusif_info(DBusConnection *conn, DBusMessage *msg, void *ud)
 {
     (void)conn;
     (void)ud;

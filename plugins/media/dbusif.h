@@ -72,6 +72,8 @@ USA.
 void dbusif_init(OhmPlugin *);
 DBusHandlerResult dbusif_session_notification(DBusConnection *, DBusMessage *,
                                               void *);
+DBusHandlerResult dbusif_info(DBusConnection *, DBusMessage *, void *);
+
 void dbusif_signal_privacy_override(int, int);
 void dbusif_signal_bluetooth_override(int, int);
 void dbusif_signal_mute(int, int);
