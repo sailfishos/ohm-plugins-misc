@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.61) unstable; urgency=low
+
+  * Disabled hal and buttons plugin.
+  * Added some support for unc.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 28 Jan 2011 15:19:13 +0200
+
 ohm-plugins-misc (1:1.60) unstable; urgency=low
 
   * Vibra: configurable vibra on/off logic, better diagostic messages.
