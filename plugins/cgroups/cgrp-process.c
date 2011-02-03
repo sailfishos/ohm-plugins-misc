@@ -559,8 +559,11 @@ process_scan_proc(cgrp_context_t *ctx)
                 continue;
             
             tid = (pid_t)strtoul(te->d_name, NULL, 10);
+
+#if 0
             if (proc_hash_lookup(ctx, tid) != NULL)
                 continue;
+#endif
 
             OHM_DEBUG(DBG_CLASSIFY, "discovering task <%s>", te->d_name);
             
