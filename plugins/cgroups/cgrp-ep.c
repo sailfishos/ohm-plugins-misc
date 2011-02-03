@@ -255,15 +255,20 @@ renice_action(cgrp_context_t *ctx, void *data)
 {
     renice_t     *action = (renice_t *)data;
     cgrp_group_t *group;
-    int               success;
+    int           preserve, success;
 
-    if ((group = group_lookup(ctx, action->group)) == NULL) {
-        OHM_WARNING("cgrp: ignoring renicing of unknown group '%s'",
-                    action->group);
+    preserve = ctx->options.prio_preserve;
+    group    = group_lookup(ctx, action->group);
+
+    if (preserve == CGRP_PRIO_ALL)
+        return TRUE;
+    
+    if (group == NULL) {
+        OHM_WARNING("cgrp: cannot renice unknown group '%s'", action->group);
         return TRUE;
     }
     
-    success = group_set_priority(group, action->priority);
+    success = group_set_priority(group, action->priority, preserve);
     
     OHM_DEBUG(DBG_ACTION, "setting group priority (renice) of %s to %d: %s",
               action->group, action->priority, success ? "OK" : "FAILED");

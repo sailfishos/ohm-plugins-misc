@@ -95,7 +95,7 @@ typedef enum {
     TOKEN_TYPE_EOL,                            /* end of line */
 } token_type_t;
 
-static lexer_t lexer /* = { .debug = 1 }*/;
+static lexer_t lexer = { .debug = 0 };
 static int     lexer_start_token;              /* parser selector token */
 static int     lexer_noinclude;                /* disable includes */
 
@@ -338,6 +338,9 @@ int
 lexer_push_input(char *path)
 {
     lexer_input_t *input;
+    
+    if (getenv("CGRP_LEXER_DEBUG") != NULL)
+        lexer.debug = TRUE;
     
     if (strchr(path, '*') || strchr(path, '?'))
         input = lexer_open_glob(path);
@@ -664,6 +667,7 @@ KEYWORD_RECLASS_AFTER     reclassify-after
 KEYWORD_RECLASSIFY        reclassify-count
 KEYWORD_CLASSIFY_ARGVX    classify-by-argv[0-9]+
 KEYWORD_CLASSIFY          classify
+KEYWORD_NO_OP             no-op
 KEYWORD_EXPORT_GROUPS     export-group-facts
 KEYWORD_EXPORT_PARTITIONS export-partition-facts
 KEYWORD_EXPORT_FACT       export-fact
@@ -673,21 +677,27 @@ KEYWORD_IOQLEN_NOTIFY     ioqlen-notify
 KEYWORD_SWAP_PRESSURE     swap-pressure
 KEYWORD_ADDON_RULES       addon-rules
 KEYWORD_CGROUP_CONTROL    cgroup-control
+KEYWORD_ALWAYS_FALLBACK   always-fallback
+KEYWORD_PRESERVE_PRIO     preserve-priority
 
 HEADER_OPEN            \[
 HEADER_CLOSE           \]
+CURLY_OPEN             \{
+CURLY_CLOSE            \}
 
 ARG                    arg[0-9]+
 
 EQUAL                  ==
 NOTEQ                  !=
-LESS                   <
 AND                    &&
 OR                     \|\|
 NOT                    \!
 IMPLIES                =>
 SEMICOLON              ;
+COMMA                  ,
 COLON                  :
+LESS                   <
+GREATER                >
 
 ASTERISK               \*
 PATH                   (\/([a-zA-Z_]([a-zA-Z0-9_\.-]*)*))+
@@ -776,6 +786,7 @@ ESCAPE		       \\
 {KEYWORD_RECLASSIFY}        { PASS_KEYWORD(RECLASSIFY);        }
 {KEYWORD_CLASSIFY}          { PASS_KEYWORD(CLASSIFY);          }
 {KEYWORD_CLASSIFY_ARGVX}    { PASS_KEYWORD(CLASSIFY_ARGVX);    }
+{KEYWORD_NO_OP}             { PASS_KEYWORD(NO_OP);             }
 {KEYWORD_EXPORT_GROUPS}     { PASS_KEYWORD(EXPORT_GROUPS);     }
 {KEYWORD_EXPORT_PARTITIONS} { PASS_KEYWORD(EXPORT_PARTITIONS); }
 {KEYWORD_EXPORT_FACT}       { PASS_KEYWORD(EXPORT_FACT);       }
@@ -785,6 +796,8 @@ ESCAPE		       \\
 {KEYWORD_IOQLEN_NOTIFY}     { PASS_KEYWORD(IOQLEN_NOTIFY);     }
 {KEYWORD_SWAP_PRESSURE}     { PASS_KEYWORD(SWAP_PRESSURE);     }
 {KEYWORD_ADDON_RULES}       { PASS_KEYWORD(ADDON_RULES);       }
+{KEYWORD_ALWAYS_FALLBACK}   { PASS_KEYWORD(ALWAYS_FALLBACK);   }
+{KEYWORD_PRESERVE_PRIO}     { PASS_KEYWORD(PRESERVE_PRIO);     }
 
 {HEADER_OPEN}               { PASS_TOKEN(HEADER_OPEN);         }
 {HEADER_CLOSE}              { PASS_TOKEN(HEADER_CLOSE);        }
@@ -793,11 +806,16 @@ ESCAPE		       \\
 {EQUAL}                     { PASS_TOKEN(EQUAL);               }
 {NOTEQ}                     { PASS_TOKEN(NOTEQ);               }
 {LESS}                      { PASS_TOKEN(LESS);                }
+{GREATER}                   { PASS_TOKEN(GREATER);             }
+{CURLY_OPEN}                { PASS_TOKEN(CURLY_OPEN);          }
+{CURLY_CLOSE}               { PASS_TOKEN(CURLY_CLOSE);         }
+
 {AND}                       { PASS_TOKEN(AND);                 }
 {OR}                        { PASS_TOKEN(OR);                  }
 {NOT}                       { PASS_TOKEN(NOT);                 }
 {IMPLIES}                   { PASS_TOKEN(IMPLIES);             }
 {SEMICOLON}                 { PASS_TOKEN(SEMICOLON);           }
+{COMMA}                     { PASS_TOKEN(COMMA);               }
 {COLON}                     { PASS_TOKEN(COLON);               }
 
 {ASTERISK}                  { PASS_TOKEN(ASTERISK);            }

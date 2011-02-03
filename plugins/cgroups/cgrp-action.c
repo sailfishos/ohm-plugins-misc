@@ -86,6 +86,7 @@ ACTION_FUNCTIONS(schedule);
 ACTION_FUNCTIONS(renice);
 ACTION_FUNCTIONS(classify);
 ACTION_FUNCTIONS(ignore);
+ACTION_FUNCTIONS(noop);
 
 
 /*
@@ -97,7 +98,8 @@ static action_handler_t actions[] = {
     ACTION(SCHEDULE  , schedule_exec, schedule_print, schedule_del),
     ACTION(RENICE    , renice_exec  , renice_print  , renice_del),
     ACTION(RECLASSIFY, classify_exec, classify_print, classify_del),
-    ACTION(IGNORE    , ignore_exec  , ignore_print  , ignore_del)
+    ACTION(IGNORE    , ignore_exec  , ignore_print  , ignore_del),
+    ACTION(NOOP      , noop_exec    , noop_print    , noop_del)
 };
 
 
@@ -288,35 +290,24 @@ int
 action_group_exec(cgrp_context_t *ctx,
                   cgrp_proc_attr_t *attr, cgrp_action_t *action)
 {
-    cgrp_action_group_t *group;
-    cgrp_process_t      *process;
+    cgrp_group_t   *group;
+    cgrp_process_t *process;
 
-    group   = &action->group;
-    process = proc_hash_remove(ctx, attr->pid);
+    group   = action->group.group;
+    process = proc_hash_lookup(ctx, attr->pid);
 
-    if (process != NULL) {
-        FREE(process->binary);
-        process->binary = STRDUP(attr->binary);
-    }
-    else {
-        if (ALLOC_OBJ(process) != NULL) {
-            process->pid = attr->pid;
-            list_init(&process->proc_hook);
-            list_init(&process->group_hook);
-            process->binary = STRDUP(attr->binary);
-        }
-    }
-
-    if (process == NULL || process->binary == NULL) {
-        FREE(process);
-        OHM_ERROR("cgrp: failed to allocate new process");
+    if (process == NULL)
+        process = process_create(ctx, attr);
+    
+    if (process == NULL) {
+        OHM_ERROR("cgrp: failed to assign process %u to group %s",
+                  attr->pid, group->name);
         return FALSE;
     }
     
     OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid, process->binary,
-              group->group->name);
-    group_add_process(ctx, group->group, process);
-    proc_hash_insert(ctx, process);
+              group->name);
+    group_add_process(ctx, group, process);
 
     return TRUE;
 }
@@ -537,10 +528,10 @@ action_classify_exec(cgrp_context_t *ctx,
     int             count, delay, argn;
 
     if (action->classify.delay > 0) {
-        count = attr->reclassify;
+        count = attr->retry;
         delay = action->classify.delay;
 
-        if (attr->reclassify < CGRP_RECLASSIFY_MAX) {
+        if (attr->retry < CGRP_RECLASSIFY_MAX) {
             OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: classify #%d after %u msecs",
                       attr->pid, attr->binary, count, delay);
 
@@ -619,6 +610,68 @@ action_ignore_exec(cgrp_context_t *ctx,
 
     if (process != NULL)
         OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: ignored", attr->pid, attr->binary);
+    
+    return TRUE;
+}
+
+
+
+
+/*
+ * noop
+ */
+
+/********************
+ * action_noop_new
+ ********************/
+cgrp_action_t *
+action_noop_new(void)
+{
+    cgrp_action_any_t *action;
+
+    if (ALLOC_OBJ(action) != NULL)
+        action->type = CGRP_ACTION_NOOP;
+
+    return (cgrp_action_t *)action;
+}
+
+
+/********************
+ * action_noop_del
+ ********************/
+void
+action_noop_del(cgrp_action_t *action)
+{
+    FREE(action);
+}
+
+
+/********************
+ * action_noop_print
+ ********************/
+int
+action_noop_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
+{
+    (void)ctx;
+    (void)action;
+    
+    return fprintf(fp, "no-op");
+}
+
+
+/********************
+ * action_noop_exec
+ ********************/
+int
+action_noop_exec(cgrp_context_t *ctx,
+                 cgrp_proc_attr_t *attr, cgrp_action_t *action)
+{
+    cgrp_process_t *process = proc_hash_lookup(ctx, attr->pid);
+
+    (void)action;
+
+    if (process != NULL)
+        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: no-op", attr->pid, attr->binary);
     
     return TRUE;
 }
