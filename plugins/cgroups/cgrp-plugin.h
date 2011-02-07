@@ -383,6 +383,28 @@ typedef struct {
 } cgrp_procdef_t;
 
 
+enum {
+    CGRP_PRIO_DEFAULT = 0,                  /* adjusted normally */
+    CGRP_PRIO_LOCKED,                       /* locked to a value */
+    CGRP_PRIO_EXTERN,                       /* out of policy control */
+};
+
+typedef enum {
+    CGRP_ADJ_ABSOLUTE = 0,                  /* set to absolute value */
+    CGRP_ADJ_RELATIVE,                      /* adjust by given value */
+    CGRP_ADJ_LOCK,                          /* lock to given value */
+    CGRP_ADJ_UNLOCK,                        /* unlock, set to given value */
+    CGRP_ADJ_EXTERN,                        /* adjusted by external entity */
+    CGRP_ADJ_INTERN,                        /* adjusted again internally */
+} cgrp_adjust_t;
+
+#define CGRP_ADJUST_ABSOLUTE "set"
+#define CGRP_ADJUST_RELATIVE "adjust"
+#define CGRP_ADJUST_LOCK     "lock"
+#define CGRP_ADJUST_UNLOCK   "unlock"
+#define CGRP_ADJUST_EXTERN   "extern"
+#define CGRP_ADJUST_INTERN   "intern"
+
 /*
  * a classified process
  */
@@ -394,7 +416,11 @@ typedef struct {
     char         *argv0;                    /* argv[0] if needed */
     char         *argvx;                    /* classified by this arg */
     cgrp_group_t *group;                    /* current group */
-    int           flags;                    /* misc. process flags */
+    int           priority;                 /* process priority */
+    int           prio_mode;                
+#if 0
+    int           oom_adj;                  /* OOM adjustment */
+#endif
     list_hook_t   proc_hook;                /* hook to process table */
     list_hook_t   group_hook;               /* hook to group */
 } cgrp_process_t;
@@ -635,6 +661,8 @@ int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
 int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
 int process_set_priority(cgrp_process_t *, int, int);
+int process_adjust_priority(cgrp_process_t *, cgrp_adjust_t, int, int);
+
 void procattr_dump(cgrp_proc_attr_t *);
 
 void proc_notify(cgrp_context_t *,

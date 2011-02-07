@@ -50,6 +50,12 @@ typedef struct {                        /* renice all processes in a group */
     int  priority;                       
 } renice_t;
 
+typedef struct {                        /* set the priority of a process */
+    int   pid;                          /* pid of the target process */
+    char *action;                       /* set, adjust, lock, unlock, self */
+    int   value;                        /* priority value */
+} proc_prio_t;
+
 typedef void (*ep_cb_t) (GObject *, GObject *, gboolean);
 
 static void     policy_decision (GObject *, GObject *, ep_cb_t, gpointer);
@@ -277,16 +283,63 @@ renice_action(cgrp_context_t *ctx, void *data)
 }
 
 
+/********************
+ * proc_prio_action
+ ********************/
+static int
+proc_prio_action(cgrp_context_t *ctx, void *data)
+{
+    proc_prio_t    *prio = (proc_prio_t *)data;
+    char           *action;
+    cgrp_adjust_t   adjust;
+    cgrp_process_t *process;
+    int             value, preserve, success;
+
+    process = proc_hash_lookup(ctx, prio->pid);
+
+    if (process == NULL) {
+        OHM_WARNING("cgrp: cannot adjust priority of unknown process %u",
+                    prio->pid);
+        return TRUE;
+    }
+
+    action = prio->action;
+    value  = prio->value;
+
+    if      (!strcmp(action, CGRP_ADJUST_ABSOLUTE)) adjust = CGRP_ADJ_ABSOLUTE;
+    else if (!strcmp(action, CGRP_ADJUST_RELATIVE)) adjust = CGRP_ADJ_RELATIVE;
+    else if (!strcmp(action, CGRP_ADJUST_LOCK    )) adjust = CGRP_ADJ_LOCK;
+    else if (!strcmp(action, CGRP_ADJUST_UNLOCK  )) adjust = CGRP_ADJ_UNLOCK;
+    else if (!strcmp(action, CGRP_ADJUST_EXTERN  )) adjust = CGRP_ADJ_EXTERN;
+    else if (!strcmp(action, CGRP_ADJUST_INTERN  )) adjust = CGRP_ADJ_INTERN;
+    else {
+        OHM_WARNING("cgrp: unknown priority adjustment action '%s'", action);
+        return TRUE;
+    }
+
+    preserve = CGRP_PRIO_LOW;
+    success  = process_adjust_priority(process, adjust, value, preserve);
+    
+    OHM_DEBUG(DBG_ACTION, "%s priority of %u (%s) to %d: %s",
+              action, prio->pid, process->binary, value,
+              success ? "OK" : "FAILED");
+    
+    return success;
+}
+
+
 /*****************************************************************************
  *                  *** action parsing routines from videoep ***             *
  *****************************************************************************/
 
 #define PREFIX   "com.nokia.policy."
-#define REPARENT PREFIX"cgroup_partition"
-#define FREEZE   PREFIX"partition_freeze"
-#define SCHEDULE PREFIX"partition_schedule"
-#define LIMIT    PREFIX"partition_limit"
-#define RENICE   PREFIX"cgroup_renice"
+#define REPARENT  PREFIX"cgroup_partition"
+#define FREEZE    PREFIX"partition_freeze"
+#define SCHEDULE  PREFIX"partition_schedule"
+#define LIMIT     PREFIX"partition_limit"
+#define RENICE    PREFIX"cgroup_renice"
+#define PROC_PRIO PREFIX"process_priority"
+
 #define STRUCT_OFFSET(s,m) ((char *)&(((s *)0)->m) - (char *)0)
 
 typedef int (*action_t)(cgrp_context_t *, void *);
@@ -341,13 +394,21 @@ static argdsc_t renice_args[] = {
     { argtype_invalid,  NULL     , 0                                 }
 };
 
+static argdsc_t proc_prio_args[] = {
+    { argtype_integer, "process" , STRUCT_OFFSET(proc_prio_t, pid)    },
+    { argtype_string , "action"  , STRUCT_OFFSET(proc_prio_t, action) },
+    { argtype_integer, "value"   , STRUCT_OFFSET(proc_prio_t, value)  },
+    { argtype_invalid,  NULL     , 0                                  }
+};
+
 static actdsc_t actions[] = {
-    { REPARENT, reparent_action, reparent_args, sizeof(reparent_t) },
-    { FREEZE  , freeze_action  , freeze_args  , sizeof(freeze_t)   },
-    { SCHEDULE, schedule_action, schedule_args, sizeof(schedule_t) },
-    { LIMIT   , limit_action   , limit_args   , sizeof(limit_t)    },
-    { RENICE  , renice_action  , renice_args  , sizeof(renice_t)   },
-    { NULL    , NULL           , NULL         , 0                  }
+    { REPARENT , reparent_action  , reparent_args  , sizeof(reparent_t)  },
+    { FREEZE   , freeze_action    , freeze_args    , sizeof(freeze_t)    },
+    { SCHEDULE , schedule_action  , schedule_args  , sizeof(schedule_t)  },
+    { LIMIT    , limit_action     , limit_args     , sizeof(limit_t)     },
+    { RENICE   , renice_action    , renice_args    , sizeof(renice_t)    },
+    { PROC_PRIO, proc_prio_action , proc_prio_args , sizeof(proc_prio_t) },
+    { NULL     , NULL             , NULL           , 0                   }
 };
 
 static int action_parser  (actdsc_t *, cgrp_context_t *);

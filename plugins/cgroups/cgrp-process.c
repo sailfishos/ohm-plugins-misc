@@ -1091,9 +1091,123 @@ process_set_priority(cgrp_process_t *process, int priority, int preserve)
     
     if (preserve)
         status = 0;
-    else
+    else {
+        process->priority = priority;
         status = setpriority(PRIO_PROCESS, process->pid, priority);
+    }
     
+    return status == 0 || errno == ESRCH;
+}
+
+
+/********************
+ * process_adjust_priority
+ ********************/
+int
+process_adjust_priority(cgrp_process_t *process,
+                        cgrp_adjust_t adjust, int value, int preserve)
+{
+    int priority, status;
+    
+    if (adjust == CGRP_ADJ_RELATIVE)
+        priority = process->priority + value;
+    else
+        priority = value;
+    
+    switch (process->prio_mode) {
+        /*
+         * currently adjusted normally
+         */
+    case CGRP_PRIO_DEFAULT:
+        switch (adjust) {
+        case CGRP_ADJ_LOCK:
+            process->prio_mode = CGRP_PRIO_LOCKED;
+            break;
+        case CGRP_ADJ_EXTERN:
+            process->prio_mode = CGRP_PRIO_EXTERN;
+            return TRUE;
+        default:
+            break;
+        }
+        break;
+        
+        /*
+         * currently locked
+         */
+    case CGRP_PRIO_LOCKED:
+        switch (adjust) {
+        case CGRP_ADJ_UNLOCK:
+            process->prio_mode = CGRP_PRIO_DEFAULT;
+            break;
+        case CGRP_ADJ_EXTERN:
+            process->prio_mode = CGRP_PRIO_EXTERN;
+            return TRUE;
+        default:
+            return TRUE;
+        }
+        break;
+        
+        /*
+         * currently controlled externally
+         */
+    case CGRP_PRIO_EXTERN:
+        switch (adjust) {
+        case CGRP_ADJ_INTERN:
+            process->prio_mode = CGRP_PRIO_DEFAULT;
+            break;
+        default:
+            return TRUE;
+        }
+        break;
+        
+    default:
+        return TRUE;
+    }
+    
+    if (priority == process->priority)
+        return TRUE;
+    
+#if 0
+    /*
+     * XXX Preserving voluntarily lowered priorities cannot be done
+     *     as simply as before. We may need to administer whether
+     *     the current priority has been set by us (and preserve this
+     *     across forks). Big ouch...
+     */
+    switch (preserve) {
+    case CGRP_PRIO_LOW:
+        preserve = (getpriority(PRIO_PROCESS, process->pid) > 0);
+        break;
+        
+    case CGRP_PRIO_NONE:
+        preserve = FALSE;
+        break;
+
+    case CGRP_PRIO_ALL:
+        preserve = TRUE;
+        break;
+    }
+#else
+    preserve = FALSE;
+#endif
+
+    OHM_DEBUG(DBG_ACTION, "%u/%u (%s), %sing priority (req: %d)",
+              process->tgid, process->pid, process->binary,
+              preserve ? "preserv" : "sett", priority);
+    
+    if (preserve)
+        status = 0;
+    else {
+
+        if (priority > 19)
+            priority = 19;
+        else if (priority < -20)
+            priority = -20;
+
+        process->priority = priority;
+        status = setpriority(PRIO_PROCESS, process->pid, priority);
+    }
+
     return status == 0 || errno == ESRCH;
 }
 
