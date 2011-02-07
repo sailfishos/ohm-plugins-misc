@@ -709,6 +709,8 @@ void group_print(cgrp_context_t *, cgrp_group_t *, FILE *);
 int  group_add_process(cgrp_context_t *, cgrp_group_t *, cgrp_process_t *);
 int  group_del_process(cgrp_process_t *);
 int  group_set_priority(cgrp_group_t *, int, int);
+int  group_adjust_priority(cgrp_group_t *, cgrp_adjust_t, int, int);
+
 
 
 /* cgrp_procdef.c */
