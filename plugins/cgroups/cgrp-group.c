@@ -324,14 +324,7 @@ group_adjust_priority(cgrp_group_t *group, cgrp_adjust_t adjust, int value,
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
-    int             priority, success;
-    
-    if (adjust == CGRP_ADJ_RELATIVE)
-        priority = group->priority + value;
-    else
-        priority = value;
-    
-    group->priority = priority;
+    int             success;
     
     success = TRUE;
     list_foreach(&group->processes, p, n) {
