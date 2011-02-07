@@ -343,6 +343,26 @@ group_adjust_priority(cgrp_group_t *group, cgrp_adjust_t adjust, int value,
 }
 
 
+/********************
+ * group_adjust_oom
+ ********************/
+int
+group_adjust_oom(cgrp_group_t *group, cgrp_adjust_t adjust, int value)
+{
+    cgrp_process_t *process;
+    list_hook_t    *p, *n;
+    int             success;
+    
+    success = TRUE;
+    list_foreach(&group->processes, p, n) {
+        process  = list_entry(p, cgrp_process_t, group_hook);
+        success &= process_adjust_oom(process, adjust, value);
+    }
+
+    return success;
+}
+
+
 /* 
  * Local Variables:
  * c-basic-offset: 4

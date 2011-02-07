@@ -68,6 +68,12 @@ typedef struct {                        /* renice a process */
     int   value;                        /* priority value */
 } group_prio_t;
 
+typedef struct {
+    char *group;                        /* target group */
+    char *action;                       /* set, adjust, ignore */
+    int   value;                        /* OOM adjustment */
+} group_oom_t;
+
 typedef void (*ep_cb_t) (GObject *, GObject *, gboolean);
 
 static void     policy_decision (GObject *, GObject *, ep_cb_t, gpointer);
@@ -427,6 +433,49 @@ group_prio_action(cgrp_context_t *ctx, void *data)
 }
 
 
+/********************
+ * group_oom_action
+ ********************/
+static int
+group_oom_action(cgrp_context_t *ctx, void *data)
+{
+    group_oom_t   *oom = (group_oom_t *)data;
+    char          *action;
+    cgrp_adjust_t  adjust;
+    cgrp_group_t  *group;
+    int            value, success;
+
+    group = group_lookup(ctx, oom->group);
+
+    if (group == NULL) {
+        OHM_WARNING("cgrp: cannot adjust OOM-priority of unknown group '%s'",
+                    oom->group);
+        return TRUE;
+    }
+
+    action = oom->action;
+    value  = oom->value;
+
+    if      (!strcmp(action, CGRP_ADJUST_ABSOLUTE)) adjust = CGRP_ADJ_ABSOLUTE;
+    else if (!strcmp(action, CGRP_ADJUST_RELATIVE)) adjust = CGRP_ADJ_RELATIVE;
+    else if (!strcmp(action, CGRP_ADJUST_LOCK    )) adjust = CGRP_ADJ_LOCK;
+    else if (!strcmp(action, CGRP_ADJUST_UNLOCK  )) adjust = CGRP_ADJ_UNLOCK;
+    else if (!strcmp(action, CGRP_ADJUST_EXTERN  )) adjust = CGRP_ADJ_EXTERN;
+    else if (!strcmp(action, CGRP_ADJUST_INTERN  )) adjust = CGRP_ADJ_INTERN;
+    else {
+        OHM_WARNING("cgrp: unknown OOM-priority adjustment action '%s'",action);
+        return TRUE;
+    }
+
+    success  = group_adjust_oom(group, adjust, value);
+    
+    OHM_DEBUG(DBG_ACTION, "%s OOM-priority of group %s to %d: %s",
+              action, oom->group, value, success ? "OK" : "FAILED");
+    
+    return success;
+}
+
+
 /*****************************************************************************
  *                  *** action parsing routines from videoep ***             *
  *****************************************************************************/
@@ -440,6 +489,7 @@ group_prio_action(cgrp_context_t *ctx, void *data)
 #define PROC_PRIO PREFIX"process_priority"
 #define PROC_OOM  PREFIX"process_oom"
 #define GRP_PRIO  PREFIX"group_priority"
+#define GRP_OOM   PREFIX"group_oom"
 
 #define STRUCT_OFFSET(s,m) ((char *)&(((s *)0)->m) - (char *)0)
 
@@ -516,6 +566,13 @@ static argdsc_t group_prio_args[] = {
     { argtype_invalid,  NULL    , 0                                   }
 };
 
+static argdsc_t group_oom_args[] = {
+    { argtype_string , "group"  , STRUCT_OFFSET(group_oom_t, group)  },
+    { argtype_string , "action" , STRUCT_OFFSET(group_oom_t, action) },
+    { argtype_integer, "value"  , STRUCT_OFFSET(group_oom_t, value)  },
+    { argtype_invalid,  NULL    , 0                                  }
+};
+
 static actdsc_t actions[] = {
     { REPARENT , reparent_action  , reparent_args  , sizeof(reparent_t)   },
     { FREEZE   , freeze_action    , freeze_args    , sizeof(freeze_t)     },
@@ -525,6 +582,7 @@ static actdsc_t actions[] = {
     { PROC_PRIO, proc_prio_action , proc_prio_args , sizeof(proc_prio_t)  },
     { PROC_OOM , proc_oom_action  , proc_oom_args  , sizeof(proc_oom_t)   },
     { GRP_PRIO , group_prio_action, group_prio_args, sizeof(group_prio_t) },
+    { GRP_OOM  , group_oom_action , group_oom_args , sizeof(group_oom_t)  },
     { NULL     , NULL             , NULL           , 0                    }
 };
 
