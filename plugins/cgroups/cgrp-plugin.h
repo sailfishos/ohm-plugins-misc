@@ -389,6 +389,12 @@ enum {
     CGRP_PRIO_EXTERN,                       /* out of policy control */
 };
 
+enum {
+    CGRP_OOM_DEFAULT = 0,                   /* adjusted normally */
+    CGRP_OOM_LOCKED,                        /* locked to a value */
+    CGRP_OOM_EXTERN,                        /* out of policy control */
+};
+
 typedef enum {
     CGRP_ADJ_ABSOLUTE = 0,                  /* set to absolute value */
     CGRP_ADJ_RELATIVE,                      /* adjust by given value */
@@ -418,9 +424,8 @@ typedef struct {
     cgrp_group_t *group;                    /* current group */
     int           priority;                 /* process priority */
     int           prio_mode;                
-#if 0
     int           oom_adj;                  /* OOM adjustment */
-#endif
+    int           oom_mode;
     list_hook_t   proc_hook;                /* hook to process table */
     list_hook_t   group_hook;               /* hook to group */
 } cgrp_process_t;
@@ -662,6 +667,8 @@ int process_scan_proc(cgrp_context_t *);
 int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
 int process_set_priority(cgrp_process_t *, int, int);
 int process_adjust_priority(cgrp_process_t *, cgrp_adjust_t, int, int);
+int process_adjust_oom(cgrp_process_t *, cgrp_adjust_t, int);
+
 
 void procattr_dump(cgrp_proc_attr_t *);
 

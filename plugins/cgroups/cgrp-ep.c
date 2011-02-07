@@ -56,6 +56,12 @@ typedef struct {                        /* set the priority of a process */
     int   value;                        /* priority value */
 } proc_prio_t;
 
+typedef struct {
+    int   pid;                          /* pid of the target process */
+    char *action;                       /* set, adjust, lock, unlock, self */
+    int   value;                        /* OOM adjustment */
+} proc_oom_t;
+
 typedef struct {                        /* renice a process */
     char *group;                        /* target group */
     char *action;                       /* set, adjust, lock, unlock, ignore */
@@ -335,6 +341,49 @@ proc_prio_action(cgrp_context_t *ctx, void *data)
 
 
 /********************
+ * proc_oom_action
+ ********************/
+static int
+proc_oom_action(cgrp_context_t *ctx, void *data)
+{
+    proc_oom_t     *oom = (proc_oom_t *)data;
+    char           *action;
+    cgrp_adjust_t   adjust;
+    cgrp_process_t *process;
+    int             value, success;
+
+    process = proc_hash_lookup(ctx, oom->pid);
+
+    if (process == NULL) {
+        OHM_WARNING("cgrp: cannot OOM-adjust unknown process %u", oom->pid);
+        return TRUE;
+    }
+
+    action = oom->action;
+    value  = oom->value;
+
+    if      (!strcmp(action, CGRP_ADJUST_ABSOLUTE)) adjust = CGRP_ADJ_ABSOLUTE;
+    else if (!strcmp(action, CGRP_ADJUST_RELATIVE)) adjust = CGRP_ADJ_RELATIVE;
+    else if (!strcmp(action, CGRP_ADJUST_LOCK    )) adjust = CGRP_ADJ_LOCK;
+    else if (!strcmp(action, CGRP_ADJUST_UNLOCK  )) adjust = CGRP_ADJ_UNLOCK;
+    else if (!strcmp(action, CGRP_ADJUST_EXTERN  )) adjust = CGRP_ADJ_EXTERN;
+    else if (!strcmp(action, CGRP_ADJUST_INTERN  )) adjust = CGRP_ADJ_INTERN;
+    else {
+        OHM_WARNING("cgrp: unknown OOM-adjustment action '%s'", action);
+        return TRUE;
+    }
+
+    success = process_adjust_oom(process, adjust, value);
+    
+    OHM_DEBUG(DBG_ACTION, "%s OOM-priority of %u (%s) to %d: %s",
+              action, oom->pid, process->binary, value,
+              success ? "OK" : "FAILED");
+    
+    return success;
+}
+
+
+/********************
  * group_prio_action
  ********************/
 static int
@@ -389,6 +438,7 @@ group_prio_action(cgrp_context_t *ctx, void *data)
 #define LIMIT     PREFIX"partition_limit"
 #define RENICE    PREFIX"cgroup_renice"
 #define PROC_PRIO PREFIX"process_priority"
+#define PROC_OOM  PREFIX"process_oom"
 #define GRP_PRIO  PREFIX"group_priority"
 
 #define STRUCT_OFFSET(s,m) ((char *)&(((s *)0)->m) - (char *)0)
@@ -452,6 +502,13 @@ static argdsc_t proc_prio_args[] = {
     { argtype_invalid,  NULL     , 0                                  }
 };
 
+static argdsc_t proc_oom_args[] = {
+    { argtype_integer, "process" , STRUCT_OFFSET(proc_oom_t, pid)    },
+    { argtype_string , "action"  , STRUCT_OFFSET(proc_oom_t, action) },
+    { argtype_integer, "value"   , STRUCT_OFFSET(proc_oom_t, value)  },
+    { argtype_invalid,  NULL     , 0                                 }
+};
+
 static argdsc_t group_prio_args[] = {
     { argtype_string , "group"  , STRUCT_OFFSET(group_prio_t, group)  },
     { argtype_string , "action" , STRUCT_OFFSET(group_prio_t, action) },
@@ -466,6 +523,7 @@ static actdsc_t actions[] = {
     { LIMIT    , limit_action     , limit_args     , sizeof(limit_t)      },
     { RENICE   , renice_action    , renice_args    , sizeof(renice_t)     },
     { PROC_PRIO, proc_prio_action , proc_prio_args , sizeof(proc_prio_t)  },
+    { PROC_OOM , proc_oom_action  , proc_oom_args  , sizeof(proc_oom_t)   },
     { GRP_PRIO , group_prio_action, group_prio_args, sizeof(group_prio_t) },
     { NULL     , NULL             , NULL           , 0                    }
 };

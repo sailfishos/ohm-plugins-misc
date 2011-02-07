@@ -1213,6 +1213,126 @@ process_adjust_priority(cgrp_process_t *process,
 
 
 /********************
+ * process_adjust_oom
+ ********************/
+int
+process_adjust_oom(cgrp_process_t *process, cgrp_adjust_t adjust, int value)
+{
+    char path[PATH_MAX], val[8], *p;
+    int  oom_adj, fd, len, success;
+    
+    
+    if (adjust == CGRP_ADJ_RELATIVE)
+        oom_adj = process->oom_adj + value;
+    else
+        oom_adj = value;
+    
+    switch (process->oom_mode) {
+        /*
+         * currently adjusted normally
+         */
+    case CGRP_OOM_DEFAULT:
+        switch (adjust) {
+        case CGRP_ADJ_LOCK:
+            process->oom_mode = CGRP_OOM_LOCKED;
+            break;
+        case CGRP_ADJ_EXTERN:
+            process->oom_mode = CGRP_OOM_EXTERN;
+            return TRUE;
+        default:
+            break;
+        }
+        break;
+        
+        /*
+         * currently locked
+         */
+    case CGRP_OOM_LOCKED:
+        switch (adjust) {
+        case CGRP_ADJ_UNLOCK:
+            process->oom_mode = CGRP_OOM_DEFAULT;
+            break;
+        case CGRP_ADJ_EXTERN:
+            process->oom_mode = CGRP_OOM_EXTERN;
+            return TRUE;
+        default:
+            return TRUE;
+        }
+        break;
+        
+        /*
+         * currently controlled externally
+         */
+    case CGRP_OOM_EXTERN:
+        switch (adjust) {
+        case CGRP_ADJ_INTERN:
+            process->oom_mode = CGRP_OOM_DEFAULT;
+            break;
+        default:
+            return TRUE;
+        }
+        break;
+        
+    default:
+        return TRUE;
+    }
+    
+    if (oom_adj < -17)
+        oom_adj = -17;
+    else if (oom_adj > 15)
+        oom_adj = 15;
+
+    if (oom_adj == process->oom_adj)
+        return TRUE;
+    
+    OHM_DEBUG(DBG_ACTION, "%u/%u (%s), adjusting OOM-priority (req: %d)",
+              process->tgid, process->pid, process->binary, oom_adj);
+    
+    process->oom_adj = oom_adj;
+    
+
+    /*
+     * XXX TODO: adjust OOM only for processes (to avoid setting it multiple
+     *           times)
+     */
+
+    if (process->pid != process->tgid)
+        OHM_WARNING("cgrp: TODON'T: adjusting OOM-priority at thread %u/%u...",
+                    process->tgid, process->pid);
+    
+    /*
+     *
+     * XXX TODO: cache fd to /proc/<pid>/oom_adj and close it during
+     *           process_remove
+     */
+    
+    snprintf(path, sizeof(path), "/proc/%u/oom_adj", process->pid);
+    if ((fd = open(path, O_WRONLY)) >= 0) {
+        p = val;
+
+        if (oom_adj < 0) {
+            *p++ = '-';
+            oom_adj = -oom_adj;
+        }
+        if (oom_adj < 10)
+            *p++ = '0' + oom_adj;
+        else {
+            *p++ = '1';
+            *p++ = '0' + (oom_adj - 10);
+        }
+        len = p - val;
+        
+        success = (write(fd, val, len) == len);
+        close(fd);
+    }
+    else
+        success = FALSE;
+
+    return success || errno == ENOENT;
+}
+
+
+/********************
  * procattr_dump
  ********************/
 void
