@@ -667,6 +667,8 @@ KEYWORD_RECLASS_AFTER     reclassify-after
 KEYWORD_RECLASSIFY        reclassify-count
 KEYWORD_CLASSIFY_ARGVX    classify-by-argv[0-9]+
 KEYWORD_CLASSIFY          classify
+KEYWORD_PRIORITY          priority
+KEYWORD_OOM               out-of-memory
 KEYWORD_NO_OP             no-op
 KEYWORD_EXPORT_GROUPS     export-group-facts
 KEYWORD_EXPORT_PARTITIONS export-partition-facts
@@ -786,6 +788,8 @@ ESCAPE		       \\
 {KEYWORD_RECLASSIFY}        { PASS_KEYWORD(RECLASSIFY);        }
 {KEYWORD_CLASSIFY}          { PASS_KEYWORD(CLASSIFY);          }
 {KEYWORD_CLASSIFY_ARGVX}    { PASS_KEYWORD(CLASSIFY_ARGVX);    }
+{KEYWORD_PRIORITY}          { PASS_KEYWORD(PRIORITY);          }
+{KEYWORD_OOM}               { PASS_KEYWORD(OOM);               }
 {KEYWORD_NO_OP}             { PASS_KEYWORD(NO_OP);             }
 {KEYWORD_EXPORT_GROUPS}     { PASS_KEYWORD(EXPORT_GROUPS);     }
 {KEYWORD_EXPORT_PARTITIONS} { PASS_KEYWORD(EXPORT_PARTITIONS); }

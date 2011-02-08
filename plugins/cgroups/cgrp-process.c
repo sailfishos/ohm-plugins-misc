@@ -1139,6 +1139,9 @@ process_adjust_priority(cgrp_process_t *process,
         case CGRP_ADJ_UNLOCK:
             process->prio_mode = CGRP_PRIO_DEFAULT;
             break;
+        case CGRP_ADJ_LOCK:
+            process->prio_mode = CGRP_PRIO_LOCKED;
+            break;
         case CGRP_ADJ_EXTERN:
             process->prio_mode = CGRP_PRIO_EXTERN;
             return TRUE;
@@ -1163,7 +1166,7 @@ process_adjust_priority(cgrp_process_t *process,
     default:
         return TRUE;
     }
-    
+
     if (priority == process->priority)
         return TRUE;
     
