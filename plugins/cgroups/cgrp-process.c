@@ -1091,10 +1091,247 @@ process_set_priority(cgrp_process_t *process, int priority, int preserve)
     
     if (preserve)
         status = 0;
-    else
+    else {
+        process->priority = priority;
         status = setpriority(PRIO_PROCESS, process->pid, priority);
+    }
     
     return status == 0 || errno == ESRCH;
+}
+
+
+/********************
+ * process_adjust_priority
+ ********************/
+int
+process_adjust_priority(cgrp_process_t *process,
+                        cgrp_adjust_t adjust, int value, int preserve)
+{
+    int priority, status;
+    
+    if (adjust == CGRP_ADJ_RELATIVE)
+        priority = process->priority + value;
+    else
+        priority = value;
+    
+    switch (process->prio_mode) {
+        /*
+         * currently adjusted normally
+         */
+    case CGRP_PRIO_DEFAULT:
+        switch (adjust) {
+        case CGRP_ADJ_LOCK:
+            process->prio_mode = CGRP_PRIO_LOCKED;
+            break;
+        case CGRP_ADJ_EXTERN:
+            process->prio_mode = CGRP_PRIO_EXTERN;
+            return TRUE;
+        default:
+            break;
+        }
+        break;
+        
+        /*
+         * currently locked
+         */
+    case CGRP_PRIO_LOCKED:
+        switch (adjust) {
+        case CGRP_ADJ_UNLOCK:
+            process->prio_mode = CGRP_PRIO_DEFAULT;
+            break;
+        case CGRP_ADJ_LOCK:
+            process->prio_mode = CGRP_PRIO_LOCKED;
+            break;
+        case CGRP_ADJ_EXTERN:
+            process->prio_mode = CGRP_PRIO_EXTERN;
+            return TRUE;
+        default:
+            return TRUE;
+        }
+        break;
+        
+        /*
+         * currently controlled externally
+         */
+    case CGRP_PRIO_EXTERN:
+        switch (adjust) {
+        case CGRP_ADJ_INTERN:
+            process->prio_mode = CGRP_PRIO_DEFAULT;
+            break;
+        default:
+            return TRUE;
+        }
+        break;
+        
+    default:
+        return TRUE;
+    }
+
+    if (priority == process->priority)
+        return TRUE;
+    
+#if 0
+    /*
+     * XXX Preserving voluntarily lowered priorities cannot be done
+     *     as simply as before. We may need to administer whether
+     *     the current priority has been set by us (and preserve this
+     *     across forks). Big ouch...
+     */
+    switch (preserve) {
+    case CGRP_PRIO_LOW:
+        preserve = (getpriority(PRIO_PROCESS, process->pid) > 0);
+        break;
+        
+    case CGRP_PRIO_NONE:
+        preserve = FALSE;
+        break;
+
+    case CGRP_PRIO_ALL:
+        preserve = TRUE;
+        break;
+    }
+#else
+    preserve = FALSE;
+#endif
+
+    OHM_DEBUG(DBG_ACTION, "%u/%u (%s), %sing priority (req: %d)",
+              process->tgid, process->pid, process->binary,
+              preserve ? "preserv" : "sett", priority);
+    
+    if (preserve)
+        status = 0;
+    else {
+
+        if (priority > 19)
+            priority = 19;
+        else if (priority < -20)
+            priority = -20;
+
+        process->priority = priority;
+        status = setpriority(PRIO_PROCESS, process->pid, priority);
+    }
+
+    return status == 0 || errno == ESRCH;
+}
+
+
+/********************
+ * process_adjust_oom
+ ********************/
+int
+process_adjust_oom(cgrp_process_t *process, cgrp_adjust_t adjust, int value)
+{
+    char path[PATH_MAX], val[8], *p;
+    int  oom_adj, fd, len, success;
+    
+    
+    if (adjust == CGRP_ADJ_RELATIVE)
+        oom_adj = process->oom_adj + value;
+    else
+        oom_adj = value;
+    
+    switch (process->oom_mode) {
+        /*
+         * currently adjusted normally
+         */
+    case CGRP_OOM_DEFAULT:
+        switch (adjust) {
+        case CGRP_ADJ_LOCK:
+            process->oom_mode = CGRP_OOM_LOCKED;
+            break;
+        case CGRP_ADJ_EXTERN:
+            process->oom_mode = CGRP_OOM_EXTERN;
+            return TRUE;
+        default:
+            break;
+        }
+        break;
+        
+        /*
+         * currently locked
+         */
+    case CGRP_OOM_LOCKED:
+        switch (adjust) {
+        case CGRP_ADJ_UNLOCK:
+            process->oom_mode = CGRP_OOM_DEFAULT;
+            break;
+        case CGRP_ADJ_EXTERN:
+            process->oom_mode = CGRP_OOM_EXTERN;
+            return TRUE;
+        default:
+            return TRUE;
+        }
+        break;
+        
+        /*
+         * currently controlled externally
+         */
+    case CGRP_OOM_EXTERN:
+        switch (adjust) {
+        case CGRP_ADJ_INTERN:
+            process->oom_mode = CGRP_OOM_DEFAULT;
+            break;
+        default:
+            return TRUE;
+        }
+        break;
+        
+    default:
+        return TRUE;
+    }
+    
+    if (oom_adj < -17)
+        oom_adj = -17;
+    else if (oom_adj > 15)
+        oom_adj = 15;
+
+    if (oom_adj == process->oom_adj)
+        return TRUE;
+    
+    OHM_DEBUG(DBG_ACTION, "%u/%u (%s), adjusting OOM-priority (req: %d)",
+              process->tgid, process->pid, process->binary, oom_adj);
+    
+    process->oom_adj = oom_adj;
+    
+
+    /*
+     * XXX TODO: adjust OOM only for processes (to avoid setting it multiple
+     *           times)
+     */
+
+    if (process->pid != process->tgid)
+        OHM_WARNING("cgrp: TODON'T: adjusting OOM-priority at thread %u/%u...",
+                    process->tgid, process->pid);
+    
+    /*
+     *
+     * XXX TODO: cache fd to /proc/<pid>/oom_adj and close it during
+     *           process_remove
+     */
+    
+    snprintf(path, sizeof(path), "/proc/%u/oom_adj", process->pid);
+    if ((fd = open(path, O_WRONLY)) >= 0) {
+        p = val;
+
+        if (oom_adj < 0) {
+            *p++ = '-';
+            oom_adj = -oom_adj;
+        }
+        if (oom_adj < 10)
+            *p++ = '0' + oom_adj;
+        else {
+            *p++ = '1';
+            *p++ = '0' + (oom_adj - 10);
+        }
+        len = p - val;
+        
+        success = (write(fd, val, len) == len);
+        close(fd);
+    }
+    else
+        success = FALSE;
+
+    return success || errno == ENOENT;
 }
 
 

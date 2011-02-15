@@ -85,6 +85,8 @@ ACTION_FUNCTIONS(group);
 ACTION_FUNCTIONS(schedule);
 ACTION_FUNCTIONS(renice);
 ACTION_FUNCTIONS(classify);
+ACTION_FUNCTIONS(priority);
+ACTION_FUNCTIONS(oom);
 ACTION_FUNCTIONS(ignore);
 ACTION_FUNCTIONS(noop);
 
@@ -98,6 +100,8 @@ static action_handler_t actions[] = {
     ACTION(SCHEDULE  , schedule_exec, schedule_print, schedule_del),
     ACTION(RENICE    , renice_exec  , renice_print  , renice_del),
     ACTION(RECLASSIFY, classify_exec, classify_print, classify_del),
+    ACTION(PRIORITY  , priority_exec, priority_print, priority_del),
+    ACTION(OOM       , oom_exec     , oom_print     , oom_del),
     ACTION(IGNORE    , ignore_exec  , ignore_print  , ignore_del),
     ACTION(NOOP      , noop_exec    , noop_print    , noop_del)
 };
@@ -552,6 +556,178 @@ action_classify_exec(cgrp_context_t *ctx,
         argn = -action->classify.delay - 1;   /* -1: 0, -2: 1, -3: 2, ... */
         return classify_by_argvx(ctx, attr, argn);
     }
+}
+
+
+/*
+ * scheduling priority
+ */
+
+/********************
+ * action_priority_new
+ ********************/
+cgrp_action_t *
+action_priority_new(cgrp_adjust_t adjust, int value)
+{
+    cgrp_action_priority_t *action;
+
+    if (ALLOC_OBJ(action) != NULL) {
+        action->type     = CGRP_ACTION_PRIORITY;
+        action->adjust   = adjust;
+        action->value    = value;
+    }
+    
+    return (cgrp_action_t *)action;
+}
+
+
+/********************
+ * action_priority_del
+ ********************/
+void
+action_priority_del(cgrp_action_t *action)
+{
+    FREE(action);
+}
+
+
+/********************
+ * action_priority_print
+ ********************/
+int
+action_priority_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
+{
+    static const char *names[] = {
+        CGRP_ADJUST_ABSOLUTE,
+        CGRP_ADJUST_RELATIVE,
+        CGRP_ADJUST_LOCK,
+        CGRP_ADJUST_UNLOCK,
+        CGRP_ADJUST_EXTERN,
+        CGRP_ADJUST_INTERN
+    };
+    cgrp_action_priority_t *prio = &action->priority;
+    const char             *adjust;
+    
+
+    (void)ctx;
+    
+    if (CGRP_ADJ_UNKNOWN < prio->adjust && prio->adjust <= CGRP_ADJ_INTERN)
+        adjust = names[prio->adjust];
+    else
+        adjust = "<unknown>";
+    
+    return fprintf(fp, "priority %s %d", adjust, prio->value);
+}
+
+
+/********************
+ * action_priority_exec
+ ********************/
+int
+action_priority_exec(cgrp_context_t *ctx,
+                     cgrp_proc_attr_t *attr, cgrp_action_t *action)
+{
+    cgrp_process_t *process = attr->process;
+    cgrp_adjust_t   adjust  = action->priority.adjust;
+    int             value   = action->priority.value;
+
+    (void)ctx;
+
+    OHM_DEBUG(DBG_CLASSIFY, "<%u, %s (%p)> priority 0x%x %d",
+              attr->pid, attr->binary, process, adjust, value);
+    
+    if (process == NULL) {
+        OHM_WARNING("cgrp: no process given, cannot adjust priority");
+        return FALSE;
+    }
+    else
+        return process_adjust_priority(process, adjust, value, CGRP_PRIO_LOW);
+}
+
+
+/*
+ * OOM priority
+ */
+
+/********************
+ * action_oom_new
+ ********************/
+cgrp_action_t *
+action_oom_new(cgrp_adjust_t adjust, int value)
+{
+    cgrp_action_oom_t *action;
+
+    if (ALLOC_OBJ(action) != NULL) {
+        action->type     = CGRP_ACTION_OOM;
+        action->adjust   = adjust;
+        action->value    = value;
+    }
+    
+    return (cgrp_action_t *)action;
+}
+
+
+/********************
+ * action_oom_del
+ ********************/
+void
+action_oom_del(cgrp_action_t *action)
+{
+    FREE(action);
+}
+
+
+/********************
+ * action_oom_print
+ ********************/
+int
+action_oom_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
+{
+    static const char *names[] = {
+        CGRP_ADJUST_ABSOLUTE,
+        CGRP_ADJUST_RELATIVE,
+        CGRP_ADJUST_LOCK,
+        CGRP_ADJUST_UNLOCK,
+        CGRP_ADJUST_EXTERN,
+        CGRP_ADJUST_INTERN
+    };
+    cgrp_action_oom_t *prio = &action->oom;
+    const char        *adjust;
+    
+
+    (void)ctx;
+    
+    if (CGRP_ADJ_UNKNOWN < prio->adjust && prio->adjust <= CGRP_ADJ_INTERN)
+        adjust = names[prio->adjust];
+    else
+        adjust = "<unknown>";
+    
+    return fprintf(fp, "out-of-memory %s %d", adjust, prio->value);
+}
+
+
+/********************
+ * action_oom_exec
+ ********************/
+int
+action_oom_exec(cgrp_context_t *ctx,
+                cgrp_proc_attr_t *attr, cgrp_action_t *action)
+{
+    cgrp_process_t *process = attr->process;
+    cgrp_adjust_t   adjust  = action->priority.adjust;
+    int             value   = action->priority.value;
+
+    (void)ctx;
+
+    OHM_DEBUG(DBG_CLASSIFY, "<%u, %s> OOM priority 0x%x %d",
+              attr->pid, attr->binary, adjust, value);
+    
+    if (process == NULL) {
+        OHM_WARNING("cgrp: no process given, cannot adjust OOM priority");
+        return FALSE;
+    }
+    else
+        return process_adjust_oom(process, adjust, value);
 }
 
 

@@ -54,6 +54,8 @@ static int add_uid(cgrp_rule_t *, uid_t);
 static int add_usr(cgrp_rule_t *, const char *);
 static int lookup_uid(const char *, uid_t *);
 
+static cgrp_adjust_t parse_adjust(const char *);
+
 
 static char rule_group[256];
 
@@ -80,6 +82,7 @@ static char rule_group[256];
     cgrp_context_t    ctx;
     s64_t             time;
     cgrp_ctrl_setting_t *ctrl_settings;
+    cgrp_adjust_t     adjust;
 }
 
 %defines
@@ -115,6 +118,8 @@ static char rule_group[256];
 %type <time>     time_usec
 %type <uint32>   schedule_priority
 %type <sint32>   renice_priority
+%type <adjust>   adjust_action
+%type <sint32>   adjust_value
 
 %type <action> action
 %type <action> actions
@@ -122,6 +127,8 @@ static char rule_group[256];
 %type <action> action_classify
 %type <action> action_schedule
 %type <action> action_renice
+%type <action> action_priority
+%type <action> action_oom
 %type <action> action_ignore
 %type <action> action_no_op
 
@@ -159,6 +166,8 @@ static char rule_group[256];
 %token KEYWORD_RECLASSIFY
 %token KEYWORD_RECLASS_AFTER
 %token KEYWORD_CLASSIFY
+%token KEYWORD_PRIORITY
+%token KEYWORD_OOM
 %token KEYWORD_NO_OP
 %token KEYWORD_EXPORT_GROUPS
 %token KEYWORD_EXPORT_PARTITIONS
@@ -1040,12 +1049,14 @@ actions: action          { $$ = $1; }
     | actions ";" action { $$ = $1; action_add($$, $3); }
     ;
 
-action: action_group          { $$ = $1; }
-    |   action_classify       { $$ = $1; }
-    |   action_schedule       { $$ = $1; }
-    |   action_renice         { $$ = $1; }
-    |   action_ignore         { $$ = $1; }
-    |   action_no_op          { $$ = $1; }
+action: action_group     { $$ = $1; }
+    |   action_classify  { $$ = $1; }
+    |   action_schedule  { $$ = $1; }
+    |   action_renice    { $$ = $1; }
+    |   action_priority  { $$ = $1; }
+    |   action_oom       { $$ = $1; }
+    |   action_ignore    { $$ = $1; }
+    |   action_no_op     { $$ = $1; }
     ;
 
 action_group: KEYWORD_GROUP string {
@@ -1121,6 +1132,32 @@ action_renice: KEYWORD_RENICE renice_priority {
     }
     ;
 
+action_priority: KEYWORD_PRIORITY adjust_action adjust_value {
+        cgrp_action_t *action;
+
+        action = action_priority_new($2, $3.value);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new priority action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
+action_oom: KEYWORD_OOM adjust_action adjust_value {
+        cgrp_action_t *action;
+
+        action = action_oom_new($2, $3.value);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new OOM action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
 action_ignore: KEYWORD_IGNORE {
         cgrp_action_t *action;
 
@@ -1154,6 +1191,15 @@ schedule_priority: /* empty */ { $$.value = 0; }
 renice_priority: TOKEN_UINT    { $$.value = $1.value; }
     |            TOKEN_SINT    { $$.value = $1.value; }
     ;
+
+adjust_action: TOKEN_IDENT  { $$ = parse_adjust($1.value); }
+    |          TOKEN_STRING { $$ = parse_adjust($1.value); }
+    ;
+
+adjust_value: TOKEN_SINT { $$.value = $1.value;      }
+    |         TOKEN_UINT { $$.value = (int)$1.value; }
+    ;
+
 
 
 
@@ -1667,6 +1713,23 @@ lookup_uid(const char *name, uid_t *uid)
         *uid = usr.pw_uid;
         return TRUE;
     }
+}
+
+
+/********************
+ * misc. parsing
+ ********************/
+static cgrp_adjust_t
+parse_adjust(const char *action)
+{
+    if      (!strcmp(action, CGRP_ADJUST_ABSOLUTE)) return CGRP_ADJ_ABSOLUTE;
+    else if (!strcmp(action, CGRP_ADJUST_RELATIVE)) return CGRP_ADJ_RELATIVE;
+    else if (!strcmp(action, CGRP_ADJUST_LOCK    )) return CGRP_ADJ_LOCK;
+    else if (!strcmp(action, CGRP_ADJUST_UNLOCK  )) return CGRP_ADJ_UNLOCK;
+    else if (!strcmp(action, CGRP_ADJUST_EXTERN  )) return CGRP_ADJ_EXTERN;
+    else if (!strcmp(action, CGRP_ADJUST_INTERN  )) return CGRP_ADJ_INTERN;
+    
+    return CGRP_ADJ_UNKNOWN;
 }
 
 

@@ -62,6 +62,30 @@ USA.
 typedef u64_t cgrp_mask_t;
 
 
+
+/*
+ * scheduling / OOM priority adjustments
+ */
+
+typedef enum {
+    CGRP_ADJ_UNKNOWN = -1,
+    CGRP_ADJ_ABSOLUTE = 0,                  /* set to absolute value */
+    CGRP_ADJ_RELATIVE,                      /* adjust by given value */
+    CGRP_ADJ_LOCK,                          /* lock to given value */
+    CGRP_ADJ_UNLOCK,                        /* unlock, set to given value */
+    CGRP_ADJ_EXTERN,                        /* adjusted by external entity */
+    CGRP_ADJ_INTERN,                        /* adjusted again internally */
+} cgrp_adjust_t;
+
+#define CGRP_ADJUST_ABSOLUTE "set"
+#define CGRP_ADJUST_RELATIVE "adjust"
+#define CGRP_ADJUST_LOCK     "lock"
+#define CGRP_ADJUST_UNLOCK   "unlock"
+#define CGRP_ADJUST_EXTERN   "extern"
+#define CGRP_ADJUST_INTERN   "intern"
+
+
+
 /*
  * a custom partition controls
  */
@@ -163,6 +187,8 @@ typedef enum {
     CGRP_ACTION_RENICE,                     /* renice process */
     CGRP_ACTION_RECLASSIFY,                 /* reclassify after a delay */
     CGRP_ACTION_CLASSIFY_ARGV0,             /* classify by argv[0] */
+    CGRP_ACTION_PRIORITY,                   /* adjust process priority */
+    CGRP_ACTION_OOM,                        /* adjust OOM priority */
     CGRP_ACTION_IGNORE,                     /* apply the default rules */
     CGRP_ACTION_NOOP,                       /* no-op action */
     CGRP_ACTION_MAX,
@@ -198,6 +224,19 @@ typedef struct {
     int delay;                              /* retry after this many msecs */
 } cgrp_action_classify_t;
 
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    cgrp_adjust_t adjust;                   /* adjustment method */
+    int           value;                    /* and value */
+} cgrp_action_priority_t;
+
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    cgrp_adjust_t adjust;                   /* adjustment method */
+    int           value;                    /* and value */
+} cgrp_action_oom_t;
+
+
 
 union cgrp_action_u {
     cgrp_action_type_t     type;
@@ -206,6 +245,8 @@ union cgrp_action_u {
     cgrp_action_schedule_t schedule;
     cgrp_action_renice_t   renice;
     cgrp_action_classify_t classify;
+    cgrp_action_priority_t priority;
+    cgrp_action_oom_t      oom;
 };
 
 
@@ -383,6 +424,18 @@ typedef struct {
 } cgrp_procdef_t;
 
 
+enum {
+    CGRP_PRIO_DEFAULT = 0,                  /* adjusted normally */
+    CGRP_PRIO_LOCKED,                       /* locked to a value */
+    CGRP_PRIO_EXTERN,                       /* out of policy control */
+};
+
+enum {
+    CGRP_OOM_DEFAULT = 0,                   /* adjusted normally */
+    CGRP_OOM_LOCKED,                        /* locked to a value */
+    CGRP_OOM_EXTERN,                        /* out of policy control */
+};
+
 /*
  * a classified process
  */
@@ -394,7 +447,10 @@ typedef struct {
     char         *argv0;                    /* argv[0] if needed */
     char         *argvx;                    /* classified by this arg */
     cgrp_group_t *group;                    /* current group */
-    int           flags;                    /* misc. process flags */
+    int           priority;                 /* process priority */
+    int           prio_mode;                
+    int           oom_adj;                  /* OOM adjustment */
+    int           oom_mode;
     list_hook_t   proc_hook;                /* hook to process table */
     list_hook_t   group_hook;               /* hook to group */
 } cgrp_process_t;
@@ -635,6 +691,10 @@ int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
 int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
 int process_set_priority(cgrp_process_t *, int, int);
+int process_adjust_priority(cgrp_process_t *, cgrp_adjust_t, int, int);
+int process_adjust_oom(cgrp_process_t *, cgrp_adjust_t, int);
+
+
 void procattr_dump(cgrp_proc_attr_t *);
 
 void proc_notify(cgrp_context_t *,
@@ -681,6 +741,9 @@ void group_print(cgrp_context_t *, cgrp_group_t *, FILE *);
 int  group_add_process(cgrp_context_t *, cgrp_group_t *, cgrp_process_t *);
 int  group_del_process(cgrp_process_t *);
 int  group_set_priority(cgrp_group_t *, int, int);
+int  group_adjust_priority(cgrp_group_t *, cgrp_adjust_t, int, int);
+int group_adjust_oom(cgrp_group_t *, cgrp_adjust_t, int);
+
 
 
 /* cgrp_procdef.c */
@@ -732,6 +795,8 @@ cgrp_action_t *action_group_new   (cgrp_group_t *);
 cgrp_action_t *action_schedule_new(char *, int);
 cgrp_action_t *action_renice_new  (int);
 cgrp_action_t *action_classify_new(int);
+cgrp_action_t *action_priority_new(cgrp_adjust_t, int);
+cgrp_action_t *action_oom_new(cgrp_adjust_t, int);
 cgrp_action_t *action_ignore_new  (void);
 cgrp_action_t *action_noop_new    (void);
 
