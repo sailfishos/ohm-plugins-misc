@@ -3990,6 +3990,7 @@ typedef struct {
     resconn_t *conn;
     resset_t  *rset;
     uint32_t   granted;
+    uint32_t   is_releasing;
     uint32_t   reqno;
     int        video;
 } resctl_t;
@@ -4070,11 +4071,12 @@ resctl_disconnect(void)
 #else
     OHM_INFO("telephony resctl: disconnecting...");
 
-    rctl.conn    = 0;
-    rctl.rset    = NULL;
-    rctl.granted = 0;
-    rctl.reqno   = 0;
-    rctl.video   = FALSE;
+    rctl.conn         = 0;
+    rctl.rset         = NULL;
+    rctl.granted      = 0;
+    rctl.is_releasing = 0;
+    rctl.reqno        = 0;
+    rctl.video        = FALSE;
 #endif
 }
 
@@ -4160,6 +4162,9 @@ need_video(void)
 static inline int
 resctl_has_audio(void)
 {
+    if (rctl.is_releasing)
+        return 0;
+
     return rctl.granted & RESMSG_AUDIO_PLAYBACK;
 }
 
@@ -4167,6 +4172,9 @@ resctl_has_audio(void)
 static inline int
 resctl_has_video(void)
 {
+    if (rctl.is_releasing)
+        return 0;
+
     return rctl.granted & RESMSG_VIDEO_PLAYBACK;
 }
 
@@ -4214,9 +4222,11 @@ resctl_release(void)
 
     OHM_INFO("telephony resctl: releasing...");
 
-    if (rctl.rset == NULL)
+    if (rctl.rset == NULL || rctl.is_releasing)
         return;
-    
+
+    rctl.is_releasing = 1;
+
     msg.possess.type  = RESMSG_RELEASE;
     msg.possess.id    = RSET_ID;
     msg.possess.reqno = rctl.reqno++;
@@ -4232,8 +4242,9 @@ resctl_grant(resmsg_t *msg, resset_t *rset, void *data)
 
     (void)rset;
     (void)data;
-    
-    rctl.granted = msg->notify.resrc;
+
+    rctl.granted      = msg->notify.resrc;
+    rctl.is_releasing = 0;
 
     OHM_INFO("telephony resctl: granted resources: %s",
              resmsg_res_str(msg->notify.resrc, buf, sizeof(buf)));
