@@ -78,7 +78,8 @@ void dbusif_signal_privacy_override(int, int);
 void dbusif_signal_bluetooth_override(int, int);
 void dbusif_signal_mute(int, int);
 
-void dbusif_send_audio_stream_info(char *,  char *, dbus_uint32_t, char *);
+void dbusif_send_audio_stream_info(char *, char *, dbus_uint32_t,
+                                   char *, char *, char *);
 
 #endif /*  __OHM_MEDIA_DBUSIF_H__ */
 

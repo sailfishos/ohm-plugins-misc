@@ -86,17 +86,8 @@ static void  audio_stream_changed_cb(fsif_entry_t      *entry,
               "method=%s pattern='%s'", oper, pid, group?group:"<null>",
               propnam, method, pattern);
 
-    if (pid != 0  &&  group != NULL   &&
-        !strcmp(propnam,"media.name") &&
-        !strcmp(method,"equals")         )
-    {
-        /*
-         * due to the current pulseaudio-policy-enforcment
-         * for the time being we support just a subset limited to
-         * stream name (ie.media.name property) equals to the
-         * provided pattern
-         */
-        dbusif_send_audio_stream_info(oper, group, pid, pattern);
+    if (pid != 0  &&  group != NULL) {
+        dbusif_send_audio_stream_info(oper, group, pid,propnam,method,pattern);
     }
 }
 

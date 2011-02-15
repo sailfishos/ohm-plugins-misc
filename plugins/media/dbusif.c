@@ -241,7 +241,9 @@ void dbusif_signal_mute(int value, int send_now)
 void dbusif_send_audio_stream_info(char          *oper,
                                    char          *group,
                                    dbus_uint32_t  pid,
-                                   char          *stream)
+                                   char          *prop,
+                                   char          *method,
+                                   char          *arg)
 {
     static dbus_uint32_t  txid = 1;
 
@@ -251,8 +253,14 @@ void dbusif_send_audio_stream_info(char          *oper,
     if (!oper || !group || !pid)
         return;
 
-    if (!stream || !stream[0])
-        stream = "<unknown>";
+    if (!prop || !prop[0])
+        prop = "<unknown>";
+
+    if (!method)
+        method = "equals";
+
+    if (!arg)
+        arg = "";
 
     msg = dbus_message_new_signal(DBUS_POLICY_DECISION_PATH,
                                   DBUS_POLICY_DECISION_INTERFACE,
@@ -268,7 +276,9 @@ void dbusif_send_audio_stream_info(char          *oper,
                                        DBUS_TYPE_STRING, &oper,
                                        DBUS_TYPE_STRING, &group,
                                        DBUS_TYPE_UINT32, &pid,
-                                       DBUS_TYPE_STRING, &stream,
+                                       DBUS_TYPE_STRING, &arg,
+                                       DBUS_TYPE_STRING, &method,
+                                       DBUS_TYPE_STRING, &prop,
                                        DBUS_TYPE_INVALID);
     if (!success) {
         OHM_ERROR("media: failed to build stream info message");
@@ -280,8 +290,8 @@ void dbusif_send_audio_stream_info(char          *oper,
     if (!success)
         OHM_ERROR("media: failed to send stream info message");
     else {
-        OHM_DEBUG(DBG_DBUS, "operation='%s' group='%s' pid=%u stream='%s'",
-                  oper, group, pid, stream);
+        OHM_DEBUG(DBG_DBUS, "operation='%s' group='%s' pid=%u property='%s' "
+                  "method='%s' arg='%s'", oper, group, pid, prop, method, arg);
         txid++;
     }
 
