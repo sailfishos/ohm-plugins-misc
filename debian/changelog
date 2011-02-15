@@ -1,3 +1,12 @@
+ohm-plugins-misc (1:1.63) unstable; urgency=low
+
+  * cgrp: initial implementation of process OOM-protection.
+  * cgrp: initial implementation of the new process priorization mechanism.
+  * telephony: mark resources as being released when releasing them.
+  * accessories: added support for configurable inverted jack event semantics.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 15 Feb 2011 18:10:37 +0200
+
 ohm-plugins-misc (1:1.62) unstable; urgency=low
 
   * cgrp: when scanning /proc reclassify also known processes.
