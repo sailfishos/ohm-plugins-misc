@@ -1091,10 +1091,9 @@ process_set_priority(cgrp_process_t *process, int priority, int preserve)
     
     if (preserve)
         status = 0;
-    else {
-        process->priority = priority;
-        status = setpriority(PRIO_PROCESS, process->pid, priority);
-    }
+    else
+        status = !process_adjust_priority(process, CGRP_ADJ_ABSOLUTE, priority,
+                                          preserve);
     
     return status == 0 || errno == ESRCH;
 }
