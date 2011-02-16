@@ -224,6 +224,7 @@ classify_by_binary(cgrp_context_t *ctx, pid_t pid, int reclassify)
             return -ENOENT;                  /* we assume it's gone already */
 
         process_get_tgid(&attr);
+        attr.process = process_create(ctx, &attr);
     }
 
     event.exec.type = CGRP_EVENT_EXEC;
