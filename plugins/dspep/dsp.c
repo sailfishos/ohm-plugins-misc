@@ -37,6 +37,7 @@ USA.
 #include "action.h"
 #include "dsp.h"
 
+
 static char *dspentry;
 static int   dspfd = -1;
 
@@ -48,27 +49,49 @@ static int   dspfd = -1;
 
 void dsp_init(OhmPlugin *plugin)
 {
-    const char *path;
+    const char *pidpath;
+    const char *enablepath;
+    int enablefd;
 
     ENTER;
 
     do { /* not a loop */
-        if ((path = ohm_plugin_get_param(plugin, "sysfspath")) == NULL) {
+        if ((pidpath = ohm_plugin_get_param(plugin, "pidpath")) == NULL) {
             OHM_INFO("dspep: no sysfs path to DSP");
-            path = strdup("<???>");
+            pidpath = "<undefined>";
             break;
         }
 
-        if ((dspfd = open(path, O_WRONLY)) < 0) {
-            OHM_INFO("dspep: failed to open '%s' for write", path);
+        if ((dspfd = open(pidpath, O_WRONLY)) < 0) {
+            OHM_INFO("dspep: failed to open '%s' for write", pidpath);
             break;
         }
 
-        OHM_INFO("dspep: sysfs entry '%s' found", path);
+        OHM_INFO("dspep: sysfs entry '%s' found", pidpath);
+
+
+        if ((enablepath = ohm_plugin_get_param(plugin,"enablepath")) != NULL) {
+            if ((enablefd = open(enablepath, O_WRONLY)) < 0) {
+                OHM_INFO("dspep: failed to enable dsp enforcement: "
+                         "can't open '%s' for write (%s)",
+                         enablepath, strerror(errno));
+                break;
+            }
+
+            if (write(enablefd, "1", 1) == 1)
+                OHM_INFO("dspep: dsp enforcement enabled");
+            else {
+                OHM_INFO("dspep: failed to enable dsp enforcement: "
+                         "can't write \"1\" to '%s' (%s)",
+                         enablepath, strerror(errno));
+            }
+
+            close(enablefd);
+        }
 
     } while (0);
 
-    dspentry = strdup(path);
+    dspentry = strdup(pidpath);
 
     LEAVE;
 }
