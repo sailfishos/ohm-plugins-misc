@@ -111,7 +111,7 @@ AC_SUBST(OHM_CONF_DIR, "\$(sysconfdir)/ohm")
 AC_SUBST(OHM_PLUGIN_CONF_DIR, "\$(OHM_CONF_DIR)/plugins.d")
 AC_SUBST(OHM_PLUGIN_DIR, "\$(libdir)/ohm")
 
-# Check for libprofile.
+# Check if profile plugin should/can be built
 PKG_CHECK_MODULES(LIBPROFILE, profile >= 0.0.3,
                               [has_libprofile=true], [has_libprofile=false])
 AM_CONDITIONAL(HAVE_LIBPROFILE, test x$has_libprofile = xtrue)
@@ -119,12 +119,29 @@ AM_CONDITIONAL(HAVE_LIBPROFILE, test x$has_libprofile = xtrue)
 AC_SUBST(LIBPROFILE_CFLAGS)
 AC_SUBST(LIBPROFILE_LIBS)
 
-if test x$has_libprofile = xtrue;
+AC_ARG_ENABLE(profile,
+              [  --enable-profile     enable profile plugin],
+              enable_profile=$enableval,enable_profile=auto)
+
+if test x$enable_profile = xyes -a \
+        x$has_libprofile = xfalse;
 then
-  AC_MSG_NOTICE([Profile plugin WILL BE built.])
-else
-  AC_MSG_NOTICE([profile plugin WILL NOT BE be built.])
+  AC_MSG_ERROR([libprofile required but not available])
 fi
+
+AM_CONDITIONAL(BUILD_PROFILE, test x$has_libprofile = xtrue -a \
+                                   x$enable_profile != xno)
+if test x$has_libprofile = xtrue -a \
+        x$enable_profile != xno;
+then
+  AC_DEFINE([BUILD_PROFILE], 1, [Build profile plugin ?])
+  AC_MSG_NOTICE([Profile plugin WILL BE built])
+else
+  AC_MSG_NOTICE([Profile plugin WILL NOT be built])
+fi
+
+AC_SUBST(BUILD_PROFILE)
+
 
 # Check for mission-control (for telephony plugins).
 #MISSION_CONTROL_REQUIRED=5.0.beta39
@@ -543,7 +560,27 @@ fi
 AC_SUBST(BUILD_FMRADIO)
 
 
-# Check for PROC_EVENT_NAME kernel process connector event.
+# Check for PROC_EVENT_{SID,NAME} kernel process connector events.
+AC_MSG_CHECKING([for PROC_EVENT_SID connector event])
+AC_COMPILE_IFELSE([
+#include <linux/cn_proc.h>
+
+int main(int argc, char **argv)
+{
+    return PROC_EVENT_SID;
+}], [has_proc_event_sid=yes],
+    [has_proc_event_sid=no])
+
+AC_MSG_RESULT($has_proc_event_sid)
+
+if test x$has_proc_event_sid = xyes;
+then
+  AC_DEFINE([HAVE_PROC_EVENT_SID], 1, [Have PROC_EVENT_SID support ?])
+fi
+
+AM_CONDITIONAL(HAVE_PROC_EVENT_SID, test "x$has_proc_event_sid" = "xyes")
+AC_SUBST(HAVE_PROC_EVENT_SID)
+
 AC_MSG_CHECKING([for PROC_EVENT_NAME connector event])
 AC_COMPILE_IFELSE([
 #include <linux/cn_proc.h>

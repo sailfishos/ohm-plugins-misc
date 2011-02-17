@@ -181,6 +181,8 @@ static int lineout;
 static int videoout;
 static int physical;
 
+static int inverted;                              /* inverted jack events */
+
 /*
  * timers
  */
@@ -242,9 +244,18 @@ jack_init(OhmPlugin *plugin, input_dev_t *dev)
 {
     const char *device;
     const char *pattern;
+    const char *invert;
 
+    invert = ohm_plugin_get_param(plugin, "inverted-jack-events");
     device = ohm_plugin_get_param(plugin, "jack-device");
 
+    if (invert != NULL && !strcasecmp(invert, "true")) {
+        OHM_INFO("accessories: jack events have inverted semantics");
+        inverted = 1;
+    }
+    else
+        inverted = 0;
+    
     if (device != NULL) {
         OHM_INFO("accessories: using device %s for jack detection", device);
 
@@ -295,6 +306,8 @@ jack_exit(input_dev_t *dev)
 static int
 jack_event(struct input_event *event, void *user_data)
 {
+    int value;
+    
     (void)user_data;
 
     if (event->type != EV_SW && event->type != EV_SYN) {
@@ -302,31 +315,33 @@ jack_event(struct input_event *event, void *user_data)
         return TRUE;
     }
 
-    OHM_DEBUG(DBG_WIRED, "jack detection event (%d, %d)",
-              event->code, event->value);
+    value = (event->value ? 1 : 0) ^ inverted;
+    
+    OHM_DEBUG(DBG_WIRED, "jack detection event (%d, %d (interpret as: %d))",
+              event->code, event->value, value);
 
     if (event->type == EV_SYN)
         goto SYN_EVENT;
 
     switch (event->code) {
     case SW_HEADPHONE_INSERT:
-        headphone = (event->value != 0);
+        headphone = value;
         break;
 
     case SW_MICROPHONE_INSERT:
-        microphone = (event->value != 0);
+        microphone = value;
         break;
 
     case SW_LINEOUT_INSERT:
-        lineout = (event->value != 0);
+        lineout = value;
         break;
 
     case SW_VIDEOOUT_INSERT:
-        videoout = (event->value != 0);
+        videoout = value;
         break;
 
     case SW_JACK_PHYSICAL_INSERT:
-        physical = (event->value != 0);
+        physical = value;
     SYN_EVENT:
         jack_update_facts(FALSE);
         break;

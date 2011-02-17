@@ -62,7 +62,6 @@ static void system_bus_init(void);
 static void session_bus_init(const char *);
 static void session_bus_cleanup(void);
 
-static DBusHandlerResult info(DBusConnection *, DBusMessage *, void *);
 static DBusHandlerResult method(DBusConnection *, DBusMessage *, void *);
 
 static DBusMessage *privacy_req_message(DBusMessage *);
@@ -242,7 +241,9 @@ void dbusif_signal_mute(int value, int send_now)
 void dbusif_send_audio_stream_info(char          *oper,
                                    char          *group,
                                    dbus_uint32_t  pid,
-                                   char          *stream)
+                                   char          *prop,
+                                   char          *method,
+                                   char          *arg)
 {
     static dbus_uint32_t  txid = 1;
 
@@ -252,8 +253,14 @@ void dbusif_send_audio_stream_info(char          *oper,
     if (!oper || !group || !pid)
         return;
 
-    if (!stream || !stream[0])
-        stream = "<unknown>";
+    if (!prop || !prop[0])
+        prop = "<unknown>";
+
+    if (!method)
+        method = "equals";
+
+    if (!arg)
+        arg = "";
 
     msg = dbus_message_new_signal(DBUS_POLICY_DECISION_PATH,
                                   DBUS_POLICY_DECISION_INTERFACE,
@@ -269,7 +276,9 @@ void dbusif_send_audio_stream_info(char          *oper,
                                        DBUS_TYPE_STRING, &oper,
                                        DBUS_TYPE_STRING, &group,
                                        DBUS_TYPE_UINT32, &pid,
-                                       DBUS_TYPE_STRING, &stream,
+                                       DBUS_TYPE_STRING, &arg,
+                                       DBUS_TYPE_STRING, &method,
+                                       DBUS_TYPE_STRING, &prop,
                                        DBUS_TYPE_INVALID);
     if (!success) {
         OHM_ERROR("media: failed to build stream info message");
@@ -281,8 +290,8 @@ void dbusif_send_audio_stream_info(char          *oper,
     if (!success)
         OHM_ERROR("media: failed to send stream info message");
     else {
-        OHM_DEBUG(DBG_DBUS, "operation='%s' group='%s' pid=%u stream='%s'",
-                  oper, group, pid, stream);
+        OHM_DEBUG(DBG_DBUS, "operation='%s' group='%s' pid=%u property='%s' "
+                  "method='%s' arg='%s'", oper, group, pid, prop, method, arg);
         txid++;
     }
 
@@ -297,11 +306,6 @@ void dbusif_send_audio_stream_info(char          *oper,
 
 static void system_bus_init(void)
 {
-    static char *filter =
-        "type='signal',"
-        "interface='" DBUS_POLICY_DECISION_INTERFACE "',"
-        "member='"    DBUS_INFO_SIGNAL               "'";
-
     DBusError   err;
 
     dbus_error_init(&err);
@@ -313,20 +317,6 @@ static void system_bus_init(void)
             OHM_ERROR("Can't get system D-Bus connection");
         exit(1);
     }
-
-    if (!dbus_connection_add_filter(sys_conn, info,NULL, NULL)) {
-        OHM_ERROR("Can't add filter 'info'");
-        exit(1);
-    }
-
-    dbus_bus_add_match(sys_conn, filter, &err);
-
-    if (dbus_error_is_set(&err)) {
-        OHM_ERROR("Can't add match \"%s\": %s", filter, err.message);
-        dbus_error_free(&err);
-        exit(1);
-    }
-
 }
 
 
@@ -448,7 +438,7 @@ static void session_bus_cleanup(void)
 }
 
 
-static DBusHandlerResult info(DBusConnection *conn, DBusMessage *msg, void *ud)
+DBusHandlerResult dbusif_info(DBusConnection *conn, DBusMessage *msg, void *ud)
 {
     (void)conn;
     (void)ud;

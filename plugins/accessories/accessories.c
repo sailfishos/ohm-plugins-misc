@@ -20,11 +20,11 @@ USA.
 
 #include "accessories.h"
 #include "wired.h"
-#include "hearing-aid-coil.h"
+#include "gconf-triggers.h"
 
 #define FACT_DEVICE_ACCESSIBLE "com.nokia.policy.audio_device_accessible"
 
-static int DBG_HEADSET, DBG_BT, DBG_HAC, DBG_INFO, DBG_WIRED;
+static int DBG_HEADSET, DBG_BT, DBG_GCONF, DBG_INFO, DBG_WIRED;
 
 static gboolean plugin_is_real;
 
@@ -33,7 +33,7 @@ OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("info", "Info signal events" , &DBG_INFO),
     OHM_DEBUG_FLAG("wired", "wired accessory events", &DBG_WIRED),
     OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT),
-    OHM_DEBUG_FLAG("hac", "Hearing aid coil", &DBG_HAC)
+    OHM_DEBUG_FLAG("mode", "Mode parameters", &DBG_GCONF)
 );
 
 
@@ -103,7 +103,7 @@ static void plugin_init(OhmPlugin *plugin)
         g_warning("Failed to initialize accessories plugin debugging.");
 
     wired_init(plugin, DBG_WIRED);
-    hearing_aid_coil_init(plugin, DBG_HAC);
+    gconf_triggers_init(plugin, DBG_GCONF);
 
     /* bluetooth*/
     g_idle_add(bluetooth_init_later, plugin);
@@ -115,7 +115,7 @@ static void plugin_exit(OhmPlugin *plugin)
 {
     /* bluetooth*/
     bluetooth_deinit(plugin);
-    hearing_aid_coil_exit(plugin);
+    gconf_triggers_exit(plugin);
 
     plugin_is_real = FALSE;
 }

@@ -17,6 +17,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
 USA.
 *************************************************************************/
 
+#include <errno.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #include "cgrp-plugin.h"
 
@@ -194,7 +197,17 @@ group_print(cgrp_context_t *ctx, cgrp_group_t *group, FILE *fp)
         list_foreach(&group->processes, p, n) {
             process = list_entry(p, cgrp_process_t, group_hook);
             
-            fprintf(fp, "  process %u (%s)\n", process->pid, process->binary);
+            if (process->tgid != process->pid)
+                fprintf(fp, "  %s %u/%u (%s%s%s)\n",
+                        process->tgid == process->pid ? "process" : "thread ",
+                        process->tgid, process->pid, process->binary,
+                        process->argvx ?            "," : "",
+                        process->argvx ? process->argvx : "");
+            else
+                fprintf(fp, "  process %u (%s%s%s)\n", process->tgid,
+                        process->binary,
+                        process->argvx ?            "," : "",
+                        process->argvx ? process->argvx : "");
         }
     }
 }
@@ -208,13 +221,13 @@ group_add_process(cgrp_context_t *ctx,
                   cgrp_group_t *group, cgrp_process_t *process)
 {
     cgrp_group_t *old = process->group;
-    int           success;
+    int           preserve, success;
 
     if (group == old)
         return TRUE;
     
-    OHM_DEBUG(DBG_ACTION, "adding process %u (%s) to group '%s'",
-              process->pid, process->binary, group->name);
+    OHM_DEBUG(DBG_ACTION, "adding task %u/%u (%s) to group '%s'",
+              process->tgid, process->pid, process->binary, group->name);
     
     if (old != NULL) {
         list_delete(&process->group_hook);
@@ -240,8 +253,10 @@ group_add_process(cgrp_context_t *ctx,
         apptrack_group_change(ctx, old, group);
     }
 
-    if (group->priority != CGRP_DEFAULT_PRIORITY)
-        success &= process_set_priority(process, group->priority);
+    if (group->priority != CGRP_DEFAULT_PRIORITY) {
+        preserve = ctx->options.prio_preserve;
+        success &= process_set_priority(process, group->priority, preserve);
+    }
     
     return success;
 }
@@ -273,12 +288,12 @@ group_del_process(cgrp_process_t *process)
  * group_set_priority
  ********************/
 int
-group_set_priority(cgrp_group_t *group, int priority)
+group_set_priority(cgrp_group_t *group, int priority, int preserve)
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
     int             result, success;
-    
+
     if (group->priority == priority)
         return TRUE;
 
@@ -287,15 +302,56 @@ group_set_priority(cgrp_group_t *group, int priority)
     success = TRUE;
     list_foreach(&group->processes, p, n) {
         process = list_entry(p, cgrp_process_t, group_hook);
-        result  = process_set_priority(process, priority);
+        result  = process_set_priority(process, priority, preserve);
 
-        OHM_DEBUG(DBG_ACTION, "setting priority of process %u (%s) to %d: %s",
-                  process->pid, process->binary, priority,
+        OHM_DEBUG(DBG_ACTION, "setting priority of task %u/%u (%s) to %d: %s",
+                  process->tgid, process->pid, process->binary, priority,
                   result ? "OK" : "FAILED");
 
         success &= result;
     }
     
+    return success;
+}
+
+
+/********************
+ * group_adjust_priority
+ ********************/
+int
+group_adjust_priority(cgrp_group_t *group, cgrp_adjust_t adjust, int value,
+                      int preserve)
+{
+    cgrp_process_t *process;
+    list_hook_t    *p, *n;
+    int             success;
+    
+    success = TRUE;
+    list_foreach(&group->processes, p, n) {
+        process  = list_entry(p, cgrp_process_t, group_hook);
+        success &= process_adjust_priority(process, adjust, value, preserve);
+    }
+
+    return success;
+}
+
+
+/********************
+ * group_adjust_oom
+ ********************/
+int
+group_adjust_oom(cgrp_group_t *group, cgrp_adjust_t adjust, int value)
+{
+    cgrp_process_t *process;
+    list_hook_t    *p, *n;
+    int             success;
+    
+    success = TRUE;
+    list_foreach(&group->processes, p, n) {
+        process  = list_entry(p, cgrp_process_t, group_hook);
+        success &= process_adjust_oom(process, adjust, value);
+    }
+
     return success;
 }
 

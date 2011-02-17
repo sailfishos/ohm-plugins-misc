@@ -431,7 +431,7 @@ prop_eval(cgrp_prop_expr_t *expr, cgrp_proc_attr_t *attr)
 
     case CGRP_PROP_RECLASSIFY:
         v1.type = CGRP_VALUE_TYPE_UINT32;
-        v1.u32  = attr->reclassify;
+        v1.u32  = attr->retry;
         break;
 
     case CGRP_PROP_EUID:
