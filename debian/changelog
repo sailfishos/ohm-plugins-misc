@@ -2,10 +2,13 @@ ohm-plugins-misc (1:1.64) unstable; urgency=low
 
   * PID support in resource sets
   * dspep plugin
-  * Fixes: NB#210941
   * videoep support for xvideo usage control
+  * Fixes: NB#210941
   * timestamping at initialization of notification, resource
     and videoep plugins
+  * support for deferred/immediate signalling
+  * Fixes: NB#225502
+  * videoep query errors will not block request queues any more
 	
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Thu, 17 Feb 2011 23:46:11 +0200
 
