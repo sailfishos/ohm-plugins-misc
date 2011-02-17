@@ -2051,17 +2051,19 @@ static guint get_txid()
 Transaction * queue_decision(gchar *signal, GSList *facts,
         gint proposed_txid,
         gboolean need_transaction,
-        guint timeout)
+        guint timeout,
+        gboolean deferred_execution)
 {
     /*
      * Puts a policy decision to the decision queue and asks the
      * process_inq to go through it when it's ready 
      */
 
-    Transaction            *transaction;
-    guint                   txid = 0;
-    gboolean               needs_processing = FALSE;
-    GQueue                *queue = NULL;
+    Transaction        *transaction;
+    guint               txid = 0;
+    gboolean            needs_processing = FALSE;
+    GQueue             *queue = NULL;
+    gpointer            data;
 
     /* create a new empty transaction */
 
@@ -2126,12 +2128,16 @@ Transaction * queue_decision(gchar *signal, GSList *facts,
             transaction, signal, queue);
 
     if (needs_processing) {
-        /* add the policy decision to the queue to be processed later */
+        data = g_strdup(signal);
 
-        g_idle_add(process_inq, g_strdup(signal));
+        if (deferred_execution)
+            /* add the policy decision to the queue to be processed later */
+            g_idle_add(process_inq, data);
+        else
+            process_inq(data);
     }
 
-    if (!need_transaction) {
+    if (!need_transaction || !deferred_execution) {
         /* no need for transaction handle */
         return NULL;
     }

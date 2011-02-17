@@ -205,7 +205,7 @@ EnforcementPoint * register_enforcement_point(const gchar * uri, const gchar *na
 
 gboolean unregister_enforcement_point(const gchar *uri);
 
-Transaction * queue_decision(gchar *signal, GSList *facts, int txid, gboolean need_transaction, guint timeout);
+Transaction * queue_decision(gchar *signal, GSList *facts, int txid, gboolean need_transaction, guint timeout, gboolean deferred_execution);
 
 gboolean init_signaling();
 
