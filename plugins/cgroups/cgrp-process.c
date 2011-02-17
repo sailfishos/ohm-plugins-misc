@@ -30,6 +30,7 @@ USA.
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <sys/select.h>
 
 #include <linux/socket.h>
 #include <linux/netlink.h>
@@ -186,6 +187,10 @@ proc_request(enum proc_cn_mcast_op req)
     unsigned char      msgbuf[EVENT_BUF_SIZE];
     ssize_t            size;
 
+    fd_set             rfds;
+    struct timeval     tv;
+    int                retval;
+
     if (sock < 0)
         return FALSE;
     
@@ -209,6 +214,25 @@ proc_request(enum proc_cn_mcast_op req)
 
     if (send(sock, nlh, size, 0) < 0) {
         OHM_ERROR("cgrp: failed to send process event request");
+        return FALSE;
+    }
+
+    /* Watch Netlink socket until something arrives */
+    FD_ZERO(&rfds);
+    FD_SET(sock, &rfds);
+
+    /* Set timeout */
+    tv.tv_sec = 0;
+    tv.tv_usec = 500;
+
+    retval = select(sock + 1, &rfds, NULL, NULL, &tv);
+
+    if ( retval == -1) {
+        OHM_ERROR("cgrp: failed to select() on event Netlink socket");
+        return FALSE;
+    } else if( retval == 0 ){
+        OHM_ERROR("cgrp: No reply from process event connector");
+        OHM_INFO("cgrp: Check if kernel CONFIG_PROC_EVENTS parameter is enabled");
         return FALSE;
     }
 
