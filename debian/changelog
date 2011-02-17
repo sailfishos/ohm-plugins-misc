@@ -1,4 +1,4 @@
-ohm-plugins-misc (1:1.59) unstable; urgency=low
+ohm-plugins-misc (1:1.64) unstable; urgency=low
 
   * PID support in resource sets
   * dspep plugin
@@ -6,8 +6,58 @@ ohm-plugins-misc (1:1.59) unstable; urgency=low
   * videoep support for xvideo usage control
   * timestamping at initialization of notification, resource
     and videoep plugins
+	
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Thu, 17 Feb 2011 23:46:11 +0200
 
- -- Janos Kovacs <janos.f.kovacs@nokia.com>  Sun, 09 Jan 2011 04:29:13 +0200
+ohm-plugins-misc (1:1.63) unstable; urgency=low
+
+  * cgrp: initial implementation of process OOM-protection.
+  * cgrp: initial implementation of the new process priorization mechanism.
+  * telephony: mark resources as being released when releasing them.
+  * accessories: added support for configurable inverted jack event semantics.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 15 Feb 2011 18:10:37 +0200
+
+ohm-plugins-misc (1:1.62) unstable; urgency=low
+
+  * cgrp: when scanning /proc reclassify also known processes.
+  * cgrp: added support for configurable process priority preservation.
+  * cgrp: classification improvements and fixes, always-fallback option.
+  * cgrp: added wildcard id events, no-op action, better rule lookup/find/print.
+  * cgrp: event-specific classification, discovery & classification fixes.
+  * cgrp: honour voluntarily lowered process priorities
+  * Fixes: NB#218131.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 03 Feb 2011 19:41:04 +0200
+
+ohm-plugins-misc (1:1.61) unstable; urgency=low
+
+  * Disabled hal and buttons plugin.
+  * Added some support for unc.
+  * Fixes: NB#222789
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 28 Jan 2011 15:19:13 +0200
+
+ohm-plugins-misc (1:1.60) unstable; urgency=low
+
+  [ Krisztian Litkey ]
+  * Vibra: configurable vibra on/off logic, better diagostic messages.
+  * Vibra: don't give up on vibra so easily, try to reinitialize on demand.
+  * Fixes: NB#213226.
+
+  [ Ismo Puustinen ]
+  * Refactor info signal handling in media plugin.
+  * Fixes: NB#190553
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Tue, 25 Jan 2011 15:43:24 +0200
+
+ohm-plugins-misc (1:1.59) unstable; urgency=low
+
+  * Telephony: added support for cmtautoactivate.
+  * Resource: update in acquire state with granted resources is a new request.
+  * Fixes: NB#216023.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Wed, 12 Jan 2011 20:19:02 +0200
 
 ohm-plugins-misc (1:1.58) unstable; urgency=low
 

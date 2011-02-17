@@ -22,6 +22,7 @@ USA.
 #define __OHM_PLUGIN_CGRP_H__
 
 #include <stdio.h>
+#include <stdint.h>
 
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-plugin-log.h>
@@ -59,6 +60,30 @@ USA.
 #define CGRP_CLR_MASK(mask, bit) ((mask) &= ~(1ULL << (bit)))
 
 typedef u64_t cgrp_mask_t;
+
+
+
+/*
+ * scheduling / OOM priority adjustments
+ */
+
+typedef enum {
+    CGRP_ADJ_UNKNOWN = -1,
+    CGRP_ADJ_ABSOLUTE = 0,                  /* set to absolute value */
+    CGRP_ADJ_RELATIVE,                      /* adjust by given value */
+    CGRP_ADJ_LOCK,                          /* lock to given value */
+    CGRP_ADJ_UNLOCK,                        /* unlock, set to given value */
+    CGRP_ADJ_EXTERN,                        /* adjusted by external entity */
+    CGRP_ADJ_INTERN,                        /* adjusted again internally */
+} cgrp_adjust_t;
+
+#define CGRP_ADJUST_ABSOLUTE "set"
+#define CGRP_ADJUST_RELATIVE "adjust"
+#define CGRP_ADJUST_LOCK     "lock"
+#define CGRP_ADJUST_UNLOCK   "unlock"
+#define CGRP_ADJUST_EXTERN   "extern"
+#define CGRP_ADJUST_INTERN   "intern"
+
 
 
 /*
@@ -162,7 +187,10 @@ typedef enum {
     CGRP_ACTION_RENICE,                     /* renice process */
     CGRP_ACTION_RECLASSIFY,                 /* reclassify after a delay */
     CGRP_ACTION_CLASSIFY_ARGV0,             /* classify by argv[0] */
+    CGRP_ACTION_PRIORITY,                   /* adjust process priority */
+    CGRP_ACTION_OOM,                        /* adjust OOM priority */
     CGRP_ACTION_IGNORE,                     /* apply the default rules */
+    CGRP_ACTION_NOOP,                       /* no-op action */
     CGRP_ACTION_MAX,
 } cgrp_action_type_t;
 
@@ -196,6 +224,19 @@ typedef struct {
     int delay;                              /* retry after this many msecs */
 } cgrp_action_classify_t;
 
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    cgrp_adjust_t adjust;                   /* adjustment method */
+    int           value;                    /* and value */
+} cgrp_action_priority_t;
+
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    cgrp_adjust_t adjust;                   /* adjustment method */
+    int           value;                    /* and value */
+} cgrp_action_oom_t;
+
+
 
 union cgrp_action_u {
     cgrp_action_type_t     type;
@@ -204,6 +245,8 @@ union cgrp_action_u {
     cgrp_action_schedule_t schedule;
     cgrp_action_renice_t   renice;
     cgrp_action_classify_t classify;
+    cgrp_action_priority_t priority;
+    cgrp_action_oom_t      oom;
 };
 
 
@@ -309,25 +352,105 @@ struct cgrp_stmt_s {
 
 
 /*
+ * events
+ */
+
+typedef enum {
+    CGRP_EVENT_UNKNOWN = 0,
+    CGRP_EVENT_FORCE,                       /* force classification */
+    CGRP_EVENT_FORK,                        /* new process forked */
+    CGRP_EVENT_EXEC,                        /* new image executed */
+    CGRP_EVENT_EXIT,                        /* process exited */
+    CGRP_EVENT_UID,                         /* user ID changed */
+    CGRP_EVENT_GID,                         /* group ID changed */
+    CGRP_EVENT_SID,                         /* session ID changed */
+    CGRP_EVENT_NAME,                        /* process name changed */
+} cgrp_event_type_t;
+
+
+typedef union cgrp_event_u cgrp_event_t;
+
+#define CGRP_EVENT_COMMON                                               \
+    cgrp_event_type_t type;                 /* event type */            \
+    pid_t             pid;                  /* affected task */         \
+    pid_t             tgid                  /*   and process */
+
+typedef struct {
+    CGRP_EVENT_COMMON;
+} cgrp_event_any_t;
+
+typedef struct {
+    CGRP_EVENT_COMMON;
+    pid_t ppid;                             /* parent process */
+} cgrp_event_fork_t;
+
+typedef struct {
+    CGRP_EVENT_COMMON;
+    uint32_t rid;                           /* real uid/gid */
+    uint32_t eid;                           /* effective uid/gid */
+} cgrp_event_id_t;
+
+union cgrp_event_u {
+    cgrp_event_any_t  any;                  /* any event */
+    cgrp_event_fork_t fork;                 /* new process forked */
+    cgrp_event_any_t  exec;                 /* new image executed */
+    cgrp_event_id_t   id;                   /* process uid/gid changed */
+    cgrp_event_any_t  exit;                 /* process exited */
+    cgrp_event_any_t  sid;                  /* session id changed */
+    cgrp_event_any_t  name;                 /* process name changed */
+};
+
+
+/*
  * a process definition
  */
 
+typedef struct cgrp_rule_s cgrp_rule_t;
+
+struct cgrp_rule_s {
+    int          event_mask;                /* cgrp_event_type_t mask */
+    gid_t       *gids;                      /* matching group ids */
+    int          ngid;                      /* number of group ids */
+    uid_t       *uids;                      /* matching user ids */
+    int          nuid;                      /* number of user ids */
+    cgrp_stmt_t *statements;                /* classification statements */
+    cgrp_rule_t *next;                      /* more rules or NULL */
+};
+
+
 typedef struct {
     char          *binary;                  /* path to binary */
-    int            renice;                  /* XXX temporary renicing kludge */
-    cgrp_stmt_t   *statements;              /* classification statements */
+    cgrp_rule_t   *rules;                   /* classification rules */
 } cgrp_procdef_t;
 
+
+enum {
+    CGRP_PRIO_DEFAULT = 0,                  /* adjusted normally */
+    CGRP_PRIO_LOCKED,                       /* locked to a value */
+    CGRP_PRIO_EXTERN,                       /* out of policy control */
+};
+
+enum {
+    CGRP_OOM_DEFAULT = 0,                   /* adjusted normally */
+    CGRP_OOM_LOCKED,                        /* locked to a value */
+    CGRP_OOM_EXTERN,                        /* out of policy control */
+};
 
 /*
  * a classified process
  */
 
 typedef struct {
-    pid_t         pid;                      /* process id */
+    pid_t         pid;                      /* task id */
+    pid_t         tgid;                     /* process id */
     char         *binary;                   /* path to binary */
     char         *argv0;                    /* argv[0] if needed */
+    char         *argvx;                    /* classified by this arg */
     cgrp_group_t *group;                    /* current group */
+    int           priority;                 /* process priority */
+    int           prio_mode;                
+    int           oom_adj;                  /* OOM adjustment */
+    int           oom_mode;
     list_hook_t   proc_hook;                /* hook to process table */
     list_hook_t   group_hook;               /* hook to group */
 } cgrp_process_t;
@@ -341,6 +464,7 @@ typedef enum {
     CGRP_PROC_NAME,                         /* process name */
     CGRP_PROC_TYPE,                         /* process type */
     CGRP_PROC_PPID,                         /* process parent binary */
+    CGRP_PROC_TGID,                         /* process pid (thread group id) */
     CGRP_PROC_EUID,                         /* effective user ID */
     CGRP_PROC_EGID,                         /* effective group ID */
     CGRP_PROC_RECLASSIFY,                   /* being reclassified ? */
@@ -358,7 +482,8 @@ typedef enum {
 
 typedef struct {
     cgrp_mask_t        mask;                /* attribute mask */
-    pid_t              pid;                 /* process id */
+    pid_t              pid;                 /* task id */
+    pid_t              tgid;                /* process id */
     pid_t              ppid;                /* parent process id */
     char              *binary;              /* path to binary */
     char               name[CGRP_COMM_LEN]; /* task_struct.comm */
@@ -368,25 +493,10 @@ typedef struct {
     int                argc;                /* number of arguments */
     uid_t              euid;                /* effective user id */
     gid_t              egid;                /* effective group id */
-    int                reclassify;          /* reclassification count */
+    int                retry;               /* reclassification attempts */
     int                byargvx;             /* classifying by argv[x] */
+    cgrp_process_t    *process;
 } cgrp_proc_attr_t;
-
-
-
-#if 0
-
-/*
- * a hash table
- */
-
-typedef struct {
-    list_hook_t *buckets;                   /* hash buckets */
-    int          nbucket;                   /* number of buckets */
-    list_hook_t  entries;                   /* hash table entries */
-} cgrp_hash_table_t;
-
-#endif
 
 
 /*
@@ -402,12 +512,21 @@ enum {
     CGRP_FLAG_MOUNT_CPUSET,
     CGRP_FLAG_ADDON_RULES,
     CGRP_FLAG_ADDON_MONITOR,
+    CGRP_FLAG_ALWAYS_FALLBACK
+};
+
+
+enum {
+    CGRP_PRIO_LOW  = -1,                    /* honour lowered priorities */
+    CGRP_PRIO_NONE =  0,                    /* overwrite all priorities */
+    CGRP_PRIO_ALL  =  1,                    /* honour all priorities */
 };
 
 
 typedef struct {
     int   flags;
     char *addon_rules;                      /* add-on rule pattern */
+    int   prio_preserve;                    /* priority preservation */
 } cgrp_options_t;
 
 
@@ -490,7 +609,7 @@ typedef struct {
     int               ngroup;               /* number of groups */
     cgrp_procdef_t   *procdefs;             /* process definitions */
     int               nprocdef;             /* number of process definitions */
-    cgrp_procdef_t   *fallback;             /* fallback process definition */
+    cgrp_rule_t      *fallback;             /* fallback classification rules */
     cgrp_procdef_t   *addons;               /* add-on rules */
     int               naddon;               /* number of add-on rules */
     int               addonwd;              /* addon watch descriptor */
@@ -505,6 +624,7 @@ typedef struct {
     GHashTable       *grouptbl;             /* lookup table of groups */
     GHashTable       *parttbl;              /* lookup table of partitions */
     list_hook_t      *proctbl;              /* lookup table of processes */
+    int               event_mask;           /* CGRP_EVENT_'s of interest */
 
     cgrp_process_t   *active_process;       /* currently active process */
     cgrp_group_t     *active_group;         /* currently active group */
@@ -557,14 +677,24 @@ char  **process_get_argv   (cgrp_proc_attr_t *, int);
 uid_t   process_get_euid   (cgrp_proc_attr_t *);
 gid_t   process_get_egid   (cgrp_proc_attr_t *);
 pid_t   process_get_ppid   (cgrp_proc_attr_t *);
+pid_t   process_get_tgid   (cgrp_proc_attr_t *);
+
+int proc_stat_parse(int, char *, pid_t *, int *, cgrp_proc_type_t *);
+
 
 cgrp_proc_type_t process_get_type(cgrp_proc_attr_t *);
 
+cgrp_process_t *process_create(cgrp_context_t *, cgrp_proc_attr_t *);
+void process_remove(cgrp_context_t *, cgrp_process_t *);
 int process_ignore(cgrp_context_t *, cgrp_process_t *);
 int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
 int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
-int process_set_priority(cgrp_process_t *, int);
+int process_set_priority(cgrp_process_t *, int, int);
+int process_adjust_priority(cgrp_process_t *, cgrp_adjust_t, int, int);
+int process_adjust_oom(cgrp_process_t *, cgrp_adjust_t, int);
+
+
 void procattr_dump(cgrp_proc_attr_t *);
 
 void proc_notify(cgrp_context_t *,
@@ -610,7 +740,10 @@ void group_print(cgrp_context_t *, cgrp_group_t *, FILE *);
 
 int  group_add_process(cgrp_context_t *, cgrp_group_t *, cgrp_process_t *);
 int  group_del_process(cgrp_process_t *);
-int  group_set_priority(cgrp_group_t *, int);
+int  group_set_priority(cgrp_group_t *, int, int);
+int  group_adjust_priority(cgrp_group_t *, cgrp_adjust_t, int, int);
+int group_adjust_oom(cgrp_group_t *, cgrp_adjust_t, int);
+
 
 
 /* cgrp_procdef.c */
@@ -626,8 +759,11 @@ int  addon_reload(cgrp_context_t *);
 
 void procdef_dump(cgrp_context_t *, FILE *);
 void procdef_print(cgrp_context_t *, cgrp_procdef_t *, FILE *);
-cgrp_action_t *rule_eval(cgrp_context_t *,
-                         cgrp_procdef_t *, cgrp_proc_attr_t *);
+cgrp_rule_t *rule_lookup(cgrp_context_t *, char *, cgrp_event_t *);
+cgrp_rule_t *rule_find  (cgrp_rule_t *, cgrp_event_t *);
+
+cgrp_rule_t   *addon_lookup(cgrp_context_t *, char *, cgrp_event_t *);
+cgrp_action_t *rule_eval(cgrp_context_t *, cgrp_rule_t *, cgrp_proc_attr_t *);
 
 
 /* cgrp-classify.c */
@@ -635,8 +771,12 @@ int  classify_init  (cgrp_context_t *);
 void classify_exit  (cgrp_context_t *);
 int  classify_config(cgrp_context_t *);
 int  classify_reconfig(cgrp_context_t *);
+int  classify_event(cgrp_context_t *, cgrp_event_t *);
 int  classify_by_binary(cgrp_context_t *, pid_t, int);
 int  classify_by_argvx(cgrp_context_t *, cgrp_proc_attr_t *, int);
+int  classify_by_parent(cgrp_context_t *, pid_t, pid_t, pid_t);
+int  classify_by_rules(cgrp_context_t *, cgrp_event_t *, cgrp_proc_attr_t *);
+
 
 
 void classify_schedule(cgrp_context_t *, pid_t, unsigned int, int);
@@ -655,9 +795,10 @@ cgrp_action_t *action_group_new   (cgrp_group_t *);
 cgrp_action_t *action_schedule_new(char *, int);
 cgrp_action_t *action_renice_new  (int);
 cgrp_action_t *action_classify_new(int);
+cgrp_action_t *action_priority_new(cgrp_adjust_t, int);
+cgrp_action_t *action_oom_new(cgrp_adjust_t, int);
 cgrp_action_t *action_ignore_new  (void);
-
-
+cgrp_action_t *action_noop_new    (void);
 
 
 /* cgrp-ep.c */

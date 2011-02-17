@@ -207,6 +207,10 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
                     transaction_start(rs, msg);
 
                     resource_set_update_factstore(resset, update_flags);
+                    if (rs->request && !strcmp(rs->request, "acquire") &&
+                        rs->granted.client != NULL)
+                        resource_set_update_factstore(resset, update_request);
+
                     dresif_resource_request(rs->manager_id, resset->peer,
                                             resset->id, "update");
                 }

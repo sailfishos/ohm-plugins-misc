@@ -28,6 +28,8 @@
 #include <dirent.h>
 #include <regex.h>
 #include <sched.h>
+#include <pwd.h>
+#include <grp.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/inotify.h>
@@ -36,9 +38,24 @@
 #include "cgrp-parser-types.h"
 #include "mm.h"  
 
+#define ALL_PRIO "all"
+#define LOW_PRIO "lowered"
+#define NO_PRIO  "none"
+
 int        cgrpyylex  (void);
 void       cgrpyyerror(cgrp_context_t *, const char *);
 extern int lexer_start_token;
+
+static int add_gid(cgrp_rule_t *, gid_t);
+static int add_grp(cgrp_rule_t *, const char *);
+static int lookup_gid(const char *, gid_t *);
+
+static int add_uid(cgrp_rule_t *, uid_t);
+static int add_usr(cgrp_rule_t *, const char *);
+static int lookup_uid(const char *, uid_t *);
+
+static cgrp_adjust_t parse_adjust(const char *);
+
 
 static char rule_group[256];
 
@@ -53,17 +70,19 @@ static char rule_group[256];
     cgrp_partition_t *parts;
     cgrp_group_t      group;
     cgrp_group_t     *groups;
-    cgrp_procdef_t    rule;
-    cgrp_procdef_t   *rules;
+    cgrp_procdef_t    procdef;
+    cgrp_procdef_t   *procdefs;
+    cgrp_rule_t      *rules;
+    cgrp_rule_t       rule;
     cgrp_stmt_t      *stmt;
     cgrp_expr_t      *expr;
     cgrp_action_t    *action;
     cgrp_prop_type_t  prop;
     cgrp_value_t      value;
     cgrp_context_t    ctx;
-    int               renice;
     s64_t             time;
     cgrp_ctrl_setting_t *ctrl_settings;
+    cgrp_adjust_t     adjust;
 }
 
 %defines
@@ -81,8 +100,12 @@ static char rule_group[256];
 %type <group>    group_properties
 %type <group>    group_description
 %type <group>    group_partition
-%type <rule>     rule
-%type <string>   rule_path
+%type <procdef>  procdef
+%type <rules>    rules
+%type <rules>    rule
+%type <rules>    rule_events
+%type <rule>     rule_event
+%type <string>   procdef_path
 %type <stmt>     rule_statements
 %type <stmt>     rule_statement
 %type <expr>     expr
@@ -90,13 +113,13 @@ static char rule_group[256];
 %type <expr>     prop_expr
 %type <prop>     prop
 %type <value>    value
-%type <string>   group_name
 %type <string>   string
-%type <renice>   optional_renice
 %type <time>     time_unit
 %type <time>     time_usec
 %type <uint32>   schedule_priority
 %type <sint32>   renice_priority
+%type <adjust>   adjust_action
+%type <sint32>   adjust_value
 
 %type <action> action
 %type <action> actions
@@ -104,14 +127,16 @@ static char rule_group[256];
 %type <action> action_classify
 %type <action> action_schedule
 %type <action> action_renice
+%type <action> action_priority
+%type <action> action_oom
 %type <action> action_ignore
+%type <action> action_no_op
 
 %type <ctrl_settings> cgroup_control_settings
 %type <ctrl_settings> cgroup_control_setting
-%type <string> cgroup_control_name
 %type <string> cgroup_control_path
-%type <string> control_setting
 %type <string> control_value
+%type <string> string_or_wildcard
 %type <ctrl_settings> optional_partition_controls
 %type <ctrl_settings> partition_controls
 %type <ctrl_settings> partition_control
@@ -141,6 +166,9 @@ static char rule_group[256];
 %token KEYWORD_RECLASSIFY
 %token KEYWORD_RECLASS_AFTER
 %token KEYWORD_CLASSIFY
+%token KEYWORD_PRIORITY
+%token KEYWORD_OOM
+%token KEYWORD_NO_OP
 %token KEYWORD_EXPORT_GROUPS
 %token KEYWORD_EXPORT_PARTITIONS
 %token KEYWORD_EXPORT_FACT
@@ -150,20 +178,25 @@ static char rule_group[256];
 %token KEYWORD_IOQLEN_NOTIFY
 %token KEYWORD_SWAP_PRESSURE
 %token KEYWORD_ADDON_RULES
+%token KEYWORD_ALWAYS_FALLBACK
+%token KEYWORD_PRESERVE_PRIO
 
 %token TOKEN_EOL "\n"
 %token TOKEN_ASTERISK "*"
 %token TOKEN_HEADER_OPEN "["
 %token TOKEN_HEADER_CLOSE "]"
-
+%token TOKEN_CURLY_OPEN   "{"
+%token TOKEN_CURLY_CLOSE  "}"
 %token TOKEN_AND       "&&"
 %token TOKEN_OR        "||"
 %token TOKEN_NOT       "!"
 %token TOKEN_EQUAL     "=="
 %token TOKEN_NOTEQ     "!="
 %token TOKEN_LESS      "<"
+%token TOKEN_GREATER   ">"
 %token TOKEN_IMPLIES   "=>"
 %token TOKEN_SEMICOLON ";"
+%token TOKEN_COMMA     ","
 %token TOKEN_COLON     ":"
 
 %token <uint32> TOKEN_ARG
@@ -177,9 +210,9 @@ static char rule_group[256];
 %%
 
 configuration: START_FULL_PARSER 
-                 global_section partition_section group_section rule_section
+                 global_section partition_section group_section procdef_section
     | START_ADDON_PARSER
-                 rule_section
+                 procdef_section
     ;
 
 /*****************************************************************************
@@ -200,6 +233,26 @@ global_option: KEYWORD_EXPORT_GROUPS "\n" {
     }
     | KEYWORD_EXPORT_PARTITIONS "\n" {
           CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_PART_FACTS);
+    }
+    | KEYWORD_ALWAYS_FALLBACK "\n" {
+          CGRP_SET_FLAG(ctx->options.flags, CGRP_FLAG_ALWAYS_FALLBACK);
+    }
+    | KEYWORD_PRESERVE_PRIO TOKEN_IDENT "\n" {
+          char *what = $2.value;
+          int   prio;
+
+          if      (!strcmp(what, ALL_PRIO)) prio = CGRP_PRIO_ALL;
+          else if (!strcmp(what, LOW_PRIO)) prio = CGRP_PRIO_LOW;
+          else if (!strcmp(what, NO_PRIO )) prio = CGRP_PRIO_NONE;
+          else {
+              OHM_ERROR("cgrp: invalid %s setting '%s'",
+                        "preserve-priority", what);
+              OHM_ERROR("cgrp: allowed settings are: '%s', '%s', '%s'",
+                        ALL_PRIO, LOW_PRIO, NO_PRIO);
+              prio = CGRP_PRIO_LOW;
+          }
+          
+          ctx->options.prio_preserve = prio;
     }
     | iowait_notify "\n"
     | ioqlen_notify "\n"
@@ -361,7 +414,7 @@ optional_monitor: /* empty */ {
 cgroup_control: KEYWORD_CGROUP_CONTROL cgroup_control_def
     ;
 
-cgroup_control_def: cgroup_control_name cgroup_control_path 
+cgroup_control_def: string cgroup_control_path 
                     cgroup_control_settings {
           cgrp_ctrl_t *ctrl, **p;
 
@@ -380,10 +433,6 @@ cgroup_control_def: cgroup_control_name cgroup_control_path
     }
     ;
 
-cgroup_control_name: TOKEN_IDENT  { $$ = $1; }
-    |                TOKEN_STRING { $$ = $1; }
-    ;
-
 cgroup_control_path: TOKEN_STRING { $$ = $1; }
     ;
 
@@ -400,7 +449,7 @@ cgroup_control_settings: cgroup_control_setting {
     }
     ;
 
-cgroup_control_setting: control_setting TOKEN_COLON control_value {
+cgroup_control_setting: string TOKEN_COLON control_value {
           cgrp_ctrl_setting_t *setting;
 
           if (ALLOC_OBJ(setting) == NULL) {
@@ -412,10 +461,6 @@ cgroup_control_setting: control_setting TOKEN_COLON control_value {
           setting->value = STRDUP($3.value);
           $$             = setting;
     }
-    ;
-
-control_setting: TOKEN_IDENT  { $$ = $1; }
-    |            TOKEN_STRING { $$ = $1; }
     ;
 
 control_value: TOKEN_IDENT { $$ = $1; }
@@ -634,39 +679,213 @@ group_fact: KEYWORD_EXPORT_FACT
  *                             *** rule section ***                          *
  *****************************************************************************/
 
-rule_section: rule
-    | rule_section rule
-    | rule_section error {
+procdef_section: procdef
+    | procdef_section procdef
+    | procdef_section error {
           OHM_ERROR("cgrp: failed to parse rule section near token '%s'",
 	            cgrpyylval.any.token);
           exit(1);
     }
     ;
 
-rule: "[" KEYWORD_RULE rule_path "]" "\n" optional_renice rule_statements {
-        cgrp_procdef_t rule;
+procdef: "[" KEYWORD_RULE procdef_path "]" "\n" 
+         optional_renice rules optional_newline {
+        cgrp_procdef_t procdef;
 
-        rule.binary     = $3.value;
-	rule.renice     = $6;
-        rule.statements = $7;
+        procdef.binary = $3.value;
+        procdef.rules  = $7;
 
         if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES))
-            addon_add(ctx, &rule);
+            addon_add(ctx, &procdef);
         else {
-            if (!procdef_add(ctx, &rule))
+            if (!procdef_add(ctx, &procdef))
                 YYABORT;
         }
     }
     ;
 
-optional_renice: /* empty */    { $$ = 0;  }
-    | KEYWORD_RENICE TOKEN_SINT { $$ = $2.value; }
+optional_renice: /* empty */
+    | KEYWORD_RENICE TOKEN_SINT {
+          OHM_WARNING("cgrp: static renice not supported any more.");
+      }
     ;
 
-rule_path: TOKEN_PATH          { $$ = $1; }
+procdef_path: TOKEN_PATH       { $$ = $1; }
     |      TOKEN_STRING        { $$ = $1; }
     |      TOKEN_ASTERISK      { $$.value = "*"; }
     ;
+
+
+rules: rule {
+          $$ = $1;
+      }
+    |  rules optional_newline rule optional_newline {
+          cgrp_rule_t *r;
+
+          for (r = $1; r->next != NULL; r = r->next)
+              ;
+          r->next = $3;
+          $$      = $1;
+       }
+    ;
+
+
+optional_newline: /* empty */
+    | "\n"
+    ;
+
+newline: "\n"
+    ;
+
+rule: "<" rule_events ">" optional_newline 
+      "{" optional_newline rule_statements optional_newline "}" {
+          $2->statements = $7;
+          $$ = $2;
+      }
+    | rule_statements {
+          cgrp_rule_t *rule;
+
+          if (ALLOC_OBJ(rule) == NULL) {
+              OHM_ERROR("cgrp: failed to allocate new rule");
+              exit(1);
+          }
+
+          rule->event_mask = (1 << CGRP_EVENT_EXEC);
+          rule->statements = $1;
+
+          $$ = rule;
+      }
+    ;
+
+rule_events: rule_event {
+       cgrp_rule_t *rule;
+
+       if (ALLOC_OBJ(rule) == NULL) {
+           OHM_ERROR("cgrp: failed to allocate new rule");
+           exit(1);
+       }
+
+       if ($1.event_mask & (1 << CGRP_EVENT_GID)) {
+           if ($1.ngid == 0)                       /* wildcard group */
+               add_grp(rule, "*");
+           else
+               add_gid(rule, (gid_t)$1.gids);
+       }
+       else if ($1.event_mask & (1 << CGRP_EVENT_UID)) {
+           if ($1.nuid == 0)                       /* wildcard user */
+               add_usr(rule, "*");
+           else
+               add_uid(rule, (uid_t)$1.uids);
+       }
+       else
+           rule->event_mask = $1.event_mask;
+       
+       $$ = rule;
+    }
+    | rule_events "," rule_event {
+       if (!($3.event_mask & ((1 << CGRP_EVENT_GID) | (1 << CGRP_EVENT_UID)))) {
+           $1->event_mask |= $3.event_mask;
+           $$ = $1;
+       }
+       else {
+           if ($3.event_mask & (1 << CGRP_EVENT_GID)) {
+               if ($3.ngid == 0)                      /* wildcard group */
+                   add_grp($1, "*");
+               else
+                   add_gid($1, (gid_t)$3.gids);
+           }
+           else { /* $3->event_mask & (1 << CGRP_EVENT_UID) */
+               if ($3.nuid == 0)                      /* wildcard user */
+                   add_usr($1, "*");
+               else
+                   add_uid($1, (uid_t)$3.uids);
+           }
+       }
+
+       $$ = $1;
+    }
+    ;
+
+rule_event: TOKEN_IDENT {
+          memset(&$$, 0, sizeof($$));
+
+          if (!strcmp($1.value, "execed"))
+              $$.event_mask = (1 << CGRP_EVENT_EXEC);
+          else if (!strcmp($1.value, "session-change"))
+              $$.event_mask = (1 << CGRP_EVENT_SID);
+          else if (!strcmp($1.value, "name-change"))
+              $$.event_mask = (1 << CGRP_EVENT_NAME);
+          else {
+              OHM_ERROR("cgrp: invalid rule event '%s'", $1.value);
+              YYABORT;
+          }
+      }
+    | TOKEN_IDENT TOKEN_UINT {
+          memset(&$$, 0, sizeof($$));
+
+          if (!strcmp($1.value, "group-change")) {
+              $$.event_mask = (1 << CGRP_EVENT_GID);
+              $$.gids       = (gid_t *)$2.value;
+              $$.ngid       = 1;
+          }
+          else if (!strcmp($1.value, "user-change")) {
+              $$.event_mask = (1 << CGRP_EVENT_UID);
+              $$.uids       = (uid_t *)$2.value;
+              $$.nuid       = 1;
+          }
+          else {
+              OHM_ERROR("cgrp: invalid rule event '%s'", $1.value);
+              YYABORT;
+          }
+      }
+    | TOKEN_IDENT string_or_wildcard {
+          const char *name = $2.value;
+
+          memset(&$$, 0, sizeof($$));
+
+          if (!strcmp($1.value, "group-change")) {
+              $$.event_mask = (1 << CGRP_EVENT_GID);
+
+              if (!strcmp(name, "*")) {
+                  $$.gids = NULL;
+                  $$.ngid = 0;                     /* wildcard */
+              }
+              else {
+                  if (lookup_gid(name, (gid_t *)&$$.gids))
+                      $$.ngid = 1;
+                  else {
+                      OHM_ERROR("cgrp: ignoring unknown group '%s'", name);
+                      $$.event_mask = 0;
+                  }
+              }
+          }
+          else if (!strcmp($1.value, "user-change")) {
+              $$.event_mask = (1 << CGRP_EVENT_UID);
+
+              if (!strcmp(name, "*")) {
+                  $$.uids = NULL;
+                  $$.nuid = 0;                     /* wildcard */
+              }
+              else {
+                  if (lookup_uid(name, (uid_t *)&$$.uids))
+                      $$.nuid = 1;
+                  else {
+                      OHM_ERROR("cgrp: ignoring unknown user '%s'", name);
+                      $$.event_mask = 0;
+                  }
+              }
+          }
+          else {
+              OHM_ERROR("cgrp: invalid rule event '%s'", $1.value);
+              YYABORT;
+          }
+      }
+    ;
+
+
+string_or_wildcard: string { $$       = $1;  }
+   |    TOKEN_ASTERISK     { $$.value = "*"; }
+   ;
 
 rule_statements: rule_statement "\n" {
         $$ = $1;
@@ -761,7 +980,8 @@ value: TOKEN_STRING {
     ;
 
 
-rule: "[" KEYWORD_CLASSIFY group_name "]" { strcpy(rule_group, $3.value); } "\n"
+procdef: "[" KEYWORD_CLASSIFY string "]"
+         { strcpy(rule_group, $3.value); } "\n"
            simple_rule_list               { rule_group[0] = '\0'; }
     ;
 
@@ -775,7 +995,8 @@ simple_rule_list: simple_rule "\n"
     ;
 
 simple_rule: path {
-        cgrp_procdef_t  rule;
+        cgrp_procdef_t  procdef;
+	cgrp_rule_t    *rule;
         cgrp_stmt_t    *stmt;
 	cgrp_action_t  *action;
 	cgrp_group_t   *group = group_find(ctx, rule_group);
@@ -799,14 +1020,21 @@ simple_rule: path {
         stmt->expr    = NULL;
         stmt->actions = action;
 
-        rule.binary     = $1.value;
-	rule.renice     = 0;
-        rule.statements = stmt;
+        if (ALLOC_OBJ(rule) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate rule");
+            statement_free_all(stmt);
+	    YYABORT;
+        }
+	rule->event_mask = (1 << CGRP_EVENT_EXEC);
+	rule->statements = stmt;
+
+        procdef.binary = $1.value;
+        procdef.rules  = rule;
 
         if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ADDON_RULES))
-            addon_add(ctx, &rule);
+            addon_add(ctx, &procdef);
         else {
-            if (!procdef_add(ctx, &rule))
+            if (!procdef_add(ctx, &procdef))
                 YYABORT;
         }
     }
@@ -821,14 +1049,17 @@ actions: action          { $$ = $1; }
     | actions ";" action { $$ = $1; action_add($$, $3); }
     ;
 
-action: action_group          { $$ = $1; }
-    |   action_classify       { $$ = $1; }
-    |   action_schedule       { $$ = $1; }
-    |   action_renice         { $$ = $1; }
-    |   action_ignore         { $$ = $1; }
+action: action_group     { $$ = $1; }
+    |   action_classify  { $$ = $1; }
+    |   action_schedule  { $$ = $1; }
+    |   action_renice    { $$ = $1; }
+    |   action_priority  { $$ = $1; }
+    |   action_oom       { $$ = $1; }
+    |   action_ignore    { $$ = $1; }
+    |   action_no_op     { $$ = $1; }
     ;
 
-action_group: KEYWORD_GROUP group_name {
+action_group: KEYWORD_GROUP string {
 	cgrp_action_t *action;
 	cgrp_group_t  *group = group_find(ctx, $2.value);
 
@@ -901,6 +1132,32 @@ action_renice: KEYWORD_RENICE renice_priority {
     }
     ;
 
+action_priority: KEYWORD_PRIORITY adjust_action adjust_value {
+        cgrp_action_t *action;
+
+        action = action_priority_new($2, $3.value);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new priority action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
+action_oom: KEYWORD_OOM adjust_action adjust_value {
+        cgrp_action_t *action;
+
+        action = action_oom_new($2, $3.value);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new OOM action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
 action_ignore: KEYWORD_IGNORE {
         cgrp_action_t *action;
 
@@ -914,8 +1171,17 @@ action_ignore: KEYWORD_IGNORE {
     }
     ;
 
-group_name: TOKEN_STRING { $$ = $1; }
-    | TOKEN_IDENT        { $$ = $1; }
+action_no_op: KEYWORD_NO_OP {
+        cgrp_action_t *action;
+
+        action = action_noop_new();
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new no-op action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
     ;
 
 schedule_priority: /* empty */ { $$.value = 0; }
@@ -925,6 +1191,15 @@ schedule_priority: /* empty */ { $$.value = 0; }
 renice_priority: TOKEN_UINT    { $$.value = $1.value; }
     |            TOKEN_SINT    { $$.value = $1.value; }
     ;
+
+adjust_action: TOKEN_IDENT  { $$ = parse_adjust($1.value); }
+    |          TOKEN_STRING { $$ = parse_adjust($1.value); }
+    ;
+
+adjust_value: TOKEN_SINT { $$.value = $1.value;      }
+    |         TOKEN_UINT { $$.value = (int)$1.value; }
+    ;
+
 
 
 
@@ -937,24 +1212,8 @@ string: TOKEN_IDENT  { $$ = $1; }
     ;
 
 
-path: TOKEN_PATH {
-#if 0  /* hmm... */
-          if ($1.value[0] != '/') {
-              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
-              exit(1);
-          }
-#endif
-          $$ = $1;
-    }
-    | TOKEN_STRING {
-#if 0 /* hmm... allow anything if quoted (we also classify by WRT IDs etc.) */
-          if ($1.value[0] != '/') {
-              OHM_ERROR("cgrp: invalid path '%s'", $1.value);
-              exit(1);
-          }
-#endif
-          $$ = $1;
-    }
+path: TOKEN_PATH   { $$ = $1; }
+    | TOKEN_STRING { $$ = $1; }
     ;
 
 
@@ -1273,6 +1532,35 @@ config_monitor_exit(cgrp_context_t *ctx)
 void
 config_print(cgrp_context_t *ctx, FILE *fp)
 {
+    const char *prio;
+    int         flags;
+
+    flags = ctx->options.flags;
+
+    if (flags) {
+        fprintf(fp, "# global configuration flags:\n");
+        
+        if (CGRP_TST_FLAG(flags, CGRP_FLAG_GROUP_FACTS))
+            fprintf(fp, "export-group-facts\n");
+
+        if (CGRP_TST_FLAG(flags, CGRP_FLAG_PART_FACTS))
+            fprintf(fp, "export-partition-facts\n");
+
+        if (CGRP_TST_FLAG(flags, CGRP_FLAG_ALWAYS_FALLBACK))
+            fprintf(fp, "always-fallback\n");
+
+        switch (ctx->options.prio_preserve) {
+        case CGRP_PRIO_ALL:  prio = ALL_PRIO; break;
+        case CGRP_PRIO_LOW:  prio = LOW_PRIO; break;
+        case CGRP_PRIO_NONE: prio = NO_PRIO;  break;
+        default:             prio = "<?>";  break;
+        }            
+
+        fprintf(fp, "preserve-priority %s\n", prio);
+    }
+    
+    /* XXX TODO: add dumping all other options, too... */
+
     ctrl_dump(ctx, fp);
     partition_dump(ctx, fp);
     group_dump(ctx, fp);
@@ -1287,10 +1575,163 @@ cgrpyyerror(cgrp_context_t *ctx, const char *msg)
 
     OHM_ERROR("parse error: %s near line %d in file %s", msg,
               lexer_line(), lexer_file());
-#if 0
-    exit(1);                              /* XXX would be better not to */
-#endif
 }
+
+
+/********************
+ * gid/uid routines
+ ********************/
+
+static int
+add_gid(cgrp_rule_t *rule, gid_t gid)
+{
+    if ((rule->event_mask & (1 << CGRP_EVENT_GID)) && rule->ngid == 0)
+        return TRUE;
+
+    if (REALLOC_ARR(rule->gids, rule->ngid, rule->ngid + 1) != NULL) {
+        rule->event_mask |= (1 << CGRP_EVENT_GID);
+        rule->gids[rule->ngid++] = gid;
+        
+        return TRUE;
+    }
+    else {
+        OHM_ERROR("cgrp: failed to allocate new group id for rule events");
+        
+        return FALSE;
+    }
+}
+
+
+static int
+add_grp(cgrp_rule_t *rule, const char *name)
+{
+    gid_t gid;
+    
+    if ((rule->event_mask & (1 << CGRP_EVENT_GID)) && rule->ngid == 0)
+        return TRUE;
+
+    if (!strcmp(name, "*")) {
+        if (rule->gids != NULL) {
+            FREE(rule->gids);
+            rule->gids = NULL;
+        }
+
+        rule->ngid        = 0;                 /* mark as wildcard group */
+        rule->event_mask |= (1 << CGRP_EVENT_GID);
+        
+        return TRUE;
+    }
+    else {
+        if (!lookup_gid(name, &gid)) {
+            OHM_ERROR("cgrp: failed to find group ID for '%s'", name);
+
+            return FALSE;
+        }
+ 
+        return add_gid(rule, gid);
+    }
+}
+
+
+static int
+lookup_gid(const char *name, gid_t *gid)
+{
+    size_t       size = sysconf(_SC_GETGR_R_SIZE_MAX);
+    struct group grp, *found;
+    char         buf[size];
+    
+    if (getgrnam_r(name, &grp, buf, size, &found) != 0 || !found)
+        return FALSE;
+    else {
+        *gid = grp.gr_gid;
+        return TRUE;
+    }
+}
+
+
+static int
+add_uid(cgrp_rule_t *rule, uid_t uid)
+{
+    if ((rule->event_mask & (1 << CGRP_EVENT_UID)) && rule->nuid == 0)
+        return TRUE;
+
+    if (REALLOC_ARR(rule->uids, rule->nuid, rule->nuid + 1) != NULL) {
+        rule->event_mask |= (1 << CGRP_EVENT_UID);
+        rule->gids[rule->nuid++] = uid;
+        
+        return TRUE;
+    }
+    else {
+        OHM_ERROR("cgrp: failed to allocate new user id for rule events");
+        
+        return FALSE;
+    }
+}
+
+
+static int
+add_usr(cgrp_rule_t *rule, const char *name)
+{
+    uid_t uid;
+    
+    if ((rule->event_mask & (1 << CGRP_EVENT_UID)) && rule->nuid == 0)
+        return TRUE;
+
+    if (!strcmp(name, "*")) {
+        if (rule->uids != NULL) {
+            FREE(rule->uids);
+            rule->uids = NULL;
+        }
+
+        rule->nuid        = 0;                  /* mark as wildcard user */
+        rule->event_mask |= (1 << CGRP_EVENT_UID);
+        
+        return TRUE;
+    }
+    else {
+        if (!lookup_uid(name, &uid)) {
+            OHM_ERROR("cgrp: failed to find user ID for '%s'", name);
+
+            return FALSE;
+        }
+    
+        return add_uid(rule, uid);
+    }
+}
+
+
+static int
+lookup_uid(const char *name, uid_t *uid)
+{
+    size_t        size = sysconf(_SC_GETPW_R_SIZE_MAX);
+    struct passwd usr, *found;
+    char          buf[size];
+
+    if (getpwnam_r(name, &usr, buf, size, &found) != 0 || !found)
+        return FALSE;
+    else {
+        *uid = usr.pw_uid;
+        return TRUE;
+    }
+}
+
+
+/********************
+ * misc. parsing
+ ********************/
+static cgrp_adjust_t
+parse_adjust(const char *action)
+{
+    if      (!strcmp(action, CGRP_ADJUST_ABSOLUTE)) return CGRP_ADJ_ABSOLUTE;
+    else if (!strcmp(action, CGRP_ADJUST_RELATIVE)) return CGRP_ADJ_RELATIVE;
+    else if (!strcmp(action, CGRP_ADJUST_LOCK    )) return CGRP_ADJ_LOCK;
+    else if (!strcmp(action, CGRP_ADJUST_UNLOCK  )) return CGRP_ADJ_UNLOCK;
+    else if (!strcmp(action, CGRP_ADJUST_EXTERN  )) return CGRP_ADJ_EXTERN;
+    else if (!strcmp(action, CGRP_ADJUST_INTERN  )) return CGRP_ADJ_INTERN;
+    
+    return CGRP_ADJ_UNKNOWN;
+}
+
 
 
 /* 

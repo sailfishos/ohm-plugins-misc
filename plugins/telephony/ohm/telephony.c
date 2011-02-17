@@ -3386,10 +3386,9 @@ call_activate(call_t *call, const char *action, event_t *event)
     
     (void)action;
     
-    OHM_INFO("ACTIVATE %s.", short_path(call->path));
+    OHM_INFO("ACTIVATE (%s) %s.", action, short_path(call->path));
     
-    if (call == event->any.call && event->any.state == STATE_ACTIVE) {
-        
+    if (call == event->any.call && event->any.state == STATE_ACTIVE) {        
         if (event->type == EVENT_CALL_ACCEPT_REQUEST) {
             if (tp_accept(call) != 0) {
                 accept_call_reply(event->call.req, "failed to accept call");
@@ -3448,10 +3447,17 @@ call_activate(call_t *call, const char *action, event_t *event)
             run_hook(HOOK_CALL_ACTIVE);
     }
     else {
-        if (tp_hold(call, FALSE) != 0) {
-            OHM_ERROR("Failed to disconnect call %s.", call->path);
-            return EIO;
+        if (!strcmp(action, "cmtautoactivate"))
+            OHM_INFO("Letting CMT reactivate call %s.", short_path(call->path));
+        else {
+            if (tp_hold(call, FALSE) != 0) {
+                OHM_ERROR("Failed to disconnect call %s.", call->path);
+                return EIO;
+            }
         }
+
+        call->state = STATE_ACTIVE;
+        policy_call_update(call, UPDATE_STATE);
     }
 
     return 0;
@@ -3491,16 +3497,17 @@ call_action(call_t *call, const char *action, event_t *event)
         const char  *action;
         int        (*handler)(call_t *, const char *, event_t *);
     } handlers[] = {
-        { "peerhungup"  , call_hungup     },
-        { "localhungup" , call_hungup     },
-        { "disconnected", call_disconnect },
-        { "busy"        , call_disconnect },
-        { "onhold"      , call_hold       },
-        { "autohold"    , call_hold       },
-        { "cmtautohold" , call_hold       },
-        { "active"      , call_activate   },
-        { "created"     , call_create     },
-        { NULL, NULL }
+        { "peerhungup"     , call_hungup     },
+        { "localhungup"    , call_hungup     },
+        { "disconnected"   , call_disconnect },
+        { "busy"           , call_disconnect },
+        { "onhold"         , call_hold       },
+        { "autohold"       , call_hold       },
+        { "cmtautohold"    , call_hold       },
+        { "active"         , call_activate   },
+        { "cmtautoactivate", call_activate   },
+        { "created"        , call_create     },
+        { NULL             , NULL }
     }, *h;
     
     for (h = handlers; h->action; h++)
@@ -3983,6 +3990,7 @@ typedef struct {
     resconn_t *conn;
     resset_t  *rset;
     uint32_t   granted;
+    uint32_t   is_releasing;
     uint32_t   reqno;
     int        video;
 } resctl_t;
@@ -4063,11 +4071,12 @@ resctl_disconnect(void)
 #else
     OHM_INFO("telephony resctl: disconnecting...");
 
-    rctl.conn    = 0;
-    rctl.rset    = NULL;
-    rctl.granted = 0;
-    rctl.reqno   = 0;
-    rctl.video   = FALSE;
+    rctl.conn         = 0;
+    rctl.rset         = NULL;
+    rctl.granted      = 0;
+    rctl.is_releasing = 0;
+    rctl.reqno        = 0;
+    rctl.video        = FALSE;
 #endif
 }
 
@@ -4153,6 +4162,9 @@ need_video(void)
 static inline int
 resctl_has_audio(void)
 {
+    if (rctl.is_releasing)
+        return 0;
+
     return rctl.granted & RESMSG_AUDIO_PLAYBACK;
 }
 
@@ -4160,6 +4172,9 @@ resctl_has_audio(void)
 static inline int
 resctl_has_video(void)
 {
+    if (rctl.is_releasing)
+        return 0;
+
     return rctl.granted & RESMSG_VIDEO_PLAYBACK;
 }
 
@@ -4207,9 +4222,11 @@ resctl_release(void)
 
     OHM_INFO("telephony resctl: releasing...");
 
-    if (rctl.rset == NULL)
+    if (rctl.rset == NULL || rctl.is_releasing)
         return;
-    
+
+    rctl.is_releasing = 1;
+
     msg.possess.type  = RESMSG_RELEASE;
     msg.possess.id    = RSET_ID;
     msg.possess.reqno = rctl.reqno++;
@@ -4225,8 +4242,9 @@ resctl_grant(resmsg_t *msg, resset_t *rset, void *data)
 
     (void)rset;
     (void)data;
-    
-    rctl.granted = msg->notify.resrc;
+
+    rctl.granted      = msg->notify.resrc;
+    rctl.is_releasing = 0;
 
     OHM_INFO("telephony resctl: granted resources: %s",
              resmsg_res_str(msg->notify.resrc, buf, sizeof(buf)));
