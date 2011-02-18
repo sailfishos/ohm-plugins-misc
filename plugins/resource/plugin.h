@@ -36,6 +36,9 @@ USA.
 #define G_MODULE_EXPORT EXPORT
 #endif
 
+#define ENTER  plugin_print_timestamp(__FUNCTION__, "enter")
+#define LEAVE  plugin_print_timestamp(__FUNCTION__, "leave")
+
 /* FactStore prefix */
 #define FACTSTORE_PREFIX                "com.nokia.policy"
 #define FACTSTORE_RESOURCE_PREFIX       FACTSTORE_PREFIX ".resource"
@@ -45,9 +48,11 @@ USA.
 #define FACTSTORE_ENFORCEMENT_POINT     FACTSTORE_PREFIX ".enforcement_point"
 
 
-extern int DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
+extern int DBG_INIT, DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
 extern int DBG_DRES, DBG_FS, DBG_QUE, DBG_TRANSACT, DBG_MEDIA, DBG_AUTH;
 
+
+void plugin_print_timestamp(const char *, const char *);
 
 /*
 static void plugin_init(OhmPlugin *);

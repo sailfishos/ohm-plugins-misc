@@ -38,14 +38,18 @@ USA.
 #define G_MODULE_EXPORT EXPORT
 #endif
 
+
 #define DIM(a)   (sizeof(a) / sizeof(a[0]))
 
+#define ENTER    plugin_print_timestamp(__FUNCTION__, "enter")
+#define LEAVE    plugin_print_timestamp(__FUNCTION__, "leave")
 
-extern int DBG_SCAN, DBG_PARSE, DBG_ACTION;
+extern int DBG_INIT, DBG_SCAN, DBG_PARSE, DBG_ACTION, DBG_IPC;
 extern int DBG_XCB, DBG_ATOM, DBG_WIN, DBG_PROP, DBG_RANDR;
 extern int DBG_EXEC, DBG_FUNC, DBG_SEQ, DBG_RESOLV;
 extern int DBG_TRACK, DBG_ROUTE, DBG_XV;
 
+void plugin_print_timestamp(const char *, const char *);
 
 #endif /* __OHM_VIDEOEP_PLUGIN_H__ */
 

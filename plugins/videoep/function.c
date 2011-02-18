@@ -53,6 +53,10 @@ static int test_function(int, videoep_arg_t **);
 void function_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
 void function_exit(OhmPlugin *plugin)

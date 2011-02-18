@@ -52,6 +52,10 @@ static void broadcast_event_list(void *);
 void subscription_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
 void subscription_create(const char *addr)

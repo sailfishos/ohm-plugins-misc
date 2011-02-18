@@ -102,9 +102,13 @@ void window_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    ENTER;
+
     xif_add_connection_callback(connection_state, NULL);
     xif_add_destruction_callback(window_destroyed, NULL);
     xif_add_property_change_callback(property_changed, NULL);
+
+    LEAVE;
 }
 
 void window_exit(OhmPlugin *plugin)

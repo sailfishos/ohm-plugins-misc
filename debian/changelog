@@ -1,8 +1,20 @@
 ohm-plugins-misc (1:1.64) unstable; urgency=low
 
+  [Janos Kovacs]
+  * PID support in resource sets
+  * dspep plugin
+  * videoep support for xvideo usage control
+  * Fixes: NB#210941
+  * timestamping at initialization of notification, resource
+    and videoep plugins
+  * support for deferred/immediate signalling
+  * Fixes: NB#225502
+  * videoep query errors will not block request queues any more
+
+  [Krisztian Litkey]
   * cgrp: auch... give plenty of time for registering to connector events.
 
- -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 18 Feb 2011 20:00:20 +0200
+ -- Janos Kovacs <janos.f.kovacs@nokia.com>  Thu, 17 Feb 2011 23:46:11 +0200
 
 ohm-plugins-misc (1:1.63) unstable; urgency=low
 
@@ -10,6 +22,7 @@ ohm-plugins-misc (1:1.63) unstable; urgency=low
   * cgrp: initial implementation of the new process priorization mechanism.
   * telephony: mark resources as being released when releasing them.
   * accessories: added support for configurable inverted jack event semantics.
+  * Fixes: NB#224130.
 
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 15 Feb 2011 18:10:37 +0200
 

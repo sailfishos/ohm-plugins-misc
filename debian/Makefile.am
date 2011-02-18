@@ -11,6 +11,9 @@ endif
 if BUILD_VIDEOEP
 	echo "${libdir}/ohm/libohm_videoep.so" >> $@
 endif
+if BUILD_DSPEP
+	echo "${libdir}/ohm/libohm_dspep.so" >> $@
+endif
 if BUILD_HAL
 	echo "${libdir}/ohm/libohm_hal.so" >> $@
 endif

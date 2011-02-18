@@ -132,9 +132,13 @@ void randr_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    ENTER;
+
     xif_add_connection_callback(connection_state, NULL);
     xif_add_randr_crtc_change_callback(crtc_changed, NULL);
     xif_add_randr_output_change_callback(output_changed, NULL);
+
+    LEAVE;
 }
 
 void randr_exit(OhmPlugin *plugin)

@@ -40,6 +40,8 @@ void timestamp_init(OhmPlugin *plugin)
     char *signature = (char *)_timestamp_add_SIGNATURE;
 
     (void)plugin;
+
+    ENTER;
  
     ohm_module_find_method("timestamp", &signature, (void *)&_timestamp_add);
 
@@ -47,6 +49,8 @@ void timestamp_init(OhmPlugin *plugin)
         OHM_INFO("resource: timestamping is enabled.");
     else
         OHM_INFO("resource: timestamping is disabled.");
+
+    LEAVE;
 }
 
 void timestamp_add(const char *fmt, ...)

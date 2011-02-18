@@ -1080,7 +1080,11 @@ invalid_line:
 
 void config_init(OhmPlugin *plugin)
 {
+    ENTER;
+
     yydeffile = ohm_plugin_get_param(plugin, "config");
+
+    LEAVE;
 }
 
 void config_exit(OhmPlugin *plugin)
@@ -1090,17 +1094,21 @@ void config_exit(OhmPlugin *plugin)
 
 int config_parse_file(const char *path)
 {
+    ENTER;
+
     if (path == NULL)
         path = yydeffile;
 
     if (!path) {
         OHM_ERROR("videoep: no configuration file");
+        LEAVE;
         return -1;
     }
 
     if (scanner_open_file(path) < 0) {
         OHM_ERROR("videoep: can't open config file '%s': %s",
                   path, strerror(errno));
+        LEAVE;
         return -1;
     }
 
@@ -1108,8 +1116,11 @@ int config_parse_file(const char *path)
 
     if (yy_videoep_parse() != 0) {
         OHM_ERROR("videoep: failed to parse config file '%s'", path);
+        LEAVE;
         return -1;
     }
+
+    LEAVE;
 
     return 0;
 }

@@ -9,6 +9,9 @@
 /* Build buttons plugin ? */
 #undef BUILD_BUTTONS
 
+/* Build dspep plugin ? */
+#undef BUILD_DSPEP
+
 /* Build FM radio plugin ? */
 #undef BUILD_FMRADIO
 

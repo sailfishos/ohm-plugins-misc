@@ -39,6 +39,9 @@ USA.
 
 #define DIM(a)   (sizeof(a) / sizeof(a[0]))
 
+#define ENTER    plugin_print_timestamp(__FUNCTION__, "enter")
+#define LEAVE    plugin_print_timestamp(__FUNCTION__, "leave")
+
 /*
  * FactStore prefix's 
  */
@@ -70,9 +73,11 @@ typedef enum {
     max_id
 } notification_id_type_t;
 
-extern int DBG_PROXY, DBG_LLIV, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
+extern int DBG_INIT, DBG_PROXY, DBG_LLIV, DBG_SUBSCR;
+extern int DBG_RESRC, DBG_DBUS, DBG_RULE;
 
 
+void plugin_print_timestamp(const char *, const char *);
 /*
 static void plugin_init(OhmPlugin *);
 static void plugin_destroy(OhmPlugin *);

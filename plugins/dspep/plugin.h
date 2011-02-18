@@ -18,29 +18,34 @@ USA.
 *************************************************************************/
 
 
-#ifndef __OHM_VIDEOEP_MEM_H__
-#define __OHM_VIDEOEP_MEM_H__
+#ifndef __OHM_DSPEP_PLUGIN_H__
+#define __OHM_DSPEP_PLUGIN_H__
 
-/* hack to avoid multiple includes */
-typedef struct _OhmPlugin OhmPlugin;
+#include <glib.h>
+#include <glib-object.h>
+#include <gmodule.h>
+#include <ohm/ohm-plugin.h>
+#include <ohm/ohm-plugin-log.h>
+#include <ohm/ohm-plugin-debug.h>
 
-#ifdef BUILTIN_MEMORY_TRACE
-#define malloc(s)   mem_malloc(__FILE__, __LINE__, s)
-#define calloc(n,s) mem_calloc(__FILE__, __LINE__, n, s)
-#define strdup(s)   mem_strdup(__FILE__, __LINE__, s)
-#define free(m)     mem_free(__FILE__, __LINE__, m)
+#define EXPORT __attribute__ ((visibility ("default")))
+#define HIDE   __attribute__ ((visibility ("hidden")))
+
+#ifdef  G_MODULE_EXPORT
+#undef  G_MODULE_EXPORT
+#define G_MODULE_EXPORT EXPORT
 #endif
 
-void mem_init(OhmPlugin *);
-void mem_exit(OhmPlugin *);
+#define DIM(a)   (sizeof(a) / sizeof(a[0]))
 
-void *mem_malloc(const char *, int, size_t);
-void *mem_calloc(const char *, int, size_t, size_t);
-char *mem_strdup(const char *, int, const char *);
-void  mem_free(const char *, int, void *);
+#define ENTER    plugin_print_timestamp(__FUNCTION__, "enter")
+#define LEAVE    plugin_print_timestamp(__FUNCTION__, "leave")
 
+extern int DBG_INIT, DBG_ACTION, DBG_DSP;
 
-#endif /* __OHM_VIDEOEP_MEM_H__ */
+void plugin_print_timestamp(const char *, const char *);
+
+#endif /* __OHM_DSPEP_PLUGIN_H__ */
 
 /* 
  * Local Variables:
