@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.64) unstable; urgency=low
+
+  * cgrp: auch... give plenty of time for registering to connector events.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Fri, 18 Feb 2011 20:00:20 +0200
+
 ohm-plugins-misc (1:1.63) unstable; urgency=low
 
   * cgrp: initial implementation of process OOM-protection.
