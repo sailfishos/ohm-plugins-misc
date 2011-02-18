@@ -223,7 +223,7 @@ proc_request(enum proc_cn_mcast_op req)
 
     /* Set timeout */
     tv.tv_sec = 0;
-    tv.tv_usec = 500;
+    tv.tv_usec = 500000;
 
     retval = select(sock + 1, &rfds, NULL, NULL, &tv);
 
