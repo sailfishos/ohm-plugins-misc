@@ -73,6 +73,10 @@ static void complete_transaction(uint32_t);
 void transaction_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
 uint32_t transaction_create(transaction_callback_t callback, void *user_data)

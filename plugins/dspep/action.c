@@ -20,7 +20,6 @@ USA.
 
 /*! \defgroup pubif Public Interfaces */
 
-#include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,21 +28,14 @@ USA.
 #include <errno.h>
 
 #include <ohm/ohm-fact.h>
-#include <policy/videoipc.h>
 
 #include "plugin.h"
 #include "action.h"
-#include "xif.h"
-#include "router.h"
-#include "videoipc.h"
+#include "dsp.h"
+
+#define MAX_DSP_USERS 64
 
 #define STRUCT_OFFSET(s,m) ((char *)&(((s *)0)->m) - (char *)0)
-
-/* in this module we need this to be signed */
-#ifdef  DIM
-#undef  DIM
-#define DIM(a) (int)(sizeof(a) / sizeof(a[0]))
-#endif
 
 OHM_IMPORTABLE(gboolean , unregister_ep, (GObject *ep));
 OHM_IMPORTABLE(GObject *, register_ep  , (gchar *uri, gchar **interested));
@@ -73,37 +65,22 @@ typedef struct {		/* action descriptor */
     int           datalen;
 } actdsc_t;
 
-typedef struct {                /* video routing data structure */
-    char         *device;
-    char         *tvstd;
-    char         *ratio;
-} route_t;
-
-typedef struct {                /* xxx_user (eg. xvideo_user) data structure */
+typedef struct {                /* dsp_user data structure */
     int           pid;
 } user_t;
-
-typedef struct {
-    int    npid;
-    pid_t  pids[256];
-} user_list_t;
 
 static OhmFactStore *factstore;
 static GObject      *conn;
 static gulong        decision_id;
 static gulong        keychange_id;
-static char         *device;
-static char         *tvstd;
-static char         *ratio;
-static user_list_t   xvuser;
-
+static uint32_t      users[MAX_DSP_USERS];	/* dsp users */
+static uint32_t      nuser;
 
 static void decision_signal_cb(GObject *,GObject *,internal_ep_cb_t,gpointer);
 static void key_change_signal_cb(GObject *, GObject *, gpointer);
 
 static gboolean transaction_parser(GObject *, GObject *, gpointer);
-static int route_action(void *);
-static int xvuser_action(void *);
+static int dspuser_action(void *);
 static int action_parser(actdsc_t *);
 static int get_args(OhmFact *, argdsc_t *, void *);
 
@@ -119,7 +96,7 @@ void action_init(OhmPlugin *plugin)
     char *unregister_name      = "signaling.unregister_enforcement_point";
     char *register_signature   = (char *)register_ep_SIGNATURE;
     char *unregister_signature = (char *)unregister_ep_SIGNATURE;
-    char *signals[]            = {"video_actions", NULL};
+    char *signals[]            = {"dsp_actions", NULL};
 
     (void)plugin;
 
@@ -133,13 +110,13 @@ void action_init(OhmPlugin *plugin)
                            (void *)&unregister_ep);
 
     if (!register_ep || !unregister_ep) {
-        OHM_ERROR("videoep: can't find mandatory signaling methods. "
-                  "Video routing disables");
+        OHM_ERROR("dspep: can't find mandatory signaling methods. "
+                  "DSP enforcement point disabled");
     }
     else {
-        if ((conn = register_ep("videoep", signals)) == NULL) {
-            OHM_ERROR("videoep: failed to register to receive '%s' signals. "
-                      "Video routing disables", signals[0]);
+        if ((conn = register_ep("dspep", signals)) == NULL) {
+            OHM_ERROR("dspep: failed to register to receive '%s' signals. "
+                      "DSP enforcement point disabled", signals[0]);
         }
         else {
             factstore    = ohm_fact_store_get_fact_store();
@@ -151,7 +128,7 @@ void action_init(OhmPlugin *plugin)
                                             G_CALLBACK(key_change_signal_cb),
                                             NULL);            
 
-            OHM_INFO("videoep: video routing enabled");
+            OHM_INFO("dspep: DSP enforcement point enabled");
         }
     }
 
@@ -208,22 +185,14 @@ static gboolean transaction_parser(GObject *conn,
     (void)conn;
     (void)data;
 
-    static argdsc_t  route_args [] = {
-        { argtype_string  ,   "device"     ,  STRUCT_OFFSET(route_t, device) },
-        { argtype_string  ,   "tvstandard" ,  STRUCT_OFFSET(route_t, tvstd ) },
-        { argtype_string  ,   "aspectratio",  STRUCT_OFFSET(route_t, ratio ) },
-        { argtype_invalid ,     NULL       ,                 0               }
-    };
-
-    static argdsc_t  xvuser_args [] = {
-        { argtype_integer ,   "pid"        ,  STRUCT_OFFSET(user_t, pid)     },
-        { argtype_invalid ,   NULL         ,              0                  }
+    static argdsc_t  dspuser_args [] = {
+        { argtype_integer , "pid" ,  STRUCT_OFFSET(user_t, pid) },
+        { argtype_invalid , NULL  ,             0               }
     };
 
     static actdsc_t  actions[] = {
-        { PREFIX "video_route", route_action , route_args , sizeof(route_t) },
-        { PREFIX "xvideo_user", xvuser_action, xvuser_args, sizeof(user_t)  },
-        {          NULL       ,     NULL     ,    NULL    ,      0          }
+        { PREFIX "dsp_user", dspuser_action, dspuser_args, sizeof(user_t) },
+        {       NULL       ,     NULL      ,    NULL     ,      0         }
     };
     
     guint      txid;
@@ -235,17 +204,18 @@ static gboolean transaction_parser(GObject *conn,
     
     OHM_DEBUG(DBG_ACTION, "got actions");
 
-    g_object_get(transaction, "txid" , &txid, NULL);
-    g_object_get(transaction, "facts", &list, NULL);
+    g_object_get(transaction, "txid"  , &txid  , NULL);
+    g_object_get(transaction, "facts" , &list  , NULL);
     g_object_get(transaction, "signal", &signal, NULL);
         
     success = TRUE;
 
-    if (!strcmp(signal, "video_actions")) {
-
-        memset(&xvuser, 0, sizeof(xvuser));
+    if (!strcmp(signal, "dsp_actions")) {
 
         OHM_DEBUG(DBG_ACTION, "txid: %d", txid);
+
+        memset(users, 0, sizeof(users));
+        nuser = 0;
 
         for (entry = list;    entry != NULL;    entry = g_slist_next(entry)) {
             name = (char *)entry->data;
@@ -255,11 +225,8 @@ static gboolean transaction_parser(GObject *conn,
                     success &= action_parser(action);
             }
         }
-        
-        videoipc_update_start();
-        videoipc_update_section(VIDEOIPC_XVIDEO_SECTION,
-                                xvuser.pids, xvuser.npid);
-        videoipc_update_end();
+
+        success = dsp_set_users(users, nuser);
     }
 
     g_free(signal);
@@ -269,58 +236,21 @@ static gboolean transaction_parser(GObject *conn,
 #undef PREFIX
 }
 
-static int route_action(void *data)
-{
-
-    route_t *route   = data;
-    int      success = FALSE;
-
-    OHM_DEBUG(DBG_ACTION, "Got video route to '%s' / '%s' / '%s'",
-              route->device, route->tvstd, route->ratio);
-
-    if (route->device != NULL) {
-        free(device);
-        device = strdup(route->device);
-    }
-
-    if (route->tvstd != NULL) {
-        free(tvstd);
-        tvstd = strdup(route->tvstd);
-    }
-
-    if (route->ratio != NULL) {
-        free(ratio);
-        ratio = strdup(route->ratio);
-    }
-
-    if (!xif_is_connected_to_xserver())
-        xif_connect_to_xserver();
-    else {
-        if (device) {
-            OHM_DEBUG(DBG_ACTION, "route to %s/%s/%s", device,
-                      tvstd ? tvstd : "<null>", ratio ? ratio : "<null>");
-            success = router_new_setup(device, tvstd, ratio);
-        }
-    }
-
-    return success;
-}
-
-static int xvuser_action(void *data)
+static int dspuser_action(void *data)
 {
 
     user_t *user    = data;
     int     success = FALSE;
 
-    OHM_DEBUG(DBG_ACTION, "Got xvideo user '%u'", user->pid);
+    OHM_DEBUG(DBG_ACTION, "Got dsp user '%u'", user->pid);
 
-    if (xvuser.npid < DIM(xvuser.pids)) {
-        xvuser.pids[xvuser.npid++] = (pid_t)user->pid;
+    if (nuser < MAX_DSP_USERS - 1) {
+        users[nuser++] = (uint32_t)user->pid;
         success = TRUE;
     }
     else {
-        OHM_ERROR("videoep: number of xvideo users exceeds "
-                  "the internally allowed maximum (%d)", DIM(xvuser.pids));
+        OHM_ERROR("dspep: number of dsp users exceeds "
+                  "the maximum (%d)", MAX_DSP_USERS);
         success = FALSE;
     }
 
@@ -336,7 +266,7 @@ static int action_parser(actdsc_t *action)
     int      success;
 
     if ((data = malloc(action->datalen)) == NULL) {
-        OHM_ERROR("videoep: Can't allocate %d byte memory", action->datalen);
+        OHM_ERROR("dspep: Can't allocate %d byte memory", action->datalen);
 
         return FALSE;
     }
@@ -377,6 +307,10 @@ static int get_args(OhmFact *fact, argdsc_t *argdsc, void *args)
         if ((gv = ohm_fact_get(fact, ad->name)) == NULL)
             continue;
 
+#if 0
+        OHM_DEBUG(DBG_ACTION, "Got value type %d", G_VALUE_TYPE(gv));
+#endif
+
         switch (ad->type) {
 
         case argtype_string:
@@ -401,9 +335,6 @@ static int get_args(OhmFact *fact, argdsc_t *argdsc, void *args)
 
     return TRUE;
 }
-
-
-
 
 /*
  * Local Variables:

@@ -72,12 +72,12 @@ OHM_EXPORTABLE(gboolean, unregister_internal_enforcement_point, (GObject *ep))
 
 OHM_EXPORTABLE(GObject *, queue_policy_decision, (gchar *signal, GSList *facts, guint timeout))
 {
-    return (GObject *) queue_decision(signal, facts, 0, TRUE, timeout);
+    return (GObject *) queue_decision(signal, facts, 0, TRUE, timeout, TRUE);
 }
 
 OHM_EXPORTABLE(void, queue_key_change, (gchar *signal, GSList *facts))
 {
-    queue_decision(signal, facts, 0, FALSE, 0);
+    queue_decision(signal, facts, 0, FALSE, 0, TRUE);
     return;
 }
 
@@ -134,15 +134,22 @@ static void complete(Transaction *t, gpointer data)
 /* simple wrapper: hide the GObject interface */
 OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char **factv, completion_cb_t callback, unsigned long timeout))
 {
+    int orig_transid = transid;
     Transaction *t = NULL;
     GSList *facts = NULL;
+    gboolean defer = TRUE;
     int i;
+
+    if (transid < 0) {
+        transid = 0;
+        defer = FALSE;
+    }
 
     /* Get facts to a list */
 
     OHM_DEBUG(DBG_SIGNALING,
-            "signal_changed: signal '%s' with txid '%i', factcount '%i' with timeout '%li', %s a callback",
-            signal, transid, factc, timeout, callback ? "requires" : "doesn't require");
+              "signal_changed: signal '%s' with txid '%i/%i', factcount '%i' with timeout '%li', %s a callback, %s execution",
+              signal, orig_transid, transid, factc, timeout, callback ? "requires" : "doesn't require", defer ? "deferred" : "immediate");
 
     for (i = 0; i < factc; i++) {
         facts = g_slist_prepend(facts, g_strdup(factv[i]));
@@ -150,7 +157,7 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
 
     if (transid == 0) {
         /* no real transaction is needed */
-        queue_decision(signal, facts, 0, FALSE, 0);
+        queue_decision(signal, facts, 0, FALSE, 0, defer);
 
         if (callback) {
 
@@ -172,7 +179,7 @@ OHM_EXPORTABLE(int, signal_changed, (char *signal, int transid, int factc, char 
         }
     }
     else {
-        t = queue_decision(signal, facts, transid, TRUE, timeout);
+        t = queue_decision(signal, facts, transid, TRUE, timeout, defer);
         if (t == NULL) {
             goto error;
         }

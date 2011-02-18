@@ -98,14 +98,23 @@ static uint32_t update_handler(DBusMessage *, char *, char *);
 
 void dbusif_configure(OhmPlugin *plugin)
 {
+    ENTER;
+
     get_parameters(plugin);
+
+    LEAVE;
 }
 
 
 void dbusif_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
     system_bus_init();
+
+    LEAVE;
 }
 
 

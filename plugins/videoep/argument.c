@@ -43,6 +43,10 @@ static void reset_argument_instance(argument_inst_t *, argument_def_t *);
 void argument_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
 void argument_exit(OhmPlugin *plugin)

@@ -72,9 +72,13 @@ static resource_set_t *find_in_hash_table(uint32_t);
 void resource_set_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
-resource_set_t *resource_set_create(resset_t *resset)
+resource_set_t *resource_set_create(pid_t client_pid, resset_t *resset)
 {
     static uint32_t  manager_id;
 
@@ -88,6 +92,7 @@ resource_set_t *resource_set_create(resset_t *resset)
 
         if ((rs = malloc(sizeof(resource_set_t))) != NULL) {
             memset(rs, 0, sizeof(resource_set_t));
+            rs->client_pid = client_pid;
             rs->manager_id = manager_id++;
             rs->resset     = resset;
             rs->request    = strdup("release");
@@ -521,6 +526,7 @@ static int add_factstore_entry(resource_set_t *rs)
 
     fsif_field_t  fldlist[] = {
         INTEGER_FIELD ("manager_id" , rs->manager_id       ),
+        INTEGER_FIELD ("client_pid" , rs->client_pid       ),
         STRING_FIELD  ("client_name", resset->peer         ),
         INTEGER_FIELD ("client_id"  , resset->id           ),
         STRING_FIELD  ("class"      , resset->klass        ),
@@ -535,6 +541,7 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("block"      , rs->block            ),
         INTEGER_FIELD ("reqno"      , 0                    ),
         STRING_FIELD  ("audiogr"    , audiogr              ),
+        INTEGER_FIELD ("videopid"   , rs->client_pid       ),
         INVALID_FIELD
     };
 

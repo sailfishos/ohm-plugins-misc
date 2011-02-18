@@ -74,7 +74,11 @@ void atom_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
+    ENTER;
+
     xif_add_connection_callback(connection_state, NULL);
+
+    LEAVE;
 }
 
 void atom_exit(OhmPlugin *plugin)

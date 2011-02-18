@@ -163,6 +163,8 @@ void proxy_init(OhmPlugin *plugin)
     const char *limit_str;
     char       *e;
 
+    ENTER;
+
     if ((limit_str = ohm_plugin_get_param(plugin, "play-limit")) == NULL)
         play_limit = DEFAULT_PLAY_LIMIT;
     else {
@@ -179,6 +181,8 @@ void proxy_init(OhmPlugin *plugin)
 
     play_timeout = play_limit + 30 * SECOND;
     stop_timeout = 10 * SECOND;
+
+    LEAVE;
 }
 
 int proxy_playback_request(const char *what,    /* eg. ringtone, alarm, etc */

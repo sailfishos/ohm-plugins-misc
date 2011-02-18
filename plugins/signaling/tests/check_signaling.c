@@ -226,11 +226,11 @@ START_TEST (test_signaling_internal_ep_1)
     key_changed_count = 0;
     decision_count = 0;
 
-    queue_decision("actions", NULL, 0, FALSE, 0);
+    queue_decision("actions", NULL, 0, FALSE, 0, TRUE);
     
     g_main_loop_run(loop);
     
-    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
+    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000, TRUE);
     g_object_unref(test_transaction_object);
 
     g_main_loop_run(loop);
@@ -276,7 +276,7 @@ START_TEST (test_signaling_internal_ep_gobject)
     key_changed_count = 0;
     decision_count = 0;
 
-    queue_decision("actions", facts, 0, FALSE, 0);
+    queue_decision("actions", facts, 0, FALSE, 0, TRUE);
 
     g_main_loop_run(loop);
 
@@ -284,7 +284,7 @@ START_TEST (test_signaling_internal_ep_gobject)
     facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_3"));
     facts = g_slist_prepend(facts, g_strdup("com.nokia.fact_4"));
 
-    test_transaction_object = queue_decision("actions", facts, 0, TRUE, 2000);
+    test_transaction_object = queue_decision("actions", facts, 0, TRUE, 2000, TRUE);
     g_object_unref(test_transaction_object);
 
     g_main_loop_run(loop);
@@ -379,7 +379,7 @@ START_TEST (test_signaling_internal_ep_2)
     key_changed_count = 0;
     decision_count = 0;
 
-    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
+    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000, TRUE);
 
     g_signal_connect(test_transaction_object, "on-transaction-complete", G_CALLBACK(test_internal_2_complete), NULL);
 
@@ -550,8 +550,8 @@ START_TEST (test_signaling_register_unregister)
     g_object_ref(register_enforcement_point("internal-2", NULL, TRUE,  capabilities));
 
 
-    queue_decision("actions", NULL, 0, FALSE, 0);
-    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
+    queue_decision("actions", NULL, 0, FALSE, 0, TRUE);
+    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000, TRUE);
 
     /* Register the signal handlers */
 
@@ -671,7 +671,7 @@ START_TEST (test_signaling_timeout)
     g_object_ref(register_enforcement_point("external",   NULL, FALSE,  capabilities));
     g_object_ref(register_enforcement_point("external-2", NULL, FALSE,  capabilities));
 
-    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000);
+    test_transaction_object = queue_decision("actions", NULL, 0, TRUE, 2000, TRUE);
 
     /* Register the signal handlers */
 

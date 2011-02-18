@@ -50,6 +50,10 @@ static void destroy_audio_stream_spec(resource_audio_stream_t *);
 void resource_spec_init(OhmPlugin *plugin)
 {
     (void)plugin;
+
+    ENTER;
+
+    LEAVE;
 }
 
 resource_spec_t *resource_spec_create(resource_set_t       *rs,

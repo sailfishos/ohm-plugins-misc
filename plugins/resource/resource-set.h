@@ -21,6 +21,7 @@ USA.
 #ifndef __OHM_RESOURCE_SET_H__
 #define __OHM_RESOURCE_SET_H__
 
+#include <sys/types.h>
 #include <stdint.h>
 
 #include <res-conn.h>
@@ -30,6 +31,7 @@ USA.
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
 struct _OhmFact;
+struct resource_set_s;
 union resource_spec_u;
 
 typedef void (*resource_set_task_t)(struct resource_set_s *);
@@ -68,6 +70,7 @@ typedef struct {
 
 typedef struct resource_set_s {
     struct resource_set_s   *next;
+    pid_t                    client_pid; /* pid of the resource client */
     uint32_t                 manager_id; /* resource-set generated unique ID */
     resset_t                *resset;     /* link to libresource */
     union resource_spec_u   *specs;      /* resource specifications if any */
@@ -94,7 +97,7 @@ typedef enum {
 
 void resource_set_init(OhmPlugin *);
 
-resource_set_t *resource_set_create(resset_t *);
+resource_set_t *resource_set_create(pid_t, resset_t *);
 void resource_set_destroy(resset_t *);
 int resource_set_add_spec(resset_t *, resource_spec_type_t, ...);
 int  resource_set_update_factstore(resset_t *, resource_set_update_t);

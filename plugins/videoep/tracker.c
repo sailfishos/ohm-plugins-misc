@@ -164,10 +164,14 @@ void tracker_init(OhmPlugin *plugin)
 
     (void)plugin;
 
+    ENTER;
+
     for (def = 0;  def < PROPERTY_MAX;  def++)
         rootdef2idx[def] = INVALID_INDEX;
 
     xif_add_connection_callback(connection_state, NULL);
+
+    LEAVE;
 }
 
 void tracker_exit(OhmPlugin *plugin)
@@ -411,8 +415,12 @@ int tracker_complete_configuration(void)
 {
     uint32_t i;
 
+    ENTER;
+
     for (i = 0;  i < nrootprop;  i++)
         exec_instance_finalize(&rootprinsts[i].exinst, &rootwinxid);
+
+    LEAVE;
 
     return 0;
 }

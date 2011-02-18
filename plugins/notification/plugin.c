@@ -18,6 +18,7 @@ USA.
 *************************************************************************/
 
 
+#include <sys/time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -34,21 +35,41 @@ USA.
 #include "subscription.h"
 
 
-int DBG_PROXY, DBG_LLIV, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
+int DBG_INIT, DBG_PROXY, DBG_LLIV, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
 static unsigned int id;
 
 OHM_DEBUG_PLUGIN(notification,
-    OHM_DEBUG_FLAG("proxy"       , "proxy functions"        , &DBG_PROXY  ),
-    OHM_DEBUG_FLAG("longlive"    , "long-live notifications", &DBG_LLIV   ),
-    OHM_DEBUG_FLAG("subscription", "subscription functions" , &DBG_SUBSCR ),
-    OHM_DEBUG_FLAG("resource"    , "resource client"        , &DBG_RESRC  ),
-    OHM_DEBUG_FLAG("dbus"        , "D-Bus interface"        , &DBG_DBUS   ),
-    OHM_DEBUG_FLAG("rule"        , "prolog interface"       , &DBG_RULE   )
+    OHM_DEBUG_FLAG( "init"        , "init sequence"          , &DBG_INIT   ),
+    OHM_DEBUG_FLAG( "proxy"       , "proxy functions"        , &DBG_PROXY  ),
+    OHM_DEBUG_FLAG( "longlive"    , "long-live notifications", &DBG_LLIV   ),
+    OHM_DEBUG_FLAG( "subscription", "subscription functions" , &DBG_SUBSCR ),
+    OHM_DEBUG_FLAG( "resource"    , "resource client"        , &DBG_RESRC  ),
+    OHM_DEBUG_FLAG( "dbus"        , "D-Bus interface"        , &DBG_DBUS   ),
+    OHM_DEBUG_FLAG( "rule"        , "prolog interface"       , &DBG_RULE   )
 );
+
+
+void plugin_print_timestamp(const char *function, const char *phase)
+{
+    struct timeval tv;
+    struct tm      tm;
+    char           tstamp[64];
+
+    if (DBG_INIT) {
+        gettimeofday(&tv, NULL);
+        localtime_r(&tv.tv_sec, &tm);
+        snprintf(tstamp, sizeof(tstamp), "%d:%d:%d.%06ld",
+                 tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
+    
+        printf("%s %s notification/%s\n", tstamp, phase, function);
+    }
+}
 
 static int init_cb(void *data)
 {
-    OhmPlugin *plugin = (OhmPlugin *) data;
+    OhmPlugin *plugin = (OhmPlugin *)data;
+
+    ENTER;
 
     dbusif_init(plugin);
     ruleif_init(plugin);
@@ -59,6 +80,8 @@ static int init_cb(void *data)
 
     id = 0;
 
+    LEAVE;
+
     /* run this only once */
     return 0;
 }
@@ -66,6 +89,10 @@ static int init_cb(void *data)
 static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(notification);
+
+    DBG_INIT = FALSE;
+
+    ENTER;
 
     dbusif_configure(plugin);
 
@@ -75,6 +102,8 @@ static void plugin_init(OhmPlugin *plugin)
 #if 0
     DBG_PROXY = DBG_LLIV = DBG_RESRC = DBG_DBUS = DBG_RULE = TRUE;
 #endif
+
+    LEAVE;
 }
 
 static void plugin_destroy(OhmPlugin *plugin)
