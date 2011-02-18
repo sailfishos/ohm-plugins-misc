@@ -13,6 +13,7 @@ ohm-plugins-misc (1:1.64) unstable; urgency=low
 
   [Krisztian Litkey]
   * cgrp: auch... give plenty of time for registering to connector events.
+  * Fixes: NB#228877.
 
  -- Janos Kovacs <janos.f.kovacs@nokia.com>  Thu, 17 Feb 2011 23:46:11 +0200
 
