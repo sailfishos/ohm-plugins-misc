@@ -1321,8 +1321,9 @@ static void atom_query_finish(xif_t *xif, void *reply_data, void *data)
         aq->replycb(aq->name, reply->atom, aq->usrdata);
 
         free((void *)aq->name);
-        memset(aq, 0, sizeof(atom_query_t));
     }
+
+    memset(aq, 0, sizeof(atom_query_t));
 }
 
 
@@ -1407,8 +1408,9 @@ static void property_query_finish(xif_t *xif, void *reply_data, void *data)
                         value, length, pq->usrdata);
         }
 
-        memset(pq, 0, sizeof(prop_query_t));
     }
+
+    memset(pq, 0, sizeof(prop_query_t));
 }
 
 
@@ -1598,6 +1600,8 @@ static void randr_create_mode_finish(xif_t *xif, void *reply_data, void *data)
         free((void *)mc->name);
         mc->name = NULL;
     }
+
+    memset(mc, 0, sizeof(mode_create_t));
 }
 
 static int randr_query_screen(xif_t                *xif,
@@ -1735,9 +1739,9 @@ static void randr_query_screen_finish(xif_t *xif, void *reply_data, void *data)
         st.vdpm    = vdpm;
 
         sq->replycb(&st, sq->usrdata);
-
-        memset(rq, 0, sizeof(randr_query_t));
     }
+
+    memset(rq, 0, sizeof(randr_query_t));
 
 #undef MAX_MODES
 #undef NAME_LENGTH
@@ -1820,9 +1824,9 @@ static void randr_query_crtc_finish(xif_t *xif, void *reply_data, void *data)
         ct.possibles = xcb_randr_get_crtc_info_possible(reply);
 
         cq->replycb(&ct, cq->usrdata);
-
-        memset(rq, 0, sizeof(randr_query_t));
     }
+
+    memset(rq, 0, sizeof(randr_query_t));
 }
 
 static int randr_config_crtc(xif_t      *xif,
@@ -1946,9 +1950,9 @@ static void randr_query_output_finish(xif_t *xif, void *reply_data, void *data)
         ot.modes  = xcb_randr_get_output_info_modes(reply);
 
         oq->replycb(&ot, oq->usrdata);
-
-        memset(rq, 0, sizeof(randr_query_t));
     }
+
+    memset(rq, 0, sizeof(randr_query_t));
 
 #undef NAME_MAX_LENGTH
 }
@@ -2035,9 +2039,9 @@ static void randr_query_output_property_finish(xif_t *xif,
         
         pq->replycb(pq->window, pq->output, pq->xid, pq->type,
                     value, length, pq->usrdata);
-
-        memset(rq, 0, sizeof(randr_query_t));
     }
+
+    memset(rq, 0, sizeof(randr_query_t));
 }
 
 
