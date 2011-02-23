@@ -255,7 +255,7 @@ group_add_process(cgrp_context_t *ctx,
 
     if (group->priority != CGRP_DEFAULT_PRIORITY) {
         preserve = ctx->options.prio_preserve;
-        success &= process_set_priority(process, group->priority, preserve);
+        success &= process_set_priority(ctx, process, group->priority,preserve);
     }
     
     return success;
@@ -288,7 +288,8 @@ group_del_process(cgrp_process_t *process)
  * group_set_priority
  ********************/
 int
-group_set_priority(cgrp_group_t *group, int priority, int preserve)
+group_set_priority(cgrp_context_t *ctx,
+                   cgrp_group_t *group, int priority, int preserve)
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
@@ -302,7 +303,7 @@ group_set_priority(cgrp_group_t *group, int priority, int preserve)
     success = TRUE;
     list_foreach(&group->processes, p, n) {
         process = list_entry(p, cgrp_process_t, group_hook);
-        result  = process_set_priority(process, priority, preserve);
+        result  = process_set_priority(ctx, process, priority, preserve);
 
         OHM_DEBUG(DBG_ACTION, "setting priority of task %u/%u (%s) to %d: %s",
                   process->tgid, process->pid, process->binary, priority,
@@ -319,7 +320,8 @@ group_set_priority(cgrp_group_t *group, int priority, int preserve)
  * group_adjust_priority
  ********************/
 int
-group_adjust_priority(cgrp_group_t *group, cgrp_adjust_t adjust, int value,
+group_adjust_priority(cgrp_context_t *ctx,
+                      cgrp_group_t *group, cgrp_adjust_t adjust, int value,
                       int preserve)
 {
     cgrp_process_t *process;
@@ -329,7 +331,8 @@ group_adjust_priority(cgrp_group_t *group, cgrp_adjust_t adjust, int value,
     success = TRUE;
     list_foreach(&group->processes, p, n) {
         process  = list_entry(p, cgrp_process_t, group_hook);
-        success &= process_adjust_priority(process, adjust, value, preserve);
+        success &= process_adjust_priority(ctx, process, adjust,
+                                           value, preserve);
     }
 
     return success;
@@ -340,7 +343,8 @@ group_adjust_priority(cgrp_group_t *group, cgrp_adjust_t adjust, int value,
  * group_adjust_oom
  ********************/
 int
-group_adjust_oom(cgrp_group_t *group, cgrp_adjust_t adjust, int value)
+group_adjust_oom(cgrp_context_t *ctx,
+                 cgrp_group_t *group, cgrp_adjust_t adjust, int value)
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
@@ -349,7 +353,7 @@ group_adjust_oom(cgrp_group_t *group, cgrp_adjust_t adjust, int value)
     success = TRUE;
     list_foreach(&group->processes, p, n) {
         process  = list_entry(p, cgrp_process_t, group_hook);
-        success &= process_adjust_oom(process, adjust, value);
+        success &= process_adjust_oom(ctx, process, adjust, value);
     }
 
     return success;
