@@ -313,6 +313,9 @@ proc_prio_action(cgrp_context_t *ctx, void *data)
     cgrp_process_t *process;
     int             value, preserve, success;
 
+    if (prio->pid == 0)
+        return TRUE;
+
     process = proc_hash_lookup(ctx, prio->pid);
 
     if (process == NULL) {
@@ -357,6 +360,9 @@ proc_oom_action(cgrp_context_t *ctx, void *data)
     cgrp_adjust_t   adjust;
     cgrp_process_t *process;
     int             value, success;
+
+    if (oom->pid == 0)
+        return TRUE;
 
     process = proc_hash_lookup(ctx, oom->pid);
 
