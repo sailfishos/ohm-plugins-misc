@@ -723,6 +723,7 @@ AC_CONFIG_FILES([build-aux/shave
                  plugins/dvfs/Makefile
 		 plugins/sensors/Makefile
 		 plugins/timestamp/Makefile
+		 plugins/upstart/Makefile
 		 plugins/cgroups/Makefile
 		 plugins/vibra/Makefile
 		 plugins/backlight/Makefile
