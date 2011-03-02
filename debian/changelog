@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.65) unstable; urgency=low
+
+  * Upstart plugin (Fixes: NB#211457).
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Wed, 02 Mar 2011 15:51:49 +0200
+
 ohm-plugins-misc (1:1.64) unstable; urgency=low
 
   [Janos Kovacs]
