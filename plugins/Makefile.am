@@ -4,6 +4,7 @@ SUBDIRS = 	     \
 	gconf        \
 	cgroups      \
 	delay        \
+	upstart      \
 	auth
 
 #	apptrack

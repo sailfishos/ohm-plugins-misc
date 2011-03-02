@@ -40,6 +40,7 @@ GHashTable     *signal_queues;
 #endif
 
 static OhmFactStore *store;
+static gboolean ecosystem_ready;
 
     
 typedef void (*internal_ep_cb_t) (GObject *ep, GObject *transaction, gboolean success);
@@ -1485,6 +1486,27 @@ void transaction_complete(Transaction *self)
         }
     }
 
+    /* check if this was the first transaction: if it was, the ecosystem
+     * is now initialized (more or less) */
+
+    if (!ecosystem_ready && store != NULL) {
+        GSList *ohm_facts = ohm_fact_store_get_facts_by_name(store, "com.nokia.policy.plugin");
+        GSList *j;
+
+        for (j = ohm_facts; j != NULL; j = g_slist_next(j)) {
+            OhmFact *of = j->data;
+            GValue *gval = ohm_fact_get(of, "name");
+            if (gval != NULL && G_VALUE_TYPE(gval) == G_TYPE_STRING) {
+                const gchar *name = g_value_get_string(gval);
+                if (!strcmp(name, "signaling")) {
+                    GValue *state = ohm_value_from_string("signaled");
+                    ohm_fact_set(of, "state", state);
+                    ecosystem_ready = TRUE;
+                }
+            }
+        }
+    }
+
     g_signal_emit (self, signals [ON_TRANSACTION_COMPLETE], 0);
 
     /* remove transaction from the table */
@@ -1854,7 +1876,6 @@ DBusHandlerResult update_external_enforcement_points(DBusConnection * c,
         void *user_data)
 {
     gchar *sender = NULL, *before = NULL, *after = NULL;
-    gboolean ret;
 
     (void) user_data;
     (void) c;
