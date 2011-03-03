@@ -527,6 +527,23 @@ partition_apply_settings(cgrp_context_t *ctx, cgrp_partition_t *partition)
 
 
 /********************
+ * partition_apply_setting
+ ********************/
+int
+partition_apply_setting(cgrp_context_t *ctx, cgrp_partition_t *partition,
+                        char *name, char *value)
+{
+    cgrp_ctrl_setting_t setting;
+    
+    setting.name  = name;
+    setting.value = value;
+    setting.next  = NULL;
+
+    return ctrl_apply(ctx, partition, &setting);
+}
+
+
+/********************
  * ctrl_dump
  ********************/
 void

@@ -74,6 +74,12 @@ typedef struct {
     int   value;                        /* OOM adjustment */
 } group_oom_t;
 
+typedef struct {                        /* custom control setting */
+    char *partition;                    /* apply to this partititon */
+    char *name;                         /* control name */
+    char *value;                        /* new value */
+} setting_t;
+
 typedef void (*ep_cb_t) (GObject *, GObject *, gboolean);
 
 static void     policy_decision (GObject *, GObject *, ep_cb_t, gpointer);
@@ -265,6 +271,35 @@ limit_action(cgrp_context_t *ctx, void *data)
     
     OHM_DEBUG(DBG_ACTION, "setting memory limit %.2f k for partition %s: %s",
               (1.0 * action->limit) / 1024.0, action->partition,
+              success ? "OK" : "FAILED");
+    
+    return success;
+}
+
+
+/********************
+ * setting_action
+ ********************/
+static int
+setting_action(cgrp_context_t *ctx, void *data)
+{
+    setting_t        *action = (setting_t *)data;
+    cgrp_partition_t *partition;
+    char             *name, *value;
+    int               success;
+
+    if ((partition = partition_lookup(ctx, action->partition)) == NULL) {
+        OHM_WARNING("cgrp: ignoring setting for unknown partition '%s'",
+                    action->partition);
+        return TRUE;
+    }
+    
+    name    = action->name;
+    value   = action->value;
+    success = partition_apply_setting(ctx, partition, name, value);
+    
+    OHM_DEBUG(DBG_ACTION, "setting '%s' to '%s' for partition %s: %s",
+              name ? name : "", value ? value : "", action->partition,
               success ? "OK" : "FAILED");
     
     return success;
@@ -491,6 +526,7 @@ group_oom_action(cgrp_context_t *ctx, void *data)
 #define FREEZE    PREFIX"partition_freeze"
 #define SCHEDULE  PREFIX"partition_schedule"
 #define LIMIT     PREFIX"partition_limit"
+#define SETTING   PREFIX"partition_setting"
 #define RENICE    PREFIX"cgroup_renice"
 #define PROC_PRIO PREFIX"process_priority"
 #define PROC_OOM  PREFIX"process_oom"
@@ -545,6 +581,13 @@ static argdsc_t limit_args[] = {
     { argtype_invalid,  NULL      , 0                                 }
 };
 
+static argdsc_t setting_args[] = {
+    { argtype_string , "partition", STRUCT_OFFSET(setting_t, partition) },
+    { argtype_string , "name"     , STRUCT_OFFSET(setting_t, name)      },
+    { argtype_string , "value"    , STRUCT_OFFSET(setting_t, value)     },
+    { argtype_invalid,  NULL      , 0                                   }
+};
+
 static argdsc_t renice_args[] = {
     { argtype_string , "group"   , STRUCT_OFFSET(renice_t, group)    },
     { argtype_integer, "priority", STRUCT_OFFSET(renice_t, priority) },
@@ -584,6 +627,7 @@ static actdsc_t actions[] = {
     { FREEZE   , freeze_action    , freeze_args    , sizeof(freeze_t)     },
     { SCHEDULE , schedule_action  , schedule_args  , sizeof(schedule_t)   },
     { LIMIT    , limit_action     , limit_args     , sizeof(limit_t)      },
+    { SETTING  , setting_action   , setting_args   , sizeof(setting_t)    },
     { RENICE   , renice_action    , renice_args    , sizeof(renice_t)     },
     { PROC_PRIO, proc_prio_action , proc_prio_args , sizeof(proc_prio_t)  },
     { PROC_OOM , proc_oom_action  , proc_oom_args  , sizeof(proc_oom_t)   },
