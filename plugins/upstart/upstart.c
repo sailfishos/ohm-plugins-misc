@@ -58,7 +58,7 @@ static int init_cb(void *data)
     GPid pid;
     gchar *argv[] = { "/sbin/initctl", "emit", "ohm-running", NULL };
 
-    OHM_DEBUG(DBG_INIT, "Emitting the initialization signal");
+    OHM_INFO(DBG_INIT, "upstart: emitting the initialization signal");
 
     /* no flags -- the child is automatically waited */
     retval = g_spawn_async(NULL, argv, NULL, 0, NULL, NULL, &pid, NULL);
@@ -125,7 +125,7 @@ static void plugin_init(OhmPlugin *plugin)
 
     OHM_DEBUG_INIT(init);
 
-    OHM_INFO("init: init ...");
+    OHM_INFO("upstart: init ...");
 
     /* Assumption: Since this plugin only exists to watch the bootup
      * sequence, the signalling may only happen after the plugin has
@@ -141,7 +141,7 @@ static void plugin_exit(OhmPlugin *plugin)
     (void) plugin;
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
 
-    OHM_INFO("init: exit ...");
+    OHM_INFO("upstart: exit ...");
 
     if (fs == NULL) {
         return;
