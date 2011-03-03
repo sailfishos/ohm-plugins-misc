@@ -719,6 +719,8 @@ int partition_limit_cpu(cgrp_partition_t *, unsigned int);
 int partition_limit_mem(cgrp_partition_t *, unsigned int);
 int partition_limit_rt(cgrp_partition_t *, int, int);
 int partition_apply_settings(cgrp_context_t *, cgrp_partition_t *);
+int partition_apply_setting(cgrp_context_t *, cgrp_partition_t *,
+                            char *, char *);
 
 void ctrl_dump(cgrp_context_t *, FILE *);
 void ctrl_del(cgrp_ctrl_t *);
