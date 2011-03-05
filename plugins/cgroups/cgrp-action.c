@@ -641,7 +641,8 @@ action_priority_exec(cgrp_context_t *ctx,
         return FALSE;
     }
     else
-        return process_adjust_priority(process, adjust, value, CGRP_PRIO_LOW);
+        return process_adjust_priority(ctx, process, adjust,
+                                       value, CGRP_PRIO_LOW);
 }
 
 
@@ -727,7 +728,7 @@ action_oom_exec(cgrp_context_t *ctx,
         return FALSE;
     }
     else
-        return process_adjust_oom(process, adjust, value);
+        return process_adjust_oom(ctx, process, adjust, value);
 }
 
 

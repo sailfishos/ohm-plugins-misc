@@ -46,6 +46,26 @@ typedef struct {
     s32_t value;
 } token_sint32_t;
 
+typedef struct {
+    COMMON_TOKEN_FIELDS;
+    double value;
+} token_double_t;
+
+typedef struct {
+    char   *name;
+    double  min;
+    double  max;
+    int     set;
+} double_range_t;
+
+typedef struct {
+    char   *name;
+    int     min;
+    int     max;
+    int     set;
+} integer_range_t;
+
+
 #endif /* __PARSER_TYPES_H__ */
 
 

@@ -260,6 +260,7 @@ typedef enum {
     CGRP_VALUE_TYPE_STRING,
     CGRP_VALUE_TYPE_UINT32,
     CGRP_VALUE_TYPE_SINT32,
+    CGRP_VALUE_TYPE_DOUBLE
 } cgrp_value_type_t;
 
 typedef struct {
@@ -599,6 +600,13 @@ typedef struct {
 
 
 typedef struct {
+    int  min;                               /* input range lower */
+    int  max;                               /* and upper limits */
+    int *out;                               /* output values */
+} cgrp_curve_t;
+
+
+typedef struct {
     char             *desired_mount;        /* desired mount point */
     char             *actual_mount;         /* actual mount point */
     unsigned int      cgroup_options;       /* cgroup mount options */
@@ -649,6 +657,11 @@ typedef struct {
     cgrp_iowait_t     iow;                  /* I/O-wait state monitoring */
     cgrp_ioqlen_t     ioq;                  /* I/O queue length monitoring */
     cgrp_swap_t       swp;                  /* swap pressure monitoring */
+
+    cgrp_curve_t     *oom_curve;            /* OOM adjustment mapping */
+    int               oom_default;          /* default/starting value */
+    cgrp_curve_t     *prio_curve;           /* priority adjustment mapping */
+    int               prio_default;         /* default/starting value */
 } cgrp_context_t;
 
 
@@ -664,7 +677,7 @@ typedef struct {
 
 /* cgrp-plugin.c */
 extern int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
-extern int DBG_SYSMON, DBG_CONFIG;
+extern int DBG_SYSMON, DBG_CONFIG, DBG_CURVE;
 
 /* cgrp-process.c */
 int  proc_init(cgrp_context_t *);
@@ -690,9 +703,10 @@ int process_ignore(cgrp_context_t *, cgrp_process_t *);
 int process_remove_by_pid(cgrp_context_t *, pid_t);
 int process_scan_proc(cgrp_context_t *);
 int process_update_state(cgrp_context_t *, cgrp_process_t *, char *);
-int process_set_priority(cgrp_process_t *, int, int);
-int process_adjust_priority(cgrp_process_t *, cgrp_adjust_t, int, int);
-int process_adjust_oom(cgrp_process_t *, cgrp_adjust_t, int);
+int process_set_priority(cgrp_context_t *, cgrp_process_t *, int, int);
+int process_adjust_priority(cgrp_context_t *,
+                            cgrp_process_t *, cgrp_adjust_t, int, int);
+int process_adjust_oom(cgrp_context_t *, cgrp_process_t *, cgrp_adjust_t, int);
 
 
 void procattr_dump(cgrp_proc_attr_t *);
@@ -742,9 +756,10 @@ void group_print(cgrp_context_t *, cgrp_group_t *, FILE *);
 
 int  group_add_process(cgrp_context_t *, cgrp_group_t *, cgrp_process_t *);
 int  group_del_process(cgrp_process_t *);
-int  group_set_priority(cgrp_group_t *, int, int);
-int  group_adjust_priority(cgrp_group_t *, cgrp_adjust_t, int, int);
-int group_adjust_oom(cgrp_group_t *, cgrp_adjust_t, int);
+int  group_set_priority(cgrp_context_t *, cgrp_group_t *, int, int);
+int  group_adjust_priority(cgrp_context_t *,
+                           cgrp_group_t *, cgrp_adjust_t, int, int);
+int  group_adjust_oom(cgrp_context_t *, cgrp_group_t *, cgrp_adjust_t, int);
 
 
 
@@ -897,6 +912,13 @@ void     fact_delete(cgrp_context_t *, OhmFact *);
 
 void fact_add_process(OhmFact *, cgrp_process_t *);
 void fact_del_process(OhmFact *, cgrp_process_t *);
+
+/* cgrp-curve.c */
+int           curve_init(cgrp_context_t *);
+void          curve_exit(cgrp_context_t *);
+cgrp_curve_t *curve_create(const char *, double, double, int, int, int, int);
+void          curve_destroy(cgrp_curve_t *);
+int           curve_map(cgrp_curve_t *, int, int *);
 
 /* cgrp-apptrack.c */
 int  apptrack_init(cgrp_context_t *, OhmPlugin *);

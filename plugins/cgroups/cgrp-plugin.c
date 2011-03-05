@@ -24,7 +24,7 @@ USA.
 
 /* debug flags */
 int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
-int DBG_SYSMON, DBG_CONFIG;
+int DBG_SYSMON, DBG_CONFIG, DBG_CURVE;
 
 OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("event"   , "process events"        , &DBG_EVENT),
@@ -33,7 +33,8 @@ OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("notify"  , "UI notifications"      , &DBG_NOTIFY),
     OHM_DEBUG_FLAG("action"  , "policy actions"        , &DBG_ACTION),
     OHM_DEBUG_FLAG("sysmon"  , "system monitoring"     , &DBG_SYSMON),
-    OHM_DEBUG_FLAG("config"  , "configuration"         , &DBG_CONFIG)
+    OHM_DEBUG_FLAG("config"  , "configuration"         , &DBG_CONFIG),
+    OHM_DEBUG_FLAG("curve"   , "response curves"       , &DBG_CURVE)
 );
 
 
@@ -83,7 +84,8 @@ plugin_init(OhmPlugin *plugin)
         plugin_exit(plugin);
 
     if (!fact_init(ctx) || !partition_init(ctx) || !group_init(ctx) || 
-        !procdef_init(ctx) || !classify_init(ctx) || !proc_init(ctx)) {
+        !procdef_init(ctx) || !classify_init(ctx) || !proc_init(ctx) ||
+        !curve_init(ctx)) {
         plugin_exit(plugin);
         exit(1);
     }
@@ -142,6 +144,7 @@ plugin_exit(OhmPlugin *plugin)
     config_monitor_exit(ctx);
     ep_exit(ctx, signaling_unregister);
     sysmon_exit(ctx);
+    curve_exit(ctx);
     proc_exit(ctx);
     classify_exit(ctx);
     procdef_exit(ctx);

@@ -56,7 +56,6 @@ static int lookup_uid(const char *, uid_t *);
 
 static cgrp_adjust_t parse_adjust(const char *);
 
-
 static char rule_group[256];
 
 %}
@@ -66,6 +65,7 @@ static char rule_group[256];
     token_string_t    string;
     token_uint32_t    uint32;
     token_sint32_t    sint32;
+    token_double_t    dbl;
     cgrp_partition_t  part;
     cgrp_partition_t *parts;
     cgrp_group_t      group;
@@ -83,6 +83,8 @@ static char rule_group[256];
     s64_t             time;
     cgrp_ctrl_setting_t *ctrl_settings;
     cgrp_adjust_t     adjust;
+    integer_range_t   int_range;
+    double_range_t    dbl_range;
 }
 
 %defines
@@ -120,6 +122,8 @@ static char rule_group[256];
 %type <sint32>   renice_priority
 %type <adjust>   adjust_action
 %type <sint32>   adjust_value
+%type <sint32>   integer_value
+%type <dbl>      double_value
 
 %type <action> action
 %type <action> actions
@@ -140,7 +144,9 @@ static char rule_group[256];
 %type <ctrl_settings> optional_partition_controls
 %type <ctrl_settings> partition_controls
 %type <ctrl_settings> partition_control
-
+%type <int_range> integer_range
+%type <int_range> optional_integer_range
+%type <dbl_range> double_range
 
 %token START_FULL_PARSER
 %token START_ADDON_PARSER
@@ -168,6 +174,7 @@ static char rule_group[256];
 %token KEYWORD_CLASSIFY
 %token KEYWORD_PRIORITY
 %token KEYWORD_OOM
+%token KEYWORD_RESPONSE_CURVE
 %token KEYWORD_NO_OP
 %token KEYWORD_EXPORT_GROUPS
 %token KEYWORD_EXPORT_PARTITIONS
@@ -206,6 +213,8 @@ static char rule_group[256];
 %token <string> TOKEN_STRING
 %token <uint32> TOKEN_UINT
 %token <sint32> TOKEN_SINT
+%token <dbl>    TOKEN_DOUBLE
+
 
 %%
 
@@ -260,6 +269,8 @@ global_option: KEYWORD_EXPORT_GROUPS "\n" {
     | cgroupfs_options "\n"
     | addon_rules "\n"
     | cgroup_control "\n"
+    | priority_response_curve "\n"
+    | oom_response_curve "\n"
     | error {
         OHM_ERROR("cgrp: failed to parse global options near token '%s'",
                   cgrpyylval.any.token);
@@ -475,6 +486,96 @@ control_value: TOKEN_IDENT { $$ = $1; }
     }
     ;
 
+priority_response_curve: KEYWORD_RESPONSE_CURVE KEYWORD_PRIORITY
+                         double_range TOKEN_STRING integer_range
+                         optional_integer_range integer_value {
+        int prio_min, prio_max;
+        
+        prio_min = $6.min ? $6.min : -20;
+        prio_max = $6.max ? $6.max :  19;
+
+        if (prio_min < -20)
+            prio_min = -20;
+        if (prio_max > 19)
+            prio_max = 19;
+
+        ctx->prio_curve = curve_create($4.value,
+                                       $3.min, $3.max,
+                                       $5.min, $5.max,
+                                       prio_min, prio_max);
+
+        ctx->prio_default = $7.value;
+    }
+    ;
+
+oom_response_curve: KEYWORD_RESPONSE_CURVE KEYWORD_OOM
+                         double_range TOKEN_STRING integer_range
+                         optional_integer_range integer_value {
+        int oom_min, oom_max;
+        
+        oom_min = $6.set ? $6.min : -17;
+        oom_max = $6.set ? $6.max :  15;
+
+        if (oom_min < -17)
+            oom_min = -17;
+        if (oom_max > 15)
+            oom_max = 15;
+
+        ctx->oom_curve = curve_create($4.value,
+                                      $3.min, $3.max,
+                                      $5.min, $5.max,
+                                      oom_min, oom_max);
+
+        ctx->oom_default = $7.value;
+    }
+    ;
+
+double_range: "[" double_value "," double_value "]" {
+          $$.name  = NULL;
+          $$.min = $2.value;
+          $$.max = $4.value;
+    }
+    ;
+
+integer_range: "[" integer_value "," integer_value "]" {
+          $$.name  = NULL;
+          $$.min = $2.value;
+          $$.max = $4.value;
+    }
+    ;
+
+optional_integer_range: /* empty */  {
+          $$.name = NULL;
+          $$.set  = FALSE;
+          $$.min  = $$.max = 0;
+      }
+     | integer_range {
+         $$     = $1;
+         $$.set = TRUE;
+       }
+     ;
+
+
+double_value: TOKEN_DOUBLE { $$ = $1; }
+            | TOKEN_SINT {
+                  $$.token  = $1.token;
+                  $$.lineno = $1.lineno;
+                  $$.value  = 1.0 * $1.value;
+              }
+            | TOKEN_UINT {
+                  $$.token  = $1.token;
+                  $$.lineno = $1.lineno;
+                  $$.value  = 1.0 * $1.value;
+              }
+            ;
+
+integer_value: TOKEN_SINT { $$ = $1; }
+             | TOKEN_UINT {
+                   $$.token  = $1.token;
+                   $$.lineno = $1.lineno;
+                   $$.value  = $1.value;
+               }
+             ;
 
 /*****************************************************************************
  *                           *** partition section ***                       *

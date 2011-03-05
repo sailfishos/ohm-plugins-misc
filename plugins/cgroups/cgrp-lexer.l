@@ -92,6 +92,7 @@ typedef enum {
     TOKEN_TYPE_ARG,                            /* argument */
     TOKEN_TYPE_UINT,                           /* unsigned integer */
     TOKEN_TYPE_SINT,                           /* signed integer */
+    TOKEN_TYPE_DOUBLE,                         /* double prec. floating */
     TOKEN_TYPE_EOL,                            /* end of line */
 } token_type_t;
 
@@ -242,6 +243,9 @@ lexer_error(lexer_t *l, const char *format, ...)
         case TOKEN_TYPE_SINT:                                           \
             cgrpyylval.sint32.value = parse_sint32(&lexer, __token);    \
             break;                                                      \
+        case TOKEN_TYPE_DOUBLE:                                         \
+            cgrpyylval.dbl.value = parse_double(&lexer, __token);       \
+            break;                                                      \
         default:                                                        \
             lexer_error(&lexer, "invalid numeric type %s", #type);      \
         }                                                               \
@@ -318,6 +322,21 @@ parse_sint32(lexer_t *l, char *str)
     
     if (*end != '\0')
         lexer_error(l, "invalid signed integer \"%s\"", str);
+    
+    return value;
+}
+
+
+static inline double
+parse_double(lexer_t *l, char *str)
+{
+    double  value;
+    char   *end;
+
+    value = strtod(str, &end);
+    
+    if (*end != '\0')
+        lexer_error(l, "invalid double precision floating \"%s\"", str);
     
     return value;
 }
@@ -669,6 +688,7 @@ KEYWORD_CLASSIFY_ARGVX    classify-by-argv[0-9]+
 KEYWORD_CLASSIFY          classify
 KEYWORD_PRIORITY          priority
 KEYWORD_OOM               out-of-memory
+KEYWORD_RESPONSE_CURVE    response-curve
 KEYWORD_NO_OP             no-op
 KEYWORD_EXPORT_GROUPS     export-group-facts
 KEYWORD_EXPORT_PARTITIONS export-partition-facts
@@ -705,9 +725,9 @@ ASTERISK               \*
 PATH                   (\/([a-zA-Z_]([a-zA-Z0-9_\.-]*)*))+
 IDENT                  [a-zA-Z_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])*
 STRING                 (('[^\n']*')|(\"[^\n\"]*\"))
+DOUBLE	               [+-]?[0-9]+\.[0-9]+
 UINT                   [0-9]+
 SINT                   [+|-]?[0-9]+
-
 ESCAPE		       \\
 
 %%
@@ -790,6 +810,7 @@ ESCAPE		       \\
 {KEYWORD_CLASSIFY_ARGVX}    { PASS_KEYWORD(CLASSIFY_ARGVX);    }
 {KEYWORD_PRIORITY}          { PASS_KEYWORD(PRIORITY);          }
 {KEYWORD_OOM}               { PASS_KEYWORD(OOM);               }
+{KEYWORD_RESPONSE_CURVE}    { PASS_KEYWORD(RESPONSE_CURVE);    }
 {KEYWORD_NO_OP}             { PASS_KEYWORD(NO_OP);             }
 {KEYWORD_EXPORT_GROUPS}     { PASS_KEYWORD(EXPORT_GROUPS);     }
 {KEYWORD_EXPORT_PARTITIONS} { PASS_KEYWORD(EXPORT_PARTITIONS); }
@@ -826,6 +847,7 @@ ESCAPE		       \\
 {IDENT}                     { PASS_STRING(IDENT);              }
 {PATH}                      { PASS_STRING(PATH);               }
 {STRING}                    { PASS_STRING(STRING);             }
+{DOUBLE}                    { PASS_NUMBER(DOUBLE);             }
 {UINT}                      { PASS_NUMBER(UINT);               }
 {SINT}                      { PASS_NUMBER(SINT);               }
 

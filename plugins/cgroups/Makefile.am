@@ -4,6 +4,8 @@ EXTRA_DIST         = $(config_DATA)
 configdir          = $(sysconfdir)/ohm/plugins.d
 config_DATA        = cgroups.ini # syspart.conf
 
+noinst_PROGRAMS    = curve-test
+
 PARSER_PREFIX      = cgrpyy
 AM_YFLAGS          = -p $(PARSER_PREFIX)
 AM_LFLAGS          = -P $(PARSER_PREFIX)
@@ -18,6 +20,7 @@ libohm_cgroups_la_SOURCES = cgrp-plugin.c    \
 			    cgrp-process.c   \
 			    cgrp-classify.c  \
 			    cgrp-ep.c        \
+			    cgrp-curve.c     \
 			    cgrp-apptrack.c  \
 			    cgrp-utils.c     \
 			    cgrp-fact.c      \
@@ -35,6 +38,10 @@ if BUILD_IOQNOTIFY
 libohm_cgroups_la_CFLAGS  += @LIBOSSO_CFLAGS@
 libohm_cgroups_la_LIBADD  += @LIBOSSO_LIBS@
 endif
+
+curve_test_SOURCES = curve-test.c
+curve_test_CFLAGS  = @DBUS_CFLAGS@ @GLIB_CFLAGS@
+curve_test_LDFLAGS = -lm
 
 cgrp-lexer.c: cgrp-lexer.l
 	$(LEXCOMPILE) $<

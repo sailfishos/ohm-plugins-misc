@@ -217,25 +217,36 @@ proc_request(enum proc_cn_mcast_op req)
         return FALSE;
     }
 
-    /* Watch Netlink socket until something arrives */
+    /*
+     * Notes: If CONFIG_PROC_EVENTS is disabled we never get any reply
+     *        back on the netlink socket. Hence we select on the socket
+     *        with a reasonable timeout to avoid getting stuch there on
+     *        such kernels.
+     */
+    
     FD_ZERO(&rfds);
     FD_SET(sock, &rfds);
 
-    /* Set timeout */
-    tv.tv_sec = 0;
-    tv.tv_usec = 500000;
+    tv.tv_sec  = 0;
+    tv.tv_usec = 500000;                                 /* half a second */
 
     retval = select(sock + 1, &rfds, NULL, NULL, &tv);
 
-    if ( retval == -1) {
-        OHM_ERROR("cgrp: failed to select() on event Netlink socket");
+    switch (retval) {
+    case -1:
+        OHM_ERROR("cgrp: select failed for netlink connector socket (%d: %s)",
+                  errno, strerror(errno));
         return FALSE;
-    } else if( retval == 0 ){
-        OHM_ERROR("cgrp: No reply from process event connector");
-        OHM_INFO("cgrp: Check if kernel CONFIG_PROC_EVENTS parameter is enabled");
-        return FALSE;
-    }
 
+    case 0:
+        OHM_ERROR("cgrp: netlink connector socket timeout");
+        OHM_ERROR("cgrp: check if CONFIG_PROC_EVENTS is enabled in the kernel");
+        return FALSE;
+
+    default:
+        break;
+    }
+    
     size = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
     if ((size = recv(sock, nlh, size, 0)) < 0 ||
         !NLMSG_OK(nlh, (size_t)size)) {
@@ -987,6 +998,9 @@ process_create(cgrp_context_t *ctx, cgrp_proc_attr_t *attr)
         
         process->pid  = attr->pid;
         process->tgid = attr->tgid;
+
+        if (ctx->oom_curve != NULL)
+            process->oom_adj = ctx->oom_default;
         
         if ((process->binary = STRDUP(attr->binary)) != NULL)
             proc_hash_insert(ctx, process);
@@ -1091,7 +1105,8 @@ process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
  * process_set_priority
  ********************/
 int
-process_set_priority(cgrp_process_t *process, int priority, int preserve)
+process_set_priority(cgrp_context_t *ctx,
+                     cgrp_process_t *process, int priority, int preserve)
 {
     int prio, status;
 
@@ -1116,8 +1131,8 @@ process_set_priority(cgrp_process_t *process, int priority, int preserve)
     if (preserve)
         status = 0;
     else
-        status = !process_adjust_priority(process, CGRP_ADJ_ABSOLUTE, priority,
-                                          preserve);
+        status = !process_adjust_priority(ctx, process, CGRP_ADJ_ABSOLUTE,
+                                          priority, preserve);
     
     return status == 0 || errno == ESRCH;
 }
@@ -1127,10 +1142,10 @@ process_set_priority(cgrp_process_t *process, int priority, int preserve)
  * process_adjust_priority
  ********************/
 int
-process_adjust_priority(cgrp_process_t *process,
+process_adjust_priority(cgrp_context_t *ctx, cgrp_process_t *process,
                         cgrp_adjust_t adjust, int value, int preserve)
 {
-    int priority, status;
+    int priority, mapped, clamped, status;
     
     if (adjust == CGRP_ADJ_RELATIVE)
         priority = process->priority + value;
@@ -1225,13 +1240,15 @@ process_adjust_priority(cgrp_process_t *process,
         status = 0;
     else {
 
-        if (priority > 19)
-            priority = 19;
-        else if (priority < -20)
-            priority = -20;
+        mapped            = curve_map(ctx->prio_curve, priority, &clamped);
+        process->priority = clamped;
+        
+        if (mapped > 19)
+            mapped = 19;
+        else if (mapped < -20)
+            mapped = -20;
 
-        process->priority = priority;
-        status = setpriority(PRIO_PROCESS, process->pid, priority);
+        status = setpriority(PRIO_PROCESS, process->pid, mapped);
     }
 
     return status == 0 || errno == ESRCH;
@@ -1242,11 +1259,14 @@ process_adjust_priority(cgrp_process_t *process,
  * process_adjust_oom
  ********************/
 int
-process_adjust_oom(cgrp_process_t *process, cgrp_adjust_t adjust, int value)
+process_adjust_oom(cgrp_context_t *ctx,
+                   cgrp_process_t *process, cgrp_adjust_t adjust, int value)
 {
     char path[PATH_MAX], val[8], *p;
-    int  oom_adj, fd, len, success;
-    
+    int  oom_adj, mapped, clamped, fd, len, success;
+
+    if (process->pid != process->tgid)
+        return TRUE;
     
     if (adjust == CGRP_ADJ_RELATIVE)
         oom_adj = process->oom_adj + value;
@@ -1302,29 +1322,21 @@ process_adjust_oom(cgrp_process_t *process, cgrp_adjust_t adjust, int value)
     default:
         return TRUE;
     }
-    
-    if (oom_adj < -17)
-        oom_adj = -17;
-    else if (oom_adj > 15)
-        oom_adj = 15;
 
     if (oom_adj == process->oom_adj)
         return TRUE;
     
-    OHM_DEBUG(DBG_ACTION, "%u/%u (%s), adjusting OOM-priority (req: %d)",
-              process->tgid, process->pid, process->binary, oom_adj);
-    
-    process->oom_adj = oom_adj;
-    
+    mapped           = curve_map(ctx->oom_curve, oom_adj, &clamped);
+    process->oom_adj = clamped;
 
-    /*
-     * XXX TODO: adjust OOM only for processes (to avoid setting it multiple
-     *           times)
-     */
+    if (mapped < -17)
+        mapped = -17;
+    else if (mapped > 15)
+        mapped = 15;
 
-    if (process->pid != process->tgid)
-        OHM_WARNING("cgrp: TODON'T: adjusting OOM-priority at thread %u/%u...",
-                    process->tgid, process->pid);
+    OHM_DEBUG(DBG_ACTION, "%u/%u (%s), adjusting OOM score %d/%d:%d",
+              process->tgid, process->pid, process->binary,
+              oom_adj, clamped, mapped);
     
     /*
      *
@@ -1336,15 +1348,15 @@ process_adjust_oom(cgrp_process_t *process, cgrp_adjust_t adjust, int value)
     if ((fd = open(path, O_WRONLY)) >= 0) {
         p = val;
 
-        if (oom_adj < 0) {
+        if (mapped < 0) {
             *p++ = '-';
-            oom_adj = -oom_adj;
+            mapped = -mapped;
         }
-        if (oom_adj < 10)
-            *p++ = '0' + oom_adj;
+        if (mapped < 10)
+            *p++ = '0' + mapped;
         else {
             *p++ = '1';
-            *p++ = '0' + (oom_adj - 10);
+            *p++ = '0' + (mapped - 10);
         }
         len = p - val;
         

@@ -327,7 +327,7 @@ renice_action(cgrp_context_t *ctx, void *data)
         return TRUE;
     }
     
-    success = group_set_priority(group, action->priority, preserve);
+    success = group_set_priority(ctx, group, action->priority, preserve);
     
     OHM_DEBUG(DBG_ACTION, "setting group priority (renice) of %s to %d: %s",
               action->group, action->priority, success ? "OK" : "FAILED");
@@ -374,7 +374,7 @@ proc_prio_action(cgrp_context_t *ctx, void *data)
     }
 
     preserve = CGRP_PRIO_LOW;
-    success  = process_adjust_priority(process, adjust, value, preserve);
+    success  = process_adjust_priority(ctx, process, adjust, value, preserve);
     
     OHM_DEBUG(DBG_ACTION, "%s priority of %u (%s) to %d: %s",
               action, prio->pid, process->binary, value,
@@ -399,15 +399,16 @@ proc_oom_action(cgrp_context_t *ctx, void *data)
     if (oom->pid == 0)
         return TRUE;
 
-    process = proc_hash_lookup(ctx, oom->pid);
-
-    if (process == NULL) {
-        OHM_WARNING("cgrp: cannot OOM-adjust unknown process %u", oom->pid);
-        return TRUE;
-    }
-
     action = oom->action;
     value  = oom->value;
+
+    if (!action[0] || action[0] == '<')        /* "", "<.*>" are no-ops */
+        return TRUE;
+
+    process = proc_hash_lookup(ctx, oom->pid);
+
+    if (process == NULL)
+        return TRUE;
 
     if      (!strcmp(action, CGRP_ADJUST_ABSOLUTE)) adjust = CGRP_ADJ_ABSOLUTE;
     else if (!strcmp(action, CGRP_ADJUST_RELATIVE)) adjust = CGRP_ADJ_RELATIVE;
@@ -416,13 +417,16 @@ proc_oom_action(cgrp_context_t *ctx, void *data)
     else if (!strcmp(action, CGRP_ADJUST_EXTERN  )) adjust = CGRP_ADJ_EXTERN;
     else if (!strcmp(action, CGRP_ADJUST_INTERN  )) adjust = CGRP_ADJ_INTERN;
     else {
-        OHM_WARNING("cgrp: unknown OOM-adjustment action '%s'", action);
+        OHM_WARNING("cgrp: unknown OOM-score action '%s'", action);
         return TRUE;
     }
 
-    success = process_adjust_oom(process, adjust, value);
+    if (value == 0 && adjust == CGRP_ADJ_RELATIVE)
+        return TRUE;
     
-    OHM_DEBUG(DBG_ACTION, "%s OOM-priority of %u (%s) to %d: %s",
+    success = process_adjust_oom(ctx, process, adjust, value);
+    
+    OHM_DEBUG(DBG_ACTION, "%s OOM-score of %u (%s) to %d: %s",
               action, oom->pid, process->binary, value,
               success ? "OK" : "FAILED");
     
@@ -442,6 +446,12 @@ group_prio_action(cgrp_context_t *ctx, void *data)
     cgrp_group_t  *group;
     int            value, preserve, success;
 
+    action = prio->action;
+    value  = prio->value;
+
+    if (!action[0] || action[0] == '<')        /* "", "<.*" are no-ops */
+        return TRUE;
+    
     group = group_lookup(ctx, prio->group);
 
     if (group == NULL) {
@@ -449,9 +459,6 @@ group_prio_action(cgrp_context_t *ctx, void *data)
                     prio->group);
         return TRUE;
     }
-
-    action = prio->action;
-    value  = prio->value;
 
     if      (!strcmp(action, CGRP_ADJUST_ABSOLUTE)) adjust = CGRP_ADJ_ABSOLUTE;
     else if (!strcmp(action, CGRP_ADJUST_RELATIVE)) adjust = CGRP_ADJ_RELATIVE;
@@ -464,8 +471,11 @@ group_prio_action(cgrp_context_t *ctx, void *data)
         return TRUE;
     }
 
+    if (value == 0 && adjust == CGRP_ADJ_RELATIVE)
+        return TRUE;
+
     preserve = CGRP_PRIO_LOW;
-    success  = group_adjust_priority(group, adjust, value, preserve);
+    success  = group_adjust_priority(ctx, group, adjust, value, preserve);
     
     OHM_DEBUG(DBG_ACTION, "%s priority of group %s to %d: %s",
               action, prio->group, value, success ? "OK" : "FAILED");
@@ -486,16 +496,22 @@ group_oom_action(cgrp_context_t *ctx, void *data)
     cgrp_group_t  *group;
     int            value, success;
 
+    action = oom->action;
+    value  = oom->value;
+
+    if (!action[0] || action[0] == '<')         /* "", "<.*>" are no-ops */
+        return TRUE;
+
+    if (!oom->group[0] || oom->group[0] == '<') /* ditto for groups */
+        return TRUE;
+    
     group = group_lookup(ctx, oom->group);
 
     if (group == NULL) {
-        OHM_WARNING("cgrp: cannot adjust OOM-priority of unknown group '%s'",
+        OHM_WARNING("cgrp: cannot adjust OOM-score of unknown group '%s'",
                     oom->group);
         return TRUE;
     }
-
-    action = oom->action;
-    value  = oom->value;
 
     if      (!strcmp(action, CGRP_ADJUST_ABSOLUTE)) adjust = CGRP_ADJ_ABSOLUTE;
     else if (!strcmp(action, CGRP_ADJUST_RELATIVE)) adjust = CGRP_ADJ_RELATIVE;
@@ -504,13 +520,16 @@ group_oom_action(cgrp_context_t *ctx, void *data)
     else if (!strcmp(action, CGRP_ADJUST_EXTERN  )) adjust = CGRP_ADJ_EXTERN;
     else if (!strcmp(action, CGRP_ADJUST_INTERN  )) adjust = CGRP_ADJ_INTERN;
     else {
-        OHM_WARNING("cgrp: unknown OOM-priority adjustment action '%s'",action);
+        OHM_WARNING("cgrp: unknown OOM-score adjustment action '%s'",action);
         return TRUE;
     }
 
-    success  = group_adjust_oom(group, adjust, value);
+    if (value == 0 && adjust == CGRP_ADJ_RELATIVE)
+        return TRUE;
     
-    OHM_DEBUG(DBG_ACTION, "%s OOM-priority of group %s to %d: %s",
+    success = group_adjust_oom(ctx, group, adjust, value);
+    
+    OHM_DEBUG(DBG_ACTION, "%s OOM-score of group %s to %d: %s",
               action, oom->group, value, success ? "OK" : "FAILED");
     
     return success;
