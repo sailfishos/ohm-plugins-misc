@@ -217,25 +217,36 @@ proc_request(enum proc_cn_mcast_op req)
         return FALSE;
     }
 
-    /* Watch Netlink socket until something arrives */
+    /*
+     * Notes: If CONFIG_PROC_EVENTS is disabled we never get any reply
+     *        back on the netlink socket. Hence we select on the socket
+     *        with a reasonable timeout to avoid getting stuch there on
+     *        such kernels.
+     */
+    
     FD_ZERO(&rfds);
     FD_SET(sock, &rfds);
 
-    /* Set timeout */
-    tv.tv_sec = 0;
-    tv.tv_usec = 500000;
+    tv.tv_sec  = 0;
+    tv.tv_usec = 500000;                                 /* half a second */
 
     retval = select(sock + 1, &rfds, NULL, NULL, &tv);
 
-    if ( retval == -1) {
-        OHM_ERROR("cgrp: failed to select() on event Netlink socket");
+    switch (retval) {
+    case -1:
+        OHM_ERROR("cgrp: select failed for netlink connector socket (%d: %s)",
+                  errno, strerror(errno));
         return FALSE;
-    } else if( retval == 0 ){
-        OHM_ERROR("cgrp: No reply from process event connector");
-        OHM_INFO("cgrp: Check if kernel CONFIG_PROC_EVENTS parameter is enabled");
-        return FALSE;
-    }
 
+    case 0:
+        OHM_ERROR("cgrp: netlink connector socket timeout");
+        OHM_ERROR("cgrp: check if CONFIG_PROC_EVENTS is enabled in the kernel");
+        return FALSE;
+
+    default:
+        break;
+    }
+    
     size = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
     if ((size = recv(sock, nlh, size, 0)) < 0 ||
         !NLMSG_OK(nlh, (size_t)size)) {
