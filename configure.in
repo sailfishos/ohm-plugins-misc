@@ -61,6 +61,15 @@ AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([dup2 localtime_r memmove memset socket strchr strdup strerror strrchr strtoul])
 
+# Check for libm.
+AC_CHECK_LIB([m], [log, log2, log10, sin, cos], [has_libm=yes], [has_libm=no])
+
+if test x$has_libm != xyes; then
+    AC_MSG_ERROR([*** libm not found or does not provide everything we need])
+else
+    AC_SUBST(LIBM_LIBS, [-lm])
+fi
+
 # Check for xlib (videoep)
 PKG_CHECK_MODULES(X11, x11)
 AC_SUBST(X11_CFLAGS)
