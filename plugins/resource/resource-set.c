@@ -58,6 +58,7 @@ static int update_factstore_flags(resource_set_t *);
 static int update_factstore_request(resource_set_t *);
 static int update_factstore_block(resource_set_t *);
 static int update_factstore_audio(resource_set_t *, resource_audio_stream_t *);
+static int update_factstore_video(resource_set_t *, resource_video_stream_t *);
 
 static void add_to_hash_table(resource_set_t *);
 static void delete_from_hash_table(resource_set_t *);
@@ -204,6 +205,11 @@ int resource_set_add_spec(resset_t *resset, resource_spec_type_t type, ...)
 
                 case resource_audio:
                     if (update_factstore_audio(rs, &spec->audio))
+                        success = TRUE;
+                    break;
+
+                case resource_video:
+                    if (update_factstore_video(rs, &spec->video))
                         success = TRUE;
                     break;
 
@@ -597,7 +603,7 @@ static int update_factstore_request(resource_set_t *rs)
     int         success;
 
     fsif_field_t  selist[]  = {
-        INTEGER_FIELD("manager_id", rs->manager_id),
+        INTEGER_FIELD ("manager_id", rs->manager_id),
         INVALID_FIELD
     };
     fsif_field_t  fldlist[] = {
@@ -617,7 +623,7 @@ static int update_factstore_block(resource_set_t *rs)
     int success;
 
     fsif_field_t  selist[]  = {
-        INTEGER_FIELD("manager_id", rs->manager_id),
+        INTEGER_FIELD ("manager_id", rs->manager_id),
         INVALID_FIELD
     };
     fsif_field_t  fldlist[] = {
@@ -638,11 +644,32 @@ static int update_factstore_audio(resource_set_t          *rs,
     int success;
 
     fsif_field_t  selist[]  = {
-        INTEGER_FIELD("manager_id", rs->manager_id),
+        INTEGER_FIELD ("manager_id", rs->manager_id),
         INVALID_FIELD
     };
     fsif_field_t  fldlist[] = {
         STRING_FIELD  ("audiogr", audio->group),
+        INVALID_FIELD
+    };
+
+    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                          selist, fldlist);
+
+    return success;
+}
+
+
+static int update_factstore_video(resource_set_t          *rs,
+                                  resource_video_stream_t *video)
+{
+    int success;
+
+    fsif_field_t  selist[]  = {
+        INTEGER_FIELD ("manager_id", rs->manager_id),
+        INVALID_FIELD
+    };
+    fsif_field_t  fldlist[] = {
+        INTEGER_FIELD ("videopid", video->pid),
         INVALID_FIELD
     };
 

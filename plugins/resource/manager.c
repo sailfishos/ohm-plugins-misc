@@ -208,7 +208,7 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
 
                     resource_set_update_factstore(resset, update_flags);
                     if (rs->request && !strcmp(rs->request, "acquire") &&
-                        rs->granted.client != NULL)
+                        rs->granted.client != 0)
                         resource_set_update_factstore(resset, update_request);
 
                     dresif_resource_request(rs->manager_id, resset->peer,
@@ -368,6 +368,41 @@ void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
         if (success) {
             dresif_resource_request(rs->manager_id, resset->peer,
                                     resset->id, "audio");
+        }
+    }
+
+    OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
+
+    resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
+}
+
+
+void manager_video(resmsg_t *msg, resset_t *resset, void *proto_data)
+{
+    resource_set_t        *rs     = resset->userdata;
+ /* uint32_t               reqno  = msg->any.reqno; */
+    resmsg_video_t        *video  = &msg->video;
+    uint32_t               pid    = video->pid;
+    int32_t                errcod = 0;
+    const char            *errmsg = "OK";
+    int                    success;
+
+    resource_set_dump_message(msg, resset, "from");
+
+    OHM_DEBUG(DBG_MGR, "message received");
+
+    if (!rs) {
+        OHM_ERROR("resource: can't set video stream spec. for %s/%u: "
+                  "confused with data structures", resset->peer, resset->id);
+        errcod = EUCLEAN;
+        errmsg = strerror(errcod);
+    }
+    else {
+        success = resource_set_add_spec(resset, resource_video, pid);
+
+        if (success) {
+            dresif_resource_request(rs->manager_id, resset->peer,
+                                    resset->id, "video");
         }
     }
 

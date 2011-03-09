@@ -55,9 +55,15 @@ typedef struct {                         /* audio stream specification */
     resource_spec_property_t  property;  /* selector PA property */
 } resource_audio_stream_t;
 
+typedef struct {                         /* video stream specification */
+    RESOURCE_COMMON;
+    uint32_t                  pid;       /* pid of the streaming app */
+} resource_video_stream_t;
+
 typedef union resource_spec_u {
     resource_any_t           any;
     resource_audio_stream_t  audio;
+    resource_video_stream_t  video;
 } resource_spec_t;
 
 void             resource_spec_init(OhmPlugin *);

@@ -45,6 +45,7 @@ USA.
 #define FACTSTORE_RESOURCE_SET          FACTSTORE_RESOURCE_PREFIX "_set"
 #define FACTSTORE_ACTIVE_POLICY_GROUP   FACTSTORE_PREFIX ".active_policy_group"
 #define FACTSTORE_AUDIO_STREAM          FACTSTORE_PREFIX ".audio_stream"
+#define FACTSTORE_VIDEO_STREAM          FACTSTORE_PREFIX ".video_stream"
 #define FACTSTORE_ENFORCEMENT_POINT     FACTSTORE_PREFIX ".enforcement_point"
 
 
