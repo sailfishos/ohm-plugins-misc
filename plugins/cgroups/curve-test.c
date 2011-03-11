@@ -128,10 +128,78 @@ static void __attribute__((unused)) print_token(token_t *token, const char *inpu
 }
 
 
+#define SVG_HEADER \
+    "<?xml version=\"1.0\" standalone=\"no\"?>\n"             \
+    "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\"\n"      \
+    "\"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n" \
+    "\n"                                                      \
+    "<svg width=\"100%\" height=\"100%\" version=\"1.1\"\n"   \
+    "xmlns=\"http://www.w3.org/2000/svg\">\n"                 \
+    "\n"
+
+#define SVG_FOOTER "</svg>\n"
+
+    /*
+      <polyline points=\"0,0 0,20 20,20 20,40 40,40 40,60\"
+      style=\"fill:white;stroke:red;stroke-width:2\"/>
+    */
+
+
+
+
+
+int curve_to_svg(cgrp_curve_t *crv, const char *path, int imin, int imax)
+{
+#define SVG_WIDTH  600
+#define SVG_HEIGHT 600
+
+    FILE   *svg;
+    char   *t;
+    int     x, y, clamped;
+    int     omin, omax;
+    int     svdx, svdy;
+    double  svfx, svfy, svx, svy;
+
+    if ((svg = fopen(path, "w")) == NULL)
+        fatal("failed to open file '%s'", path);
+
+    omin = curve_map(crv, imin, &imin);
+    omax = curve_map(crv, imax, &imax);
+
+    svfx = (1.0 * SVG_WIDTH)  / (imax - imin);
+    svfy = (1.0 * SVG_HEIGHT) / (omax - omin);
+    svdx = 0 - imin;
+    svdy = 0;
+
+    fprintf(svg, "%s", SVG_HEADER);
+    
+    fprintf(svg, "<polyline points=\"");
+    for (x = imin, t = ""; x <= imax; x++, t = " ") {
+        y = curve_map(crv, x, &clamped);
+        
+        svx = svfx * (x + svdx);
+        svy = svfy * y;
+        if (svdy == 0)
+            svdy = -svy;
+        printf("svg: (%d, %d) -> (%f, %f)\n", x, y, svx, svy + svdy);
+        fprintf(svg, "%s%f,%f", t, svx, svy + svdy);
+        fprintf(svg, " %f,%f", svx+1, svy + svdy);
+    }
+    fprintf(svg, "\"");
+    fprintf(svg, "\n%s\n",
+            "style=\"fill:white;stroke:black;stroke-width:2\"/>");
+    
+    fprintf(svg, "%s", SVG_FOOTER);
+    fclose(svg);
+
+    return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
     cgrp_curve_t *crv;
-    const char   *func;
+    const char   *func, *svg;
     char         *end;
     token_t      *rpn;
     double        cmin, cmax, x, step;
@@ -140,7 +208,7 @@ int main(int argc, char *argv[])
 
 
 
-#define OPTIONS "c:C:i:I:o:O:s:f:h"
+#define OPTIONS "c:C:i:I:o:O:s:f:g:h"
     struct option options[] = {
         { "cmin", required_argument, NULL, 'c' },
         { "cmax", required_argument, NULL, 'C' },
@@ -150,6 +218,7 @@ int main(int argc, char *argv[])
         { "omax", required_argument, NULL, 'O' },
         { "step", required_argument, NULL, 's' },
         { "func", required_argument, NULL, 'f' },
+        { "svg" , required_argument, NULL, 'g' },
         { "help", no_argument      , NULL, 'h' },
         { NULL  , 0                , NULL,  0  }
     };
@@ -165,13 +234,14 @@ int main(int argc, char *argv[])
     step = 0.5;
     omin = -17;
     omax =  15;
-    
+    svg  =  NULL;
     
     while ((opt = getopt_long(argc, argv, OPTIONS, options, NULL)) != -1) {
         switch (opt) {
         case 'h':
-            printf("%s [--cmin cmin] [--cmax cmax] [--step step] --func func "
-                   "[--imin imin] [--imax imax] [--omin omin] [--omax omax]\n",
+            printf("%s [--cmin cmin] [--cmax cmax] [--step step] --func func\n"
+                   "   [--imin imin] [--imax imax] "
+                   "[--omin omin] [--omax omax] [--svg out]\n",
                    argv[0]);
             exit(0);
             break;
@@ -228,6 +298,10 @@ int main(int argc, char *argv[])
         case 'f':
             func = optarg;
             break;
+
+        case 'g':
+            svg = optarg;
+            break;
             
         default:
             fatal("unknown command line option '%c'", opt);
@@ -253,6 +327,9 @@ int main(int argc, char *argv[])
         mapped = curve_map(crv, i, &clamped);
         printf("curve(%d:%d) = %d\n", i, clamped, mapped);
     }
+
+    if (svg != NULL)
+        curve_to_svg(crv, svg, imin, imax);
     
     curve_destroy(crv);
 
