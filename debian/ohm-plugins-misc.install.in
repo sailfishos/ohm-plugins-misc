@@ -8,3 +8,5 @@ usr/lib/ohm/libohm_delay.so
 usr/lib/ohm/libohm_cgroups.so
 usr/lib/ohm/libohm_auth.so
 usr/lib/ohm/libohm_upstart.so
+usr/lib/ohm/libohm_dbus.so
+usr/lib/ohm/libohm_dbus_signal.so
