@@ -76,29 +76,42 @@ signal_init(void)
     bus_t *system, *session;
 
     system  = bus_by_type(DBUS_BUS_SYSTEM);
+
+    if (system != NULL) {
+        system->signals  = hash_table_create(NULL, siglist_purge);
+        
+        if (system->signals == NULL) {
+            OHM_ERROR("dbus: failed to create signal tables");
+            signal_exit();
+            return FALSE;
+        }
+        
+        if (!signal_add_filter(system)) {
+            OHM_ERROR("dbus: failed to add signal dispatcher for system bus");
+            signal_exit();
+            return FALSE;
+        }
+    }
+
+#if 1
     session = bus_by_type(DBUS_BUS_SESSION);
 
-    system->signals  = hash_table_create(NULL, siglist_purge);
-    session->signals = hash_table_create(NULL, siglist_purge);
+    if (session != NULL) {
+        session->signals = hash_table_create(NULL, siglist_purge);
 
-    if (system->signals == NULL || session->signals == NULL) {
-        OHM_ERROR("dbus: failed to create signal tables");
-        signal_exit();
-        return FALSE;
-    }
+        if (session->signals == NULL) {
+            OHM_ERROR("dbus: failed to create signal tables");
+            signal_exit();
+            return FALSE;
+        }
 
-    if (!signal_add_filter(system)) {
-        OHM_ERROR("dbus: failed to add signal dispatcher for system bus");
-        signal_exit();
-        return FALSE;
+        if (!bus_watch_add(session, session_bus_event, NULL)) {
+            OHM_ERROR("dbus: failed to install session bus watch");
+            signal_exit();
+            return FALSE;
+        }
     }
-    
-
-    if (!bus_watch_add(session, session_bus_event, NULL)) {
-        OHM_ERROR("dbus: failed to install session bus watch");
-        signal_exit();
-        return FALSE;
-    }
+#endif
 
     return TRUE;
 }
@@ -115,19 +128,24 @@ signal_exit(void)
     system  = bus_by_type(DBUS_BUS_SYSTEM);
     session = bus_by_type(DBUS_BUS_SESSION);
 
-    signal_del_filter(system);
-    signal_del_filter(session);
+    if (system != NULL) {
+        signal_del_filter(system);
 
-    bus_watch_del(session, session_bus_event, NULL);
-
-    if (system->signals) {
-        hash_table_destroy(system->signals);
-        system->signals = NULL;
+        if (system->signals) {
+            hash_table_destroy(system->signals);
+            system->signals = NULL;
+        }
     }
     
-    if (session->signals) {
-        hash_table_destroy(session->signals);
-        session->signals = NULL;
+    if (session != NULL) {
+        signal_del_filter(session);
+
+        bus_watch_del(session, session_bus_event, NULL);
+
+        if (session->signals) {
+            hash_table_destroy(session->signals);
+            session->signals = NULL;
+        }
     }
 }
 
@@ -151,7 +169,7 @@ signal_add_filter(bus_t *bus)
 void
 signal_del_filter(bus_t *bus)
 {
-    if (bus->conn == NULL)
+    if (bus == NULL || bus->conn == NULL)
         return;
     
     dbus_connection_remove_filter(bus->conn, signal_dispatch, NULL);
@@ -271,6 +289,7 @@ signal_add(DBusBusType type, const char *path, const char *interface,
     if ((siglist = siglist_lookup(bus, key))    == NULL &&
         (siglist = siglist_add(bus, key, rule)) == NULL) {
         signal_purge(sig);
+        OHM_WARNING("dbus: error setting the signal match");
         return FALSE;
     }
         
@@ -351,6 +370,7 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     handled = FALSE;
     
     signal_key(key, sizeof(key), interface, member);
+
     if ((siglist = siglist_lookup(bus, key)) != NULL) {
         list_foreach(&siglist->signals, p, n) {
             sig = list_entry(p, signal_t, hook);
@@ -365,6 +385,7 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     }
     
     signal_key(key, sizeof(key), NULL, member);
+
     if ((siglist = siglist_lookup(bus, key)) != NULL) {
         list_foreach(&siglist->signals, p, n) {
             sig = list_entry(p, signal_t, hook);

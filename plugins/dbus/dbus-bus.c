@@ -38,32 +38,37 @@ static void bus_event(bus_t *bus, int event);
 
 
 /********************
- * bus_init
+ * dbus_bus_init
  ********************/
 int
-bus_init(void)
+dbus_bus_init(void)
 {
-    if ((system_bus  = bus_create(DBUS_BUS_SYSTEM))  == NULL ||
-        (session_bus = bus_create(DBUS_BUS_SESSION)) == NULL) {
-        OHM_ERROR("dbus: failed to allocate bus");
-        bus_exit();
+    if ((system_bus  = bus_create(DBUS_BUS_SYSTEM))  == NULL) {
+        OHM_ERROR("dbus: failed to allocate system bus");
+        dbus_bus_exit();
         return FALSE;
     }
 
     if (!bus_connect(system_bus, NULL)) {
-        bus_exit();
+        OHM_ERROR("dbus: could not connect to system bus");
+        dbus_bus_exit();
         return FALSE;
     }
         
+    if ((session_bus  = bus_create(DBUS_BUS_SESSION))  == NULL) {
+        OHM_ERROR("dbus: failed to allocate session bus");
+        dbus_bus_exit();
+        return FALSE;
+    }
+
     return TRUE;
 }
 
-
 /********************
- * bus_exit
+ * dbus_bus_exit
  ********************/
 void
-bus_exit(void)
+dbus_bus_exit(void)
 {
     if (system_bus) {
         bus_destroy(system_bus);

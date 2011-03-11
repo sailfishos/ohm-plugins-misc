@@ -58,23 +58,32 @@ method_init(void)
     bus_t *system, *session;
     
     system  = bus_by_type(DBUS_BUS_SYSTEM);
-    session = bus_by_type(DBUS_BUS_SESSION);
     
-    system->objects  = hash_table_create(NULL, object_purge);
-    session->objects = hash_table_create(NULL, object_purge);
-    
-    if (system->objects == NULL || session->objects == NULL) {
-        OHM_ERROR("dbus: failed to create method object tables");
-        method_exit();
-        return FALSE;
+    if (system != NULL) {
+        system->objects  = hash_table_create(NULL, object_purge);
+        if (system->objects == NULL) {
+            OHM_ERROR("dbus: failed to create method object tables");
+            method_exit();
+            return FALSE;
+        }
     }
 
-    if (!bus_watch_add(session, session_bus_event, NULL)) {
-        OHM_ERROR("dbus: failed to install session bus watch");
-        method_exit();
-        return FALSE;
+    session = bus_by_type(DBUS_BUS_SESSION);
+
+    if (session != NULL) {
+        session->objects = hash_table_create(NULL, object_purge);
+        if (session->objects == NULL) {
+            OHM_ERROR("dbus: failed to create method object tables");
+            method_exit();
+            return FALSE;
+        }
+        if (!bus_watch_add(session, session_bus_event, NULL)) {
+            OHM_ERROR("dbus: failed to install session bus watch");
+            method_exit();
+            return FALSE;
+        }
     }
-    
+
     return TRUE;
 }
 
@@ -89,17 +98,20 @@ method_exit(void)
     
     system  = bus_by_type(DBUS_BUS_SYSTEM);
     session = bus_by_type(DBUS_BUS_SESSION);
-    
-    bus_watch_del(session, session_bus_event, NULL);
 
-    if (system->objects) {
-        hash_table_destroy(system->objects);
-        system->objects = NULL;
+    if (system != NULL) {
+        if (system->objects) {
+            hash_table_destroy(system->objects);
+            system->objects = NULL;
+        }
     }
 
-    if (session->objects) {
-        hash_table_destroy(session->objects);
-        session->objects = NULL;
+    if (session != NULL) {
+        bus_watch_del(session, session_bus_event, NULL);
+        if (session->objects) {
+            hash_table_destroy(session->objects);
+            session->objects = NULL;
+        }
     }
 }
 
