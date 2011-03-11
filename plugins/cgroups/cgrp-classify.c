@@ -155,7 +155,7 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
             return TRUE;
         
         memset(&attr, 0, sizeof(attr));
-        bin[0]         = '\0';
+        bin[0]       = '\0';
     
         attr.binary  = bin;
         attr.pid     = event->any.pid;
@@ -177,6 +177,10 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
         }
         
     case CGRP_EVENT_EXIT:
+        attr.process = proc_hash_lookup(ctx, event->any.pid);;
+        if (attr.process != NULL && attr.process->track)
+            process_track_notify(ctx, attr.process, event->any.type);
+
         process_remove_by_pid(ctx, event->any.pid);
         return TRUE;
 
@@ -296,6 +300,9 @@ classify_by_rules(cgrp_context_t *ctx,
     OHM_DEBUG(DBG_CLASSIFY, "classifying process <%u> by rules for event 0x%x",
               event->any.pid, event->any.type);
 
+    if (attr->process != NULL && attr->process->track)
+        process_track_notify(ctx, attr->process, event->any.type);
+    
     /*
      * The basic algorithm here is roughly the following:
      *
