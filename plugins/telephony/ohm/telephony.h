@@ -113,6 +113,8 @@ USA.
 #define TONEGEN_DBUS_PATH      "/com/Nokia/Telephony/Tones"
 #define TONEGEN_MUTE           "Mute"
 
+#define TP_STREAMENGINE_NAME "org.maemo.Telepathy.StreamEngine"
+
 
 /*
  * call actions (policy decisions)
