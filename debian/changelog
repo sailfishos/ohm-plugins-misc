@@ -1,3 +1,10 @@
+ohm-plugins-misc (1:1.68) unstable; urgency=low
+
+  * telephony: kludge for telepathy stream-engine based video calls.
+  * backlight: fix memory leaks.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 15 Mar 2011 00:41:32 +0200
+
 ohm-plugins-misc (1:1.67) unstable; urgency=low
 
   [Janos Kovacs]
