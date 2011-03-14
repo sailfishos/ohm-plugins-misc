@@ -19,8 +19,10 @@ USA.
 
 
 #include <stdlib.h>
+#include <errno.h>
 
 #include "cgrp-plugin.h"
+
 
 /* debug flags */
 int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
@@ -38,14 +40,27 @@ OHM_DEBUG_PLUGIN(cgroups,
 );
 
 
+
 OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri, gchar **interested));
 OHM_IMPORTABLE(gboolean , signaling_unregister, (GObject *ep));
 OHM_IMPORTABLE(int      , resolve             , (char *goal, char **locals));
-
+OHM_IMPORTABLE(int      , register_method     , (char *name,
+                                                 dres_handler_t handler));
+OHM_IMPORTABLE(int      , unregister_method   , (char *name,
+                                                 dres_handler_t handler));
 
 static cgrp_context_t *ctx;
 
 static void plugin_exit(OhmPlugin *plugin);
+
+static int
+cgrp_track_process(void *data, char *name,
+                   vm_stack_entry_t *args, int narg,
+                   vm_stack_entry_t *rv);
+static int
+cgrp_untrack_process(void *data, char *name,
+                     vm_stack_entry_t *args, int narg,
+                     vm_stack_entry_t *rv);
 
 
 /********************
@@ -107,6 +122,12 @@ plugin_init(OhmPlugin *plugin)
     }
 
     ctx->resolve = resolve;
+
+    if (!register_method("track_process", cgrp_track_process))
+        OHM_ERROR("cgrp: failed to register track_process to resolver");
+    if (!register_method("untrack_process", cgrp_untrack_process))
+        OHM_ERROR("cgrp: failed to register untrack_process to resolver");
+
     if (!apptrack_init(ctx, plugin))
         plugin_exit(plugin);
     
@@ -146,6 +167,12 @@ plugin_exit(OhmPlugin *plugin)
     sysmon_exit(ctx);
     curve_exit(ctx);
     proc_exit(ctx);
+    
+    if (!unregister_method("track_process", cgrp_track_process))
+        OHM_ERROR("cgrp: failed to register track_process to resolver");
+    if (!unregister_method("untrack_process", cgrp_untrack_process))
+        OHM_ERROR("cgrp: failed to register untrack_process to resolver");
+    
     classify_exit(ctx);
     procdef_exit(ctx);
     group_exit(ctx);
@@ -220,6 +247,110 @@ OHM_EXPORTABLE(void, cgrp_app_query, (pid_t *pid,
 }
 
 
+static int
+cgrp_track_process(void *data, char *name,
+                   vm_stack_entry_t *args, int narg,
+                   vm_stack_entry_t *rv)
+{
+    cgrp_process_t *process;
+    const char     *target, *event;
+    pid_t           pid;
+    int             mask, success;
+
+    (void)data;
+
+    if (narg != 3) {
+        OHM_ERROR("cgrp: %s called with incorrect number of arguments (%d!=3)",
+                  name, narg);
+        DRES_ACTION_ERROR(EINVAL);
+    }
+
+    if (args[0].type != DRES_TYPE_INTEGER ||
+        args[1].type != DRES_TYPE_STRING  ||
+        args[2].type != DRES_TYPE_STRING) {
+        OHM_ERROR("cgrp: %s: expecting args (<i:pid>, <s:event>, <s:target>",
+                  name);
+        DRES_ACTION_ERROR(EINVAL);
+    }
+
+    pid    = args[0].v.i;
+    event  = args[1].v.s;
+    target = args[2].v.s;
+
+    if      (!strcmp(event, "exit")) mask = 1 << CGRP_EVENT_EXIT;
+    else if (!strcmp(event, "exec")) mask = 1 << CGRP_EVENT_EXEC;
+    else if (!strcmp(event, "all"))  mask = 1 << CGRP_EVENT_EXIT |
+                                            1 << CGRP_EVENT_EXEC;
+    else {
+        OHM_ERROR("cgrp: %s: incorrect event '%s', expecting {exit, exec}",
+                  name, event);
+        DRES_ACTION_ERROR(EINVAL);
+    }    
+    
+    if ((process = proc_hash_lookup(ctx, pid)) != NULL)
+        success = process_track_add(process, target, mask);
+    else
+        success = FALSE;
+
+    rv->type = DRES_TYPE_INTEGER;
+    rv->v.i  = success; 
+
+    DRES_ACTION_SUCCEED;
+}
+
+
+static int
+cgrp_untrack_process(void *data, char *name,
+                     vm_stack_entry_t *args, int narg,
+                     vm_stack_entry_t *rv)
+{
+    cgrp_process_t *process;
+    const char     *target, *event;
+    pid_t           pid;
+    int             mask, success;
+
+    (void)data;
+    
+    if (narg != 1 && narg != 2 && narg != 3) {
+        OHM_ERROR("cgrp: %s: expects args <i:pid>[, <s:event> [,<s:target>]]",
+                  name);
+        DRES_ACTION_ERROR(EINVAL);
+    }
+
+    if (args[0].type != DRES_TYPE_INTEGER ||
+        (narg >= 2 && args[1].type != DRES_TYPE_STRING) ||
+        (narg == 3 && args[2].type != DRES_TYPE_STRING)) {
+        OHM_ERROR("cgrp: %s: expects args <i:pid>[, <s:event> [, <s:target>]]",
+                  name);
+        DRES_ACTION_ERROR(EINVAL);
+    }
+
+    pid    = args[0].v.i;
+    event  = (narg > 1 ? args[1].v.s : "all");
+    target = (narg > 2 ? args[2].v.s : "");
+
+    if      (!strcmp(event, "exit")) mask = 1 << CGRP_EVENT_EXIT;
+    else if (!strcmp(event, "exec")) mask = 1 << CGRP_EVENT_EXEC;
+    else if (!strcmp(event, "all"))  mask = 1 << CGRP_EVENT_EXIT |
+                                            1 << CGRP_EVENT_EXEC;
+    else {
+        OHM_ERROR("cgrp: %s: incorrect event '%s', expecting {exit, exec}",
+                  name, event);
+        DRES_ACTION_ERROR(EINVAL);
+    }
+    
+    if ((process = proc_hash_lookup(ctx, pid)) != NULL)
+        success = process_track_del(process, target, mask);
+    else
+        success = FALSE;
+    
+    rv->type = DRES_TYPE_INTEGER;
+    rv->v.i  = success; 
+    
+    DRES_ACTION_SUCCEED;
+}
+
+
 /*****************************************************************************
  *                            *** OHM plugin glue ***                        *
  *****************************************************************************/
@@ -231,10 +362,12 @@ OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        plugin_init, plugin_exit, NULL);
 
 
-OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 3, 
+OHM_PLUGIN_REQUIRES_METHODS(PLUGIN_PREFIX, 5, 
    OHM_IMPORT("signaling.register_enforcement_point"  , signaling_register),
    OHM_IMPORT("signaling.unregister_enforcement_point", signaling_unregister),
-   OHM_IMPORT("dres.resolve", resolve));
+   OHM_IMPORT("dres.resolve"          , resolve),
+   OHM_IMPORT("dres.register_method"  , register_method),
+   OHM_IMPORT("dres.unregister_method", unregister_method));
 
 OHM_PLUGIN_PROVIDES_METHODS(cgroups, 4,
     OHM_EXPORT(cgrp_process_info   , "process_info"),

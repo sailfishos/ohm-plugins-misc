@@ -535,11 +535,12 @@ typedef enum {
     FUNC_LOG2,                                 /* 2-base logarithm */
     FUNC_LOG10,                                /* 10-base logarithm */
     FUNC_SIN,                                  /* sine */
-    FUNC_COS                                   /* cosine */
+    FUNC_COS,                                  /* cosine */
+    FUNC_ABS,                                  /* absolute value */
 } function_t;
 
 const char *function_name[] = {
-    "unknown", "ln", "log2", "log10", "sin", "cos"
+    "unknown", "ln", "log2", "log10", "sin", "cos", "abs"
 };
 
 
@@ -568,6 +569,7 @@ static inline function_t func_lookup(const char *name)
         { "log10", FUNC_LOG10   },
         { "sin"  , FUNC_SIN     },
         { "cos"  , FUNC_COS     },
+        { "abs"  , FUNC_ABS     },
         { NULL   , FUNC_UNKNOWN }
     }, *func;
 
@@ -855,6 +857,8 @@ rpn_free(void *tokens)
 static double
 rpn_calc(double x, void *data)
 {
+#undef ABS
+#define ABS(v) ((v) >= 0 ? (v) : -(v))
 #define PUSH(t) do {                                                    \
         if (si >= RPN_MAX_TOKENS - 1) {                                 \
             OHM_ERROR("cgrp: RPN evaluator stack overflow");            \
@@ -931,6 +935,7 @@ rpn_calc(double x, void *data)
             case FUNC_LOG10: v.val = log10(v.val); break;
             case FUNC_SIN:   v.val = sin(v.val);   break;
             case FUNC_COS:   v.val = cos(v.val);   break;
+            case FUNC_ABS:   v.val = ABS(v.val);   break;
             default:
                 OHM_ERROR("cgrp: RPN evaluation: unknown function");
                 return 0.0;

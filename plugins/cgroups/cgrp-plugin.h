@@ -23,6 +23,7 @@ USA.
 
 #include <stdio.h>
 #include <stdint.h>
+#include <dres/dres.h>
 
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-plugin-log.h>
@@ -437,6 +438,15 @@ enum {
     CGRP_OOM_EXTERN,                        /* out of policy control */
 };
 
+
+typedef struct {
+    int   events;                           /* mask of events CGRP_EVENT*'s */
+    char *target;                           /* hook to resolve */
+} cgrp_track_t;
+
+
+
+
 /*
  * a classified process
  */
@@ -454,6 +464,7 @@ typedef struct {
     int           oom_mode;
     list_hook_t   proc_hook;                /* hook to process table */
     list_hook_t   group_hook;               /* hook to group */
+    cgrp_track_t *track;                    /* resolver notifications */
 } cgrp_process_t;
 
 typedef enum {
@@ -651,6 +662,8 @@ typedef struct {
     guint             apptrack_update;      /* scheduled change update */
     
     int             (*resolve)(char *, char **);
+    int             (*register_method)(char *, dres_handler_t);
+    int             (*unregister_method)(char *, dres_handler_t);
 
     /* I/O wait monitoring */
     int               proc_stat;            /* /proc/stat fd */
@@ -713,6 +726,11 @@ void procattr_dump(cgrp_proc_attr_t *);
 
 void proc_notify(cgrp_context_t *,
                  void (*)(cgrp_context_t *, int, pid_t, void *), void *);
+
+int  process_track_add(cgrp_process_t *, const char *, int);
+int  process_track_del(cgrp_process_t *, const char *, int);
+void process_track_notify(cgrp_context_t *, cgrp_process_t *,cgrp_event_type_t);
+
 
 /* cgrp-partition.c */
 int  partition_init(cgrp_context_t *);
@@ -931,7 +949,6 @@ void apptrack_unsubscribe(void (*)(pid_t, const char *, const char *,
                                    const char *, void *),
                           void *);
 void apptrack_query(pid_t *, const char **, const char **, const char **);
-
 
 /* cgrp-console.c */
 int  console_init(cgrp_context_t *);

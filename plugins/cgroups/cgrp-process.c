@@ -1021,12 +1021,17 @@ process_create(cgrp_context_t *ctx, cgrp_proc_attr_t *attr)
 void
 process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
 {
+    cgrp_track_t *track;
+    
     if (process == ctx->active_process) {
         ctx->active_process = NULL;
         ctx->active_group   = NULL;
 
         apptrack_group_change(ctx, process->group, NULL);
     }
+    
+    if ((track = process->track) != NULL)
+        process_track_del(process, track->target, track->events);
     
     group_del_process(process);
     proc_hash_unhash(ctx, process);
@@ -1367,6 +1372,111 @@ process_adjust_oom(cgrp_context_t *ctx,
         success = FALSE;
 
     return success || errno == ENOENT;
+}
+
+
+/********************
+ * process_track_add
+ ********************/
+int
+process_track_add(cgrp_process_t *process, const char *target, int mask)
+{
+    cgrp_track_t *track;
+    
+    if ((track = process->track) != NULL) {
+        if (track->events & mask) {
+            if (!strcmp(track->target, target))
+                return TRUE;
+            else {
+                OHM_ERROR("cgrp: cannot track same process by two targets");
+                return FALSE;
+            }
+        }
+    }
+    else {
+        if (ALLOC_OBJ(track)                 == NULL ||
+            (track->target = STRDUP(target)) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate process tracking data");
+            if (track)
+                FREE(track->target);
+            return FALSE;
+        }
+
+        process->track = track;
+    }
+
+    OHM_DEBUG(DBG_NOTIFY, "added track-hook '%s' for event 0x%x of process %u",
+              track->target, mask, process->pid);
+    
+    track->events |= mask;
+    return TRUE;
+}
+
+
+/********************
+ * process_track_del
+ ********************/
+int
+process_track_del(cgrp_process_t *process, const char *target, int mask)
+{
+    cgrp_track_t *track;
+    
+    if ((track = process->track) == NULL || !(track->events & mask) ||
+        (!target || !target[0] || strcmp(track->target, target) != 0))
+        return TRUE;
+
+    track->events &= ~mask;
+    
+    if (!track->events) {
+        FREE(track->target);
+        FREE(track);
+        process->track = NULL;
+    }
+
+    OHM_DEBUG(DBG_NOTIFY, "removed track-hook '%s' 0x%x of process %u",
+              track->target, mask, process->pid);
+    
+    return TRUE;
+}
+
+
+/********************
+ * process_track_notify
+ ********************/
+void
+process_track_notify(cgrp_context_t *ctx, cgrp_process_t *process,
+                     cgrp_event_type_t event)
+{
+    cgrp_track_t *track = process->track;
+    char         *what, *vars[8];
+    pid_t         pid;
+
+    if (unlikely(track == NULL))
+        return;
+    
+    if (!(track->events & (1 << event)))
+        return;
+ 
+    pid = process->tgid;
+
+    switch (event) {
+    case CGRP_EVENT_EXIT: what = "exit";  break;
+    case CGRP_EVENT_EXEC: what = "exec";  break;
+    default:              what = "other"; break;
+    }
+
+    OHM_DEBUG(DBG_NOTIFY, "triggering hook '%s' for event '%s' of process %u",
+              track->target, what, pid);
+    
+    vars[0] = "pid";
+    vars[1] = (char *)'i';
+    vars[2] = (char *)process->tgid;
+    vars[3] = "event";
+    vars[4] = (char *)'s';
+    vars[5] = what;
+    vars[6] = NULL;
+    
+    ctx->resolve(track->target, vars);
 }
 
 
