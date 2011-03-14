@@ -240,6 +240,8 @@ complete_request(DBusPendingCall *pending, void *user_data)
     
  unref_out:
     dbus_message_unref(req);
+    dbus_message_unref(reply);
+    dbus_pending_call_unref(pending);
 }
 
 
