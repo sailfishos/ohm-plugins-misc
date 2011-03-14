@@ -41,6 +41,10 @@ static int  create_audio_stream_spec(resource_audio_stream_t *,
                                      resource_set_t *, va_list);
 static void destroy_audio_stream_spec(resource_audio_stream_t *);
 
+static int  create_video_stream_spec(resource_video_stream_t *,
+                                     resource_set_t *, va_list);
+static void destroy_video_stream_spec(resource_video_stream_t *);
+
 
 /*! \addtogroup pubif
  *  Functions
@@ -72,6 +76,10 @@ resource_spec_t *resource_spec_create(resource_set_t       *rs,
             success = create_audio_stream_spec(&spec->audio, rs, args);
             break;
 
+        case resource_video:
+            success = create_video_stream_spec(&spec->video, rs, args);
+            break;
+
         default:
             success = FALSE;
             break;
@@ -91,6 +99,7 @@ void resource_spec_destroy(resource_spec_t *spec)
 {
     switch (spec->any.type) {
     case resource_audio:   destroy_audio_stream_spec(&spec->audio);   break;
+    case resource_video:   destroy_video_stream_spec(&spec->video);   break;
     default:               /* do nothing */                           break;
     }
 
@@ -106,9 +115,15 @@ int resource_spec_update(resource_spec_t      *spec,
     int success = TRUE;
 
     switch (type) {
+
     case resource_audio:
         destroy_audio_stream_spec(&spec->audio);
         create_audio_stream_spec(&spec->audio, rs, args);
+        break;
+
+    case resource_video:
+        destroy_video_stream_spec(&spec->video);
+        create_video_stream_spec(&spec->video, rs, args);
         break;
 
     default:
@@ -187,6 +202,41 @@ static void destroy_audio_stream_spec(resource_audio_stream_t *audio)
     audio->group = NULL;
     audio->property.name = NULL;
     audio->property.match.pattern = NULL;
+}
+
+
+static int create_video_stream_spec(resource_video_stream_t *video,
+                                    resource_set_t          *rs,
+                                    va_list                  args)
+{
+    resset_t                 *resset  = rs->resset;
+    uint32_t                  pid     = va_arg(args, uint32_t);
+    int                       success = FALSE;
+
+    fsif_field_t fldlist[] = {
+        INTEGER_FIELD ("videopid", pid          ),
+        STRING_FIELD  ("class"   , resset->klass),
+        INVALID_FIELD
+    };
+
+    video->type = resource_video;
+    video->pid  = pid;
+
+    success = fsif_add_factstore_entry(FACTSTORE_VIDEO_STREAM, fldlist);
+
+    return success;
+}
+
+static void destroy_video_stream_spec(resource_video_stream_t *video)
+{
+    uint32_t  pid = video->pid;
+
+    fsif_field_t selist[] = {
+        INTEGER_FIELD ("videopid", pid),
+        INVALID_FIELD
+    };
+
+    fsif_delete_factstore_entry(FACTSTORE_VIDEO_STREAM, selist);
 }
 
 

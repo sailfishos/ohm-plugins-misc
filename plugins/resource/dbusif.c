@@ -321,6 +321,7 @@ static void res_conn_setup(DBusConnection *conn)
     resproto_set_handler(res_conn, RESMSG_ACQUIRE   , manager_acquire   );
     resproto_set_handler(res_conn, RESMSG_RELEASE   , manager_release   );
     resproto_set_handler(res_conn, RESMSG_AUDIO     , manager_audio     );
+    resproto_set_handler(res_conn, RESMSG_VIDEO     , manager_video     );
 }
 
 static void pid_queried(DBusPendingCall *pend, void *data)
