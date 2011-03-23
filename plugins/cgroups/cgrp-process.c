@@ -1183,7 +1183,6 @@ process_adjust_priority(cgrp_context_t *ctx, cgrp_process_t *process,
             process->prio_mode = CGRP_PRIO_DEFAULT;
             break;
         case CGRP_ADJ_LOCK:
-            process->prio_mode = CGRP_PRIO_LOCKED;
             break;
         case CGRP_ADJ_EXTERN:
             process->prio_mode = CGRP_PRIO_EXTERN;
@@ -1302,6 +1301,8 @@ process_adjust_oom(cgrp_context_t *ctx,
         switch (adjust) {
         case CGRP_ADJ_UNLOCK:
             process->oom_mode = CGRP_OOM_DEFAULT;
+            break;
+        case CGRP_ADJ_LOCK:
             break;
         case CGRP_ADJ_EXTERN:
             process->oom_mode = CGRP_OOM_EXTERN;
