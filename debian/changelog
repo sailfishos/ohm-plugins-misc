@@ -2,6 +2,7 @@ ohm-plugins-misc (1:1.68) unstable; urgency=low
 
   * telephony: kludge for telepathy stream-engine based video calls.
   * backlight: fix memory leaks.
+  * Fixes: NB#222603.
 
  -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 15 Mar 2011 00:41:32 +0200
 
