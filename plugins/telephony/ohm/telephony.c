@@ -705,7 +705,8 @@ se_name_query_cb(DBusPendingCall *pending, void *data)
     
     if (reply == NULL ||
         dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
-        OHM_ERROR("telephony: DBUS name query failed.");
+        if (!dbus_message_is_error(reply, DBUS_ERROR_NAME_HAS_NO_OWNER))
+            OHM_ERROR("telephony: DBUS name query failed.");
         goto unref_out;
     }
     
