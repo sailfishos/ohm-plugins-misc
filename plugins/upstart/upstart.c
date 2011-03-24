@@ -40,13 +40,13 @@ USA.
  * for all plugins. This tells the applications depending on ohmd in the
  * boot order that the ohm is now at least somewhat ready for operation. */
 
-static int DBG_INIT;
+static int DBG_UPSTART;
 
 static unsigned int id;
 static gulong updated_id;
 
-OHM_DEBUG_PLUGIN(init,
-    OHM_DEBUG_FLAG("init", "emission of the init signal", &DBG_INIT)
+OHM_DEBUG_PLUGIN(upstart,
+    OHM_DEBUG_FLAG("upstart", "emission of the init signal", &DBG_UPSTART)
 );
 
 static int init_cb(void *data)
@@ -58,7 +58,7 @@ static int init_cb(void *data)
     GPid pid;
     gchar *argv[] = { "/sbin/initctl", "emit", "ohm-running", NULL };
 
-    OHM_DEBUG(DBG_INIT, "upstart: emitting the initialization signal");
+    OHM_INFO("upstart: emitting the initialization signal");
 
     /* no flags -- the child is automatically waited */
     retval = g_spawn_async(NULL, argv, NULL, 0, NULL, NULL, &pid, NULL);
@@ -81,12 +81,12 @@ static void updated_cb(void *data, OhmFact *fact, GQuark fldquark, gpointer valu
     const char *name;
 
     if (fact == NULL) {
-        OHM_DEBUG(DBG_INIT, "%s() called with null fact pointer", __FUNCTION__);
+        OHM_DEBUG(DBG_UPSTART, "%s() called with null fact pointer", __FUNCTION__);
         return;
     }
 
     if (value == NULL) {
-        OHM_DEBUG(DBG_INIT, "%s() called with null value pointer", __FUNCTION__);
+        OHM_DEBUG(DBG_UPSTART, "%s() called with null value pointer", __FUNCTION__);
         return;
     }
 
@@ -122,8 +122,7 @@ static void plugin_init(OhmPlugin *plugin)
     if (fs == NULL) {
         return;
     }
-
-    OHM_DEBUG_INIT(init);
+    OHM_DEBUG_INIT(upstart);
 
     OHM_INFO("upstart: init ...");
 
@@ -132,7 +131,7 @@ static void plugin_init(OhmPlugin *plugin)
      * been initialized. Thus we don't check the signaling fact state
      * here but instead assume that it has been initialized as something
      * else than 'signaled'. */
-    updated_id  = g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
+    updated_id = g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
 }
 
 
@@ -158,7 +157,7 @@ static void plugin_exit(OhmPlugin *plugin)
 }
 
 
-OHM_PLUGIN_DESCRIPTION("init",
+OHM_PLUGIN_DESCRIPTION("upstart",
                        "0.0.1",
                        "ismo.h.puustinen@nokia.com",
                        OHM_LICENSE_LGPL,
