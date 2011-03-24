@@ -58,7 +58,7 @@ static int init_cb(void *data)
     GPid pid;
     gchar *argv[] = { "/sbin/initctl", "emit", "ohm-running", NULL };
 
-    OHM_INFO(DBG_INIT, "upstart: emitting the initialization signal");
+    OHM_DEBUG(DBG_INIT, "upstart: emitting the initialization signal");
 
     /* no flags -- the child is automatically waited */
     retval = g_spawn_async(NULL, argv, NULL, 0, NULL, NULL, &pid, NULL);
