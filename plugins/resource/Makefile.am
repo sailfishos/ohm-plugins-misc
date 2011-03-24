@@ -9,7 +9,7 @@ config_DATA        = resource.ini
 libohm_resource_la_SOURCES = plugin.c timestamp.c \
                              dbusif.c internalif.c fsif.c dresif.c \
                              manager.c resource-set.c resource-spec.c \
-                             transaction.c auth.c
+                             transaction.c auth.c ruleif.c
 
 libohm_resource_la_LIBADD = @OHM_PLUGIN_LIBS@ @LIBRESOURCE_LIBS@
 libohm_resource_la_LDFLAGS = -module -avoid-version
