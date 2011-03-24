@@ -1,3 +1,9 @@
+ohm-plugins-misc (1:1.69) unstable; urgency=low
+
+  * cgrp: allow locked OOM adjustment to be re-locked to a different value.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 24 Mar 2011 02:36:23 +0200
+
 ohm-plugins-misc (1:1.68) unstable; urgency=low
 
   * telephony: kludge for telepathy stream-engine based video calls.
