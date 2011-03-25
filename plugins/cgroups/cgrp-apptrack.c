@@ -104,7 +104,9 @@ socket_init(cgrp_context_t *ctx, OhmPlugin *plugin)
         OHM_ERROR("cgrp: failed to bind notification socket");
         return FALSE;
     }
-    
+   
+    ctx->apptrack_chnl = g_io_channel_unix_new(ctx->apptrack_sock);
+
     ctx->apptrack_src = g_io_add_watch(ctx->apptrack_chnl, G_IO_IN,
                                        socket_cb, ctx);
 
