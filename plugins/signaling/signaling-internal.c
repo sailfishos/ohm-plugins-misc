@@ -245,8 +245,7 @@ static void transaction_get_property(GObject *object,
     }
 }
 
-    static void
-external_ep_strategy_get_property(GObject *object,
+static void external_ep_strategy_get_property(GObject *object,
         guint property_id,
         GValue *value,
         GParamSpec *pspec)
@@ -1072,8 +1071,7 @@ static void transaction_dispose(GObject *object)
     self->signal = NULL;
 }
 
-    static void
-transaction_class_init(gpointer g_class, gpointer class_data)
+static void transaction_class_init(gpointer g_class, gpointer class_data)
 {
     
     GObjectClass *gobject = (GObjectClass *) g_class;
