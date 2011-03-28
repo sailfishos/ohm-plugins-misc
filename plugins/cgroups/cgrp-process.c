@@ -1398,8 +1398,7 @@ process_track_add(cgrp_process_t *process, const char *target, int mask)
         if (ALLOC_OBJ(track)                 == NULL ||
             (track->target = STRDUP(target)) == NULL) {
             OHM_ERROR("cgrp: failed to allocate process tracking data");
-            if (track)
-                FREE(track->target);
+            FREE(track);
             return FALSE;
         }
 
@@ -1427,15 +1426,15 @@ process_track_del(cgrp_process_t *process, const char *target, int mask)
         return TRUE;
 
     track->events &= ~mask;
+
+    OHM_DEBUG(DBG_NOTIFY, "removing track-hook '%s' 0x%x of process %u",
+              track->target, mask, process->pid);
     
     if (!track->events) {
         FREE(track->target);
         FREE(track);
         process->track = NULL;
     }
-
-    OHM_DEBUG(DBG_NOTIFY, "removed track-hook '%s' 0x%x of process %u",
-              track->target, mask, process->pid);
     
     return TRUE;
 }
