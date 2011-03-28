@@ -427,6 +427,7 @@ static void dequeue_and_send(resource_set_t          *rs,
     resource_set_output_t *value;
     resource_set_qhead_t  *qhead;
     resource_set_queue_t  *qentry;
+    resource_set_queue_t  *qnext;
     int32_t                block;
     resmsg_t               msg;
     char                   buf[128];
@@ -445,11 +446,13 @@ static void dequeue_and_send(resource_set_t          *rs,
     qhead = &value->queue;
     block = rs->block;
 
+    qnext = (void *) qhead->first;
+
     /*
      * we assume that the queue contains strictly monoton increasing txid's
      * and this function is called with strictly monoton txid's
      */
-    while ((void *)(qentry = qhead->first) != (void *)qhead) {
+    while ((void *)(qentry = qnext) != (void *)qhead) {
         if (qentry->txid > txid)
             return;             /* nothing to send */
 
@@ -495,6 +498,7 @@ static void dequeue_and_send(resource_set_t          *rs,
 
         qentry->prev->next = qentry->next;
         qentry->next->prev = qentry->prev;
+        qnext = (void *) qhead->first;
         free(qentry);
     } /* while */
 }
@@ -503,6 +507,7 @@ static void destroy_queue(resource_set_t *rs, resource_set_field_id_t what)
 {
     resource_set_qhead_t *qhead;
     resource_set_queue_t *qentry;
+    resource_set_queue_t *qnext;
 
     switch (what) {
     case resource_set_granted:    qhead = &rs->granted.queue;    break;
@@ -510,10 +515,14 @@ static void destroy_queue(resource_set_t *rs, resource_set_field_id_t what)
     default:                                                     return;
     }
 
-    while ((void *)(qentry = qhead->first) != (void *)qhead) {
+    qnext = (void *) qhead->first;
+
+    while ((void *)(qentry = qnext) != (void *)qhead) {
 
         qentry->prev->next = qentry->next;
         qentry->next->prev = qentry->prev;
+
+        qnext = (void *) qhead->first;
 
         free(qentry);
     }

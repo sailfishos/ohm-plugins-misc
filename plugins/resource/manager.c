@@ -743,8 +743,12 @@ static int reg_request_create(resmsg_t *msg,resset_t *resset,void *proto_data)
 
             case RESMSG_REGISTER:
                 auth_query(resset->klass, &method, &arg);
-                
-                if (!resset->peer || !method || !arg) {
+
+                if (!resset->peer) {
+                    /* we can't query the pid -- better not authorize */
+                    authorize_cb(FALSE, "not authorized", regreq);
+                }
+                else if (!method || !arg) {
                     OHM_DEBUG(DBG_AUTH, "applying default policies");
                     
                     if (auth_get_default_policy() == auth_accept)
