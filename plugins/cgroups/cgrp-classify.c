@@ -101,6 +101,7 @@ classify_by_parent(cgrp_context_t *ctx, pid_t pid, pid_t tgid, pid_t ppid)
         attr.pid    = pid;
         attr.tgid   = tgid;
         attr.binary = parent->binary;
+        attr.mask = 0;
 
         CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
         CGRP_SET_MASK(attr.mask, CGRP_PROC_BINARY);

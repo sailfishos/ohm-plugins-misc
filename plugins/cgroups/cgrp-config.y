@@ -1737,7 +1737,8 @@ add_grp(cgrp_rule_t *rule, const char *name)
 static int
 lookup_gid(const char *name, gid_t *gid)
 {
-    size_t       size = sysconf(_SC_GETGR_R_SIZE_MAX);
+    long         scnf = sysconf(_SC_GETGR_R_SIZE_MAX);
+    size_t       size = (scnf < 0 ? 1024 : (size_t)scnf);
     struct group grp, *found;
     char         buf[size];
     
@@ -1804,10 +1805,11 @@ add_usr(cgrp_rule_t *rule, const char *name)
 static int
 lookup_uid(const char *name, uid_t *uid)
 {
-    size_t        size = sysconf(_SC_GETPW_R_SIZE_MAX);
+    long          scnf = sysconf(_SC_GETPW_R_SIZE_MAX);
+    size_t        size = (scnf < 0 ? 1024 : (size_t)scnf);
     struct passwd usr, *found;
     char          buf[size];
-
+    
     if (getpwnam_r(name, &usr, buf, size, &found) != 0 || !found)
         return FALSE;
     else {
