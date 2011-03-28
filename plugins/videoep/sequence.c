@@ -119,11 +119,11 @@ sequence_def_t *sequence_definition_find(const char *seqname)
 
 argument_inst_t **sequence_instance_create(sequence_def_t *sd)
 {
-    argument_inst_t **aa;
-    argument_inst_t  *ai;
-    sequence_inst_t  *si;
+    argument_inst_t **aa = NULL;
+    argument_inst_t  *ai = NULL;
+    sequence_inst_t  *si = NULL;
     exec_def_t       *ed;
-    exec_inst_t      *ei;
+    exec_inst_t      *ei = NULL;
     int               i;
 
     if (!(aa = calloc(1, sizeof(argument_inst_t *)))   ||
@@ -131,6 +131,11 @@ argument_inst_t **sequence_instance_create(sequence_def_t *sd)
         !(si = calloc(1,sizeof(sequence_inst_t)))      ||
         !(ei = calloc(sd->stepc, sizeof(exec_inst_t)))   )
     {
+        free(aa);
+        free(ai);
+        free(si);
+        free(ei);
+        aa = NULL;
         OHM_ERROR("videoep: can't allocate memory for argument instance");
     }
     else {

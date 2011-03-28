@@ -124,7 +124,6 @@ void window_exit(OhmPlugin *plugin)
 
 uint32_t window_create(uint32_t id, window_destcb_t destcb, void *destdata)
 {
-    win_def_t *win;
     uint32_t   retid;
     uint32_t   xidlist[32];
     uint32_t   xidcnt;
@@ -148,8 +147,8 @@ uint32_t window_create(uint32_t id, window_destcb_t destcb, void *destdata)
         }
 
         for (i = 0;  i < xidcnt;  i++) {
-            if (!(win = find_window_by_xid(xidlist[i]))) {
-                if (!(win = create_window(id,xidlist[i],destcb,destdata,root)))
+            if (!find_window_by_xid(xidlist[i])) {
+                if (!create_window(id,xidlist[i],destcb,destdata,root))
                     retid = WINDOW_INVALID_ID;
             }
         }

@@ -226,14 +226,8 @@ static int set_appwin_if_needed_function(int argc, videoep_arg_t **argv)
             lsarg = argv[1];        /* window list */
 
             if (awarg && lsarg) {
-                if (awarg) {
-                    awtype = videoep_get_argument_type(awarg);
-                    awdim  = videoep_get_argument_dimension(awarg);
-                }
-                else {
-                    awtype = videoep_unsignd;
-                    awdim  = 1;
-                }
+                awtype = videoep_get_argument_type(awarg);
+                awdim  = videoep_get_argument_dimension(awarg);
                 
                 lstype = videoep_get_argument_type(lsarg);
                 lsdim  = videoep_get_argument_dimension(lsarg);

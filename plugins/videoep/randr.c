@@ -287,7 +287,7 @@ void randr_crtc_set_outputs(int        screen_id,
                         if (!(output=output_find_by_name(screen,outnames[i]))){
                             OHM_ERROR("videoep: can't find output '%s'",
                                       outnames[i] ? outnames[i] : "<null>");
-                            free(output);
+                            free(outputs);
                             return;
                         }
 
@@ -303,7 +303,7 @@ void randr_crtc_set_outputs(int        screen_id,
                                       "allowed for crtc 0x%x",
                                       outnames[i] ? outnames[i]:"<null>",
                                       crtc->xid);
-                            free(output);
+                            free(outputs);
                             return;
                         }
 
@@ -378,6 +378,7 @@ void randr_output_change_property(char *outnam, char *propnam, void *value)
                     strncpy(inst->value.string, *(char **)value,
                             sizeof(inst->value.string));
                     inst->value.string[sizeof(inst->value.string) - 1] = '\0';
+                    break;
                 default:
                     /* unsupported type */
                     continue;
@@ -804,6 +805,7 @@ static void crtc_query_finish(xif_crtc_t *xif_crtc, void *usrdata)
         if (!(possibles = malloc(sizeof(uint32_t) * xif_crtc->npossible))) {
             OHM_ERROR("videoep: crtc_query failed: can't allocate memory "
                       "for %d possible outputs", xif_crtc->npossible);
+            free(outputs);
             return;
         }
 

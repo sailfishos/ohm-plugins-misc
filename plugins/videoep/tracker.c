@@ -427,10 +427,9 @@ int tracker_complete_configuration(void)
 
 int tracker_window_create(tracker_wintype_t type, uint32_t xid)
 {
-    tracker_window_t *win;
     int               sts;
 
-    if ((win = find_in_winhash(xid)) != NULL)
+    if (find_in_winhash(xid) != NULL)
         sts = -1;
     else {
         switch (type) {

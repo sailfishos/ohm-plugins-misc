@@ -164,11 +164,14 @@ void router_exit(OhmPlugin *plugin)
 struct router_sequence_s *router_sequence_create(router_seq_type_t type,
                                                  char             *id)
 {
-    sequence_t *head = (sequence_t *)(sequences + type);
+    sequence_t *head = NULL;
     sequence_t *seq  = NULL;
     sequence_t *last;
 
     if (type >= 0 && type < router_seq_max && id != NULL) {
+
+        head = (sequence_t *)(sequences + type);
+
         for (last = head;   last->next != NULL;   last = last->next) {
             if (last != head && !strcmp(id, last->id))
                 return NULL;
