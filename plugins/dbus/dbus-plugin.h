@@ -53,8 +53,8 @@ enum {
 
 
 /* dbus-bus.c */
-int  bus_init(void);
-void bus_exit(void);
+int  dbus_bus_init(void);
+void dbus_bus_exit(void);
 bus_t *bus_by_type(DBusBusType type);
 bus_t *bus_by_connection(DBusConnection *conn);
 int bus_connect(bus_t *bus, const char *address);

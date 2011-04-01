@@ -740,6 +740,8 @@ AC_CONFIG_FILES([build-aux/shave
 		 plugins/buttons/Makefile
 		 plugins/apptrack/Makefile
 		 plugins/fmradio/Makefile
+		 plugins/dbus/Makefile
+		 plugins/dbus-signal/Makefile
 		 ohm-session-agent/Makefile
  		 doc/Makefile
  		 tests/Makefile])

@@ -43,12 +43,22 @@ static DBusHandlerResult session_bus_up(DBusConnection *c,
 static void
 plugin_init(OhmPlugin *plugin)
 {
+    int retval = 0;
+
     if (!OHM_DEBUG_INIT(dbus))
         OHM_WARNING("dbus: failed to register for debugging");
 
-    if (!bus_init() || !watch_init() || !method_init() || !signal_init()) {
+    OHM_INFO("dbus: initializing...");
+
+    retval += dbus_bus_init() * 1;
+    retval += watch_init()    * 2;
+    retval += method_init()   * 4;
+    retval += signal_init()   * 8;
+
+    if (!retval) {
+        OHM_ERROR("dbus ERROR: 0x%04x", retval);
         plugin_exit(plugin);
-        exit(1);
+        return;
     }
 
     if (!signal_add(DBUS_BUS_SYSTEM, NULL,
@@ -78,7 +88,7 @@ plugin_exit(OhmPlugin *plugin)
     signal_exit();
     method_exit();
     watch_exit();
-    bus_exit();
+    dbus_bus_exit();
 
     dbus_plugin = NULL;
 }
