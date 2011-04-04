@@ -51,11 +51,13 @@ void dresif_init(OhmPlugin *plugin)
 
     ENTER;
 
-    ohm_module_find_method(name, &signature, (void *)&resolve);
+    if (use_dres) {
+        ohm_module_find_method(name, &signature, (void *)&resolve);
 
-    if (resolve == NULL) {
-        OHM_ERROR("resource: can't find mandatory method '%s'", name);
-        exit(1);
+        if (resolve == NULL) {
+            OHM_ERROR("resource: can't find mandatory method '%s'", name);
+            exit(1);
+        }
     }
 
     LEAVE;
@@ -67,55 +69,64 @@ int dresif_resource_request(uint32_t  manager_id,
                             uint32_t  client_id,
                             char     *request)
 {
-    char     *vars[48];
-    int       i;
-    int       status;
-    int       success;
+    const char *rules = use_builtin_rules ? "builtin" : "prolog";
+    char       *vars[48];
+    int         i;
+    int         status;
+    int         success;
 
-    vars[i=0] = "manager_id";
-    vars[++i] = DRESIF_VARTYPE('i');
-    vars[++i] = DRESIF_VARVALUE(manager_id);
+    if (!use_dres)
+        success = TRUE;
+    else {
+        vars[i=0] = "manager_id";
+        vars[++i] = DRESIF_VARTYPE('i');
+        vars[++i] = DRESIF_VARVALUE(manager_id);
 
-    vars[++i] = "request";
-    vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = DRESIF_VARVALUE(request);
+        vars[++i] = "request";
+        vars[++i] = DRESIF_VARTYPE('s');
+        vars[++i] = DRESIF_VARVALUE(request);
+        
+        vars[++i] = "rules";
+        vars[++i] = DRESIF_VARTYPE('s');
+        vars[++i] = DRESIF_VARVALUE(rules);
 
 #if 0
-    if (transid > 0) {
-        vars[++i] = "completion_callback";
-        vars[++i] = DRESIF_VARTYPE('s');
-        vars[++i] = DRESIF_VARVALUE("resource.completion_cb");
-
-        vars[++i] = "transaction_id";
-        vars[++i] = DRESIF_VARTYPE('i');
-        vars[++i] = DRESIF_VARVALUE(transid);
-    }
+        if (transid > 0) {
+            vars[++i] = "completion_callback";
+            vars[++i] = DRESIF_VARTYPE('s');
+            vars[++i] = DRESIF_VARVALUE("resource.completion_cb");
+            
+            vars[++i] = "transaction_id";
+            vars[++i] = DRESIF_VARTYPE('i');
+            vars[++i] = DRESIF_VARVALUE(transid);
+        }
 #endif
-    vars[++i] = NULL;
+        vars[++i] = NULL;
 
-    timestamp_add("resource request -- resolving start");
-    status = resolve("resource_request", vars);
-    timestamp_add("resource request -- resolving end");
-    
-    if (status < 0) {
-        OHM_DEBUG(DBG_DRES, "resolving resource_request for %s/%d "
-                  "(manager id %u) failed: (%d) %s",
-                  client_name, client_id, manager_id,
-                  status, strerror(-status));
-        success = FALSE;
-    }
-    else if (status == 0) {
-        OHM_DEBUG(DBG_DRES, "resolving resource_request for %s/%u "
-                  "(manager id %u) failed",
-                  client_name, client_id, manager_id);
-        success = FALSE;
-    }
-    else {
-        OHM_DEBUG(DBG_DRES, "successfully resolved resource_request for %s/%u "
-                  "(manager id %u)",
-                  client_name, client_id, manager_id);
-        success = TRUE;
-    }
+        timestamp_add("resource request -- resolving start");
+        status = resolve("resource_request", vars);
+        timestamp_add("resource request -- resolving end");
+        
+        if (status < 0) {
+            OHM_DEBUG(DBG_DRES, "resolving resource_request for %s/%d "
+                      "(manager id %u) failed: (%d) %s",
+                      client_name, client_id, manager_id,
+                      status, strerror(-status));
+            success = FALSE;
+        }
+        else if (status == 0) {
+            OHM_DEBUG(DBG_DRES, "resolving resource_request for %s/%u "
+                      "(manager id %u) failed",
+                      client_name, client_id, manager_id);
+            success = FALSE;
+        }
+        else {
+            OHM_DEBUG(DBG_DRES, "successfully resolved resource_request "
+                      "for %s/%u (manager id %u)",
+                      client_name, client_id, manager_id);
+            success = TRUE;
+        }
+    } /* if use_dres */
     
     return success;
 }

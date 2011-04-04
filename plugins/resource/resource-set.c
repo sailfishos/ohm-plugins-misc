@@ -41,9 +41,14 @@ USA.
 #define STRING_FIELD(n,v)  { fldtype_string , n, .value.string  = v ? v : "" }
 #define INVALID_FIELD      { fldtype_invalid, NULL, .value.string = NULL }
 
+#define FORCE_UPDATE   1
+#define IF_CHANGED     0
+
 #define SELIST_DIM  2
 
 static resource_set_t  *hash_table[HASH_DIM];
+
+static int resource_id_list(uint32_t, int *);
 
 static gboolean idle_task(gpointer);
 
@@ -57,6 +62,7 @@ static int delete_factstore_entry(resource_set_t *);
 static int update_factstore_flags(resource_set_t *);
 static int update_factstore_request(resource_set_t *);
 static int update_factstore_block(resource_set_t *);
+static int update_factstore_builtins(resource_set_t *);
 static int update_factstore_audio(resource_set_t *, resource_audio_stream_t *);
 static int update_factstore_video(resource_set_t *, resource_video_stream_t *);
 
@@ -103,7 +109,10 @@ resource_set_t *resource_set_create(pid_t client_pid, resset_t *resset)
             
             rs->advice.queue.first = (void *)&rs->advice.queue;
             rs->advice.queue.last  = (void *)&rs->advice.queue;
-            
+
+            rs->resrc.count = resource_id_list(resset->flags.all,
+                                               rs->resrc.ids);
+
             resset->userdata = rs;
             add_to_hash_table(rs);
             add_factstore_entry(rs);
@@ -120,6 +129,16 @@ resource_set_t *resource_set_create(pid_t client_pid, resset_t *resset)
     }
     
     return rs;
+}
+
+void resource_set_update(resset_t *resset)
+{
+    resource_set_t  *rs;
+
+    if (resset == NULL || (rs = resset->userdata) == NULL)
+        OHM_ERROR("resource: refuse to update sesource set: argument error");
+    else
+        rs->resrc.count = resource_id_list(resset->flags.all, rs->resrc.ids);
 }
 
 void resource_set_destroy(resset_t *resset)
@@ -139,6 +158,8 @@ void resource_set_destroy(resset_t *resset)
         else {
             mgrid = rs->manager_id;
 
+            resource_class_unlink_resource_set(rs);
+
             while ((spec = rs->specs) != NULL) {
                 rs->specs = spec->any.next;
                 resource_spec_destroy(spec);
@@ -156,7 +177,7 @@ void resource_set_destroy(resset_t *resset)
             free(rs->request);
             free(rs);
 
-            resset->userdata=NULL;
+            resset->userdata = NULL;
 
             OHM_DEBUG(DBG_SET, "destroyed resource set %s/%u (manager id %u)",
                       resset->peer, resset->id, mgrid);
@@ -224,6 +245,21 @@ int resource_set_add_spec(resset_t *resset, resource_spec_type_t type, ...)
 }
 
 
+resource_spec_t *resource_set_find_spec(resource_set_t       *rs,
+                                        resource_spec_type_t  type)
+{
+    resource_spec_t *spec;
+
+    if (rs != NULL) {
+        for (spec = rs->specs;   spec != NULL;   spec = spec->any.next) {
+            if (type == spec->any.type)
+                return spec;
+        }
+    }
+
+    return NULL;
+}
+
 
 int resource_set_update_factstore(resset_t *resset, resource_set_update_t what)
 {
@@ -243,6 +279,7 @@ int resource_set_update_factstore(resset_t *resset, resource_set_update_t what)
             case update_flags:   success = update_factstore_flags(rs);   break;
             case update_request: success = update_factstore_request(rs); break;
             case update_block:   success = update_factstore_block(rs);   break;
+            case update_builtins:success = update_factstore_builtins(rs);break;
             default:             success = FALSE;                        break;
             }
         }
@@ -362,6 +399,48 @@ void resource_set_dump_message(resmsg_t *msg,resset_t *resset,const char *dir)
 /*!
  * @}
  */
+
+static int resource_id_list(uint32_t res, int *list)
+{
+    typedef struct {
+        int  len;
+        char list[4];
+    } nibble2list_t;
+
+    nibble2list_t nibble2list[16] = {
+        /*   0 */ { 0, {0x00, 0x00, 0x00, 0x00}},
+        /*   1 */ { 1, {0x00, 0x00, 0x00, 0x00}},
+        /*   2 */ { 1, {0x01, 0x00, 0x00, 0x00}},
+        /*   3 */ { 2, {0x00, 0x01, 0x00, 0x00}},
+        /*   4 */ { 1, {0x02, 0x00, 0x00, 0x00}},
+        /*   5 */ { 2, {0x00, 0x02, 0x00, 0x00}},
+        /*   6 */ { 2, {0x01, 0x02, 0x00, 0x00}},
+        /*   7 */ { 3, {0x00, 0x01, 0x02, 0x00}},
+        /*   8 */ { 1, {0x03, 0x00, 0x00, 0x00}},
+        /*   9 */ { 2, {0x00, 0x03, 0x00, 0x00}},
+        /*   A */ { 2, {0x01, 0x03, 0x00, 0x00}},
+        /*   B */ { 3, {0x00, 0x01, 0x03, 0x00}},
+        /*   C */ { 2, {0x02, 0x03, 0x00, 0x00}},
+        /*   D */ { 3, {0x00, 0x02, 0x03, 0x00}},
+        /*   E */ { 3, {0x01, 0x02, 0x03, 0x00}},
+        /*   F */ { 4, {0x00, 0x01, 0x02, 0x03}},
+    };
+
+    nibble2list_t *n2l;
+    uint32_t bits;
+    int shift;
+    int len;
+    int i;
+
+    for (bits = res, shift = len = 0;    bits != 0;    bits >>= 4, shift +=4) {
+        n2l = nibble2list + (bits & 0x0f);
+        
+        for (i = 0;  i < n2l->len;  i++)
+	    list[len++] = (int)n2l->list[i] + shift;
+    }
+    
+    return len;
+}
 
 static gboolean idle_task(gpointer data)
 {
@@ -530,28 +609,32 @@ static int add_factstore_entry(resource_set_t *rs)
     /* TODO: this should come from prolog at init time */
     audiogr = strcmp(resset->klass, "proclaimer") ? resset->klass : "alwayson";
 
-    fsif_field_t  fldlist[] = {
-        INTEGER_FIELD ("manager_id" , rs->manager_id       ),
-        INTEGER_FIELD ("client_pid" , rs->client_pid       ),
-        STRING_FIELD  ("client_name", resset->peer         ),
-        INTEGER_FIELD ("client_id"  , resset->id           ),
-        STRING_FIELD  ("class"      , resset->klass        ),
-        INTEGER_FIELD ("mode"       , resset->mode         ),
-        INTEGER_FIELD ("mandatory"  , mandatory            ),
-        INTEGER_FIELD ("optional"   , resset->flags.opt    ),
-        INTEGER_FIELD ("shared"     , resset->flags.share  ),
-        INTEGER_FIELD ("mask"       , resset->flags.mask   ),
-        INTEGER_FIELD ("granted"    , rs->granted.factstore),
-        INTEGER_FIELD ("advice"     , rs->advice.factstore ),
-        STRING_FIELD  ("request"    , rs->request          ),
-        INTEGER_FIELD ("block"      , rs->block            ),
-        INTEGER_FIELD ("reqno"      , 0                    ),
-        STRING_FIELD  ("audiogr"    , audiogr              ),
-        INTEGER_FIELD ("videopid"   , rs->client_pid       ),
-        INVALID_FIELD
-    };
+    if (!use_dres)
+        success = TRUE;
+    else {
+        fsif_field_t  fldlist[] = {
+            INTEGER_FIELD ("manager_id" , rs->manager_id       ),
+            INTEGER_FIELD ("client_pid" , rs->client_pid       ),
+            STRING_FIELD  ("client_name", resset->peer         ),
+            INTEGER_FIELD ("client_id"  , resset->id           ),
+            STRING_FIELD  ("class"      , resset->klass        ),
+            INTEGER_FIELD ("mode"       , resset->mode         ),
+            INTEGER_FIELD ("mandatory"  , mandatory            ),
+            INTEGER_FIELD ("optional"   , resset->flags.opt    ),
+            INTEGER_FIELD ("shared"     , resset->flags.share  ),
+            INTEGER_FIELD ("mask"       , resset->flags.mask   ),
+            INTEGER_FIELD ("granted"    , rs->granted.factstore),
+            INTEGER_FIELD ("advice"     , rs->advice.factstore ),
+            STRING_FIELD  ("request"    , rs->request          ),
+            INTEGER_FIELD ("block"      , rs->block            ),
+            INTEGER_FIELD ("reqno"      , 0                    ),
+            STRING_FIELD  ("audiogr"    , audiogr              ),
+            INTEGER_FIELD ("videopid"   , rs->client_pid       ),
+            INVALID_FIELD
+        };
 
-    success = fsif_add_factstore_entry(FACTSTORE_RESOURCE_SET, fldlist);
+        success = fsif_add_factstore_entry(FACTSTORE_RESOURCE_SET, fldlist);
+    }
 
     return success;
 }
@@ -560,13 +643,16 @@ static int delete_factstore_entry(resource_set_t *rs)
 {
     int success;
 
-    fsif_field_t  selist[] = {
-        INTEGER_FIELD("manager_id", rs->manager_id),
-        INVALID_FIELD
-    };
+    if (!use_dres)
+        success = TRUE;
+    else {
+        fsif_field_t  selist[] = {
+            INTEGER_FIELD("manager_id", rs->manager_id),
+            INVALID_FIELD
+        };
 
-
-    success = fsif_delete_factstore_entry(FACTSTORE_RESOURCE_SET, selist);
+        success = fsif_delete_factstore_entry(FACTSTORE_RESOURCE_SET, selist);
+    }
 
     return success;
 }
@@ -577,20 +663,24 @@ static int update_factstore_flags(resource_set_t *rs)
     uint32_t  mandatory = resset->flags.all & ~resset->flags.opt;
     int       success;
 
-    fsif_field_t  selist[]  = {
-        INTEGER_FIELD("manager_id", rs->manager_id),
-        INVALID_FIELD
-    };
-    fsif_field_t  fldlist[] = {
-        INTEGER_FIELD ("mandatory"  , mandatory            ),
-        INTEGER_FIELD ("optional"   , resset->flags.opt    ),
-        INTEGER_FIELD ("shared"     , resset->flags.share  ),
-        INTEGER_FIELD ("mask"       , resset->flags.mask   ),
-        INVALID_FIELD
-    };
-
-    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
-                                          selist, fldlist);
+    if (!use_dres)
+        success = TRUE;
+    else {
+        fsif_field_t  selist[]  = {
+            INTEGER_FIELD("manager_id", rs->manager_id),
+            INVALID_FIELD
+        };
+        fsif_field_t  fldlist[] = {
+            INTEGER_FIELD ("mandatory"  , mandatory            ),
+            INTEGER_FIELD ("optional"   , resset->flags.opt    ),
+            INTEGER_FIELD ("shared"     , resset->flags.share  ),
+            INTEGER_FIELD ("mask"       , resset->flags.mask   ),
+            INVALID_FIELD
+        };
+        
+        success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                              selist, fldlist, FORCE_UPDATE);
+    }
 
     return success;
 }
@@ -602,18 +692,22 @@ static int update_factstore_request(resource_set_t *rs)
     static int  reqno;
     int         success;
 
-    fsif_field_t  selist[]  = {
-        INTEGER_FIELD ("manager_id", rs->manager_id),
-        INVALID_FIELD
-    };
-    fsif_field_t  fldlist[] = {
-        STRING_FIELD  ("request", rs->request),
-        INTEGER_FIELD ("reqno"  , reqno++    ),
-        INVALID_FIELD
-    };
+    if (!use_dres)
+        success = TRUE;
+    else {
+        fsif_field_t  selist[]  = {
+            INTEGER_FIELD ("manager_id", rs->manager_id),
+            INVALID_FIELD
+        };
+        fsif_field_t  fldlist[] = {
+            STRING_FIELD  ("request", rs->request),
+            INTEGER_FIELD ("reqno"  , reqno++    ),
+            INVALID_FIELD
+        };
 
-    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
-                                          selist, fldlist);
+        success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                              selist, fldlist, FORCE_UPDATE);
+    }
 
     return success;
 }
@@ -622,17 +716,46 @@ static int update_factstore_block(resource_set_t *rs)
 {
     int success;
 
-    fsif_field_t  selist[]  = {
-        INTEGER_FIELD ("manager_id", rs->manager_id),
-        INVALID_FIELD
-    };
-    fsif_field_t  fldlist[] = {
-        INTEGER_FIELD ("block"  , rs->block),
-        INVALID_FIELD
-    };
+    if (!use_dres)
+        success = TRUE;
+    else {
+        fsif_field_t  selist[]  = {
+            INTEGER_FIELD ("manager_id", rs->manager_id),
+            INVALID_FIELD
+        };
+        fsif_field_t  fldlist[] = {
+            INTEGER_FIELD ("block"  , rs->block),
+            INVALID_FIELD
+        };
+        
+        success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                              selist, fldlist, FORCE_UPDATE);
+    }
 
-    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
-                                          selist, fldlist);
+    return success;
+}
+
+
+static int update_factstore_builtins(resource_set_t *rs)
+{
+    int success;
+
+    if (!use_dres)
+        success = TRUE;
+    else {
+        fsif_field_t  selist[]  = {
+            INTEGER_FIELD ("manager_id", rs->manager_id),
+            INVALID_FIELD
+        };
+        fsif_field_t  fldlist[] = {
+            INTEGER_FIELD ("granted", rs->granted.factstore),
+            INTEGER_FIELD ("advice" , rs->advice.factstore ),
+            INVALID_FIELD
+        };
+        
+        success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                              selist, fldlist, FORCE_UPDATE);
+    }
 
     return success;
 }
@@ -643,17 +766,21 @@ static int update_factstore_audio(resource_set_t          *rs,
 {
     int success;
 
-    fsif_field_t  selist[]  = {
-        INTEGER_FIELD ("manager_id", rs->manager_id),
-        INVALID_FIELD
-    };
-    fsif_field_t  fldlist[] = {
-        STRING_FIELD  ("audiogr", audio->group),
-        INVALID_FIELD
-    };
+    if (!use_dres)
+        success = TRUE;
+    else {
+        fsif_field_t  selist[]  = {
+            INTEGER_FIELD ("manager_id", rs->manager_id),
+            INVALID_FIELD
+        };
+        fsif_field_t  fldlist[] = {
+            STRING_FIELD  ("audiogr", audio->role),
+            INVALID_FIELD
+        };
 
-    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
-                                          selist, fldlist);
+        success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                              selist, fldlist, FORCE_UPDATE);
+    }
 
     return success;
 }
@@ -664,18 +791,22 @@ static int update_factstore_video(resource_set_t          *rs,
 {
     int success;
 
-    fsif_field_t  selist[]  = {
-        INTEGER_FIELD ("manager_id", rs->manager_id),
-        INVALID_FIELD
-    };
-    fsif_field_t  fldlist[] = {
-        INTEGER_FIELD ("videopid", video->pid),
-        INVALID_FIELD
-    };
-
-    success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
-                                          selist, fldlist);
-
+    if (!use_dres)
+        success = TRUE;
+    else {
+        fsif_field_t  selist[]  = {
+            INTEGER_FIELD ("manager_id", rs->manager_id),
+            INVALID_FIELD
+        };
+        fsif_field_t  fldlist[] = {
+            INTEGER_FIELD ("videopid", video->pid),
+            INVALID_FIELD
+        };
+        
+        success = fsif_update_factstore_entry(FACTSTORE_RESOURCE_SET,
+                                              selist, fldlist, FORCE_UPDATE);
+    }
+        
     return success;
 }
 

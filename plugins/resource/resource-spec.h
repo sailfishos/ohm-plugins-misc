@@ -25,10 +25,16 @@ USA.
 
 #include <res-msg.h>
 #include <resource-set.h>
+#include <resource-class.h>
 
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;
 
+typedef struct {
+    const char            *name;
+    resource_class_type_t  class_id; /* id of the class */
+    uint32_t               relpri;   /* priority within the class */
+} resource_audio_role_t;
 
 typedef struct {
     resmsg_match_method_t     method;
@@ -50,7 +56,8 @@ typedef struct {
 
 typedef struct {                         /* audio stream specification */
     RESOURCE_COMMON;
-    char                     *group;     /* audio group for the stream*/
+    char                     *role;      /* role of the audio stream */
+    resource_audio_role_t    *roledef;   /* role definition */
     uint32_t                  pid;       /* pid of the streaming app */
     resource_spec_property_t  property;  /* selector PA property */
 } resource_audio_stream_t;

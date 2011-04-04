@@ -37,6 +37,29 @@ USA.
 #define INVALID_FIELD      { fldtype_invalid, NULL, .value.string = NULL }
 
 
+
+static resource_audio_role_t audio_roles[] = {
+    { "alwayson"   , resource_class_proclaimer , ROLE_PRIORITY(0) },
+    { "nonsilent"  , resource_class_none       , ROLE_PRIORITY(0) },
+    { "cstone"     , resource_class_none       , ROLE_PRIORITY(0) },
+    { "navigator"  , resource_class_navigator  , ROLE_PRIORITY(0) },
+    { "call"       , resource_class_call       , ROLE_PRIORITY(0) },
+    { "videoeditor", resource_class_videoeditor, ROLE_PRIORITY(0) },
+    { "camera"     , resource_class_camera     , ROLE_PRIORITY(0) },
+    { "ringtone"   , resource_class_ringtone   , ROLE_PRIORITY(0) },
+    { "alarm"      , resource_class_alarm      , ROLE_PRIORITY(0) },
+    { "game"       , resource_class_game       , ROLE_PRIORITY(0) },
+    { "player"     , resource_class_player     , ROLE_PRIORITY(0) },
+    { "flash"      , resource_class_player     , ROLE_PRIORITY(0) },
+    { "fmradio"    , resource_class_player     , ROLE_PRIORITY(0) },
+    { "othermedia" , resource_class_player     , ROLE_PRIORITY(3) },
+    { "event"      , resource_class_event      , ROLE_PRIORITY(0) },
+    { "systemsound", resource_class_none       , ROLE_PRIORITY(0) },
+    { "background" , resource_class_background , ROLE_PRIORITY(0) },
+    { "idle"       , resource_class_nobody     , ROLE_PRIORITY(0) },
+    {     NULL     , resource_class_none       , ROLE_PRIORITY(0) }
+};
+
 static int  create_audio_stream_spec(resource_audio_stream_t *,
                                      resource_set_t *, va_list);
 static void destroy_audio_stream_spec(resource_audio_stream_t *);
@@ -94,7 +117,6 @@ resource_spec_t *resource_spec_create(resource_set_t       *rs,
     return spec;
 }
 
-
 void resource_spec_destroy(resource_spec_t *spec)
 {
     switch (spec->any.type) {
@@ -134,6 +156,9 @@ int resource_spec_update(resource_spec_t      *spec,
     return success;
 }
 
+
+
+
 /*!
  * @}
  */
@@ -143,7 +168,7 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
                                     va_list                  args)
 {
     resset_t                 *resset   = rs->resset;
-    char                     *group    = va_arg(args, char *);
+    char                     *role     = va_arg(args, char *);
     uint32_t                  pid      = va_arg(args, uint32_t);
     char                     *propnam  = va_arg(args, char *);
     resmsg_match_method_t     method   = va_arg(args, resmsg_match_method_t);
@@ -151,28 +176,38 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
     resource_spec_property_t *property = &audio->property;
     resource_spec_match_t    *match    = &property->match;
     int                       success  = FALSE;
+    resource_audio_role_t    *roledef;
 
     fsif_field_t fldlist[] = {
         INTEGER_FIELD ("pid"     , pid                             ),
-        STRING_FIELD  ("group"   , group                           ),
+        STRING_FIELD  ("group"   , role                            ),
         STRING_FIELD  ("property", propnam                         ),
         STRING_FIELD  ("method"  , resmsg_match_method_str(method) ),
         STRING_FIELD  ("pattern" , pattern                         ),
         INVALID_FIELD
     };
 
-    if (rs->resset && (group == NULL || group[0] == '\0'))
-        group = resset->klass;
+    if (rs->resset && (role == NULL || role[0] == '\0'))
+        role = resset->klass;
 
-    if (group) {
-        audio->type    = resource_audio;
-        audio->group   = strdup(group);
-        audio->pid     = pid;
-        property->name = strdup(propnam ? propnam : "");
-        match->method  = method;
-        match->pattern = strdup(pattern ? pattern : "");
+    if (role) {
+        for (roledef = audio_roles;  roledef->name != NULL;   roledef++) {
+            if (!strcmp(role, roledef->name))
+                break;
+        }
 
-        success = fsif_add_factstore_entry(FACTSTORE_AUDIO_STREAM, fldlist);
+        if (roledef->name != NULL) {
+
+            audio->type    = resource_audio;
+            audio->role    = strdup(role);
+            audio->roledef = roledef;
+            audio->pid     = pid;
+            property->name = strdup(propnam ? propnam : "");
+            match->method  = method;
+            match->pattern = strdup(pattern ? pattern : "");
+
+            success = fsif_add_factstore_entry(FACTSTORE_AUDIO_STREAM,fldlist);
+        }
     }
 
     return success;
@@ -195,11 +230,11 @@ static void destroy_audio_stream_spec(resource_audio_stream_t *audio)
 
     fsif_delete_factstore_entry(FACTSTORE_AUDIO_STREAM, selist);
 
-    free(audio->group);
+    free(audio->role);
     free(audio->property.name);
     free(audio->property.match.pattern);
 
-    audio->group = NULL;
+    audio->role = NULL;
     audio->property.name = NULL;
     audio->property.match.pattern = NULL;
 }

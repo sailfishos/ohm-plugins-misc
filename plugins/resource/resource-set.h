@@ -33,6 +33,7 @@ typedef struct _OhmPlugin OhmPlugin;
 struct _OhmFact;
 struct resource_set_s;
 union resource_spec_u;
+struct resource_class_s;
 
 typedef void (*resource_set_task_t)(struct resource_set_s *);
 
@@ -70,20 +71,28 @@ typedef struct {
 
 typedef struct resource_set_s {
     struct resource_set_s   *next;
+    struct resource_set_s   *clink;      /* linked list within the class */
+    struct resource_class_s *class;      /* resource class definition */
+    uint32_t                 priority;   /* priority within class */
     pid_t                    client_pid; /* pid of the resource client */
-    uint32_t                 manager_id; /* resource-set generated unique ID */
+    uint32_t                 manager_id; /* generated unique ID */
     resset_t                *resset;     /* link to libresource */
-    union resource_spec_u   *specs;      /* resource specifications if any */
-    char                    *request;    /* either 'acquire', 'release'  */
+    union resource_spec_u   *specs;      /* resource specs if any */
+    char                    *request;    /* either 'acquire' or 'release'  */
+    uint32_t                 stamp;      /* request change stamp */
     int32_t                  block;      /* manager forced release */
-    resource_set_output_t    granted;    /* granted resources of this set */
+    resource_set_output_t    granted;    /* granted resources */
     resource_set_output_t    advice;     /* advice on this resource set */
     resource_set_qhead_t     qhead;      /* queue for delayed responses */
     uint32_t                 reqno;
     struct {
+        int count;
+        int ids[32];
+    }                        resrc;      /* resources */
+    struct {
         uint32_t            srcid;
         resource_set_task_t task;
-    }                        idle;       /* idle task source ID (gmainloop) */
+    }                        idle;       /* idle task (gmainloop) */
 } resource_set_t;
 
 typedef enum {
@@ -91,6 +100,7 @@ typedef enum {
     update_flags,
     update_request,
     update_block,
+    update_builtins,
 } resource_set_update_t;
 
 
@@ -98,8 +108,11 @@ typedef enum {
 void resource_set_init(OhmPlugin *);
 
 resource_set_t *resource_set_create(pid_t, resset_t *);
+void resource_set_update(resset_t *);
 void resource_set_destroy(resset_t *);
 int resource_set_add_spec(resset_t *, resource_spec_type_t, ...);
+union resource_spec_u *resource_set_find_spec(resource_set_t *,
+                                              resource_spec_type_t);
 int  resource_set_update_factstore(resset_t *, resource_set_update_t);
 void resource_set_queue_change(resource_set_t *, uint32_t,
                                uint32_t, resource_set_field_id_t);

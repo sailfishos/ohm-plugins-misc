@@ -195,7 +195,8 @@ int fsif_delete_factstore_entry(char *name, fsif_field_t *selist)
 
 int fsif_update_factstore_entry(char         *name,
                                 fsif_field_t *selist,
-                                fsif_field_t *fldlist)
+                                fsif_field_t *fldlist,
+                                int           force)
 {
     OhmFact      *fact;
     fsif_field_t *fld;
@@ -203,6 +204,8 @@ int fsif_update_factstore_entry(char         *name,
     char          valb[256];
     char         *selstr;
     char         *valstr;
+
+    (void)force;
 
     selstr = print_selector(selist, selb, sizeof(selb));
 

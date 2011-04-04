@@ -80,7 +80,7 @@ void fsif_init(OhmPlugin *);
 void fsif_exit(OhmPlugin *);
 int  fsif_add_factstore_entry(char *, fsif_field_t *);
 int  fsif_delete_factstore_entry(char *, fsif_field_t *);
-int  fsif_update_factstore_entry(char *, fsif_field_t *,fsif_field_t *);
+int  fsif_update_factstore_entry(char *, fsif_field_t *,fsif_field_t *, int);
 void fsif_get_field_by_entry(fsif_entry_t *, fsif_fldtype_t, char *, void *);
 int  fsif_get_field_by_name(const char *, fsif_fldtype_t, char *, void *);
 int  fsif_add_fact_watch(char *,fsif_fact_watch_e,fsif_fact_watch_cb_t,void *);

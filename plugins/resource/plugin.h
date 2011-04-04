@@ -39,18 +39,26 @@ USA.
 #define ENTER  plugin_print_timestamp(__FUNCTION__, "enter")
 #define LEAVE  plugin_print_timestamp(__FUNCTION__, "leave")
 
+#define DIM(a) (int)(sizeof(a) / sizeof(a[0]))
+
 /* FactStore prefix */
 #define FACTSTORE_PREFIX                "com.nokia.policy"
 #define FACTSTORE_RESOURCE_PREFIX       FACTSTORE_PREFIX ".resource"
 #define FACTSTORE_RESOURCE_SET          FACTSTORE_RESOURCE_PREFIX "_set"
+#define FACTSTORE_RESOURCE_OWNER        FACTSTORE_RESOURCE_PREFIX "_owner"
 #define FACTSTORE_ACTIVE_POLICY_GROUP   FACTSTORE_PREFIX ".active_policy_group"
 #define FACTSTORE_AUDIO_STREAM          FACTSTORE_PREFIX ".audio_stream"
 #define FACTSTORE_VIDEO_STREAM          FACTSTORE_PREFIX ".video_stream"
 #define FACTSTORE_ENFORCEMENT_POINT     FACTSTORE_PREFIX ".enforcement_point"
 
 
+extern int use_builtin_rules;
+extern int use_dres;
+
 extern int DBG_INIT, DBG_MGR, DBG_SET, DBG_DBUS, DBG_INTERNAL;
 extern int DBG_DRES, DBG_FS, DBG_QUE, DBG_TRANSACT, DBG_MEDIA, DBG_AUTH;
+extern int DBG_CLASS, DBG_GRANT;
+
 
 
 void plugin_print_timestamp(const char *, const char *);

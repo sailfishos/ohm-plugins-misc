@@ -31,8 +31,8 @@ USA.
 #include "plugin.h"
 #include "manager.h"
 #include "resource-spec.h"
+#include "resource.h"
 #include "fsif.h"
-#include "dresif.h"
 #include "dbusif.h"
 #include "transaction.h"
 #include "auth.h"
@@ -45,6 +45,7 @@ typedef struct reg_data_s {
     int                authorize;
     resmsg_t          *msg;
     resset_t          *resset;
+    resource_class_t  *class;
     void              *proto_data;
     pid_t              pid;
     char              *method;
@@ -59,6 +60,7 @@ OHM_IMPORTABLE(int, auth_request, (char *id_type,  void *id,
 
 static uint32_t     trans_id;
 static reg_data_t  *reg_reqs;
+static uint32_t     stamp;
 
 static void forced_auto_release(resource_set_t *);
 
@@ -67,12 +69,21 @@ static void keyword_list(char *, char **, int);
 static void pid_cb(pid_t, void *);
 static void authorize_cb(int, char *, void *);
 static void register_cb(int, reg_data_t *);
-static void granted_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
-static void advice_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
-static void request_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
-static void block_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
 
-static int  reg_request_create(resmsg_t *, resset_t *, void *);
+static void resource_builtin_cb(resource_set_t *, uint32_t, uint32_t);
+
+static void factstore_granted_cb(fsif_entry_t *,char *,fsif_field_t *,void *);
+static void factstore_advice_cb(fsif_entry_t *,char *,fsif_field_t *,void *);
+static void factstore_request_cb(fsif_entry_t *,char *,fsif_field_t *,void *);
+static void factstore_block_cb(fsif_entry_t *, char *, fsif_field_t *, void *);
+
+static void grant_changed(resource_set_t *, uint32_t);
+static void advice_changed(resource_set_t *, uint32_t);
+static void request_changed(resource_set_t *, char *);
+static void block_changed(resource_set_t *, int);
+
+static int  reg_request_create(resmsg_t *, resset_t *,
+                               resource_class_t *, void *);
 static void reg_request_destroy(reg_data_t *);
 static void reg_request_cancel(resset_t *);
 
@@ -106,10 +117,17 @@ void manager_init(OhmPlugin *plugin)
         exit(1);
     }
 
-    ADD_FIELD_WATCH("granted", granted_cb);
-    ADD_FIELD_WATCH("advice" , advice_cb );
-    ADD_FIELD_WATCH("request", request_cb);
-    ADD_FIELD_WATCH("block"  , block_cb  );
+    if (use_builtin_rules)
+        resource_register_builtin_cb(resource_builtin_cb);
+    else {
+        ADD_FIELD_WATCH("granted", factstore_granted_cb);
+        ADD_FIELD_WATCH("advice" , factstore_advice_cb );
+    }
+
+    if (use_dres) {
+        ADD_FIELD_WATCH("request", factstore_request_cb);
+        ADD_FIELD_WATCH("block"  , factstore_block_cb  );
+    }
 
     LEAVE;
 
@@ -118,13 +136,24 @@ void manager_init(OhmPlugin *plugin)
 
 void manager_register(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
+    resource_class_t *class;
+
     resource_set_dump_message(msg, resset, "from");
 
     OHM_DEBUG(DBG_MGR, "message received");
 
-    if (!reg_request_create(msg, resset, proto_data)) {
+    if ((class = resource_class_find(resset->klass)) == NULL ||
+        !resource_class_check_resources(class, resset->flags.all))
+    {
+        OHM_DEBUG(DBG_MGR, "invalid registration request");
+        resproto_reply_message(resset,msg,proto_data,EINVAL,strerror(EINVAL));
+        return;
+    }
+
+    if (!reg_request_create(msg, resset, class, proto_data)) {
         OHM_DEBUG(DBG_MGR, "registration request creation failed");
         resproto_reply_message(resset, msg, proto_data, errno,strerror(errno));
+        return;
     }
 }
 
@@ -162,10 +191,8 @@ void manager_unregister(resmsg_t *msg, resset_t *resset, void *proto_data)
     if (rs)
         resource_set_destroy(resset);
 
-    if (manager_id) {
-        dresif_resource_request(manager_id, client_name, client_id,
-                                "unregister");
-    }
+    if (manager_id)
+        resource_request(manager_id, client_name, client_id, "unregister");
 
     OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
 
@@ -179,6 +206,7 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
  /* uint32_t         reqno  = record->reqno; */
     int32_t          errcod = 0;
     const char      *errmsg = "OK";
+    int              reqchg;
 
     resource_set_dump_message(msg, resset, "from");
 
@@ -199,21 +227,31 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
             if (resset->flags.all   != record->rset.all   ||
                 resset->flags.opt   != record->rset.opt   ||
                 resset->flags.share != record->rset.share   )
-                {
-                    resset->flags.all   = record->rset.all;
-                    resset->flags.opt   = record->rset.opt;
-                    resset->flags.share = record->rset.share;
-                    
-                    transaction_start(rs, msg);
+            {
+                resset->flags.all   = record->rset.all;
+                resset->flags.opt   = record->rset.opt;
+                resset->flags.share = record->rset.share;
+                
+                resource_set_update(resset);
 
-                    resource_set_update_factstore(resset, update_flags);
-                    if (rs->request && !strcmp(rs->request, "acquire") &&
-                        rs->granted.client != 0)
-                        resource_set_update_factstore(resset, update_request);
+                transaction_start(rs, msg);
+                
+                reqchg = rs->request && !strcmp(rs->request, "acquire") &&
+                         rs->granted.client != 0;
 
-                    dresif_resource_request(rs->manager_id, resset->peer,
-                                            resset->id, "update");
+                if (reqchg)
+                    rs->stamp = ++stamp;
+
+                resource_class_link_resource_set(rs->class, rs);
+                
+                resource_set_update_factstore(resset, update_flags);
+                if (reqchg) {
+                    resource_set_update_factstore(resset, update_request);
                 }
+
+                resource_request(rs->manager_id, resset->peer,
+                                 resset->id, "update");
+            }
         }
     }
 
@@ -263,9 +301,12 @@ void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
         }
 
         if (acquire) {
+            rs->stamp = ++stamp;
+            resource_class_link_resource_set(rs->class, rs);
+
             resource_set_update_factstore(resset, update_request);
-            dresif_resource_request(rs->manager_id, resset->peer,
-                                    resset->id, "acquire");
+            resource_request(rs->manager_id, resset->peer,
+                             resset->id, "acquire");
         }
     }
 
@@ -319,9 +360,12 @@ void manager_release(resmsg_t *msg, resset_t *resset, void *proto_data)
         }
 
         if (release) {
+            rs->stamp = ++stamp;
+            resource_class_link_resource_set(rs->class, rs);
+
             resource_set_update_factstore(resset, update_request);
-            dresif_resource_request(rs->manager_id, resset->peer,
-                                    resset->id, "release");
+            resource_request(rs->manager_id, resset->peer,
+                             resset->id, "release");
         }
     }
 
@@ -366,8 +410,9 @@ void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
                                         propnam, method,pattern);
 
         if (success) {
-            dresif_resource_request(rs->manager_id, resset->peer,
-                                    resset->id, "audio");
+            resource_class_link_resource_set(rs->class, rs);
+
+            resource_request(rs->manager_id, resset->peer,resset->id, "audio");
         }
     }
 
@@ -401,8 +446,9 @@ void manager_video(resmsg_t *msg, resset_t *resset, void *proto_data)
         success = resource_set_add_spec(resset, resource_video, pid);
 
         if (success) {
-            dresif_resource_request(rs->manager_id, resset->peer,
-                                    resset->id, "video");
+            resource_class_link_resource_set(rs->class, rs);
+
+            resource_request(rs->manager_id, resset->peer,resset->id, "video");
         }
     }
 
@@ -432,13 +478,13 @@ static void forced_auto_release(resource_set_t *rs)
 
             free(rs->request);
             rs->request = strdup("release");
+            rs->stamp   = ++stamp;
             rs->block   = 0;
 
             resource_set_update_factstore(resset, update_block);
             resource_set_update_factstore(resset, update_request);
 
-            dresif_resource_request(rs->manager_id, resset->peer,
-                                    resset->id, "release");
+            resource_request(rs->manager_id,resset->peer,resset->id,"release");
 
             transaction_end(rs);
         }
@@ -527,11 +573,15 @@ static void register_cb(int32_t errcod, reg_data_t *regreq)
                 errcod = ENOMEM;
                 errmsg = strerror(errcod);
             }
+            else if (resource_class_link_resource_set(regreq->class, rs) < 0) {
+                errcod = errno;
+                errmsg = strerror(errcod);
+            }
             else {
                 transaction_start(rs, msg);
                 
-                dresif_resource_request(rs->manager_id, resset->peer,
-                                        resset->id, "register");
+                resource_request(rs->manager_id, resset->peer,
+                                 resset->id, "register");
             }
             
             OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
@@ -552,16 +602,29 @@ static void register_cb(int32_t errcod, reg_data_t *regreq)
     reg_request_destroy(regreq);
 }
 
-static void granted_cb(fsif_entry_t *entry,
-                       char         *name,
-                       fsif_field_t *fld,
-                       void         *ud)
+static void resource_builtin_cb(resource_set_t *rs,
+                                uint32_t        granted,
+                                uint32_t        advice)
+{
+    resset_t *resset;
+
+    if ((resset = rs->resset) != NULL) {
+
+        advice_changed(rs, advice);
+        grant_changed(rs, granted);
+
+        resource_set_update_factstore(resset, update_builtins);
+    }
+}
+
+
+static void factstore_granted_cb(fsif_entry_t *entry,
+                                 char         *name,
+                                 fsif_field_t *fld,
+                                 void         *ud)
 {
     uint32_t        granted;
     resource_set_t *rs;
-    resset_t       *resset;
-    char           *granted_str;
-    char            buf[256];
 
     (void)name;
     (void)ud;
@@ -573,9 +636,94 @@ static void granted_cb(fsif_entry_t *entry,
     }
 
     granted = fld->value.integer;
-    granted_str = resmsg_res_str(granted, buf, sizeof(buf));
+    rs = resource_set_find(entry);
 
-    if ((rs = resource_set_find(entry))  && (resset = rs->resset)) {
+    if (rs != NULL)
+        grant_changed(rs, granted);
+}
+
+static void factstore_advice_cb(fsif_entry_t *entry,
+                                char         *name,
+                                fsif_field_t *fld,
+                                void         *ud)
+{
+    uint32_t        advice;
+    resource_set_t *rs;
+
+    (void)name;
+    (void)ud;
+
+    if (fld->type != fldtype_integer) {
+        OHM_ERROR("resource: [%s] invalid field type: not integer",
+                  __FUNCTION__);
+        return;
+    }
+
+    advice = fld->value.integer;
+    rs = resource_set_find(entry);
+
+    if (rs != NULL)
+        advice_changed(rs, advice);
+}
+
+
+static void factstore_request_cb(fsif_entry_t *entry,
+                                 char         *name,
+                                 fsif_field_t *fld,
+                                 void         *ud)
+{
+    char           *request;
+    resource_set_t *rs;
+
+    (void)name;
+    (void)ud;
+
+    if (fld->type != fldtype_string || !fld->value.string) {
+        OHM_ERROR("resource: [%s] invalid field type: not string",
+                  __FUNCTION__);
+        return;
+    }
+
+    request = fld->value.string;
+    rs = resource_set_find(entry);
+
+    if (rs != NULL)
+        request_changed(rs, request);
+}
+
+static void factstore_block_cb(fsif_entry_t *entry,
+                               char         *name,
+                               fsif_field_t *fld,
+                               void         *ud)
+{
+    int32_t         block;
+    resource_set_t *rs;
+
+    (void)name;
+    (void)ud;
+
+    if (fld->type != fldtype_integer) {
+        OHM_ERROR("resource: [%s] invalid field type: not integer",
+                  __FUNCTION__);
+        return;
+    }
+
+    block = fld->value.integer;
+    rs = resource_set_find(entry);
+
+    if (rs != NULL)
+        block_changed(rs, block);
+}
+
+static void grant_changed(resource_set_t *rs, uint32_t granted)
+{
+    resset_t       *resset;
+    char           *granted_str;
+    char            buf[256];
+
+    if ((resset = rs->resset) != NULL) {
+        granted_str = resmsg_res_str(granted, buf, sizeof(buf));
+    
         OHM_DEBUG(DBG_MGR, "resource set %s/%u (manager id %u) grant changed: "
                   "%s", resset->peer, resset->id, rs->manager_id, granted_str);
 
@@ -595,30 +743,16 @@ static void granted_cb(fsif_entry_t *entry,
     }
 }
 
-static void advice_cb(fsif_entry_t *entry,
-                      char         *name,
-                      fsif_field_t *fld,
-                      void         *ud)
+static void advice_changed(resource_set_t *rs, uint32_t advice)
 {
-    uint32_t        advice;
-    resource_set_t *rs;
     resset_t       *resset;
     char           *advice_str;
     char            buf[256];
 
-    (void)name;
-    (void)ud;
 
-    if (fld->type != fldtype_integer) {
-        OHM_ERROR("resource: [%s] invalid field type: not integer",
-                  __FUNCTION__);
-        return;
-    }
+    if ((resset = rs->resset) != NULL) {
+        advice_str = resmsg_res_str(advice, buf, sizeof(buf));
 
-    advice = fld->value.integer;
-    advice_str = resmsg_res_str(advice, buf, sizeof(buf));
-
-    if ((rs = resource_set_find(entry))  && (resset = rs->resset)) {
         OHM_DEBUG(DBG_MGR,"resource set %s/%u (manager id %u) advice changed: "
                   "%s", resset->peer, resset->id, rs->manager_id, advice_str);
 
@@ -635,27 +769,11 @@ static void advice_cb(fsif_entry_t *entry,
 }
 
 
-static void request_cb(fsif_entry_t *entry,
-                       char         *name,
-                       fsif_field_t *fld,
-                       void         *ud)
+static void request_changed(resource_set_t *rs, char *request)
 {
-    char           *request;
-    resource_set_t *rs;
-    resset_t       *resset;
+    resset_t *resset;
 
-    (void)name;
-    (void)ud;
-
-    if (fld->type != fldtype_string || !fld->value.string) {
-        OHM_ERROR("resource: [%s] invalid field type: not string",
-                  __FUNCTION__);
-        return;
-    }
-
-    request = fld->value.string;
-
-    if ((rs = resource_set_find(entry))  && (resset = rs->resset)) {
+    if ((resset = rs->resset) != NULL) {
         if (strcmp(request, rs->request)) {
             OHM_DEBUG(DBG_MGR,"resource set %s/%u (manager id %u) request "
                       "changed: %s", resset->peer, resset->id, rs->manager_id,
@@ -667,27 +785,12 @@ static void request_cb(fsif_entry_t *entry,
     }
 }
 
-static void block_cb(fsif_entry_t *entry,
-                     char         *name,
-                     fsif_field_t *fld,
-                     void         *ud)
+
+static void block_changed(resource_set_t *rs, int block)
 {
-    int32_t         block;
-    resource_set_t *rs;
-    resset_t       *resset;
+    resset_t *resset;
 
-    (void)name;
-    (void)ud;
-
-    if (fld->type != fldtype_integer) {
-        OHM_ERROR("resource: [%s] invalid field type: not integer",
-                  __FUNCTION__);
-        return;
-    }
-
-    block = fld->value.integer;
-
-    if ((rs = resource_set_find(entry))  && (resset = rs->resset)) {
+    if ((resset = rs->resset) != NULL) {
         if (block != rs->block) {
             OHM_DEBUG(DBG_MGR,"resource set %s/%u (manager id %u) block "
                       "changed: %d", resset->peer, resset->id, rs->manager_id,
@@ -705,7 +808,10 @@ static void block_cb(fsif_entry_t *entry,
     }
 }
 
-static int reg_request_create(resmsg_t *msg,resset_t *resset,void *proto_data)
+static int reg_request_create(resmsg_t         *msg,
+                              resset_t         *resset,
+                              resource_class_t *class,
+                              void             *proto_data)
 {
     resconn_t   *resconn = resset->resconn;
     resmsg_t    *msgcopy;
@@ -726,6 +832,7 @@ static int reg_request_create(resmsg_t *msg,resset_t *resset,void *proto_data)
         memset(regreq, 0, sizeof(reg_data_t));
         regreq->msg        = msgcopy;
         regreq->resset     = resset;
+        regreq->class      = class;
         regreq->proto_data = proto_data;
         
         last->next = regreq;
