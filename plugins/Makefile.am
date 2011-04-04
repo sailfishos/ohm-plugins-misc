@@ -5,7 +5,9 @@ SUBDIRS = 	     \
 	cgroups      \
 	delay        \
 	upstart      \
-	auth
+	auth         \
+	dbus         \
+	dbus-signal
 
 #	apptrack
 #	fmradio

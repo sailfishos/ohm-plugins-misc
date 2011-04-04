@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: Resource Policy Team <resource-policy@projects.maemo.org>
 Standards-Version: 3.8.0
-Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev, libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libxcb-render0-dev, xserver-policy-enforcement-dev, libsp-timestamp-dev, flex, libbluetooth3-dev, check, automake, autoconf, libcreds2-dev, libimmvibe-dev [armel]
+Build-Depends: cdbs, debhelper (>= 4.1.0), ohm-dev (>= 1:1.1), libglib2.0-dev, libdbus-glib-1-dev, libdbus-1-dev, libhal-dev, libdres-dev (>= 1:1.0), libtrace-dev (>= 1:1.0), libprofile-dev (>= 0.0.10), libmissioncontrol-dev, libresource0-dev (>= 0.26), libgconf2-dev, libtelepathy-glib-dev, libx11-dev, libxcb1-dev, libxcb-xv0-dev, libxcb-randr0-dev, libxcb-render0-dev, xserver-policy-enforcement-dev, libsp-timestamp-dev, flex, libbluetooth3-dev, check, automake, autoconf, libcreds2-dev, libimmvibe-dev [armel]
 
 Package: ohm-plugins-misc
 Architecture: any

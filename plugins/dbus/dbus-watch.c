@@ -56,14 +56,12 @@ watch_init(void)
 {
     bus_t *system, *session;
 
-    if ((system  = bus_by_type(DBUS_BUS_SYSTEM))  == NULL ||
-        (session = bus_by_type(DBUS_BUS_SESSION)) == NULL)
+    if ((system = bus_by_type(DBUS_BUS_SYSTEM)) == NULL)
         return FALSE;
 
     system->watches  = hash_table_create(NULL, watchlist_purge);
-    session->watches = hash_table_create(NULL, watchlist_purge);
 
-    if (system->watches == NULL || session->watches == NULL) {
+    if (system->watches == NULL) {
         OHM_ERROR("dbus: failed to create name watch tables");
         watch_exit();
         return FALSE;
@@ -72,7 +70,19 @@ watch_init(void)
     if (!watchlist_add_filter(system)) {
         OHM_ERROR("dbus: failed to add watch dispatcher for system bus");
         watch_exit();
-       return FALSE;
+        return FALSE;
+    }
+
+#if 1
+    if ((session = bus_by_type(DBUS_BUS_SESSION)) == NULL)
+        return FALSE;
+
+    session->watches = hash_table_create(NULL, watchlist_purge);
+
+    if (session->watches == NULL) {
+        OHM_ERROR("dbus: failed to create name watch tables");
+        watch_exit();
+        return FALSE;
     }
 
     if (!bus_watch_add(session, session_bus_event, NULL)) {
@@ -80,6 +90,7 @@ watch_init(void)
         watch_exit();
         return FALSE;
     }
+#endif
     
     return TRUE;
 }
@@ -91,25 +102,26 @@ watch_init(void)
 void
 watch_exit(void)
 {
-   bus_t *system, *session;
+    bus_t *system, *session;
 
-   system  = bus_by_type(DBUS_BUS_SYSTEM);
-   session = bus_by_type(DBUS_BUS_SESSION);
+    system  = bus_by_type(DBUS_BUS_SYSTEM);
+    session = bus_by_type(DBUS_BUS_SESSION);
 
-   watchlist_del_filter(system);
-   watchlist_del_filter(session);
-
-   bus_watch_del(session, session_bus_event, NULL);
-   
-   if (system && system->watches) {
-       hash_table_destroy(system->watches);
-       system->watches = NULL;
-   }
-
-   if (session && session->watches) {
-       hash_table_destroy(session->watches);
-       session->watches = NULL;
-   }
+    if (system != NULL) {
+        watchlist_del_filter(system);
+        if (system->watches) {
+            hash_table_destroy(system->watches);
+            system->watches = NULL;
+        }
+    }
+    if (session != NULL) {
+        watchlist_del_filter(session);
+        bus_watch_del(session, session_bus_event, NULL);
+        if (session->watches) {
+            hash_table_destroy(session->watches);
+            session->watches = NULL;
+        }
+    }
 }
 
 

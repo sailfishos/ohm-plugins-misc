@@ -107,6 +107,7 @@ DBUS_METHOD_HANDLER(accept_call_request);
 DBUS_METHOD_HANDLER(hold_call_request);
 DBUS_METHOD_HANDLER(dtmf_start_request);
 DBUS_METHOD_HANDLER(dtmf_stop_request);
+DBUS_SIGNAL_HANDLER(name_owner_changed);
 
 
 static int tp_start_dtmf(call_t *call, unsigned int stream, int tone);
@@ -120,6 +121,19 @@ static void event_handler(event_t *event);
 
 static void plugin_reconnect(char *address);
 
+static void se_pid_query_cb(DBusPendingCall *pending, void *data);
+static void se_name_query_cb(DBusPendingCall *pending, void *data);
+static int  bus_query_name(const char *name,
+                            void (*query_cb)(DBusPendingCall *, void *),
+                            void *data);
+static int  bus_query_pid(const char *addr,
+                           void (*query_cb)(DBusPendingCall *, void *),
+                           void *data);
+static void bus_track_name(const char *name, int track);
+
+static inline int need_video(void);
+
+
 /*
  * call bookkeeping
  */
@@ -131,6 +145,7 @@ static int         nvideo;                      /* number of calls with video */
 static int         callid;                      /* call id */
 static int         holdorder;                   /* autohold order */
 static int         tonegen_muting = FALSE;      /* muting driver by tonegen */
+static pid_t       video_pid;                   /* stream engine pid */
 
 call_t *call_register(call_type_t type, const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
@@ -401,6 +416,9 @@ bus_init(const char *address)
     
     if (!bus_add_match("signal", TP_CONFERENCE, MEMBER_CHANNEL_REMOVED, NULL))
         exit(1);
+
+    bus_query_name(TP_STREAMENGINE_NAME, se_name_query_cb, NULL);
+    bus_track_name(TP_STREAMENGINE_NAME, TRUE);
     
     if (!dbus_connection_add_filter(bus, dispatch_signal, NULL, NULL)) {
         OHM_ERROR("Failed to add DBUS filter for signal dispatching.");
@@ -460,7 +478,8 @@ bus_exit(void)
     }
     dbus_connection_unregister_object_path(bus, TELEPHONY_PATH);
     dbus_connection_remove_filter(bus, dispatch_signal, NULL);
-    
+
+    bus_track_name(TP_STREAMENGINE_NAME, FALSE);
     bus_del_match("signal", TELEPHONY_INTERFACE, NULL, NULL);
     bus_del_match("signal", TP_CHANNEL_GROUP, NULL, NULL);
     bus_del_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL);
@@ -629,6 +648,215 @@ bus_send(DBusMessage *msg, dbus_uint32_t *serial)
 
 
 /********************
+ * bus_track_name
+ ********************/
+static void
+bus_track_name(const char *name, int track)
+{
+    char       filter[1024];
+    DBusError  error;
+
+    snprintf(filter, sizeof(filter),
+             "type='signal',"
+             "sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',"
+             "member='NameOwnerChanged',path='/org/freedesktop/DBus',"
+             "arg0='%s'", name);
+    
+    /*
+     * Notes:
+     *   We block when adding filters, to minimize (= eliminate ?) the time
+     *   window for the client to crash after it has let us know about itself
+     *   but before we managed to install the filter. According to the docs
+     *   we do not re-enter the main loop and all other messages than the
+     *   reply to AddMatch will get queued and processed once we're back in the
+     *   main loop. On the watch removal path we do not care about errors and
+     *   we do not want to block either.
+     */
+
+    if (track) {
+        dbus_error_init(&error);
+
+        dbus_bus_add_match(bus, filter, &error);
+
+        if (dbus_error_is_set(&error)) {
+            OHM_ERROR("apptrack: failed to add match rule \"%s\": %s", filter,
+                      error.message);
+            dbus_error_free(&error);
+        }
+    }
+    else
+        dbus_bus_remove_match(bus, filter, NULL);
+}
+
+
+
+/********************
+ * se_name_query_cb
+ ********************/
+static void
+se_name_query_cb(DBusPendingCall *pending, void *data)
+{
+    DBusMessage *reply;
+    const char  *addr;
+
+    (void)data;
+    
+    reply = dbus_pending_call_steal_reply(pending);
+    
+    if (reply == NULL ||
+        dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+        if (!dbus_message_is_error(reply, DBUS_ERROR_NAME_HAS_NO_OWNER))
+            OHM_ERROR("telephony: DBUS name query failed.");
+        goto unref_out;
+    }
+    
+    if (!dbus_message_get_args(reply, NULL, DBUS_TYPE_STRING, &addr,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("telephony: invalid DBUS name query reply.");
+        goto unref_out;
+    }
+    
+    OHM_INFO("telephony: stream engine address is %s.", addr);
+
+    bus_query_pid(addr, se_pid_query_cb, NULL);
+    
+ unref_out:
+    dbus_message_unref(reply);
+    dbus_pending_call_unref(pending);
+}
+
+
+
+/********************
+ * bus_query_name
+ ********************/
+static int
+bus_query_name(const char *name,
+                void (*query_cb)(DBusPendingCall *, void *), void *data)
+{
+    const char *service   = "org.freedesktop.DBus";
+    const char *path      = "/org/freedesktop/DBus";
+    const char *interface = "org.freedesktop.DBus";
+    const char *member    = "GetNameOwner";
+
+    DBusMessage     *msg  = NULL;
+    DBusPendingCall *pending;
+
+    msg = dbus_message_new_method_call(service, path, interface, member);
+
+    if (msg != NULL) {
+        if (!dbus_message_append_args(msg,
+                                      DBUS_TYPE_STRING, &name,
+                                      DBUS_TYPE_INVALID)) {
+            OHM_ERROR("telephony: failed to create DBUS name query message.");
+            dbus_message_unref(msg);
+            return FALSE;
+        }
+
+        if (!dbus_connection_send_with_reply(bus, msg, &pending, 5 * 1000)) {
+            OHM_ERROR("telephony: failed to send DBUS name query message.");
+            dbus_message_unref(msg);
+            return FALSE;
+        }
+        
+        if (!dbus_pending_call_set_notify(pending, query_cb, data, NULL)) {
+            OHM_ERROR("telephony: failed to set DBUS name query handler.");
+            dbus_pending_call_unref(pending);
+            dbus_message_unref(msg);
+            return FALSE;
+        }
+
+        dbus_message_unref(msg);
+    }
+    
+    return TRUE;
+}
+
+
+/********************
+ * se_pid_query_cb
+ ********************/
+static void
+se_pid_query_cb(DBusPendingCall *pending, void *data)
+{
+    DBusMessage   *reply;
+    dbus_uint32_t  pid;
+
+    (void)data;
+
+    reply = dbus_pending_call_steal_reply(pending);
+    
+    if (reply == NULL ||
+        dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+        OHM_ERROR("telephony: DBUS pid query failed.");
+        goto unref_out;
+    }
+    
+    if (!dbus_message_get_args(reply, NULL, DBUS_TYPE_UINT32, &pid,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("telephony: invalid DBUS pid query reply.");
+        goto unref_out;
+    }
+    
+    OHM_INFO("telephony: stream engine PID is %u.", pid);
+
+    video_pid = pid;
+    if (need_video())
+        RESCTL_REALLOC();
+    
+ unref_out:
+    dbus_message_unref(reply);
+    dbus_pending_call_unref(pending);
+}
+
+
+/********************
+ * bus_query_pid
+ ********************/
+static int
+bus_query_pid(const char *addr,
+              void (*query_cb)(DBusPendingCall *, void *), void *data)
+{
+    const char *service   = "org.freedesktop.DBus";
+    const char *path      = "/org/freedesktop/DBus";
+    const char *interface = "org.freedesktop.DBus";
+    const char *member    = "GetConnectionUnixProcessID";
+
+    DBusMessage     *msg  = NULL;
+    DBusPendingCall *pending;
+
+    msg = dbus_message_new_method_call(service, path, interface, member);
+
+    if (msg != NULL) {
+        if (!dbus_message_append_args(msg,
+                                      DBUS_TYPE_STRING, &addr,
+                                      DBUS_TYPE_INVALID)) {
+            OHM_ERROR("telephony: failed to create DBUS PID query message.");
+            dbus_message_unref(msg);
+            return FALSE;
+        }
+
+        if (!dbus_connection_send_with_reply(bus, msg, &pending, 5 * 1000)) {
+            OHM_ERROR("telephony: failed to send DBUS PID query message.");
+            dbus_message_unref(msg);
+            return FALSE;
+        }
+        
+        if (!dbus_pending_call_set_notify(pending, query_cb, data, NULL)) {
+            OHM_ERROR("telephony: failed to set DBUS PID query handler.");
+            dbus_pending_call_unref(pending);
+            dbus_message_unref(msg);
+            return FALSE;
+        }
+
+        dbus_message_unref(msg);
+    }
+    
+    return TRUE;
+}
+
+
+/********************
  * short_path
  ********************/
 static const char *
@@ -666,6 +894,9 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
 
     if (!interface || !member)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    if (MATCHES("org.freedesktop.DBus", "NameOwnerChanged"))
+        return name_owner_changed(c, msg, data);
 
     if (MATCHES(TP_CONNECTION, NEW_CHANNEL))
         return channel_new(c, msg, data);
@@ -1288,6 +1519,10 @@ stream_removed(DBusConnection *c, DBusMessage *msg, void *data)
             else if ((char *)id == call->video) {
                 call->video = NULL;
                 policy_call_update(call, UPDATE_VIDEO);
+
+                nvideo--;
+                if (nvideo <= 0)
+                    RESCTL_UPDATE(FALSE);
             }
         }
         else
@@ -1884,6 +2119,43 @@ dtmf_mute(DBusConnection *c, DBusMessage *msg, void *data)
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
+
+/********************
+ * name_owner_changed
+ ********************/
+static DBusHandlerResult
+name_owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char *name, *before, *after;
+
+    (void)c;
+    (void)data;
+    
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_STRING, &name,
+                               DBUS_TYPE_STRING, &before,
+                               DBUS_TYPE_STRING, &after,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse NameOwnerChanged signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    
+    if (strcmp(name, TP_STREAMENGINE_NAME))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    if (!after || !after[0]) {
+        OHM_INFO("Telepathy stream engine went down.");
+        video_pid = 0;
+    }
+    else {
+        OHM_INFO("Telepathy stream engine is up (address %s).", after);
+        video_pid = 0;
+        
+        bus_query_pid(after, se_pid_query_cb, NULL);
+    }
+    
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
 
 
 /********************
@@ -4187,12 +4459,15 @@ resctl_realloc(void)
             resctl_release();                       /* release resources */
             resctl_update(FALSE);                   /* audio-only */
         }
+        nvideo = 0;                                 /* fix any damage */
     }
     else {
-        resctl_update(need_video());                /* audio/video if needed */
+        if ((need_video()  && !resctl_has_video()) ||
+            (!need_video() &&  resctl_has_video()))
+            resctl_update(need_video());            /* audio/video if needed */
 
         if (!resctl_has_audio())
-            resctl_acquire();                       /* acquire resources */
+            resctl_acquire();                   /* acquire resources */
     }
 }
 
@@ -4254,10 +4529,11 @@ resctl_grant(resmsg_t *msg, resset_t *rset, void *data)
 static void
 resctl_update(int videocall)
 {
-    resmsg_t msg;
+    resmsg_t msg, vidmsg;
     uint32_t video;
     
-    OHM_INFO("telephony resctl: updating...");
+    OHM_INFO("telephony resctl: updating, video resource %s...",
+             videocall ? "needed" : "not needed");
 
     if (rctl.rset == NULL)
         return;
@@ -4266,6 +4542,16 @@ resctl_update(int videocall)
         return;
     
     video = videocall ? (RESMSG_VIDEO_PLAYBACK | RESMSG_VIDEO_RECORDING): 0;
+    
+    
+    if (video) {
+        vidmsg.video.type  = RESMSG_VIDEO;
+        vidmsg.video.id    = RSET_ID;
+        vidmsg.video.reqno = rctl.reqno++;
+        vidmsg.video.pid   = video_pid;
+        
+        resproto_send_message(rctl.rset, &vidmsg, resctl_status);
+    }
     
     msg.record.type       = RESMSG_UPDATE;
     msg.record.id         = RSET_ID;

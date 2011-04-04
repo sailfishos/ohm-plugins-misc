@@ -1,3 +1,24 @@
+ohm-plugins-misc (1:1.70) unstable; urgency=low
+
+  * Fixes: NB#230660.
+
+ -- Ismo Puustinen <ismo.h.puustinen@nokia.com>  Fri, 01 Apr 2011 10:43:00 +0300
+
+ohm-plugins-misc (1:1.69) unstable; urgency=low
+
+  * cgrp: allow locked OOM adjustment to be re-locked to a different value. 
+  * Fixes: NB#213676.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Thu, 24 Mar 2011 02:36:23 +0200
+
+ohm-plugins-misc (1:1.68) unstable; urgency=low
+
+  * telephony: kludge for telepathy stream-engine based video calls.
+  * backlight: fix memory leaks.
+  * Fixes: NB#222603.
+
+ -- Krisztian Litkey <krisztian.litkey@nokia.com>  Tue, 15 Mar 2011 00:41:32 +0200
+
 ohm-plugins-misc (1:1.67) unstable; urgency=low
 
   [Janos Kovacs]
