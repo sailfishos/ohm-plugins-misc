@@ -35,19 +35,56 @@ USA.
 #include <ohm/ohm-plugin-debug.h>
 #include <ohm/ohm-fact.h>
 
-/* This plugin has only one feature: it emits an upstart signal when
- * ohmd enters the idle loop the first time after running plugin init
- * for all plugins. This tells the applications depending on ohmd in the
- * boot order that the ohm is now at least somewhat ready for operation. */
+/* This plugin has two features:
+ *
+ * First, it emits an upstart signal when ohmd enters the idle loop the
+ * first time after running plugin init for all plugins. This tells the
+ * applications depending on ohmd in the boot order that the ohm is now
+ * at least somewhat ready for operation.
+ *
+ * Second, during the bootup, notification events (except for ringtone)
+ * are suspended until the desktop is visible. This indication is done
+ * by receiving desktop_ready signal.  In case the signal is never sent
+ * (for instance in cases where ohmd is started when the desktop is
+ * already visible), this plugin enables the notification events again.
+ */
+
+extern char **environ;
+
+OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
+OHM_PLUGIN_REQUIRES_METHODS(upstart, 1,
+    OHM_IMPORT("dres.resolve", resolve));
 
 static int DBG_UPSTART;
 
-static unsigned int id;
+static unsigned int init_id;
 static gulong updated_id;
+static gulong enable_notifications_id;
 
 OHM_DEBUG_PLUGIN(upstart,
     OHM_DEBUG_FLAG("upstart", "emission of the init signal", &DBG_UPSTART)
 );
+
+static int enable_notifications_cb(void *data)
+{
+    char *dres_args[1] = { NULL };
+    int status;
+
+    (void) data;
+
+    OHM_INFO("upstart: enabling notifications without signal after possible ohmd crash");
+
+    status = resolve("desktop_visible", dres_args);
+    if (status < 0) {
+        OHM_DEBUG(DBG_UPSTART, "ran policy hook desktop_visible from timeout"
+                "with status %d", status);
+    }
+
+    enable_notifications_id = 0;
+
+    /* this function is run only once */
+    return FALSE;
+}
 
 static int init_cb(void *data)
 {
@@ -68,6 +105,8 @@ static int init_cb(void *data)
         g_signal_handler_disconnect(G_OBJECT(fs), updated_id);
         updated_id = 0;
     }
+
+    init_id = 0;
 
     /* this function is run only once */
     return FALSE;
@@ -105,7 +144,7 @@ static void updated_cb(void *data, OhmFact *fact, GQuark fldquark, gpointer valu
                         /* it was the state that changed */
                         if (!strcmp(g_value_get_string(gval), "signaled")) {
                             /* emit the signal in the next idle loop */
-                            id = g_idle_add(init_cb, NULL);
+                            init_id = g_idle_add(init_cb, NULL);
                         }
                     }
                 }
@@ -118,6 +157,7 @@ static void plugin_init(OhmPlugin *plugin)
 {
     (void) plugin;
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
+    char *respawn = NULL;
 
     if (fs == NULL) {
         return;
@@ -132,6 +172,25 @@ static void plugin_init(OhmPlugin *plugin)
      * here but instead assume that it has been initialized as something
      * else than 'signaled'. */
     updated_id = g_signal_connect(G_OBJECT(fs), "updated" , G_CALLBACK(updated_cb) , NULL);
+
+    respawn = getenv("UPSTART_JOB_RESPAWNED");
+
+    enable_notifications_id = 0;
+
+    if (respawn != NULL) {
+
+        OHM_INFO("upstart: UPSTART_JOB_RESPAWNED = %s", respawn);
+
+        if (strcmp(respawn, "1") == 0) {
+
+            /* Ohmd was respawned by upstart. This means that there might
+             * not be a desktop_visible signal coming. Enable the
+             * notifications immediately, since it is unlikely that the
+             * crash happened before the desktop was ready. */
+
+            enable_notifications_id = g_idle_add(enable_notifications_cb, NULL);
+        }
+    }
 }
 
 
@@ -151,8 +210,12 @@ static void plugin_exit(OhmPlugin *plugin)
         updated_id = 0;
     }
 
-    if (id) {
-        g_source_remove(id);
+    if (enable_notifications_id != 0) {
+        g_source_remove(enable_notifications_id);
+    }
+
+    if (init_id) {
+        g_source_remove(init_id);
     }
 }
 
