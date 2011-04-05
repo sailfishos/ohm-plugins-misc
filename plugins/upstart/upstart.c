@@ -25,6 +25,8 @@ USA.
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <utmp.h>
+#include <ctype.h>
 
 #include <gmodule.h>
 #include <glib.h>
@@ -153,11 +155,16 @@ static void updated_cb(void *data, OhmFact *fact, GQuark fldquark, gpointer valu
     }
 }
 
+#define DRES_VARTYPE(t)  (char *)(t)
+#define DRES_VARVALUE(s) (char *)(s)
+
 static void plugin_init(OhmPlugin *plugin)
 {
     (void) plugin;
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
     char *respawn = NULL;
+    struct utmp query;
+    struct utmp *runlevel_entry;
 
     if (fs == NULL) {
         return;
@@ -191,8 +198,36 @@ static void plugin_init(OhmPlugin *plugin)
             enable_notifications_id = g_idle_add(enable_notifications_cb, NULL);
         }
     }
+
+    /* get the current runlevel */
+
+    query.ut_type = RUN_LVL;
+    runlevel_entry = getutid(&query);
+    if (runlevel_entry != NULL) {
+        char runlevel_c = runlevel_entry->ut_pid;
+        if (isdigit(runlevel_c)) {
+            int runlevel = runlevel_c - '0';
+            char *dres_args[4];
+            int status;
+
+            OHM_INFO("upstart: current system runlevel is %d, storing it", runlevel);
+
+            dres_args[0] = "runlevel";
+            dres_args[1] = DRES_VARTYPE('i');
+            dres_args[2] = DRES_VARVALUE(runlevel);
+            dres_args[3] = NULL;
+
+            status = resolve("system_runlevel", dres_args);
+            if (status < 0) {
+                OHM_DEBUG(DBG_UPSTART, "ran policy hook 'system_runlevel(%d)' with status %d",
+                        runlevel, status);
+            }
+        }
+    }
 }
 
+#undef DRES_VARVALUE
+#undef DRES_VARTYPE
 
 static void plugin_exit(OhmPlugin *plugin)
 {
