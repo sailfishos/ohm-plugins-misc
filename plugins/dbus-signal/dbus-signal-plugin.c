@@ -362,8 +362,6 @@ OHM_PLUGIN_DESCRIPTION("dbus_signal",
                        plugin_init, plugin_exit, NULL);
 
 
-#undef INI_FILE_STRING_DELIMITER
-
 /*
  * Local Variables:
  * c-basic-offset: 4
