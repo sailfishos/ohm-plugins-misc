@@ -227,6 +227,7 @@ watchlist_add(bus_t *bus, const char *name)
 
  failed:
     watchlist_purge(watchlist);
+    FREE(watchlist);
     return NULL;
 }
 

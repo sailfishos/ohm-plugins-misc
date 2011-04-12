@@ -319,10 +319,6 @@ static void plugin_init(OhmPlugin *plugin)
 
 error:
 
-    if (keyfile != NULL) {
-        g_key_file_free(keyfile);
-    }
-
     g_free(dbus_plugin);
     dbus_plugin = NULL;
 

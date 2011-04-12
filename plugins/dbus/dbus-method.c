@@ -199,7 +199,6 @@ method_add(DBusBusType type, const char *path, const char *interface,
     
  failed:
     method_purge(method);
-    FREE(key);
 
     return FALSE;
 }
