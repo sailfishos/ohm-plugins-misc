@@ -66,6 +66,10 @@ USA.
 #define test_bit(n, bits) (((bits)[(n) / BITS_PER_U32]) &       \
                            (0x1 << ((n) % BITS_PER_U32)))
 
+#ifndef SW_INCOMPATIBLE_INSERT
+#  define SW_INCOMPATIBLE_INSERT 14
+#endif
+
 
 /*
  * input device descriptors
@@ -104,6 +108,7 @@ enum {
     DEV_HEADPHONE,
     DEV_HEADMIKE,
     DEV_VIDEOOUT,
+    DEV_INCOMPATIBLE,                    /* plug with incorrect pin layout */
     DEV_LINEOUT,
     NUM_DEVS,
     DEV_NONE
@@ -152,12 +157,13 @@ static input_dev_t devices[] = {
  */
 
 static device_state_t states[] = {
-    [DEV_HEADSET]   = { "headset"  , NULL, 0 },
-    [DEV_HEADPHONE] = { "headphone", NULL, 0 },
-    [DEV_HEADMIKE]  = { "headmike" , NULL, 0 },
-    [DEV_VIDEOOUT]  = { "tvout"    , NULL, 0 },
-    [DEV_LINEOUT]   = { /* "line-out" */ NULL, NULL, 0 },
-    [DEV_NONE]      = { NULL, NULL, 0 }
+    [DEV_HEADSET]      = { "headset"     , NULL, 0 },
+    [DEV_HEADPHONE]    = { "headphone"   , NULL, 0 },
+    [DEV_HEADMIKE]     = { "headmike"    , NULL, 0 },
+    [DEV_VIDEOOUT]     = { "tvout"       , NULL, 0 },
+    [DEV_INCOMPATIBLE] = { "incompatible", NULL, 0 },
+    [DEV_LINEOUT]      = { /* "line-out" */ NULL, NULL, 0 },
+    [DEV_NONE]         = { NULL, NULL, 0 }
 };
 
 
@@ -179,6 +185,7 @@ static int headphone;
 static int microphone;
 static int lineout;
 static int videoout;
+static int incompatible;
 static int physical;
 
 static int inverted;                              /* inverted jack events */
@@ -210,17 +217,21 @@ jack_query(int fd)
         return FALSE;
     }
 
-    headphone =  test_bit(SW_HEADPHONE_INSERT    , bitmask);
-    microphone = test_bit(SW_MICROPHONE_INSERT   , bitmask);
-    lineout    = test_bit(SW_LINEOUT_INSERT      , bitmask);
-    videoout   = test_bit(SW_VIDEOOUT_INSERT     , bitmask);
-    physical   = test_bit(SW_JACK_PHYSICAL_INSERT, bitmask);
+    headphone    = test_bit(SW_HEADPHONE_INSERT    , bitmask);
+    microphone   = test_bit(SW_MICROPHONE_INSERT   , bitmask);
+    lineout      = test_bit(SW_LINEOUT_INSERT      , bitmask);
+    videoout     = test_bit(SW_VIDEOOUT_INSERT     , bitmask);
+    incompatible = test_bit(SW_INCOMPATIBLE_INSERT , bitmask);
+    physical     = test_bit(SW_JACK_PHYSICAL_INSERT, bitmask);
 
     OHM_INFO("accessories: headphone is %sconnected" , headphone  ? "" : "dis");
     OHM_INFO("accessories: microphone is %sconnected", microphone ? "" : "dis");
     OHM_INFO("accessories: lineout is %sconnected"   , lineout    ? "" : "dis");
     OHM_INFO("accessories: videoout is %sconnected"  , videoout   ? "" : "dis");
     OHM_INFO("accessories: physicallly %sconnected"  , physical   ? "" : "dis");
+
+    if (incompatible)
+        OHM_INFO("accessories: incompatible accessory connected");
     
     /*
      * Notes: Some of the plugins and facts might not be fully initialized
@@ -339,8 +350,12 @@ jack_event(struct input_event *event, void *user_data)
     case SW_VIDEOOUT_INSERT:
         videoout = value;
         break;
+ 
+    case SW_INCOMPATIBLE_INSERT:
+        incompatible = value;
+        break;
 
-    case SW_JACK_PHYSICAL_INSERT:
+   case SW_JACK_PHYSICAL_INSERT:
         physical = value;
     SYN_EVENT:
         jack_update_facts(FALSE);
@@ -387,7 +402,8 @@ jack_update_facts(int initial_query)
 {
     device_state_t *device, *current;
 
-    if      (headphone && microphone) current = states + DEV_HEADSET;
+    if      (incompatible)            current = states + DEV_INCOMPATIBLE;
+    else if (headphone && microphone) current = states + DEV_HEADSET;
     else if (headphone)               current = states + DEV_HEADPHONE;
     else if (microphone)              current = states + DEV_HEADMIKE;
     else if (videoout)                current = states + DEV_VIDEOOUT;
@@ -422,11 +438,13 @@ jack_update_facts(int initial_query)
          */
 
         if (!initial_query) {
-            eci_update_mode(current);
+            if (!incompatible)
+                eci_update_mode(current);
             dres_accessory_request(current->name, -1, 1);
         }
         
-        eci_schedule_update(current, probe_delay);
+        if (!incompatible)
+            eci_schedule_update(current, probe_delay);
     }
 }
 
