@@ -53,8 +53,9 @@ static int   sock  = -1;
 static int   nlseq = 0;
 static pid_t mypid = 0;
 
-static GIOChannel *gioc = NULL;
-static guint       gsrc = 0;
+static GIOChannel *gioc        = NULL;
+static guint       gsrc        = 0;
+static guint       setup_timer = 0;
 
 static int         proc_subscribe  (cgrp_context_t *ctx);
 static int         proc_unsubscribe(void);
@@ -63,6 +64,10 @@ static int         proc_request    (enum proc_cn_mcast_op req);
 
 static int  netlink_create(void);
 static void netlink_close (void);
+static int  netlink_setup(cgrp_context_t *ctx);
+static void netlink_cleanup(void);
+static int netlink_delayed_setup(cgrp_context_t *ctx, int timeout);
+
 
 static gboolean netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data);
 
@@ -90,13 +95,12 @@ proc_init(cgrp_context_t *ctx)
 
     subscr_init(ctx);
 
+    netlink_setup(ctx);
+
     /*
      * Notes: we always claim success to be able to run the same
      *        configuration on cgroupless kernels
      */
-
-    if (!netlink_create() || !proc_subscribe(ctx))
-        return TRUE;
     
     return TRUE;
 }
@@ -121,8 +125,7 @@ proc_exit(cgrp_context_t *ctx)
 
     subscr_exit(ctx);
 
-    proc_unsubscribe();
-    netlink_close();
+    netlink_cleanup();
 
     proc_hash_foreach(ctx, remove_process, NULL);
 
@@ -185,6 +188,7 @@ proc_request(enum proc_cn_mcast_op req)
     struct cn_msg     *nld;
     struct proc_event *event;
     unsigned char      msgbuf[EVENT_BUF_SIZE];
+
     ssize_t            size;
 
     fd_set             rfds;
@@ -490,10 +494,15 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
             OHM_ERROR("cgrp: netlink error %d (%s)", sckerr, strerror(sckerr));
         }
 
-        proc_unsubscribe();
-        netlink_close();
+        /*
+         * close netlink socket and set it up again after a timeout
+         */
+
+        netlink_cleanup();
         errno = 0;
 
+        netlink_delayed_setup(ctx, 2000);
+        
         netlink_create();
         proc_subscribe(ctx);
         process_scan_proc(ctx);
@@ -555,6 +564,68 @@ netlink_close(void)
         close(sock);
         sock = -1;
     }
+}
+
+
+/********************
+ * netlink_setup
+ ********************/
+static int
+netlink_setup(cgrp_context_t *ctx)
+{
+    if (netlink_create()) {
+        if (proc_subscribe(ctx))
+            return TRUE;
+
+        netlink_close();
+    }
+
+    return FALSE;
+}
+
+
+/********************
+ * netlink_cleanup
+ ********************/
+static void
+netlink_cleanup(void)
+{
+    if (setup_timer != 0) {
+        g_source_remove(setup_timer);
+        setup_timer = 0;
+    }
+
+    proc_unsubscribe();
+    netlink_close();
+}
+
+
+/********************
+ * netlink_delayed_setup
+ ********************/
+static gboolean
+delayed_setup(gpointer data)
+{
+    cgrp_context_t *ctx = (cgrp_context_t *)data;
+
+    netlink_create();
+    proc_subscribe(ctx);
+    process_scan_proc(ctx);
+    
+    setup_timer = 0;
+
+    return FALSE;
+}
+
+
+static int
+netlink_delayed_setup(cgrp_context_t *ctx, int timeout)
+{
+    if (setup_timer != 0)
+        return TRUE;
+
+    setup_timer = g_timeout_add(timeout, delayed_setup, ctx);
+    return TRUE;
 }
 
 
