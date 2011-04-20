@@ -68,6 +68,9 @@ static int  netlink_setup(cgrp_context_t *ctx);
 static void netlink_cleanup(void);
 static int netlink_delayed_setup(cgrp_context_t *ctx, int timeout);
 
+static struct proc_event *proc_recv(unsigned char *buf, size_t bufsize,
+                                    int block);
+
 
 static gboolean netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data);
 
@@ -184,8 +187,8 @@ proc_unsubscribe(void)
 static int
 proc_request(enum proc_cn_mcast_op req)
 {
-    struct nlmsghdr       *nlh;
-    struct cn_msg         *nld;
+    struct nlmsghdr       *nl_hdr;
+    struct cn_msg         *cn_msg;
     enum proc_cn_mcast_op *mcop;
     struct proc_event     *event;
     unsigned char          msgbuf[EVENT_BUF_SIZE];
@@ -200,25 +203,25 @@ proc_request(enum proc_cn_mcast_op req)
         return FALSE;
     
     memset(msgbuf, 0, sizeof(msgbuf));
-    nlh = (struct nlmsghdr *)msgbuf;
-    nlh->nlmsg_type  = NLMSG_DONE;
-    nlh->nlmsg_flags = NLM_F_REQUEST;
-    nlh->nlmsg_seq   = nlseq++;
-    nlh->nlmsg_pid   = mypid;
-    size             = sizeof(*nld) + sizeof(req);
-    nlh->nlmsg_len   = NLMSG_LENGTH(size);
+    nl_hdr = (struct nlmsghdr *)msgbuf;
+    nl_hdr->nlmsg_type  = NLMSG_DONE;
+    nl_hdr->nlmsg_flags = NLM_F_REQUEST;
+    nl_hdr->nlmsg_seq   = nlseq++;
+    nl_hdr->nlmsg_pid   = mypid;
+    size                = sizeof(*cn_msg) + sizeof(req);
+    nl_hdr->nlmsg_len   = NLMSG_LENGTH(size);
     
-    nld = (struct cn_msg *)NLMSG_DATA(nlh);
-    nld->id.idx = CN_IDX_PROC;
-    nld->id.val = CN_VAL_PROC;
-    nld->seq    = nlseq;
-    nld->ack    = nld->seq;
-    nld->len    = sizeof(req);
-    mcop        = (enum proc_cn_mcast_op *)&nld->data[0];
-    *mcop       = req;
-    size        = NLMSG_SPACE(size);
+    cn_msg = (struct cn_msg *)NLMSG_DATA(nl_hdr);
+    cn_msg->id.idx = CN_IDX_PROC;
+    cn_msg->id.val = CN_VAL_PROC;
+    cn_msg->seq    = nlseq;
+    cn_msg->ack    = cn_msg->seq;
+    cn_msg->len    = sizeof(req);
+    mcop           = (enum proc_cn_mcast_op *)&cn_msg->data[0];
+    *mcop          = req;
+    size           = NLMSG_SPACE(size);
 
-    if (send(sock, nlh, size, 0) < 0) {
+    if (send(sock, nl_hdr, size, 0) < 0) {
         OHM_ERROR("cgrp: failed to send process event request");
         return FALSE;
     }
@@ -253,19 +256,17 @@ proc_request(enum proc_cn_mcast_op req)
         break;
     }
     
-    size = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
-    if ((size = recv(sock, nlh, size, 0)) < 0 ||
-        !NLMSG_OK(nlh, (size_t)size)) {
-        OHM_ERROR("cgrp: failed to receive process event reply");
+    if ((event = proc_recv(msgbuf, sizeof(msgbuf), 0)) == NULL) {
+        OHM_ERROR("cgrp: failed to receive process event reply (%d: %s)",
+                  errno, strerror(errno));
         return FALSE;
     }
-
-    event = (struct proc_event *)nld->data;
+    
     if (event->what != PROC_EVENT_NONE) {
         OHM_ERROR("cgrp: unexpected process event 0x%x", event->what);
         return FALSE;
     }
-
+    
     return TRUE;
 }
 
@@ -276,30 +277,67 @@ proc_request(enum proc_cn_mcast_op req)
 static struct proc_event *
 proc_recv(unsigned char *buf, size_t bufsize, int block)
 {
-    struct nlmsghdr   *nlh;
-    struct cn_msg     *nld;
-    struct proc_event *event;
-    ssize_t            size;
+    struct nlmsghdr    *nl_hdr;
+    struct cn_msg      *cn_hdr;
+    struct proc_event  *event;
+    struct sockaddr_nl  addr;
+    socklen_t           addrlen;
+    ssize_t             n;
+    size_t              size;
+    int                 flags;
 
     if (bufsize < EVENT_BUF_SIZE)
         return NULL;
     
     memset(buf, 0, bufsize);
-    nlh   = (struct nlmsghdr *)buf;
-    size  = NLMSG_SPACE(sizeof(*nld) + sizeof(*event));
-    block = block ? 0 : MSG_DONTWAIT;
+    nl_hdr = (struct nlmsghdr *)buf;
+    size   = NLMSG_SPACE(sizeof(*cn_hdr) + sizeof(*event));
     
-    if ((size = recv(sock, nlh, size, block)) < 0 ||
-        !NLMSG_OK(nlh, (size_t)size)) {
-        if (errno != EAGAIN)
-            OHM_ERROR("cgrp: failed to receive process event");
+    if (size > bufsize) {
+        errno = EINVAL;
         return NULL;
     }
 
-    nld   = (struct cn_msg *)NLMSG_DATA(nlh);
-    event = (struct proc_event *)nld->data;
+    flags   = block ? 0 : MSG_DONTWAIT;
+    addrlen = sizeof(addr);
     
-    return event;
+    while ((n = recvfrom(sock, nl_hdr, size, flags,
+                         (struct sockaddr *)&addr, &addrlen)) > 0) {
+        if (addr.nl_pid != 0)
+            continue;
+        
+        if (NLMSG_OK(nl_hdr, (size_t)n)) {
+            if (nl_hdr->nlmsg_type == NLMSG_NOOP)
+                continue;
+
+            if (nl_hdr->nlmsg_type == NLMSG_ERROR ||
+                nl_hdr->nlmsg_type == NLMSG_OVERRUN) {
+                errno = EIO;
+                return NULL;
+            }
+
+            cn_hdr = (struct cn_msg *)NLMSG_DATA(nl_hdr);
+            
+            if (cn_hdr->id.idx != CN_IDX_PROC ||
+                cn_hdr->id.val != CN_VAL_PROC)
+                continue;
+            
+            event = (struct proc_event *)cn_hdr->data;
+            return event;
+        }
+        else {
+            OHM_ERROR("cgrp: received malformed netlink message");
+            errno = EIO;
+            return NULL;
+        }
+    }
+
+    if (n < 0) {
+        if (errno != EAGAIN)
+            OHM_ERROR("cgrp: failed to receive process event");
+    }
+
+    return NULL;
 }
 
 
