@@ -184,16 +184,17 @@ proc_unsubscribe(void)
 static int
 proc_request(enum proc_cn_mcast_op req)
 {
-    struct nlmsghdr   *nlh;
-    struct cn_msg     *nld;
-    struct proc_event *event;
-    unsigned char      msgbuf[EVENT_BUF_SIZE];
+    struct nlmsghdr       *nlh;
+    struct cn_msg         *nld;
+    enum proc_cn_mcast_op *mcop;
+    struct proc_event     *event;
+    unsigned char          msgbuf[EVENT_BUF_SIZE];
 
-    ssize_t            size;
+    ssize_t                size;
 
-    fd_set             rfds;
-    struct timeval     tv;
-    int                retval;
+    fd_set                 rfds;
+    struct timeval         tv;
+    int                    retval;
 
     if (sock < 0)
         return FALSE;
@@ -213,7 +214,8 @@ proc_request(enum proc_cn_mcast_op req)
     nld->seq    = nlseq;
     nld->ack    = nld->seq;
     nld->len    = sizeof(req);
-    *((enum proc_cn_mcast_op *)nld->data) = req;
+    mcop        = (enum proc_cn_mcast_op *)&nld->data[0];
+    *mcop       = req;
     size        = NLMSG_SPACE(size);
 
     if (send(sock, nlh, size, 0) < 0) {
