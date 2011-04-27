@@ -261,6 +261,7 @@ events_print(int event_mask, cgrp_rule_t *rule, FILE *fp)
         EVENT(UNKNOWN, "unknown"),
         EVENT(FORCE  , "force"),
         EVENT(FORK   , "fork"),
+        EVENT(THREAD , "new-thread"),
         EVENT(EXEC   , "execed"),
         EVENT(EXIT   , "exit"),
         EVENT(UID    , "user-change"),
@@ -359,6 +360,7 @@ rule_find(cgrp_rule_t *rules, cgrp_event_t *event)
         switch (type) {
         case CGRP_EVENT_EXEC:
         case CGRP_EVENT_FORCE:
+        case CGRP_EVENT_THREAD:
             return r;
 
         case CGRP_EVENT_GID:

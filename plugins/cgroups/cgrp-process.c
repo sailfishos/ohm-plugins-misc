@@ -452,13 +452,14 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
             case PROC_EVENT_FORK: {
                 struct fork_proc_event *e = &pevt->event_data.fork;
 
-                event.fork.type = CGRP_EVENT_FORK;
                 if (e->child_tgid == e->child_pid) {  /* a child process */
+                    event.fork.type = CGRP_EVENT_FORK;
                     event.fork.pid  = e->child_pid;
                     event.fork.tgid = e->child_tgid;
                     event.fork.ppid = e->parent_tgid;
                 }
                 else {                                /* a new thread */
+                    event.fork.type = CGRP_EVENT_THREAD;
                     event.fork.pid  = e->child_pid;
                     event.fork.tgid = e->child_tgid;
                     event.fork.ppid = e->child_tgid;

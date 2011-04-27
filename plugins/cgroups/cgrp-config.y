@@ -912,6 +912,8 @@ rule_event: TOKEN_IDENT {
 
           if (!strcmp($1.value, "execed"))
               $$.event_mask = (1 << CGRP_EVENT_EXEC);
+          else if (!strcmp($1.value, "new-thread"))
+              $$.event_mask = (1 << CGRP_EVENT_THREAD);
           else if (!strcmp($1.value, "session-change"))
               $$.event_mask = (1 << CGRP_EVENT_SID);
           else if (!strcmp($1.value, "name-change"))

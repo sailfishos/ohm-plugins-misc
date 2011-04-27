@@ -361,6 +361,7 @@ typedef enum {
     CGRP_EVENT_UNKNOWN = 0,
     CGRP_EVENT_FORCE,                       /* force classification */
     CGRP_EVENT_FORK,                        /* new process forked */
+    CGRP_EVENT_THREAD,                      /* new thread created */
     CGRP_EVENT_EXEC,                        /* new image executed */
     CGRP_EVENT_EXIT,                        /* process exited */
     CGRP_EVENT_UID,                         /* user ID changed */

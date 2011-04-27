@@ -152,6 +152,7 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
     case CGRP_EVENT_GID:
     case CGRP_EVENT_SID:
     case CGRP_EVENT_NAME:
+    case CGRP_EVENT_THREAD:
         if ((ctx->event_mask & (1 << event->any.type)) == 0)
             return TRUE;
         
@@ -298,8 +299,11 @@ classify_by_rules(cgrp_context_t *ctx,
     cgrp_rule_t    *rules;
     cgrp_action_t  *actions;
 
-    OHM_DEBUG(DBG_CLASSIFY, "classifying process <%u> by rules for event 0x%x",
-              event->any.pid, event->any.type);
+    OHM_DEBUG(DBG_CLASSIFY, "classifying process <%u:%s> by rules "
+                            "for event 0x%x",
+              event->any.pid,
+              attr->binary[0] ? attr->binary : "-",
+              event->any.type);
 
     if (attr->process != NULL && attr->process->track)
         process_track_notify(ctx, attr->process, event->any.type);
@@ -331,10 +335,11 @@ classify_by_rules(cgrp_context_t *ctx,
     
     if (rules == NULL) {
         if (!CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ALWAYS_FALLBACK) &&
-            (event->any.type == CGRP_EVENT_GID ||
-             event->any.type == CGRP_EVENT_UID ||
-             event->any.type == CGRP_EVENT_SID ||
-             event->any.type == CGRP_EVENT_NAME)) {
+            (event->any.type == CGRP_EVENT_GID  ||
+             event->any.type == CGRP_EVENT_UID  ||
+             event->any.type == CGRP_EVENT_SID  ||
+             event->any.type == CGRP_EVENT_NAME ||
+             event->any.type == CGRP_EVENT_THREAD)) {
             OHM_DEBUG(DBG_CLASSIFY, "no matching rule, omitting fallback.");
             return TRUE;
         }
