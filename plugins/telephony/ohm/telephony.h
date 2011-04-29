@@ -115,6 +115,15 @@ USA.
 
 #define TP_STREAMENGINE_NAME "org.maemo.Telepathy.StreamEngine"
 
+/*
+ * The csd interface is unofficial. Instead of depending on it and
+ * including the dev headers, we rather define the single constant
+ * we need for our BT UI answer detection kludge here...
+ */
+#define CSD_CALLINST_INTERFACE "com.nokia.csd.Call.Instance"
+#define CSD_CALL_STATUS        "CallStatus"
+#define CSD_STATUS_ACCEPTED    8
+
 
 /*
  * call actions (policy decisions)

@@ -53,6 +53,7 @@ USA.
 #define EVENT_TIMEOUT (10 * 1000)
 
 static int DBG_CALL;
+static int bt_ui_kludge;
 
 OHM_DEBUG_PLUGIN(telephony,
                  OHM_DEBUG_FLAG("call", "call events", &DBG_CALL));
@@ -100,6 +101,7 @@ DBUS_SIGNAL_HANDLER(call_end);
 DBUS_SIGNAL_HANDLER(sending_dialstring);
 DBUS_SIGNAL_HANDLER(stopped_dialstring);
 DBUS_METHOD_HANDLER(dtmf_mute);
+DBUS_SIGNAL_HANDLER(csd_call_status);
 
 DBUS_METHOD_HANDLER(dispatch_method);
 DBUS_METHOD_HANDLER(call_request);
@@ -2154,6 +2156,58 @@ name_owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
         bus_query_pid(after, se_pid_query_cb, NULL);
     }
     
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+
+/********************
+ * csd_call_status
+ ********************/
+static void
+find_any_call(gpointer key, gpointer value, gpointer data)
+{
+    call_t **call = (call_t **)data;
+
+    (void)key;
+
+    if (*call == NULL)
+        *call = (call_t *)value;
+}
+
+static DBusHandlerResult
+csd_call_status(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    call_event_t event;
+    uint32_t     status;
+
+    (void)c;
+    (void)data;
+
+    if (!bt_ui_kludge)
+        return DBUS_HANDLER_RESULT_HANDLED;
+    
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_UINT32, &status,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse CSD call status signal.");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    if (status == CSD_STATUS_ACCEPTED && ncscall == 1 && nipcall == 0) {
+        event.call = NULL;
+        call_foreach(find_any_call, &event.call);
+
+        if (event.call != NULL && event.call->state != STATE_ACTIVE) {
+            event.path = event.call->path;
+            event.type = EVENT_CALL_ACCEPTED;
+
+            OHM_INFO("Call %s accepted (signalled by CSD).",
+                     short_path(event.call->path));
+            
+            event_handler((event_t *)&event);
+        }
+    }
+
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
@@ -4646,10 +4700,19 @@ static void timestamp_init(void)
 static void
 plugin_init(OhmPlugin *plugin)
 {
+    char *cfgstr = (char *)ohm_plugin_get_param(plugin, "bt-ui-kludge");
+
+    if (cfgstr != NULL &&
+        (!strcmp(cfgstr, "yes") || !strcmp(cfgstr, "true") ||
+         !strcmp(cfgstr, "enabled")))
+        bt_ui_kludge =  TRUE;
+    
+    OHM_INFO("telephony: BT UI csd acceptance kludge %s",
+             bt_ui_kludge ? "enabled" : "disabled");
+    
     if (!OHM_DEBUG_INIT(telephony))
         OHM_WARNING("failed to register plugin %s for tracing", PLUGIN_NAME);
 
-    (void)plugin;
 
     /*
      * Notes: We delay session bus initializtion until we get the correct
@@ -4722,7 +4785,9 @@ OHM_PLUGIN_DBUS_SIGNALS(
     { NULL, DBUS_INTERFACE_POLICY, DBUS_POLICY_NEW_SESSION, NULL,
             bus_new_session, NULL },
     { NULL, TONEGEN_DBUS_INTERFACE, TONEGEN_MUTE, TONEGEN_DBUS_PATH,
-            dtmf_mute, NULL });
+            dtmf_mute, NULL },
+    { NULL, CSD_CALLINST_INTERFACE, CSD_CALL_STATUS, NULL,
+            csd_call_status, NULL });
 
 
 /*
