@@ -83,6 +83,11 @@ SUBDIRS += \
 	vibra
 endif
 
+if BUILD_FACTTOOL
+SUBDIRS += \
+	facttool
+endif
+
 
 clean-local:
 	rm -f *~

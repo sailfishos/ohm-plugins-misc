@@ -700,6 +700,23 @@ fi
 
 AC_SUBST(BUILD_VIBRA)
 
+# Check if the facttool plugin should be built
+AC_ARG_ENABLE(facttool,
+              [  --enable-facttool     enable the facttool plugin],
+              enable_facttool=$enableval,enable_facttool=no)
+
+AM_CONDITIONAL(BUILD_FACTTOOL, test x$enable_facttool = xyes)
+
+if test x$enable_facttool = xyes;
+then
+  AC_DEFINE([BUILD_FACTTOOL], 1, [Build facttool plugin ?])
+  AC_MSG_NOTICE([facttool plugin WILL BE built])
+else
+  AC_MSG_NOTICE([facttool plugin WILL NOT be built])
+fi
+
+AC_SUBST(BUILD_FACTTOOL)
+
 
 # shave
 SHAVE_INIT([build-aux], [enable])
@@ -734,6 +751,7 @@ AC_CONFIG_FILES([build-aux/shave
 		 plugins/upstart/Makefile
 		 plugins/cgroups/Makefile
 		 plugins/vibra/Makefile
+		 plugins/facttool/Makefile
 		 plugins/backlight/Makefile
 		 plugins/delay/Makefile
 		 plugins/buttons/Makefile
