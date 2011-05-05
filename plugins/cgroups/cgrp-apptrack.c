@@ -321,13 +321,13 @@ static gboolean
 apptrack_update(gpointer data)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)data;
-    cgrp_group_t   *prev_active, *curr_active;
-    cgrp_process_t *process;
+    cgrp_group_t   *old_group, *new_group;
+    cgrp_process_t *old_proc, *new_proc;
     pid_t           active, standby;
     GValue         *gactive, *gstandby;
     char           *state;
 
-    prev_active = ctx->active_group;
+    old_group = ctx->active_group;
     
     active   = 0;
     gactive  = ohm_fact_get(ctx->apptrack_changes, APP_ACTIVE);
@@ -340,26 +340,30 @@ apptrack_update(gpointer data)
     if (gstandby != NULL && G_VALUE_TYPE(gstandby) == G_TYPE_INT)
         standby = g_value_get_int(gstandby);
 
-    if (standby != 0 && (process = proc_hash_lookup(ctx, standby)) != NULL) {
+    if (standby != 0 && (old_proc = proc_hash_lookup(ctx, standby)) != NULL) {
         state = APP_INACTIVE;
         
         OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
-                  standby, process->binary, state);
+                  standby, old_proc->binary, state);
         
-        process_update_state(ctx, process, state);
+        process_update_state(ctx, old_proc, state);
     }
+    else
+        old_proc = NULL;
     
-    if (active != 0 && (process = proc_hash_lookup(ctx, active)) != NULL) {
+    if (active != 0 && (new_proc = proc_hash_lookup(ctx, active)) != NULL) {
         state = APP_ACTIVE;
         
         OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
-                  active, process->binary, state);
+                  active, new_proc->binary, state);
         
-        process_update_state(ctx, process, state);
+        process_update_state(ctx, new_proc, state);
     }
+    else
+        new_proc = NULL;
 
-    curr_active = ctx->active_group;
-    apptrack_group_change(ctx, prev_active, curr_active);
+    new_group = ctx->active_group;
+    apptrack_group_change(ctx, old_group, old_proc, new_group, new_proc);
     
     apptrack_notify(ctx, ctx->active_process);
 
@@ -452,7 +456,7 @@ socket_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
     }
 
     curr_active = ctx->active_group;
-    apptrack_group_change(ctx, prev_active, curr_active);
+    apptrack_group_change(ctx, prev_active, NULL, curr_active, NULL);
 
  out:
     return TRUE;
@@ -464,27 +468,36 @@ socket_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
  ********************/
 int
 apptrack_group_change(cgrp_context_t *ctx,
-                      cgrp_group_t *prev, cgrp_group_t *curr)
+                      cgrp_group_t *old_group, cgrp_process_t *old_proc,
+                      cgrp_group_t *new_group, cgrp_process_t *new_proc)
 {
-    char *group;
-    char *vars[2*2 + 1];
+    char *group, *process;
+    char *vars[2*3 + 1];
 
-    if (prev == curr)
+    if (old_group == new_group && old_proc == new_proc)
         return TRUE;
 
     OHM_DEBUG(DBG_NOTIFY, "active group has changed from '%s' to '%s'",
-              prev ? prev->name : "<none>", curr ? curr->name : "<none>");
+              old_group ? old_group->name : "<none>",
+              new_group ? new_group->name : "<none>");
 
-    if (curr != NULL)
-        group = curr->name;
+    if (new_group != NULL)
+        group = new_group->name;
     else
         group = "<none>";
+    
+    if (new_proc != NULL)
+        process = new_proc->argvx ? new_proc->argvx : new_proc->binary;
+    else
+        process = "<none>";
     
     vars[0] = "cgroup_group";
     vars[1] = group;
     vars[2] = "cgroup_state";
     vars[3] = APP_ACTIVE;
-    vars[4] = NULL;
+    vars[4] = "cgroup_process";
+    vars[5] = process;
+    vars[6] = NULL;
     
     return ctx->resolve("cgroup_notify", vars) == 0;
 }

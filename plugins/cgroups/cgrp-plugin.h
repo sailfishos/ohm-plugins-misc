@@ -942,7 +942,9 @@ int           curve_map(cgrp_curve_t *, int, int *);
 /* cgrp-apptrack.c */
 int  apptrack_init(cgrp_context_t *, OhmPlugin *);
 void apptrack_exit(cgrp_context_t *);
-int  apptrack_group_change(cgrp_context_t *, cgrp_group_t *, cgrp_group_t *);
+int  apptrack_group_change(cgrp_context_t *, cgrp_group_t *, cgrp_process_t *,
+                           cgrp_group_t *, cgrp_process_t *);
+
 void apptrack_subscribe(void (*)(pid_t, const char *, const char *,
                                  const char *, void *),
                         void *);
