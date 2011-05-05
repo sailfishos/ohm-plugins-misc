@@ -74,6 +74,7 @@ struct lexer_input_s {
 typedef struct {
     int              debug;                    /* debug lexical analysis ? */
     int              eol;                      /* last token EOL ? */
+    int              eof;                      /* previous token EOF ? */
     char             tokens[RINGBUF_SIZE];     /* token ring buffer */
     int              offset;                   /* ring buffer offset */
     lexer_input_t   *input;                    /* current input */
@@ -784,6 +785,7 @@ ESCAPE		       \\
                               PUSH_BACK_EOL();                 }
 {COMMENT_TRAIL}             { IGNORE(COMMENT_TRAIL);
                               PUSH_BACK_EOL();                 }
+\r                          { IGNORE(CR);                      }
 {EOL}                       { PROCESS_EOL();                   }
 
 {KEYWORD_GLOBAL}            { PASS_KEYWORD(GLOBAL);            }
@@ -861,8 +863,16 @@ ESCAPE		       \\
 			      }
 			    }
 
-<<EOF>>                     { if (!lexer_pop_input())          
-                                  yyterminate();               
+<<EOF>>                     {
+                               if (!lexer.eof) {
+                                   lexer.eof = TRUE;
+                                   PROCESS_EOL();
+                               }
+                               else {
+                                   lexer.eof = FALSE;
+                                   if (!lexer_pop_input())
+                                       yyterminate();
+                               }
 /* 
  * Local Variables:
  * c-basic-offset: 4
