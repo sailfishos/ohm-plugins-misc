@@ -1115,6 +1115,10 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
     member    = dbus_message_get_member(msg);
     result    = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
+    if (interface == NULL || member == NULL) {
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
     OHM_DEBUG(DBG_DBUS, "got '%s' request on interface '%s'",member,interface);
 
     if (type == DBUS_MESSAGE_TYPE_METHOD_CALL &&
