@@ -275,7 +275,7 @@ apptrack_query(pid_t *pid, const char **binary, const char **argv0,
         if (binary != NULL)
             *binary = process->binary;
         if (argv0 != NULL)
-            *argv0 = get_argv0(process);
+            *argv0 = process->argv0 ? process->argv0 : get_argv0(process);
         if (group != NULL)
             *group  = process->group ? process->group->name : "<unknown>";
     }
