@@ -371,7 +371,9 @@ static int profile_load_state(void)
     int err;
     
     if ((fp = fopen(PROFILE_SAVE_PATH, "r")) == NULL) {
-        printf("%s: opening %s failed\n", __FUNCTION__, PROFILE_SAVE_PATH);
+        if (errno != ENOENT)
+            OHM_ERROR("profile: could not load saved state from %s (%d: %s)",
+                      PROFILE_SAVE_PATH, errno, strerror(errno));
         return errno;
     }
 
@@ -385,7 +387,7 @@ static int profile_load_state(void)
     
     /* create new fact and populate it with saved fields */
     if ((fact = ohm_fact_new(FACTSTORE_PROFILE)) == NULL) {
-        printf("%s: creating %s failed\n", __FUNCTION__, FACTSTORE_PROFILE);
+        OHM_ERROR("profile: failed to create fact %s", FACTSTORE_PROFILE);
         fclose(fp);
         return ENOMEM;
     }
@@ -397,12 +399,12 @@ static int profile_load_state(void)
     
     if (err != ENOENT) {
         g_object_unref(fact);
-        printf("%s: loading profile failed\n", __FUNCTION__);
+        OHM_ERROR("profile: failed to load saved state");
         return err;
     }
 
     ohm_fact_store_insert(fs, fact);
-    OHM_INFO("Profile state loaded.");
+    OHM_INFO("profile: saved state loaded");
     return 0;
 }
 
@@ -469,7 +471,7 @@ static void profile_name_change(const char *profile, void *dummy)
     profileval_t *values = NULL;
 
 #if 0
-    printf("> profile name change: '%s'\n", profile);
+    OHM_INFO("profile: active profile has changed: '%s'", profile);
 #endif
 
     if (!profile)
