@@ -2334,10 +2334,43 @@ static void xevent_cb(xif_t *xif, xcb_generic_event_t *ev)
  */
 
 static void (*orig_handler)(int);
+static int    num_sigpipes;
+
 
 static void sigpipe_handler(int signum)
 {
-    OHM_ERROR("videoep: got SIGPIPE");
+
+    /*
+     * Notes:
+     *
+     *    Emitting an error message might cause ohm taking 100 % CPU in
+     *    a 'SIGPIPE busy loop'. Here's how you can get there:
+     *
+     *  1) Run with USB networking, stderr redirected through the
+     *     console plugin to a telnet session over the USB cable.
+     *
+     *  2) Disconnect the USB cable without releasing stderr.
+     *
+     *  3) Use the device (eg. switch between applications), until you
+     *     get an error message (which is typically from this plugin
+     *     complaining about request queue being full).
+     *
+     *  4) You're happily busy looping...
+     *
+     *  Basically what happens is this: after the cable is disconnected any
+     *  write(2) to fd 2 will trigger a SIGPIPE... which in turn causes an
+     *  attempt to log an error message here which goes to stderr/fd 2...
+     *  which in turn causes a SIGPIPE... ad infinitum or actually until
+     *  we run out of battery which in this case happens very fast and much
+     *  before infinity is even close ;-)
+     *
+     *  To avoid this, we stop reporting SIGPIPEs if we ever receive a
+     *  suspiciously large number of them. We expect any potentially
+     *  chained original handler to do the same.
+     */
+
+    if (num_sigpipes++ < 32)
+        OHM_ERROR("videoep: got SIGPIPE");
     
     if (orig_handler != NULL)
         orig_handler(signum);
