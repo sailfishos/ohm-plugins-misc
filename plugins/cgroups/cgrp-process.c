@@ -1149,6 +1149,7 @@ process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
     proc_hash_unhash(ctx, process);
     FREE(process->binary);
     FREE(process->argv0);
+    FREE(process->argvx);
     FREE(process);
 }
 
