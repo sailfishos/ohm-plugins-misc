@@ -66,8 +66,15 @@ USA.
 #define test_bit(n, bits) (((bits)[(n) / BITS_PER_U32]) &       \
                            (0x1 << ((n) % BITS_PER_U32)))
 
-#ifndef SW_INCOMPATIBLE_INSERT
+/*
+ * Notes: AFAICT from the patches, the latest driver emits
+ *   SW_JACK_PHYSICAL_INSERT (5:7) instead of 5:14 when it
+ *   detects an incompatible heaset. So we also use that.
+ */
+#if 0
 #  define SW_INCOMPATIBLE_INSERT 14
+#else
+#  undef SW_INCOMPATIBLE_INSERT
 #endif
 
 
@@ -221,8 +228,11 @@ jack_query(int fd)
     microphone   = test_bit(SW_MICROPHONE_INSERT   , bitmask);
     lineout      = test_bit(SW_LINEOUT_INSERT      , bitmask);
     videoout     = test_bit(SW_VIDEOOUT_INSERT     , bitmask);
+#ifdef SW_INCOMPATIBLE_INSERT
     incompatible = test_bit(SW_INCOMPATIBLE_INSERT , bitmask);
-    physical     = test_bit(SW_JACK_PHYSICAL_INSERT, bitmask);
+#else
+    incompatible = test_bit(SW_JACK_PHYSICAL_INSERT, bitmask);
+#endif
 
     OHM_INFO("accessories: headphone is %sconnected" , headphone  ? "" : "dis");
     OHM_INFO("accessories: microphone is %sconnected", microphone ? "" : "dis");
@@ -351,12 +361,16 @@ jack_event(struct input_event *event, void *user_data)
         videoout = value;
         break;
  
+#ifdef SW_INCOMPATIBLE_INSERT
     case SW_INCOMPATIBLE_INSERT:
         incompatible = value;
         break;
+#else
+    case SW_JACK_PHYSICAL_INSERT:
+        incompatible = value;
+        break;
+#endif
 
-   case SW_JACK_PHYSICAL_INSERT:
-        physical = value;
     SYN_EVENT:
         jack_update_facts(FALSE);
         break;
