@@ -4,7 +4,7 @@ EXTRA_DIST         = $(config_DATA)
 configdir          = $(sysconfdir)/ohm/plugins.d
 config_DATA        = auth.ini
 
-AM_CFLAGS = -g3 -O0
+#AM_CFLAGS = -g3 -O0
 
 libohm_auth_la_SOURCES = plugin.c auth-request.c auth-creds.c dbusif.c
 

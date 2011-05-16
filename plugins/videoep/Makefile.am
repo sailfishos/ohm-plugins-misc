@@ -9,7 +9,7 @@ AM_YFLAGS          = -p $(PARSER_PREFIX)
 AM_LFLAGS          = -P $(PARSER_PREFIX)
 LEX_OUTPUT_ROOT    = ./lex.$(PARSER_PREFIX)
 
-AM_CFLAGS = -g3 -O0
+#AM_CFLAGS = -g3 -O0
 
 libohm_videoep_la_SOURCES = plugin.c mem.c config-parser.y config-scanner.l \
                             data-types.c xif.c videoipc.c \

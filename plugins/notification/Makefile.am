@@ -4,7 +4,7 @@ EXTRA_DIST         = $(config_DATA)
 configdir          = $(sysconfdir)/ohm/plugins.d
 config_DATA        = notification.ini
 
-AM_CFLAGS = -g3 -O0
+#AM_CFLAGS = -g3 -O0
 
 libohm_notification_la_SOURCES = plugin.c dbusif.c ruleif.c resource.c \
                                  proxy.c longlive.c subscription.c
