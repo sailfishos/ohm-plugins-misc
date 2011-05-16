@@ -51,7 +51,9 @@ void dsp_init(OhmPlugin *plugin)
 {
     const char *pidpath;
     const char *enablepath;
-    int enablefd;
+    const char *unauthpath;
+    const char *allow_unauth;
+    int fd, unauth;
 
     ENTER;
 
@@ -71,14 +73,14 @@ void dsp_init(OhmPlugin *plugin)
 
 
         if ((enablepath = ohm_plugin_get_param(plugin,"enablepath")) != NULL) {
-            if ((enablefd = open(enablepath, O_WRONLY)) < 0) {
+            if ((fd = open(enablepath, O_WRONLY)) < 0) {
                 OHM_INFO("dspep: failed to enable dsp enforcement: "
                          "can't open '%s' for write (%s)",
                          enablepath, strerror(errno));
                 break;
             }
 
-            if (write(enablefd, "1", 1) == 1)
+            if (write(fd, "1", 1) == 1)
                 OHM_INFO("dspep: dsp enforcement enabled");
             else {
                 OHM_INFO("dspep: failed to enable dsp enforcement: "
@@ -86,8 +88,43 @@ void dsp_init(OhmPlugin *plugin)
                          enablepath, strerror(errno));
             }
 
-            close(enablefd);
+            close(fd);
         }
+
+
+        unauthpath   = ohm_plugin_get_param(plugin, "unauthpath");
+        allow_unauth = ohm_plugin_get_param(plugin, "allow-unauthorized");
+
+        if (unauthpath != NULL && allow_unauth != NULL) {
+            if (!strcasecmp(allow_unauth, "yes") ||
+                !strcasecmp(allow_unauth, "true"))
+                unauth = TRUE;
+            else
+                unauth = FALSE;
+
+            if ((fd = open(unauthpath, O_WRONLY)) < 0) {
+                OHM_INFO("dspep: failed to %s unauthorized access to idle DSP: "
+                         "can't open '%s' for writing (%s)",
+                         unauth ? "enable" : "disable",
+                         unauthpath, strerror(errno));
+                break;
+            }
+            
+            if (write(fd, unauth ? "1" : "0", 1) == 1)
+                OHM_INFO("dspep: %s unauthorized access to idle dsp",
+                         unauth ? "enabled" : "disabled");
+            else
+                OHM_INFO("dspep: failed to %s unauthorized access to idle "
+                         "DSP: can't write \"%s\" to '%s' (%s)",
+                         unauth ? "grant" : "block",
+                         unauth ? "1"     : "0",
+                         unauthpath, strerror(errno));
+
+            close(fd);
+        }
+        else
+            OHM_INFO("dspep: %s configuration for unauthorized access to DSP",
+                     allow_unauth && !unauthpath ? "missing" : "not touching"); 
 
     } while (0);
 
