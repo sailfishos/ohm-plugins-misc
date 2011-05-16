@@ -47,7 +47,8 @@ USA.
 #  define SOL_NETLINK 270
 #endif
 
-#define EVENT_BUF_SIZE 4096
+#define SETUP_RETRY_DELAY (5 * 1000)
+#define EVENT_BUF_SIZE    4096
 
 static int   sock  = -1;
 static int   nlseq = 0;
@@ -334,7 +335,8 @@ proc_recv(unsigned char *buf, size_t bufsize, int block)
 
     if (n < 0) {
         if (errno != EAGAIN)
-            OHM_ERROR("cgrp: failed to receive process event");
+            OHM_ERROR("cgrp: failed to receive netlink process event (%d: %s)",
+                      errno, strerror(errno));
     }
 
     return NULL;
@@ -536,17 +538,13 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
         }
 
         /*
-         * close netlink socket and set it up again after a timeout
+         * close netlink socket and try to set it up again after a timeout
          */
 
         netlink_cleanup();
         errno = 0;
-
-        netlink_delayed_setup(ctx, 2000);
+        netlink_delayed_setup(ctx, SETUP_RETRY_DELAY);
         
-        netlink_create();
-        proc_subscribe(ctx);
-        process_scan_proc(ctx);
         return FALSE;
     }
     
@@ -649,8 +647,14 @@ delayed_setup(gpointer data)
 {
     cgrp_context_t *ctx = (cgrp_context_t *)data;
 
-    netlink_create();
-    proc_subscribe(ctx);
+    if (!netlink_create())
+        return TRUE;                            /* retry again */
+    
+    if (!proc_subscribe(ctx)) {
+        netlink_close();
+        return TRUE;                            /* retry again */
+    }
+        
     process_scan_proc(ctx);
     
     setup_timer = 0;
