@@ -2,7 +2,7 @@ plugindir = @OHM_PLUGIN_DIR@
 plugin_LTLIBRARIES = libohm_dspep.la
 EXTRA_DIST         = $(config_DATA)
 configdir          = $(sysconfdir)/ohm/plugins.d
-config_DATA        = dspep.ini
+config_DATA        = # dspep.ini
 
 AM_CFLAGS = -g3 -O0
 
