@@ -275,6 +275,7 @@ static void run_hook(hook_type_t);
 
 static void resctl_realloc(void);
 static void resctl_update (int video);
+static void resctl_video_pid(pid_t pid);
 
 static int resctl_disabled;
 
@@ -298,6 +299,10 @@ static int resctl_disabled;
             resctl_update(video);               \
     } while (0)
 
+#define RESCTL_VIDEO_PID(pid) do {              \
+        if (!resctl_disabled)                   \
+            resctl_video_pid(pid);              \
+    } while (0)
 
 /********************
  * bus_init
@@ -803,6 +808,7 @@ se_pid_query_cb(DBusPendingCall *pending, void *data)
     OHM_INFO("telephony: stream engine PID is %u.", pid);
 
     video_pid = pid;
+    RESCTL_VIDEO_PID(video_pid);
     if (need_video())
         RESCTL_REALLOC();
     
@@ -2148,6 +2154,7 @@ name_owner_changed(DBusConnection *c, DBusMessage *msg, void *data)
     if (!after || !after[0]) {
         OHM_INFO("Telepathy stream engine went down.");
         video_pid = 0;
+        RESCTL_VIDEO_PID(video_pid);
     }
     else {
         OHM_INFO("Telepathy stream engine is up (address %s).", after);
@@ -4581,9 +4588,23 @@ resctl_grant(resmsg_t *msg, resset_t *rset, void *data)
 
 
 static void
+resctl_video_pid(pid_t pid)
+{
+    resmsg_t vidmsg;
+
+    vidmsg.video.type  = RESMSG_VIDEO;
+    vidmsg.video.id    = RSET_ID;
+    vidmsg.video.reqno = rctl.reqno++;
+    vidmsg.video.pid   = pid;
+        
+    resproto_send_message(rctl.rset, &vidmsg, resctl_status);
+}
+
+
+static void
 resctl_update(int videocall)
 {
-    resmsg_t msg, vidmsg;
+    resmsg_t msg;
     uint32_t video;
     
     OHM_INFO("telephony resctl: updating, video resource %s...",
@@ -4596,16 +4617,6 @@ resctl_update(int videocall)
         return;
     
     video = videocall ? (RESMSG_VIDEO_PLAYBACK | RESMSG_VIDEO_RECORDING): 0;
-    
-    
-    if (video) {
-        vidmsg.video.type  = RESMSG_VIDEO;
-        vidmsg.video.id    = RSET_ID;
-        vidmsg.video.reqno = rctl.reqno++;
-        vidmsg.video.pid   = video_pid;
-        
-        resproto_send_message(rctl.rset, &vidmsg, resctl_status);
-    }
     
     msg.record.type       = RESMSG_UPDATE;
     msg.record.id         = RSET_ID;
