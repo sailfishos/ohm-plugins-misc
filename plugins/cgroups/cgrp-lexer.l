@@ -209,18 +209,22 @@ lexer_error(lexer_t *l, const char *format, ...)
             cgrpyylval.uint32.value = parse_uint32(&lexer, __token);    \
         }                                                               \
                                                                         \
+        cgrpyylval.any.token = __token;                                 \
         return KEYWORD_##kw;                                            \
     } while (0)
 
 #define PASS_TOKEN(type) do {                                           \
+        char *__token;                                                  \
+                                                                        \
         if (!strcmp(#type, "EOL"))                                      \
             lexer_error(&lexer, "internal error: TOKEN(EOL) !");        \
                                                                         \
         DEBUG("TOKEN %s @ %s:%d", #type, lexer_file(), lexer_line());   \
                                                                         \
         lexer.eol = FALSE;                                              \
-        token_save(&lexer, cgrpyytext);                                 \
+        __token = token_save(&lexer, cgrpyytext);                       \
                                                                         \
+        cgrpyylval.any.token = __token;                                 \
         return TOKEN_##type;                                            \
     } while (0)
     
@@ -251,6 +255,7 @@ lexer_error(lexer_t *l, const char *format, ...)
             lexer_error(&lexer, "invalid numeric type %s", #type);      \
         }                                                               \
                                                                         \
+        cgrpyylval.any.token = __token;                                 \
         return TOKEN_##type;                                            \
     } while (0)
 
@@ -275,10 +280,13 @@ lexer_error(lexer_t *l, const char *format, ...)
         cgrpyylval.string.value = __token;                              \
         lexer.eol = FALSE;                                              \
                                                                         \
+        cgrpyylval.any.token = __token;                                 \
         return TOKEN_##type;                                            \
     } while (0)
 
 #define PROCESS_EOL() do {                                              \
+        char *__token;                                                  \
+                                                                        \
         lexer.input->line++;                                            \
         if (lexer.eol) 							\
             IGNORE(EOL);                                                \
@@ -286,8 +294,9 @@ lexer_error(lexer_t *l, const char *format, ...)
             DEBUG("TOKEN EOL @ %s:%d", lexer_file(), lexer_line());     \
                                                                         \
             lexer.eol = TRUE;                                           \
-            token_saven(&lexer, "\n", 1);                               \
+            __token = token_saven(&lexer, "\n", 1);                     \
                                                                         \
+            cgrpyylval.any.token = __token;                             \
             return TOKEN_EOL;                                           \
         }                                                               \
     } while (0)

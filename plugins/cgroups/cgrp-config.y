@@ -136,6 +136,7 @@ static char rule_group[256];
 %type <action> action_ignore
 %type <action> action_no_op
 
+%type <ctrl_settings> optional_cgroup_control_settings
 %type <ctrl_settings> cgroup_control_settings
 %type <ctrl_settings> cgroup_control_setting
 %type <string> cgroup_control_path
@@ -426,7 +427,7 @@ cgroup_control: KEYWORD_CGROUP_CONTROL cgroup_control_def
     ;
 
 cgroup_control_def: string cgroup_control_path 
-                    cgroup_control_settings {
+                    optional_cgroup_control_settings {
           cgrp_ctrl_t *ctrl, **p;
 
           if (ALLOC_OBJ(ctrl) == NULL) {
@@ -445,6 +446,11 @@ cgroup_control_def: string cgroup_control_path
     ;
 
 cgroup_control_path: TOKEN_STRING { $$ = $1; }
+    ;
+
+
+optional_cgroup_control_settings: /* empty */ { $$ = NULL; }
+    |    cgroup_control_settings              { $$ = $1; }
     ;
 
 cgroup_control_settings: cgroup_control_setting {
@@ -713,6 +719,30 @@ partition_control: TOKEN_IDENT TOKEN_IDENT "\n" {
 
           setting->name  = STRDUP($1.value);
           setting->value = STRDUP($2.value);
+          $$             = setting;
+    }
+    |  TOKEN_IDENT TOKEN_UINT "\n" {
+          cgrp_ctrl_setting_t *setting;
+
+          if (ALLOC_OBJ(setting) == NULL) {
+              OHM_ERROR("cgrp: failed to allocate partition control setting");
+              exit(1);
+          }
+
+          setting->name  = STRDUP($1.value);
+          setting->value = STRDUP($2.token);
+          $$             = setting;
+    }
+    |  TOKEN_IDENT TOKEN_SINT "\n" {
+          cgrp_ctrl_setting_t *setting;
+
+          if (ALLOC_OBJ(setting) == NULL) {
+              OHM_ERROR("cgrp: failed to allocate partition control setting");
+              exit(1);
+          }
+
+          setting->name  = STRDUP($1.value);
+          setting->value = STRDUP($2.token);
           $$             = setting;
     }
     ;

@@ -633,6 +633,7 @@ ctrl_apply(cgrp_context_t *ctx, cgrp_partition_t *partition,
 {
     cgrp_ctrl_setting_t *cs;
     cgrp_ctrl_t         *ctrl;
+    char                *value;
     int                  fd, success;
 
     for (ctrl = ctx->controls; ctrl != NULL; ctrl = ctrl->next) {
@@ -645,9 +646,12 @@ ctrl_apply(cgrp_context_t *ctx, cgrp_partition_t *partition,
         return FALSE;
     }
     
+    value = setting->value;
     for (cs = ctrl->settings; cs != NULL; cs = cs->next) {
-        if (!strcmp(cs->name, setting->value))
+        if (!strcmp(cs->name, setting->value)) {
+            value = cs->value;
             break;
+        }
     }
 
     if (cs == NULL) {
@@ -665,14 +669,14 @@ ctrl_apply(cgrp_context_t *ctx, cgrp_partition_t *partition,
     }
 
     OHM_INFO("cgrp: setting '%s' ('%s') to '%s' ('%s') for partition '%s'",
-             ctrl->name, ctrl->path, cs->name, cs->value, partition->name);
+             ctrl->name, ctrl->path, cs->name, value, partition->name);
 
-    success = write_control(fd, "%s", cs->value);
+    success = write_control(fd, "%s", value);
     close(fd);
 
     if (!success)
         OHM_WARNING("failed to set '%s' to '%s' ('%s') for partition '%s'",
-                    ctrl->name, cs->name, cs->value, partition->name);
+                    ctrl->name, cs->name, value, partition->name);
     
     return success;
 }
