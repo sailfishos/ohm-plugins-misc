@@ -422,9 +422,10 @@ static void forced_auto_release(resource_set_t *rs)
 
     resset_t *resset;
 
-    if (rs && (resset = rs->resset)) {
-        if (rs->block && rs->request && !strcmp(rs->request, "acquire")) {
-
+    if (rs && (resset = rs->resset) && rs->block) {
+        if (!rs->request || strcmp(rs->request, "acquire"))
+            resource_set_send_release_request(rs);
+        else {
             OHM_DEBUG(DBG_MGR, "release resource set %s/%u (manager id %u)",
                       resset->peer, resset->id, rs->manager_id);
 
