@@ -1385,10 +1385,11 @@ process_adjust_oom(cgrp_context_t *ctx,
 {
     char path[PATH_MAX], val[8], *p;
     int  oom_adj, mapped, clamped, fd, len, success;
+    int  neg;
 
     if (process->pid != process->tgid)
         return TRUE;
-    
+
     if (adjust == CGRP_ADJ_RELATIVE)
         oom_adj = process->oom_adj + value;
     else
@@ -1468,27 +1469,48 @@ process_adjust_oom(cgrp_context_t *ctx,
      */
     
     snprintf(path, sizeof(path), "/proc/%u/oom_adj", process->pid);
-    if ((fd = open(path, O_WRONLY)) >= 0) {
-        p = val;
 
-        if (mapped < 0) {
-            *p++ = '-';
-            mapped = -mapped;
-        }
-        if (mapped < 10)
-            *p++ = '0' + mapped;
-        else {
-            *p++ = '1';
-            *p++ = '0' + (mapped - 10);
-        }
-        len = p - val;
-        
-        success = (write(fd, val, len) == len);
+    // Check the current value and if it is negative, don't touch it.
+    success = TRUE;
+    neg = FALSE;
+
+    if ((fd = open(path, O_RDONLY)) < 0) {
+        success = FALSE;
+    }
+    else {
+
+        if ((len = read(fd, &val, 1)) < 1) success = FALSE;
+
+        else if (val[0] == '-') neg = TRUE;
+
         close(fd);
     }
-    else
-        success = FALSE;
+    if (neg) {
+        return TRUE;
+    }
+    if (success) {
+        if ((fd = open(path, O_WRONLY)) >= 0) {
+            p = val;
 
+            if (mapped < 0) {
+                *p++ = '-';
+                mapped = -mapped;
+            }
+            if (mapped < 10)
+                *p++ = '0' + mapped;
+            else {
+                *p++ = '1';
+                *p++ = '0' + (mapped - 10);
+            }
+            len = p - val;
+        
+            success = (write(fd, val, len) == len);
+            close(fd);
+        }
+        else {
+            success = FALSE;
+        }
+    }
     return success || errno == ENOENT;
 }
 
