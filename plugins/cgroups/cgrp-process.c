@@ -558,8 +558,9 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 static int
 netlink_create(void)
 {
+    unsigned int val;
     struct sockaddr_nl addr;
-    
+
     if ((sock = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_CONNECTOR)) < 0) {
         OHM_ERROR("cgrp: failed to create connector netlink socket");
         goto fail;
@@ -580,7 +581,11 @@ netlink_create(void)
         OHM_ERROR("cgrp: failed to set netlink membership");
         goto fail;
     }
-    
+
+    val = 1;
+    if (!setsockopt(sock, SOL_NETLINK, NETLINK_NO_ENOBUFS, &val, sizeof(val))) {
+        OHM_INFO("cgrp: disable netlink ENOBUFS notifications");
+    }
 
     return TRUE;
 
