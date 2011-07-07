@@ -163,6 +163,7 @@ plugin_exit(OhmPlugin *plugin)
     console_exit();
 
     config_monitor_exit(ctx);
+    apptrack_exit(ctx);
     ep_exit(ctx, signaling_unregister);
     sysmon_exit(ctx);
     curve_exit(ctx);

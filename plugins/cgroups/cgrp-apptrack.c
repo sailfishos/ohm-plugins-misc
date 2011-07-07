@@ -474,6 +474,9 @@ apptrack_group_change(cgrp_context_t *ctx,
     char *group, *process;
     char *vars[2*3 + 1];
 
+    if (context == NULL)
+        return TRUE;
+
     if (old_group == new_group && old_proc == new_proc)
         return TRUE;
 
