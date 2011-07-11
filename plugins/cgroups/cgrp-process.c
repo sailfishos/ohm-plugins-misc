@@ -1389,7 +1389,7 @@ process_adjust_oom(cgrp_context_t *ctx,
                    cgrp_process_t *process, cgrp_adjust_t adjust, int value)
 {
     char path[PATH_MAX], val[8], *p;
-    int  oom_adj, mapped, clamped, fd, len, success;
+    int  oom_adj, mapped, fd, len, success;
     int  neg;
 
     if (process->pid != process->tgid)
@@ -1455,8 +1455,7 @@ process_adjust_oom(cgrp_context_t *ctx,
     if (oom_adj == process->oom_adj)
         return TRUE;
     
-    mapped           = curve_map(ctx->oom_curve, oom_adj, &clamped);
-    process->oom_adj = clamped;
+    mapped = curve_map(ctx->oom_curve, oom_adj, &process->oom_adj);
 
     if (mapped < -17)
         mapped = -17;
@@ -1465,7 +1464,7 @@ process_adjust_oom(cgrp_context_t *ctx,
 
     OHM_DEBUG(DBG_ACTION, "%u/%u (%s), adjusting OOM score %d/%d:%d",
               process->tgid, process->pid, process->binary,
-              oom_adj, clamped, mapped);
+              oom_adj, process->oom_adj, mapped);
     
     /*
      *
