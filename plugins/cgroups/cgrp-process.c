@@ -1390,7 +1390,6 @@ process_adjust_oom(cgrp_context_t *ctx,
 {
     char path[PATH_MAX], val[8], *p;
     int  oom_adj, mapped, fd, len, success;
-    int  neg;
 
     if (process->pid != process->tgid)
         return TRUE;
@@ -1471,51 +1470,57 @@ process_adjust_oom(cgrp_context_t *ctx,
      * XXX TODO: cache fd to /proc/<pid>/oom_adj and close it during
      *           process_remove
      */
-    
+
     snprintf(path, sizeof(path), "/proc/%u/oom_adj", process->pid);
 
-    // Check the current value and if it is negative, don't touch it.
-    success = TRUE;
-    neg = FALSE;
+    /* Always return success, if process is rescheduled */
+    success = FALSE;
 
-    if ((fd = open(path, O_RDONLY)) < 0) {
-        success = FALSE;
+    fd = open(path, O_RDWR);
+    if (fd < 0) {
+        if (errno == ENOENT)
+            success = TRUE;
+        goto exit;
     }
+
+    len = read(fd, &val, 1);
+    if (len < 0) {
+        if (errno == ESRCH)
+            success = TRUE;
+        goto exit;
+    }
+
+    /* Check the current value and if it is negative, don't touch it. */
+    if (val[0] == '-') {
+        success = TRUE;
+        goto exit;
+    }
+
+    /* mapped value is strictly in -17..15 range */
+    p = val;
+    if (mapped < 0) {
+        *p++ = '-';
+        mapped = -mapped;
+    }
+    if (mapped < 10)
+        *p++ = '0' + mapped;
     else {
+        *p++ = '1';
+        *p++ = '0' + (mapped - 10);
+    }
+    len = p - val;
 
-        if ((len = read(fd, &val, 1)) < 1) success = FALSE;
+    success = write(fd, val, len);
+    if (success == len || (success < 0 && errno == ESRCH))
+        success = TRUE;
+    else
+        success = FALSE;
 
-        else if (val[0] == '-') neg = TRUE;
-
+ exit:
+    if (fd >= 0)
         close(fd);
-    }
-    if (neg) {
-        return TRUE;
-    }
-    if (success) {
-        if ((fd = open(path, O_WRONLY)) >= 0) {
-            p = val;
 
-            if (mapped < 0) {
-                *p++ = '-';
-                mapped = -mapped;
-            }
-            if (mapped < 10)
-                *p++ = '0' + mapped;
-            else {
-                *p++ = '1';
-                *p++ = '0' + (mapped - 10);
-            }
-            len = p - val;
-        
-            success = (write(fd, val, len) == len);
-            close(fd);
-        }
-        else {
-            success = FALSE;
-        }
-    }
-    return success || errno == ENOENT;
+    return success;
 }
 
 
