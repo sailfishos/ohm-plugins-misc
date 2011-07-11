@@ -167,9 +167,14 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
         attr.cmdline = cmdl;
         attr.process = proc_hash_lookup(ctx, attr.pid);
 
-        if (!process_get_binary(&attr))
-            return FALSE;                   /* we assume it's gone already */
-        else {
+        if (!process_get_binary(&attr)) {
+            /*
+             * we assume that the process is gone already and no need to
+             * classify it, but still we'll stay waiting for exit event
+             * to perform a proper cleanup procedure later
+             */
+            return FALSE;
+        } else {
             if (event->any.type == CGRP_EVENT_EXEC && attr.process != NULL) {
                 FREE(attr.process->binary);
                 attr.process->binary = STRDUP(attr.binary);

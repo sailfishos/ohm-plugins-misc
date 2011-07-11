@@ -748,11 +748,15 @@ process_get_binary(cgrp_proc_attr_t *attr)
         return attr->binary;
     
     sprintf(exe, "/proc/%u/exe", attr->pid);
-    
-    if ((len = readlink(exe, exe, sizeof(exe) - 1)) < 0) {
-        process_get_type(attr);
-        return attr->binary;
+
+    len = readlink(exe, exe, sizeof(exe) - 1);
+    if (len < 0) {
+        if (errno != ENOENT)
+            OHM_ERROR("cgrp: can't unreference a link of %d exe: %d (%s)",
+                      attr->pid, errno, strerror(errno));
+        return NULL;
     }
+
     exe[len] = '\0';
 
     /*
