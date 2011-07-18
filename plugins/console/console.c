@@ -461,8 +461,11 @@ ungrab_fd(int grab)
 
     if (gfd < 0)
         return ENOENT;
-    
-    dup2(gfd, gid);
+
+    if (gid != gfd) {
+        dup2(gfd, gid);
+        close(gfd);
+    }
 
     if (gid == fileno(stdout))
         setvbuf(stdout, NULL, _IOLBF, 0);
