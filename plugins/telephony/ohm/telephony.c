@@ -55,6 +55,23 @@ USA.
 static int DBG_CALL;
 static int bt_ui_kludge;
 
+/*
+  This is for handling the situation when a call
+  is initiated before we have session bus address
+  (We don't get directly informed about the call)
+  As long as we haven't received a CHANNEL_CLOSED
+  signal, if we get a call status, we deduce that
+  the call began in the bootup phase, and we'll
+  make some trickery to the audio routing.
+  The states are:
+  0: CHANNEL_CLOSED not received, no call going on
+  1: CHANNEL_CLOSED not received, a call going on
+  2: NEW_CHANNEL received while in state 1
+  3: CHANNEL_CLOSED received
+  After getting to state 3, we are in the normal situation
+*/
+static int early_call = 0;
+
 OHM_DEBUG_PLUGIN(telephony,
                  OHM_DEBUG_FLAG("call", "call events", &DBG_CALL));
 
@@ -223,6 +240,16 @@ static GHashTable *deferred;                     /* deferred events */
 #define FACT_PLAYBACK    "com.nokia.policy.playback"
 
 int set_string_field(OhmFact *fact, const char *field, const char *value);
+static int update_factstore_entry(char         *name,
+                                  fsif_field_t *selist,
+                                  fsif_field_t *fldlist);
+static void set_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr);
+static char *print_selector(fsif_field_t *selist, char *buf, int len);
+static OhmFact *find_entry(char *name, fsif_field_t *selist);
+static char *print_value(fsif_fldtype_t type, void *vptr, char *buf, int len);
+static int matching_entry(OhmFact *fact, fsif_field_t *selist);
+static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr);
+
 
 
 static OhmFactStore *store;
@@ -558,7 +585,7 @@ bus_new_session(DBusConnection *c, DBusMessage *msg, void *data)
         OHM_ERROR("telephony: failed to connect to session bus.");
     else
         OHM_INFO("telephony: connected to session bus.");
-    
+
     /* we need to give others a chance to notice the session bus */
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
@@ -2186,19 +2213,57 @@ csd_call_status(DBusConnection *c, DBusMessage *msg, void *data)
 {
     call_event_t event;
     uint32_t     status;
+    fsif_field_t  selist[] = {
+        INVALID_FIELD
+    };
+    fsif_field_t  fldlist0[] = {
+        INTEGER_FIELD ("value"  , 0 ),
+        INVALID_FIELD
+    };
+    fsif_field_t  fldlist1[] = {
+        INTEGER_FIELD ("value"  , 1 ),
+        INVALID_FIELD
+    };
 
     (void)c;
     (void)data;
 
-    if (!bt_ui_kludge)
-        return DBUS_HANDLER_RESULT_HANDLED;
-    
     if (!dbus_message_get_args(msg, NULL,
                                DBUS_TYPE_UINT32, &status,
                                DBUS_TYPE_INVALID)) {
         OHM_ERROR("Failed to parse CSD call status signal.");
         return DBUS_HANDLER_RESULT_HANDLED;
     }
+    if (status == 0) {
+        switch (early_call) {
+
+        case 0: break;
+        case 1:
+            OHM_INFO("%s: early call 1->0", __FUNCTION__);
+            update_factstore_entry(POLICY_FACT_EARLY, selist, fldlist0);
+            early_call = 0;
+            break;
+        case 2:
+            OHM_INFO("%s: early call 2->1", __FUNCTION__);
+            early_call = 1;
+        default: break;
+        }
+    }
+    else {
+        switch (early_call) {
+
+        case 0:
+            OHM_INFO("%s: early call 0->1", __FUNCTION__);
+            update_factstore_entry(POLICY_FACT_EARLY, selist, fldlist1);
+            early_call = 1;
+            break;
+        case 1: break;
+        default: break;
+        }
+    }
+    if (!bt_ui_kludge)
+        return DBUS_HANDLER_RESULT_HANDLED;
+
 
     if (status == CSD_STATUS_ACCEPTED && ncscall == 1 && nipcall == 0) {
         event.call = NULL;
@@ -2615,11 +2680,19 @@ event_handler(event_t *event)
 {
     call_t *call = event->any.call;
     int     status;
+    fsif_field_t  selist[] = {
+        INVALID_FIELD
+    };
+    fsif_field_t  fldlist0[] = {
+        INTEGER_FIELD ("value"  , 0 ),
+        INVALID_FIELD
+    };
 
     event_print(event);
 
     switch (event->type) {
     case EVENT_NEW_CHANNEL:
+
         if (call == NULL) {
             call = call_register(event->channel.call_type,
                                  event->channel.path, event->channel.name,
@@ -2684,6 +2757,16 @@ event_handler(event_t *event)
         else
             event->any.state = STATE_CREATED;
         event->any.call  = call;
+
+        // Handle possible early call situation
+        switch (early_call) {
+
+        case 1:
+            OHM_INFO("%s: early call 1->2", __FUNCTION__);
+            early_call = 2;
+            break;
+        default: break;
+        }
         break;
 
     case EVENT_CALL_REQUEST:
@@ -2736,7 +2819,28 @@ event_handler(event_t *event)
     case EVENT_CALL_PEER_HUNGUP:  event->any.state = STATE_PEER_HUNGUP;  break;
     case EVENT_CALL_LOCAL_HUNGUP: event->any.state = STATE_LOCAL_HUNGUP; break;
     case EVENT_CALL_HELD:         event->any.state = STATE_ON_HOLD;      break;
-    case EVENT_CHANNEL_CLOSED:    event->any.state = STATE_DISCONNECTED; break;
+    case EVENT_CHANNEL_CLOSED:
+        event->any.state = STATE_DISCONNECTED;
+
+        // Handle possible early call situation
+        switch (early_call) {
+
+        case 0:
+            OHM_INFO("%s: early call 0->3", __FUNCTION__);
+            early_call = 3;
+            resolve("audio_route", NULL);
+            resolve("volume_mode", NULL);
+            break;
+        case 1:
+            OHM_INFO("%s: early call 1->3", __FUNCTION__);
+            early_call = 3;
+            update_factstore_entry(POLICY_FACT_EARLY, selist, fldlist0);
+            resolve("audio_route", NULL);
+            resolve("volume_mode", NULL);
+            break;
+        default: break;
+        }
+        break;
     case EVENT_CALL_ENDED:        event->any.state = STATE_DISCONNECTED; break;
 
     case EVENT_SENDING_DIALSTRING:
@@ -4143,6 +4247,21 @@ run_hook(hook_type_t which)
  *****************************************************************************/
 
 
+void fsif_init(OhmPlugin *plugin)
+{
+    (void)plugin;
+
+    store = ohm_fact_store_get_fact_store();
+}
+
+void fsif_exit(OhmPlugin *plugin)
+{
+    (void)plugin;
+
+    store = ohm_fact_store_get_fact_store();
+
+}
+
 /********************
  * set_string_field
  ********************/
@@ -4310,6 +4429,249 @@ policy_call_delete(call_t *call)
     }
 }
 
+static int update_factstore_entry(char         *name,
+                                  fsif_field_t *selist,
+                                  fsif_field_t *fldlist)
+{
+    OhmFact      *fact;
+    fsif_field_t *fld;
+    char          selb[256];
+    char          valb[256];
+    char         *selstr;
+    char         *valstr;
+
+    selstr = print_selector(selist, selb, sizeof(selb));
+
+    if ((fact = find_entry(name, selist)) == NULL) {
+        OHM_ERROR("resource: [%s] Failed to update '%s%s' entry: "
+                  "no entry found", __FUNCTION__, name, selstr);
+        return FALSE;
+    }
+
+    for (fld = fldlist;   fld->type != fldtype_invalid;   fld++) {
+        set_field(fact, fld->type, fld->name, (void *)&fld->value);
+
+
+        valstr = print_value(fld->type,(void *)&fld->value, valb,sizeof(valb));
+
+    }
+
+    return TRUE;
+}
+
+static void set_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
+{
+    fsif_value_t *v = (fsif_value_t *)vptr;
+    GValue       *gv;
+
+    switch (type) {
+    case fldtype_string:    gv = ohm_value_from_string(v->string);      break;
+    case fldtype_integer:   gv = ohm_value_from_int(v->integer);        break;
+    case fldtype_unsignd:   gv = ohm_value_from_unsigned(v->unsignd);   break;
+    case fldtype_floating:  gv = ohm_value_from_double(v->floating);    break;
+    case fldtype_time:      gv = ohm_value_from_time(v->time);          break;
+    default:          OHM_ERROR("resource: invalid type for %s", name); return;
+    }
+
+    ohm_fact_set(fact, name, gv);
+}
+
+static char *print_selector(fsif_field_t *selist, char *buf, int len)
+{
+    fsif_field_t *se;
+    fsif_value_t *v;
+    char         *p, *e, *c;
+    char         *val;
+    char          vb[64];
+
+    if (!selist || !buf || len < 3)
+        return "";
+
+    e = (p = buf) + len - 2;
+
+    p += snprintf(p, e-p, "[");
+
+    for (se = selist, c = "";
+         se->type != fldtype_invalid && p < e;
+         se++, c = ", ")
+    {
+        v = &se->value;
+
+        switch (se->type) {
+        case fldtype_string:   val = v->string;                         break;
+        case fldtype_integer:  val = vb; sprintf(vb,"%ld",v->integer);  break;
+        case fldtype_unsignd:  val = vb; sprintf(vb,"%lu",v->unsignd);  break;
+        case fldtype_floating: val = vb; sprintf(vb,"%lf",v->floating); break;
+        default:               val = "???";                             break;
+        }
+
+        p += snprintf(p, e-p, "%s%s:%s", c, se->name, val);
+    }
+
+    p += snprintf(p, (buf + len) - p, "]");
+
+    return buf;
+}
+
+static OhmFact *find_entry(char *name, fsif_field_t *selist)
+{
+    OhmFact            *fact;
+    GSList             *list;
+
+    for (list  = ohm_fact_store_get_facts_by_name(store, name);
+         list != NULL;
+         list  = g_slist_next(list))
+    {
+        fact = (OhmFact *)list->data;
+
+        if (matching_entry(fact, selist))
+            return fact;
+    }
+    return NULL;
+}
+
+static char *print_value(fsif_fldtype_t type, void *vptr, char *buf, int len)
+{
+    fsif_value_t *v = (fsif_value_t *)vptr;
+    char         *s;
+
+    if (!buf || !v || len <= 0)
+        return "";
+
+    switch (type) {
+    case fldtype_string:   s = v->string;                                break;
+    case fldtype_integer:  s = buf; snprintf(buf,len,"%ld",v->integer);  break;
+    case fldtype_unsignd:  s = buf; snprintf(buf,len,"%lu",v->unsignd);  break;
+    case fldtype_floating: s = buf; snprintf(buf,len,"%lf",v->floating); break;
+    default:               s = "???";                                    break;
+    }
+
+    return s;
+}
+
+static int matching_entry(OhmFact *fact, fsif_field_t *selist)
+{
+    fsif_field_t       *se;
+    char               *strval;
+    long                intval;
+    unsigned long       unsval;
+    double              fltval;
+    unsigned long long  timeval;
+
+    if (selist == NULL)
+        return TRUE;
+
+    for (se = selist;   se->type != fldtype_invalid;   se++) {
+        switch (se->type) {
+
+        case fldtype_string:
+            get_field(fact, fldtype_string, se->name, &strval);
+            if (strval == NULL || strcmp(strval, se->value.string))
+                return FALSE;
+            break;
+
+        case fldtype_integer:
+            get_field(fact, fldtype_integer, se->name, &intval);
+            if (intval != se->value.integer)
+                return FALSE;
+            break;
+
+        case fldtype_unsignd:
+            get_field(fact, fldtype_unsignd, se->name, &unsval);
+            if (unsval != se->value.unsignd)
+                return FALSE;
+            break;
+
+        case fldtype_floating:
+            get_field(fact, fldtype_floating, se->name, &fltval);
+            if (fltval != se->value.floating)
+                return FALSE;
+            break;
+
+        case fldtype_time:
+            get_field(fact, fldtype_time, se->name, &timeval);
+            if (timeval != se->value.time)
+                return FALSE;
+            break;
+
+        default:
+            return FALSE;
+        } /* switch type */
+    } /* for se */
+
+    return TRUE;
+}
+
+static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
+{
+    GValue  *gv;
+
+    if (!fact || !name || !(gv = ohm_fact_get(fact, name))) {
+        OHM_ERROR("resource: [%s] Cant find field %s",
+                  __FUNCTION__, name?name:"<null>");
+        goto return_empty_value;
+    }
+
+    switch (type) {
+
+    case fldtype_string:
+        if (G_VALUE_TYPE(gv) != G_TYPE_STRING)
+            goto type_mismatch;
+        else
+            *(const char **)vptr = g_value_get_string(gv);
+        break;
+
+    case fldtype_integer:
+        switch (G_VALUE_TYPE(gv)) {
+        case G_TYPE_LONG: *(long *)vptr = g_value_get_long(gv); break;
+        case G_TYPE_INT:  *(long *)vptr = g_value_get_int(gv);  break;
+        default:          goto type_mismatch;
+        }
+        break;
+
+    case fldtype_unsignd:
+        if (G_VALUE_TYPE(gv) != G_TYPE_ULONG)
+            goto type_mismatch;
+        else
+            *(unsigned long *)vptr = g_value_get_ulong(gv);
+        break;
+
+    case fldtype_floating:
+        if (G_VALUE_TYPE(gv) != G_TYPE_DOUBLE)
+            goto type_mismatch;
+        else
+            *(double *)vptr = g_value_get_double(gv);
+        break;
+
+    case fldtype_time:
+        if (G_VALUE_TYPE(gv) != G_TYPE_UINT64)
+            goto type_mismatch;
+        else
+            *(time_t *)vptr = g_value_get_uint64(gv);
+        break;
+
+    default:
+        break;
+    }
+
+    return TRUE;
+
+ type_mismatch:
+    OHM_ERROR("resource: [%s] Type mismatch when fetching field '%s'",
+              __FUNCTION__,name);
+
+ return_empty_value:
+    switch (type) {
+    case fldtype_string:      *(char              **)vptr = NULL;       break;
+    case fldtype_integer:     *(long               *)vptr = 0;          break;
+    case fldtype_unsignd:     *(unsigned long      *)vptr = 0;          break;
+    case fldtype_floating:    *(double             *)vptr = 0.0;        break;
+    case fldtype_time:        *(unsigned long long *)vptr = 0ULL;       break;
+    default:                                                            break;
+    }
+
+    return FALSE;
+}
 
 /*****************************************************************************
  *                           *** resource control ***                        *
@@ -4733,6 +5095,7 @@ plugin_init(OhmPlugin *plugin)
     call_init();
     policy_init();
     timestamp_init();
+    fsif_init(plugin);
 
     if (ohm_fact_store_get_facts_by_name(store, FACT_PLAYBACK) != NULL)
         resctl_disabled = TRUE;
@@ -4753,6 +5116,7 @@ plugin_exit(OhmPlugin *plugin)
 {
     (void)plugin;
  
+    fsif_exit(plugin);
     RESCTL_EXIT();
     bus_exit();
     call_exit();

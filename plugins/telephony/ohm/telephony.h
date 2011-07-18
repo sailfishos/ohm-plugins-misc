@@ -105,6 +105,7 @@ USA.
 
 #define POLICY_FACT_CALL   "com.nokia.policy.call"
 #define POLICY_FACT_EMERG  "com.nokia.policy.emergency_call"
+#define POLICY_FACT_EARLY  "com.nokia.policy.early_call"
 
 #define DBUS_INTERFACE_POLICY   "com.nokia.policy"
 #define DBUS_POLICY_NEW_SESSION "NewSession"
@@ -363,6 +364,36 @@ enum {
     TP_CHANGE_REASON_SEPARATED
 };
 
+typedef enum {
+    fldtype_invalid = 0,
+    fldtype_string,
+    fldtype_integer,
+    fldtype_unsignd,
+    fldtype_floating,
+    fldtype_time,
+} fsif_fldtype_t;
+
+typedef union {
+    /* input field types */
+    char               *string;
+    long                integer;
+    unsigned long       unsignd;
+    double              floating;
+    unsigned long long  time;
+
+    /* output field types */
+    void               *retval;
+} fsif_value_t;
+
+typedef struct {
+    fsif_fldtype_t  type;
+    char           *name;
+    fsif_value_t    value;
+} fsif_field_t;
+
+#define INTEGER_FIELD(n,v) { fldtype_integer, n, .value.integer = v }
+#define STRING_FIELD(n,v)  { fldtype_string , n, .value.string  = v ? v : "" }
+#define INVALID_FIELD      { fldtype_invalid, NULL, .value.string = NULL }
 
 #endif /* __OHM_PLUGIN_TELEPHONY_H__ */
 
