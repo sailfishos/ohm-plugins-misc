@@ -84,6 +84,7 @@ static DBusHandlerResult proxy_method(DBusConnection *, DBusMessage *, void *);
 static uint32_t play_handler(DBusMessage *, char *, char *);
 static uint32_t stop_handler(DBusMessage *, char *, char *);
 static uint32_t pause_handler(DBusMessage *, char *, char *);
+static uint32_t bt_stop_handler(DBusMessage *, char *, char *);
 static uint32_t subscribe_handler(DBusMessage *, char *, char *);
 static uint32_t unsubscribe_handler(DBusMessage *, char *, char *);
 static uint32_t status_handler(DBusMessage *, char *, char *);
@@ -1089,6 +1090,7 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
         { client_handler,  DBUS_PLAY_METHOD       , play_handler        },
         { client_handler,  DBUS_STOP_METHOD       , stop_handler        },
         { client_handler,  DBUS_PAUSE_METHOD      , pause_handler       },
+        { client_handler,  DBUS_BT_STOP_METHOD    , bt_stop_handler     },
         { backend_handler, DBUS_STATUS_METHOD     , status_handler      },
         { backend_handler, DBUS_UPDATE_METHOD     , update_handler      },
         { subscr_handler,  DBUS_SUBSCRIBE_METHOD  , subscribe_handler   },
@@ -1271,6 +1273,22 @@ static uint32_t pause_handler(DBusMessage *msg, char *err, char *desc)
     return success;
 }
 
+static uint32_t bt_stop_handler(DBusMessage *msg, char *err, char *desc)
+{
+    uint32_t    success;
+    const char *client;
+    uint32_t    id;
+
+    client = dbus_message_get_sender(msg);
+    OHM_DEBUG(DBG_DBUS, "%s requested bt stop for ringtone", client);
+
+    success = proxy_bt_stop_request(client, msg, desc);
+    if (!success) {
+        snprintf(err, DBUS_ERRBUF_LEN, "%s", DBUS_NGF_ERROR_DENIED);
+    }
+
+    return success;
+}
 
 static uint32_t subscribe_handler(DBusMessage *msg, char *err, char *desc)
 {

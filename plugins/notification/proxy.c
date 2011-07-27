@@ -91,6 +91,7 @@ typedef enum {
 typedef struct proxy_s {
     struct proxy_s  *idnext;    /* chain for id hashes */
     struct proxy_s  *clnext;    /* chain for client hashes */
+    struct proxy_s  *sqnext;    /* chain for sequential access */
     int              type;      /* notification type */
     char            *event;     /* event name */
     uint32_t         id;        /* system-wide unique play request ID */
@@ -107,6 +108,7 @@ typedef struct proxy_s {
 static uint32_t      seqno = 1;              /* serial # for unique notif.ID */
 static proxy_t      *idhashtbl[ID_HASH_DIM]; /* for ID based access */
 static proxy_t      *clhashtbl[CL_HASH_DIM]; /* for client based access */
+static proxy_t      *sqlist = NULL;          /* for sequential based access */
 static uint32_t      play_limit;             /* notif. play limit in msec's */
 static uint32_t      play_timeout;           /* max.time for a play request */
 static uint32_t      stop_timeout;           /* max.time for a stop request */
@@ -123,6 +125,9 @@ static void     cl_hash_add(proxy_t *);
 static void     cl_hash_delete(proxy_t *);
 static proxy_t *cl_hash_lookup_proxy(const char *, void **);
 static int      cl_hash_lookup_client(const char *);
+
+static void     sq_list_add(proxy_t *);
+static void     sq_list_delete(proxy_t *);
 
 static void     timeout_create(proxy_t *, uint32_t);
 static void     timeout_destroy(proxy_t *);
@@ -298,6 +303,28 @@ int proxy_stop_request(uint32_t id, const char *client, void *data, char *err)
     return success;
 }
 
+int proxy_bt_stop_request(const char *client, void *data, char *err)
+{
+    proxy_t *proxy;
+    void *stopdata;
+
+    (void) client;
+    (void) data;
+
+    for (proxy = sqlist; proxy; proxy = proxy->sqnext) {
+        /* if the type is a ringtone, then we'll force a stop and
+           pretend that we are the actual client. */
+        if (proxy->type == rset_ringtone) {
+            OHM_DEBUG(DBG_PROXY, "bt force stop for proxy (id %u)", proxy->id);
+            stopdata = dbusif_create_stop_data(proxy->id);
+            proxy_stop_request(proxy->id, proxy->client, stopdata, err);
+        }
+    }
+
+    /* always succeed */
+    return TRUE;
+}
+
 int proxy_pause_request(uint32_t id, int pause, const char *client, void *data, char *err)
 {
     proxy_t *proxy;
@@ -406,6 +433,7 @@ static proxy_t *proxy_create(uint32_t id, const char *client, void *data)
 
         id_hash_add(proxy);
         cl_hash_add(proxy);
+        sq_list_add(proxy);
 
         OHM_DEBUG(DBG_PROXY, "proxy object created (id %u)", id);
     }
@@ -427,6 +455,7 @@ static void proxy_destroy(proxy_t *proxy)
 
         id_hash_delete(proxy);
         cl_hash_delete(proxy);
+        sq_list_delete(proxy);
 
         dbusif_monitor_client(proxy->client, FALSE);
 
@@ -588,6 +617,43 @@ static int cl_hash_lookup_client(const char *client)
     return FALSE;
 }
 
+static void sq_list_add(proxy_t *proxy)
+{
+    proxy_t *item;
+
+    if (sqlist == NULL) {
+        sqlist = proxy;
+    }
+    else {
+        item = sqlist;
+        while (item->sqnext != NULL) {
+            item = item->sqnext;
+        }
+        item->sqnext = proxy;
+    }
+}
+
+static void sq_list_delete(proxy_t *proxy)
+{
+    proxy_t *item = sqlist;
+    proxy_t *prev = NULL;
+
+    while (item) {
+        if (item == proxy) {
+            if (prev) {
+                prev->sqnext = item->sqnext;
+            }
+            else {
+                sqlist = item->sqnext;
+            }
+            proxy->sqnext = NULL;
+            break;
+        }
+
+        prev = item;
+        item = item->sqnext;
+    }
+}
 
 static void timeout_create(proxy_t *proxy, uint32_t delay)
 {
