@@ -30,7 +30,7 @@ typedef struct _OhmPlugin OhmPlugin;
 void proxy_init(OhmPlugin *);
 int  proxy_playback_request(const char *, const char *, void *, char *);
 int  proxy_stop_request(uint32_t, const char *, void *, char *);
-int  proxy_bt_stop_request(const char *, void *, char *);
+int  proxy_stop_ringtone_request(const char *, void *, char *);
 int  proxy_pause_request(uint32_t, int, const char *, void *, char *);
 int  proxy_status_request(uint32_t, void *);
 int  proxy_update_request(uint32_t, void *);

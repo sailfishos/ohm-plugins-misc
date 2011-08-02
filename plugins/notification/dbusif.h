@@ -69,7 +69,7 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUS_UNSUBSCRIBE_METHOD        "Unsubscribe"
 #define DBUS_STATUS_METHOD             "Status"
 #define DBUS_UPDATE_METHOD             "Update"
-#define DBUS_BT_STOP_METHOD            "BTStop"
+#define DBUS_STOP_RINGTONE_METHOD      "StopRingtone"
 
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL "NameOwnerChanged"
 #define DBUS_POLICY_NEW_SESSION_SIGNAL "NewSession"

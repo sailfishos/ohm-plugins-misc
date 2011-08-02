@@ -303,7 +303,7 @@ int proxy_stop_request(uint32_t id, const char *client, void *data, char *err)
     return success;
 }
 
-int proxy_bt_stop_request(const char *client, void *data, char *err)
+int proxy_stop_ringtone_request(const char *client, void *data, char *err)
 {
     proxy_t *proxy;
     void *stopdata;
@@ -315,7 +315,7 @@ int proxy_bt_stop_request(const char *client, void *data, char *err)
         /* if the type is a ringtone, then we'll force a stop and
            pretend that we are the actual client. */
         if (proxy->type == rset_ringtone) {
-            OHM_DEBUG(DBG_PROXY, "bt force stop for proxy (id %u)", proxy->id);
+            OHM_DEBUG(DBG_PROXY, "ringtone force stop for proxy (id %u)", proxy->id);
             stopdata = dbusif_create_stop_data(proxy->id);
             proxy_stop_request(proxy->id, proxy->client, stopdata, err);
         }
