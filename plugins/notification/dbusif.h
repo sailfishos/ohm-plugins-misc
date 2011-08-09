@@ -65,8 +65,6 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUS_PLAY_METHOD               "Play"
 #define DBUS_STOP_METHOD               "Stop"
 #define DBUS_PAUSE_METHOD              "Pause"
-#define DBUS_SUBSCRIBE_METHOD          "Subscribe"
-#define DBUS_UNSUBSCRIBE_METHOD        "Unsubscribe"
 #define DBUS_STATUS_METHOD             "Status"
 #define DBUS_UPDATE_METHOD             "Update"
 #define DBUS_STOP_RINGTONE_METHOD      "StopRingtone"

@@ -32,13 +32,11 @@ USA.
 #include "proxy.h"
 #include "resource.h"
 #include "longlive.h"
-#include "subscription.h"
 
 typedef enum {
     unknown_handler = 0,
     client_handler,
-    backend_handler,
-    subscr_handler,
+    backend_handler
 } handler_type_t;
 
 typedef struct {
@@ -85,8 +83,6 @@ static uint32_t play_handler(DBusMessage *, char *, char *);
 static uint32_t stop_handler(DBusMessage *, char *, char *);
 static uint32_t pause_handler(DBusMessage *, char *, char *);
 static uint32_t stop_ringtone_handler(DBusMessage *, char *, char *);
-static uint32_t subscribe_handler(DBusMessage *, char *, char *);
-static uint32_t unsubscribe_handler(DBusMessage *, char *, char *);
 static uint32_t status_handler(DBusMessage *, char *, char *);
 static uint32_t update_handler(DBusMessage *, char *, char *);
 
@@ -1093,8 +1089,6 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
         { client_handler,  DBUS_STOP_RINGTONE_METHOD, stop_ringtone_handler },
         { backend_handler, DBUS_STATUS_METHOD       , status_handler        },
         { backend_handler, DBUS_UPDATE_METHOD       , update_handler        },
-        { subscr_handler,  DBUS_SUBSCRIBE_METHOD    , subscribe_handler     },
-        { subscr_handler,  DBUS_UNSUBSCRIBE_METHOD  , unsubscribe_handler   },
         { unknown_handler,        NULL              ,      NULL             }
     };
 
@@ -1155,13 +1149,6 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
                         hlr->function(msg, err, desc);
                         reply(msg);
                     }
-                    result = DBUS_HANDLER_RESULT_HANDLED;
-                    break;
-
-                case subscr_handler:
-                    err[0] = desc[0] = '\0';                        
-                    hlr->function(msg, err, desc);
-                    reply(msg);
                     result = DBUS_HANDLER_RESULT_HANDLED;
                     break;
 
@@ -1287,34 +1274,6 @@ static uint32_t stop_ringtone_handler(DBusMessage *msg, char *err, char *desc)
     }
 
     return success;
-}
-
-static uint32_t subscribe_handler(DBusMessage *msg, char *err, char *desc)
-{
-    const char *client = dbus_message_get_sender(msg);
-
-    (void)err;
-    (void)desc;
-
-    OHM_DEBUG(DBG_DBUS, "susbscription request for %s", client);
-
-    subscription_create(client);
-
-    return TRUE;
-}
-
-static uint32_t unsubscribe_handler(DBusMessage *msg, char *err, char *desc)
-{
-    const char *client = dbus_message_get_sender(msg);
-
-    (void)err;
-    (void)desc;
-
-    OHM_DEBUG(DBG_DBUS, "unsusbscription request for %s", client);
-
-    subscription_destroy(client);
-
-    return TRUE;
 }
 
 static uint32_t status_handler(DBusMessage *msg, char *err, char *desc)

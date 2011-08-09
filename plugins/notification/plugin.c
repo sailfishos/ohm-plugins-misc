@@ -32,17 +32,14 @@ USA.
 #include "resource.h"
 #include "proxy.h"
 #include "longlive.h"
-#include "subscription.h"
 
-
-int DBG_INIT, DBG_PROXY, DBG_LLIV, DBG_SUBSCR, DBG_RESRC, DBG_DBUS, DBG_RULE;
+int DBG_INIT, DBG_PROXY, DBG_LLIV, DBG_RESRC, DBG_DBUS, DBG_RULE;
 static unsigned int id;
 
 OHM_DEBUG_PLUGIN(notification,
     OHM_DEBUG_FLAG( "init"        , "init sequence"          , &DBG_INIT   ),
     OHM_DEBUG_FLAG( "proxy"       , "proxy functions"        , &DBG_PROXY  ),
     OHM_DEBUG_FLAG( "longlive"    , "long-live notifications", &DBG_LLIV   ),
-    OHM_DEBUG_FLAG( "subscription", "subscription functions" , &DBG_SUBSCR ),
     OHM_DEBUG_FLAG( "resource"    , "resource client"        , &DBG_RESRC  ),
     OHM_DEBUG_FLAG( "dbus"        , "D-Bus interface"        , &DBG_DBUS   ),
     OHM_DEBUG_FLAG( "rule"        , "prolog interface"       , &DBG_RULE   )
@@ -76,7 +73,6 @@ static int init_cb(void *data)
     resource_init(plugin);
     proxy_init(plugin);
     longlive_init(plugin);
-    subscription_init(plugin);
 
     id = 0;
 

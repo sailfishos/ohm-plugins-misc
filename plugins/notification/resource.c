@@ -32,8 +32,6 @@ USA.
 #include "plugin.h"
 #include "resource.h"
 #include "ruleif.h"
-#include "subscription.h"
-
 
 typedef struct {
     resource_set_id_t  id;     /* ID of the resource set */
@@ -89,8 +87,7 @@ static gboolean      fake_grant_handler(gpointer);
 static fake_grant_t *fake_grant_create(resource_set_t *, uint32_t,
                                        resource_cb_t, void *);
 static void          fake_grant_delete(fake_grant_t *);
-static void          update_event_list(void);
-static void          free_event_list(char **);
+static fake_grant_t *fake_grant_find(resource_set_t *, resource_cb_t, void *);
 static char         *strlist(char **, char *, int);
 
 static const char     *type_to_string(resource_set_type_t);
@@ -230,9 +227,6 @@ int resource_set_acquire(resource_set_id_t    id,
             msg.possess.reqno = rs->reqno;
 
             success = resproto_send_message(rs->resset, &msg, NULL);
-
-            if (success)
-                update_event_list();
         }
     }
 
@@ -404,7 +398,6 @@ static void connect_to_manager(resconn_t *rc)
 
     if (success) {
         OHM_DEBUG(DBG_RESRC, "successfully registered all resource classes");
-        update_event_list();
     }
 
 #undef LLIV_NOTIF
@@ -538,9 +531,6 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
         OHM_DEBUG(DBG_RESRC, "resource set%u acquire=%s reqno=%u %s",
                   resset->id, rs->acquire ? "True":"False", rs->reqno,
                   rs->grant.function ? "grantcb present":"no grantcb");
-
-        if (update)
-            update_event_list();
     }
 }
 
@@ -599,49 +589,6 @@ static void fake_grant_delete(fake_grant_t *fake)
         g_source_remove(fake->srcid);
 
     g_slice_free(fake_grant_t, fake);
-}
-
-static void update_event_list(void)
-{
-    resource_set_t *rs;
-    char           *evls[256];
-    int             evcnt;
-    uint32_t        sign;
-    int             i, k;
-    char            buf[256*10];
-
-    sign = 0;
-
-    for (i = evcnt = 0;   i < rset_id_max && evcnt < DIM(evls)-1;    i++) {
-        rs = regular_set + i;
-
-        if (!rs->acquire) {
-            sign |= (((uint32_t)1) << i);
-
-            for (k = 0;  k < rs->event.count;  k++)
-                evls[evcnt++] = rs->event.list[k];
-        }
-    }
-
-    evls[evcnt] = NULL;
-
-    OHM_DEBUG(DBG_RESRC, "signature %u event list %d '%s'",
-              sign, evcnt, strlist(evls, buf, sizeof(buf)));
-
-    subscription_update_event_list(sign, evls, evcnt);
-}
-
-
-static void free_event_list(char **list)
-{
-    int i;
-
-    if (list != NULL) {
-        for (i = 0;  list[i]; i++)
-            free(list[i]);
-
-        free(list);
-    }
 }
 
 static char *strlist(char **arr, char *buf, int len)
