@@ -66,7 +66,6 @@ typedef struct _OhmPlugin OhmPlugin;
 #define DBUS_STOP_METHOD               "Stop"
 #define DBUS_PAUSE_METHOD              "Pause"
 #define DBUS_STATUS_METHOD             "Status"
-#define DBUS_UPDATE_METHOD             "Update"
 #define DBUS_STOP_RINGTONE_METHOD      "StopRingtone"
 
 #define DBUS_NAME_OWNER_CHANGED_SIGNAL "NameOwnerChanged"
@@ -98,7 +97,6 @@ void *dbusif_copy_status_data(const char *, void *);
 void *dbusif_create_status_data(const char *, uint32_t, uint32_t);
 void *dbusif_copy_stop_data(void *);
 void *dbusif_create_stop_data(uint32_t);
-void *dbusif_create_update_data(const char **, int);
 void  dbusif_forward_data(void *);
 void  dbusif_send_data_to(void *, const char *);
 void *dbusif_engage_data(void *);

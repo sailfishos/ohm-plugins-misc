@@ -84,8 +84,6 @@ static uint32_t stop_handler(DBusMessage *, char *, char *);
 static uint32_t pause_handler(DBusMessage *, char *, char *);
 static uint32_t stop_ringtone_handler(DBusMessage *, char *, char *);
 static uint32_t status_handler(DBusMessage *, char *, char *);
-static uint32_t update_handler(DBusMessage *, char *, char *);
-
 
 /*! \addtogroup pubif
  *  Functions
@@ -353,40 +351,6 @@ void *dbusif_create_stop_data(uint32_t id)
     }
 
     return (void *)msg;
-}
-
-void *dbusif_create_update_data(const char **evlist, int evcnt)
-{
-    DBusMessage  *msg = NULL;
-    int           success;
-
-    do { /* not a loop */
-
-        if (!evlist || evcnt < 1)
-            break;
-
-        msg = dbus_message_new_method_call(NULL,
-                                           DBUS_NGF_PATH,
-                                           DBUS_NGF_INTERFACE,
-                                           DBUS_UPDATE_METHOD);
-        if (msg == NULL)
-            break;
-
-        success = dbus_message_append_args(msg,
-                                           DBUS_TYPE_ARRAY,
-                                           DBUS_TYPE_STRING, &evlist, evcnt,
-                                           DBUS_TYPE_INVALID);
-        if (!success)
-            break;
-
-        return (void *)msg;
-
-    } while (0);
-
-    if (msg != NULL)
-        dbus_message_unref(msg);
-
-    return (void *)NULL;
 }
 
 void dbusif_forward_data(void *data)
@@ -1088,7 +1052,6 @@ static DBusHandlerResult proxy_method(DBusConnection *conn,
         { client_handler,  DBUS_PAUSE_METHOD        , pause_handler         },
         { client_handler,  DBUS_STOP_RINGTONE_METHOD, stop_ringtone_handler },
         { backend_handler, DBUS_STATUS_METHOD       , status_handler        },
-        { backend_handler, DBUS_UPDATE_METHOD       , update_handler        },
         { unknown_handler,        NULL              ,      NULL             }
     };
 
@@ -1295,104 +1258,6 @@ static uint32_t status_handler(DBusMessage *msg, char *err, char *desc)
         case regular_id:    success = proxy_status_request(id, msg);    break;
         case longlive_id:   success = longlive_status_request(id, msg); break;
         default:            success = FALSE;                            break;
-        }
-    }
-
-    return success;
-}
-
-static uint32_t update_handler(DBusMessage *msg, char *err, char *desc)
-{
-    static const char *media = NGF_TAG_MEDIA_PREFIX;
-    static size_t      media_length = sizeof(NGF_TAG_MEDIA_PREFIX) - 1;
-
-    DBusMessageIter  mit;
-    DBusMessageIter  ait;
-    DBusMessageIter  dit;
-    DBusMessageIter  vit;
-    const char      *name;
-    int              type;
-    dbus_bool_t      stopped;
-    uint32_t         id      = 0;
-    uint32_t         flags   = 0;
-    int              success = TRUE;
-
-    (void)err;
-    (void)desc;
-
-    dbus_message_iter_init(msg, &mit);
-
-    do {
-        if (dbus_message_iter_get_arg_type(&mit) != DBUS_TYPE_ARRAY) {
-            success = FALSE;
-            break;
-        }
-
-        dbus_message_iter_recurse(&mit, &ait);
-
-        do {
-            if (dbus_message_iter_get_arg_type(&ait) != DBUS_TYPE_DICT_ENTRY) {
-                success = FALSE;
-                break;
-            }
-
-            dbus_message_iter_recurse(&ait, &dit);
-
-            if (dbus_message_iter_get_arg_type(&dit) != DBUS_TYPE_STRING) {
-                success = FALSE;
-                break;
-            }
-
-            dbus_message_iter_get_basic(&dit, (void *)&name);
-
-            if (!dbus_message_iter_next(&dit)) {
-                success = FALSE;
-                break;
-            }
-
-
-            if (dbus_message_iter_get_arg_type(&dit) != DBUS_TYPE_VARIANT) {
-                success = FALSE;
-                break;
-            }
-            
-            dbus_message_iter_recurse(&dit, &vit);
-
-            type = dbus_message_iter_get_arg_type(&vit);
-
-            if (!strcmp(name, NGF_TAG_POLICY_ID)) {
-                if (type != DBUS_TYPE_UINT32) {
-                    success = FALSE;
-                    break;
-                }
-
-                dbus_message_iter_get_basic(&vit, &id);
-            }
-            else if (!strncmp(name, media, media_length)) {
-                if (type != DBUS_TYPE_BOOLEAN) {
-                    success = FALSE;
-                    break;
-                }
-
-                dbus_message_iter_get_basic(&vit, &stopped);
-
-                if (!stopped)
-                    flags |= resource_name_to_flag(name + media_length);
-            }
-            
-        } while (dbus_message_iter_next(&ait));
-
-    } while(0);
-
-
-    if (!success)
-        OHM_DEBUG(DBG_DBUS, "malformed update request");
-    else {
-        OHM_DEBUG(DBG_DBUS, "update request id=%u flags=0x%x", id, flags);
-        switch (NOTIFICATION_TYPE(id)) {
-        case regular_id:   success = proxy_update_request(id, &flags);   break;
-        case longlive_id:  success = TRUE;                               break;
-        default:           success = FALSE;                              break;
         }
     }
 
