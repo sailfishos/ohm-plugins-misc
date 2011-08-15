@@ -181,7 +181,7 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
 
     if (g_slist_length(list) > 1) {
-        OHM_DEBUG(DBG_PROFILE, "Error: multiple profile facts\n");
+        OHM_DEBUG(DBG_PROFILE, "Error: multiple profile facts");
         return FALSE;
     }
 
@@ -190,14 +190,9 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
 
         if (fact) {
             GSList *fields = NULL, *e = NULL;
-            gboolean process = TRUE; 
+            gboolean process = TRUE;
 
             /* remove existing fields */
-#if 0
-            OHM_DEBUG(DBG_PROFILE, "A profile exists already, modifying it\n");
-            OHM_DEBUG(DBG_PROFILE, "reseting fact: fs: %p, fact: %p\n", fs, fact);
-#endif
-
             do {
                 fields = ohm_fact_get_fields(fact);
                 gboolean found = FALSE;
@@ -218,7 +213,7 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
     }
     else {
         /* no previous fact */
-        OHM_DEBUG(DBG_PROFILE, "Creating a new profile fact\n");
+        OHM_DEBUG(DBG_PROFILE, "Creating a new profile fact");
         fact = ohm_fact_new(FACTSTORE_PROFILE);
         /* put the fact in the factstore -- this way we have the same
          * update semantics (update called on each key) */
@@ -227,14 +222,15 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
 
     /* fill the fact with the profile name and the values */
 
-    OHM_DEBUG(DBG_PROFILE, "setting key %s with value %s\n", PROFILE_NAME_KEY, profile);
+    OHM_DEBUG(DBG_PROFILE, "setting key %s with value %s", PROFILE_NAME_KEY, profile);
     gval = ohm_value_from_string(profile);
     ohm_fact_set(fact, PROFILE_NAME_KEY, gval);
 
     if (values) {
         while (values->pv_key) {
             if (values->pv_val) {
-                OHM_DEBUG(DBG_PROFILE, "setting key %s with value %s\n", values->pv_key, values->pv_val);
+                OHM_DEBUG(DBG_PROFILE, "setting key %s with value %s",
+                          values->pv_key, values->pv_val);
                 gval = ohm_value_from_string(values->pv_val);
                 ohm_fact_set(fact, values->pv_key, gval);
             }
@@ -242,7 +238,7 @@ static gboolean profile_create_fact(const char *profile, profileval_t *values)
         }
     }
 
-    OHM_DEBUG(DBG_PROFILE, "created fact: fs: %p, fact: %p\n", fs, fact);
+    OHM_DEBUG(DBG_PROFILE, "created fact: fs: %p, fact: %p", fs, fact);
 
     profile_save_state(fact);
     
@@ -425,10 +421,10 @@ static void profile_value_change(const char *profile, const char *key,
     (void) type;
     (void) dummy;
 
-    OHM_DEBUG(DBG_PROFILE, "profile value change: '%s', '%s'\n", key, val);
+    OHM_DEBUG(DBG_PROFILE, "profile value change: '%s', '%s'", key, val);
 
     if (g_slist_length(list) != 1) {
-        OHM_DEBUG(DBG_PROFILE, "Error: there isn't a unique profile fact\n");
+        OHM_DEBUG(DBG_PROFILE, "Error: there isn't a unique profile fact");
         return;
     }
     fact = list->data;
@@ -450,11 +446,11 @@ static void profile_value_change(const char *profile, const char *key,
         if (val)
             gval = ohm_value_from_string(val);
 
-        OHM_DEBUG(DBG_PROFILE, "changing key %s with value %s\n", key, val);
+        OHM_DEBUG(DBG_PROFILE, "changing key %s with new value '%s'", key, val);
         ohm_fact_set(fact, key, gval);
     }
     else {
-        OHM_DEBUG(DBG_PROFILE, "Error\n");
+        OHM_DEBUG(DBG_PROFILE, "Error, no facts or empty key");
     }
 
     return;
