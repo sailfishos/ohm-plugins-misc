@@ -486,19 +486,25 @@ static void profile_name_change(const char *profile, void *dummy)
 
 static gboolean subscribe_to_service()
 {
-    /* subscribe to the profile change notification */
-    
-    profile_track_set_profile_cb_with_data(profile_name_change, NULL);
+    /* subscribe to the current profile change notifications */
+    profile_track_add_profile_cb(profile_name_change, NULL, NULL);
 
-    /* subscribe to the value change in profile notification */
-    
-    profile_track_set_active_cb_with_data(profile_value_change, NULL);
+    /* subscribe to a value change in the current profile notifications */
+    profile_track_add_active_cb(profile_value_change, NULL, NULL);
 
     if (profile_tracker_init() < 0) {
         return FALSE;
     }
 
     return TRUE;
+}
+
+static void unsubscribe_from_service(void)
+{
+    profile_track_remove_profile_cb(profile_name_change, NULL);
+    profile_track_remove_active_cb(profile_value_change, NULL);
+
+    profile_tracker_quit();
 }
 
 /* non-static for testing purposes */
@@ -559,7 +565,7 @@ void deinit_profile(profile_plugin *plugin)
     (void) plugin;
 
     /* unregister to the notifications */
-    profile_tracker_quit();
+    unsubscribe_from_service();
     g_free(profile_plugin_p);
 
     return;
