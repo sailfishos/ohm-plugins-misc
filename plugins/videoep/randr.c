@@ -947,7 +947,6 @@ static void crtc_synchronize(randr_crtc_t *randr_crtc, int dryrun)
     randr_screen_t *screen = randr_crtc->screen;
     xif_crtc_t      xif_crtc;
     uint32_t        x, y;
-    int32_t         new_crtc_x, new_crtc_y;
     char            buf[256];
 
     x = crtc_horizontal_position(randr_crtc);
@@ -981,11 +980,8 @@ static void crtc_synchronize(randr_crtc_t *randr_crtc, int dryrun)
         randr_crtc->sync = FALSE;
     }
 
-    if ((new_crtc_x = x + randr_crtc->width) > crtc_x)
-        crtc_x = new_crtc_x;
-
-    if ((new_crtc_y = y + randr_crtc->height) > crtc_y)
-        crtc_y = new_crtc_y;
+    crtc_x = x + randr_crtc->width;
+    crtc_y = y + randr_crtc->height;
 }
 
 static uint32_t crtc_horizontal_position(randr_crtc_t *crtc)
