@@ -987,7 +987,7 @@ static gboolean get_properties(const gchar *device_path,
         goto error;
     }
 
-    dbus_data = calloc(2, sizeof (gchar *));
+    dbus_data = g_malloc(2 * sizeof (gchar *));
     if (!dbus_data)
         goto error;
 
