@@ -33,6 +33,7 @@ USA.
 #include "resource-spec.h"
 #include "fsif.h"
 #include "dresif.h"
+#include "ruleif.h"
 #include "dbusif.h"
 #include "transaction.h"
 #include "auth.h"
@@ -172,6 +173,29 @@ void manager_unregister(resmsg_t *msg, resset_t *resset, void *proto_data)
     resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
 }
 
+static int validate_resource_request(const char *class, resmsg_rset_t *resset)
+{
+    uint32_t mandatory = resset->all & ~resset->opt;
+    uint32_t mand, opt;
+    int status;
+
+    status = ruleif_valid_resource_request(class, mandatory, resset->opt,
+                                           RULEIF_INTEGER_ARG ("mandatory", mand),
+                                           RULEIF_INTEGER_ARG ("optional",  opt),
+                                           RULEIF_ARGLIST_END);
+    if (!status) {
+        OHM_DEBUG(DBG_MGR, "resource set validity request is rejected");
+    } else if (mand != mandatory) {
+        OHM_DEBUG(DBG_MGR, "resource set is not valid for that class");
+        status = FALSE;
+    } else if (opt != resset->opt) {
+        OHM_DEBUG(DBG_MGR, "optional resource set is adjusted");
+        resset->opt = opt;
+    }
+
+    return status;
+}
+
 void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
 {
     resource_set_t  *rs     = resset->userdata;
@@ -194,6 +218,12 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
 
     if (strcmp(record->klass, resset->klass)) {
         errcod = EINVAL;
+        errmsg = strerror(errcod);
+        goto reply_message;
+    }
+
+    if (!validate_resource_request(record->klass, &record->rset)) {
+        errcod = EACCES;
         errmsg = strerror(errcod);
         goto reply_message;
     }
@@ -511,11 +541,20 @@ static void register_cb(int32_t errcod, reg_data_t *regreq)
     void           *proto_data = regreq->proto_data;
     const char     *errmsg     = "OK";
     resource_set_t *rs;
+    int status;
 
     if (regreq->canceled)
         goto request_destroy;
 
     if (errcod) {
+        errmsg = strerror(errcod);
+        goto reply_message;
+    }
+
+    status = validate_resource_request(resset->klass,
+                                       (resmsg_rset_t *)(&resset->flags));
+    if (!status) {
+        errcod = EACCES;
         errmsg = strerror(errcod);
         goto reply_message;
     }
