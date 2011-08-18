@@ -514,42 +514,30 @@ static void register_cb(int32_t errcod, reg_data_t *regreq)
     const char     *errmsg     = "OK";
     resource_set_t *rs;
 
-    if (!regreq->canceled) {
+    if (regreq->canceled)
+        goto request_destroy;
 
-        if (errcod) {
-            errmsg = strerror(errcod);
-
-            OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
-
-            resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
-        }
-        else {
-            if ((rs = resource_set_create(regreq->pid, resset)) == NULL) {
-                errcod = ENOMEM;
-                errmsg = strerror(errcod);
-            }
-            else {
-                transaction_start(rs, msg);
-                
-                dresif_resource_request(rs->manager_id, resset->peer,
-                                        resset->id, "register");
-            }
-            
-            OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
-            
-            resproto_reply_message(resset, msg, proto_data, 0, "OK");
-            
-#if 0
-            if (rs && trans_id && (resset->mode & RESMSG_MODE_ALWAYS_REPLY)) {
-                resource_set_queue_change(rs,trans_id,rs->reqno,
-                                          resource_set_granted);
-            }
-#endif
-
-            transaction_end(rs);
-        }
+    if (errcod) {
+        errmsg = strerror(errcod);
+        goto reply_message;
     }
 
+    rs = resource_set_create(regreq->pid, resset);
+    if (!rs) {
+        errcod = ENOMEM;
+        errmsg = strerror(errcod);
+        goto reply_message;
+    }
+
+    transaction_start(rs, msg);
+    dresif_resource_request(rs->manager_id, resset->peer, resset->id, "register");
+    transaction_end(rs);
+
+ reply_message:
+    OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
+    resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
+
+ request_destroy:
     reg_request_destroy(regreq);
 }
 
