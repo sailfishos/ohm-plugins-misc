@@ -189,43 +189,41 @@ void manager_update(resmsg_t *msg, resset_t *resset, void *proto_data)
                   "confused with data structures", resset->peer, resset->id);
         errcod = EUCLEAN;
         errmsg = strerror(errcod);
-    }
-    else {
-        if (strcmp(record->klass, resset->klass)) {
-            errcod = EINVAL;
-            errmsg = strerror(errcod);
-        }
-        else {
-            if (resset->flags.all   != record->rset.all   ||
-                resset->flags.opt   != record->rset.opt   ||
-                resset->flags.share != record->rset.share   )
-                {
-                    resset->flags.all   = record->rset.all;
-                    resset->flags.opt   = record->rset.opt;
-                    resset->flags.share = record->rset.share;
-                    
-                    transaction_start(rs, msg);
-
-                    resource_set_update_factstore(resset, update_flags);
-                    if (rs->request && !strcmp(rs->request, "acquire") &&
-                        rs->granted.client != 0)
-                        resource_set_update_factstore(resset, update_request);
-
-                    dresif_resource_request(rs->manager_id, resset->peer,
-                                            resset->id, "update");
-                }
-        }
+        goto reply_message;
     }
 
-    OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
-
-    resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
-
-    if (rs && trans_id && (resset->mode & RESMSG_MODE_ALWAYS_REPLY)) {
-        resource_set_queue_change(rs,trans_id,rs->reqno,resource_set_granted);
+    if (strcmp(record->klass, resset->klass)) {
+        errcod = EINVAL;
+        errmsg = strerror(errcod);
+        goto reply_message;
     }
+
+    if (resset->flags.all   == record->rset.all &&
+        resset->flags.opt   == record->rset.opt &&
+        resset->flags.share == record->rset.share)
+        goto reply_message;
+
+    resset->flags.all   = record->rset.all;
+    resset->flags.opt   = record->rset.opt;
+    resset->flags.share = record->rset.share;
+
+    transaction_start(rs, msg);
+
+    resource_set_update_factstore(resset, update_flags);
+    if (rs->request && !strcmp(rs->request, "acquire") &&
+        rs->granted.client != 0)
+        resource_set_update_factstore(resset, update_request);
+
+    dresif_resource_request(rs->manager_id, resset->peer, resset->id, "update");
+
+    if (trans_id != NO_TRANSACTION && (resset->mode & RESMSG_MODE_ALWAYS_REPLY))
+        resource_set_queue_change(rs, trans_id, rs->reqno, resource_set_granted);
 
     transaction_end(rs);
+
+ reply_message:
+    OHM_DEBUG(DBG_MGR, "message replied with %d '%s'", errcod, errmsg);
+    resproto_reply_message(resset, msg, proto_data, errcod, errmsg);
 }
 
 void manager_acquire(resmsg_t *msg, resset_t *resset, void *proto_data)
