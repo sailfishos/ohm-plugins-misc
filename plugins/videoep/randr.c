@@ -745,7 +745,6 @@ static void crtc_disable(randr_crtc_t *randr_crtc)
     memset(&xif_crtc, 0, sizeof(xif_crtc));
     xif_crtc.window   = screen->rootwin;
     xif_crtc.xid      = randr_crtc->xid;
-    xif_crtc.rotation = XCB_RANDR_ROTATION_ROTATE_0;
 
     xif_crtc_config(screen->tstamp, &xif_crtc);
 
