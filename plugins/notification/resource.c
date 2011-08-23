@@ -24,6 +24,7 @@ USA.
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <res-conn.h>
 
@@ -66,6 +67,7 @@ typedef struct resource_set_s {
         int    count;
         char **list;
     }                    event;
+    int                  num_users;
 } resource_set_t;
 
 
@@ -93,6 +95,11 @@ static void          update_event_list(void);
 static void          free_event_list(char **);
 static char         *strlist(char **, char *, int);
 
+static const char     *type_to_string(resource_set_type_t);
+static int             is_valid_resource_set(resource_set_type_t type,
+                                             resource_set_id_t id);
+static resource_set_t *get_resource_set(resource_set_type_t type,
+                                        resource_set_id_t id);
 
 /*! \addtogroup pubif
  *  Functions
@@ -159,34 +166,34 @@ int resource_set_acquire(resource_set_id_t    id,
                          resource_cb_t        function,
                          void                *data)
 {
-    resource_set_t *rspool;
     resource_set_t *rs;
     resset_t       *resset;
     uint32_t        all;
     resmsg_t        msg;
     char            mbuf[256];
     char            obuf[256];
-    int             success;
+    int             success = FALSE;
     const char     *typstr;
 
-    if (id < 0 || id >= rset_id_max || type < 0 || type >= rset_type_max)
-        success = FALSE;
-    else {
-        switch (type) {
-        case rset_regular:  rspool = regular_set;   typstr = "regular";  break;
-        case rset_longlive: rspool = longlive_set;  typstr = "longlive"; break;
-        default:            rspool = empty_set;     typstr = "???";      break;
-        }
+    if (is_valid_resource_set(type, id)) {
 
+        typstr = type_to_string(type);
         all = mand | opt;
-        rs  = rspool + id;
+        rs = get_resource_set(type, id);
+        rs->num_users++;
         resset = rs->resset;
 
         if (!resset)
             success = FALSE;
-        else if (!all || rs->acquire) {
+        else if (!all) {
             if (type == rset_regular)
                 fake_grant_create(rs, RESOURCE_SET_BUSY, function,data);
+            success = TRUE;
+        }
+        else if (rs->acquire && rs->num_users > 0) {
+            /* We already have at least the mandatory resources, so let's
+             * just fake-grant them */
+            fake_grant_create(rs, resset->flags.all, function, data);
             success = TRUE;
         }
         else {
@@ -209,7 +216,7 @@ int resource_set_acquire(resource_set_id_t    id,
                 msg.record.rset.opt = opt;
                 msg.record.klass = resset->klass;
                 msg.record.mode  = resset->mode;
-                
+
                 resproto_send_message(rs->resset, &msg, NULL);
             }
 
@@ -222,7 +229,7 @@ int resource_set_acquire(resource_set_id_t    id,
             msg.possess.type  = RESMSG_ACQUIRE;
             msg.possess.id    = id;
             msg.possess.reqno = rs->reqno;
-            
+
             success = resproto_send_message(rs->resset, &msg, NULL);
 
             if (success)
@@ -238,51 +245,50 @@ int resource_set_release(resource_set_id_t    id,
                          resource_cb_t        function,
                          void                *data)
 {
-    resource_set_t *rspool;
     resource_set_t *rs;
     resmsg_t        msg;
-    int             success;
+    int             success = FALSE;
     fake_grant_t   *fake;
     const char     *typstr;
 
-    if (id < 0 || id >= rset_id_max || type < 0 || type >= rset_type_max)
-        success = FALSE;
-    else {
-        switch (type) {
-        case rset_regular:  rspool = regular_set;   typstr = "regular";  break;
-        case rset_longlive: rspool = longlive_set;  typstr = "longlive"; break;
-        default:            rspool = empty_set;     typstr = "???";      break;
-        }
+    if (is_valid_resource_set(type, id)) {
 
-        rs = rspool + id;
+        typstr = type_to_string(type);
+        rs = get_resource_set(type, id);
 
-        if (function == rs->grant.function && data == rs->grant.data) {
-            rs->reqno = ++reqno;
+        if (rs->num_users > 0)
+            rs->num_users--;
+
+        if ((fake = fake_grant_find(rs, function, data)) != NULL)
+            fake_grant_delete(fake);
+
+        if (rs->grant.function == function && rs->grant.data == data) {
             rs->grant.function = NULL;
             rs->grant.data     = NULL;
-            
+        }
+
+        if (rs->num_users > 0) {
+            OHM_DEBUG(DBG_RESRC, "%s resource set %u, still has %d users",
+                                 typstr, id, rs->num_users);
+        }
+        else {
+            rs->reqno = ++reqno;
+
             OHM_DEBUG(DBG_RESRC, "releasing %s resource set%u (reqno %u)",
                       typstr, id, rs->reqno);
-            
+
             memset(&msg, 0, sizeof(msg));
             msg.possess.type  = RESMSG_RELEASE;
             msg.possess.id    = id;
             msg.possess.reqno = rs->reqno;
-            
+
             success = resproto_send_message(rs->resset, &msg, NULL);
 
             if (success && type == rset_longlive)
                 rs->acquire = FALSE;
         }
-        else {
-            success = TRUE;
-
-            if ((fake = fake_grant_find(rs, function,data)) != NULL) {
-                fake_grant_delete(fake);
-            }
-        }
+        success = TRUE;
     }
-
     return success;
 }
 
@@ -490,7 +496,7 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
     if ((rs = resset->userdata) != NULL) {
         update = FALSE;
         grant  = rs->grant;
-        typstr = (rs->type == rset_regular) ? "regular" : "longlive";
+        typstr = type_to_string(rs->type);
 
         OHM_DEBUG(DBG_RESRC, "granted %s resource set%u %s (reqno %u)",
                   typstr, resset->id,
@@ -506,16 +512,17 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
             else {
                 rs->reqno = 0;
                 rs->flags = msg->notify.resrc;
-                
+
                 if (rs->flags == 0) {
-                    
+
                     update  = rs->acquire;
-                    
+
                     rs->acquire        = FALSE; /* auto released */
                     rs->grant.function = NULL;
                     rs->grant.data     = NULL;
+                    rs->num_users      = 0;
                 }
-                
+
                 if (grant.function != NULL)
                     grant.function(rs->flags, grant.data);
             }
@@ -536,7 +543,7 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
         OHM_DEBUG(DBG_RESRC, "resource set%u acquire=%s reqno=%u %s",
                   resset->id, rs->acquire ? "True":"False", rs->reqno,
                   rs->grant.function ? "grantcb present":"no grantcb");
-        
+
         if (update)
             update_event_list();
     }
@@ -695,6 +702,38 @@ static char *strlist(char **arr, char *buf, int len)
     }
 
     return buf;
+}
+
+static const char* type_to_string(resource_set_type_t type) {
+    const char* typstr = NULL;
+
+    switch (type) {
+        case rset_regular:  typstr = "regular";  break;
+        case rset_longlive: typstr = "longlive"; break;
+        default:            typstr = "???";      break;
+    }
+
+    return typstr;
+}
+
+resource_set_t* get_resource_set(resource_set_type_t type, resource_set_id_t id) {
+    resource_set_t* rspool = NULL;
+
+    assert(is_valid_resource_set(type, id));
+
+    switch (type) {
+        case rset_regular:  rspool = regular_set;  break;
+        case rset_longlive: rspool = longlive_set; break;
+        default:            rspool = empty_set;    break;
+    }
+
+    assert(rspool != NULL);
+
+    return rspool + id;
+}
+
+static int is_valid_resource_set(resource_set_type_t type, resource_set_id_t id) {
+    return (id >= 0 && id < rset_id_max && type >= 0 && type < rset_type_max);
 }
 
 /* 
