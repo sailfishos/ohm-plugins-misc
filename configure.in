@@ -309,7 +309,7 @@ AC_SUBST(BUILD_IOQNOTIFY)
 
 
 # Check for MCE.
-PKG_CHECK_MODULES(MCE, mce, [has_mce=yes], [mas_mce=no])
+PKG_CHECK_MODULES(MCE, mce, [has_mce=yes], [has_mce=no])
 AC_SUBST(MCE_CFLAGS)
 AC_SUBST(MCE_LIBS)
 
