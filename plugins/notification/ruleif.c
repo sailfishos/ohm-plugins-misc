@@ -276,7 +276,7 @@ int ruleif_notification_play_short(int id, int *play_ret)
     char    *argv[16];
     char  ***retval;
     char   **entry;
-    int      i, j;
+    int      i;
     int      status;
     int      success = FALSE;
 

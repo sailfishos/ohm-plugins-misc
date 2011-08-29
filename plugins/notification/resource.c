@@ -412,7 +412,7 @@ static void connect_to_manager(resconn_t *rc)
 #undef LLIV_DEFAULT
 #undef OPT_NOTIF
 #undef OPT_MISCALL
-#undef OPT PROCLM
+#undef OPT_PROCLM
 #undef OPT_DEFAULT
 #undef MAND_NOTIF
 #undef MAND_MISCALL

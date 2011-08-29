@@ -64,7 +64,7 @@ static void reply_with_id(DBusMessage *, uint32_t);
 static void reply(DBusMessage *);
 
 static int copy_string(DBusMessageIter *, DBusMessageIter *);
-static int append_string(DBusMessageIter *, char *);
+static int append_string(DBusMessageIter *, const char *);
 static int copy_dict_entry(DBusMessageIter *, DBusMessageIter *);
 static int copy_variant(DBusMessageIter *, DBusMessageIter *);
 static int append_variant(DBusMessageIter *, int, void *);
@@ -764,7 +764,7 @@ static int copy_string(DBusMessageIter *sit, DBusMessageIter *dit)
     return dbus_message_iter_next(sit);
 }
 
-static int append_string(DBusMessageIter *it, char *string)
+static int append_string(DBusMessageIter *it, const char *string)
 {
     dbus_message_iter_append_basic(it, DBUS_TYPE_STRING, &string);
 
@@ -1277,7 +1277,6 @@ static uint32_t stop_ringtone_handler(DBusMessage *msg, char *err, char *desc)
 {
     uint32_t    success;
     const char *client;
-    uint32_t    id;
 
     client = dbus_message_get_sender(msg);
     OHM_DEBUG(DBG_DBUS, "%s requested stop for ringtone", client);
