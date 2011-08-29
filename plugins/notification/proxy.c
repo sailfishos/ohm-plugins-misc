@@ -136,7 +136,8 @@ static uint32_t timeout_handler(proxy_t *);
 static void     grant_handler(uint32_t, void *);
 
 static int evaluate_notification_request_rules(const char *, char *, uint32_t *,
-                                               uint32_t *, uint32_t *, char *);
+                                               uint32_t *, uint32_t *, uint32_t *,
+                                               char *);
 
 static int state_machine(proxy_t *, proxy_event_t, void *);
 
@@ -198,6 +199,7 @@ int proxy_playback_request(const char *what,    /* eg. ringtone, alarm, etc */
     uint32_t       mand   = 0;
     uint32_t       opt    = 0;
     uint32_t       lliv   = 0;
+    uint32_t       allow_multiple = 0;
     proxy_t       *proxy  = NULL;
     uint32_t       status = NGF_COMPLETED;
     uint32_t       proxid;
@@ -209,7 +211,8 @@ int proxy_playback_request(const char *what,    /* eg. ringtone, alarm, etc */
     do { /* not a loop */
 
         memset(event, 0, sizeof(char) * DBUS_DESCBUF_LEN);
-        type = evaluate_notification_request_rules(what,event,&mand,&opt,&lliv,err);
+        type = evaluate_notification_request_rules(what,event,&mand,&opt,&lliv,
+                                                   &allow_multiple, err);
 
         if (type >= 0)
             state  = state_acquiring;
@@ -247,6 +250,7 @@ int proxy_playback_request(const char *what,    /* eg. ringtone, alarm, etc */
         }
         else {
             success = resource_set_acquire(type, rset_regular, mand, opt,
+                                           allow_multiple,
                                            grant_handler, (void *) proxy->id);
             if (!success) {
                 strncpy(err, "recource acquisition failed", DBUS_DESCBUF_LEN);
@@ -725,6 +729,7 @@ static int evaluate_notification_request_rules(const char *event,
                                                uint32_t   *mand_ret,
                                                uint32_t   *opt_ret,
                                                uint32_t   *lliv_ret,
+                                               uint32_t    *allow_multiple_ret,
                                                char       *errbuf)
 {
     int   success;
@@ -732,16 +737,18 @@ static int evaluate_notification_request_rules(const char *event,
     int   mand;
     int   opt;
     int   lliv;
+    int   multiple;
     char *evt   = NULL;
     char *error = NULL;
 
     success = ruleif_notification_request(event,
-                     RULEIF_INTEGER_ARG ("type"     , type ),
-                     RULEIF_STRING_ARG  ("event"    , evt  ),
-                     RULEIF_STRING_ARG  ("error"    , error),
-                     RULEIF_INTEGER_ARG ("mandatory", mand ),
-                     RULEIF_INTEGER_ARG ("optional" , opt  ),
-                     RULEIF_INTEGER_ARG ("longlive" , lliv ),
+                     RULEIF_INTEGER_ARG ("type"           , type     ),
+                     RULEIF_STRING_ARG  ("event"          , evt      ),
+                     RULEIF_STRING_ARG  ("error"          , error    ),
+                     RULEIF_INTEGER_ARG ("mandatory"      , mand     ),
+                     RULEIF_INTEGER_ARG ("optional"       , opt      ),
+                     RULEIF_INTEGER_ARG ("longlive"       , lliv     ),
+                     RULEIF_INTEGER_ARG ("allow_multiple" , multiple ),
                      RULEIF_ARGLIST_END                    );
 
     if (!success || type < 0) {
@@ -777,9 +784,13 @@ static int evaluate_notification_request_rules(const char *event,
         if (lliv_ret != NULL)
             *lliv_ret = (uint32_t)lliv;
 
+        if (allow_multiple_ret != NULL)
+            *allow_multiple_ret = (uint32_t)multiple;
+
         OHM_DEBUG(DBG_PROXY, "notification request rules returned: "
-                  "type=%d, event='%s', mandatory=%d optional=%d longliv=%d err='%s'",
-                  type, evt, mand, opt, lliv, error);
+                  "type=%d, event='%s', mandatory=%d optional=%d longliv=%d "
+                  "allow_multiple=%d, err='%s'",
+                  type, evt, mand, opt, lliv, multiple, error);
     }
 
     free(evt);

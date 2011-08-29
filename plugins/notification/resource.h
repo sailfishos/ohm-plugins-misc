@@ -54,7 +54,7 @@ typedef void (*resource_cb_t)(uint32_t, void *);
 
 void resource_init(OhmPlugin *);
 int  resource_set_acquire(resource_set_id_t, resource_set_type_t,
-                          uint32_t, uint32_t,
+                          uint32_t, uint32_t, uint32_t,
                           resource_cb_t, void *);
 int  resource_set_release(resource_set_id_t, resource_set_type_t,
                           resource_cb_t, void *);

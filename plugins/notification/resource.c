@@ -161,6 +161,7 @@ int resource_set_acquire(resource_set_id_t    id,
                          resource_set_type_t  type,
                          uint32_t             mand,
                          uint32_t             opt,
+                         uint32_t             allow_multiple,
                          resource_cb_t        function,
                          void                *data)
 {
@@ -183,7 +184,7 @@ int resource_set_acquire(resource_set_id_t    id,
 
         if (!resset)
             success = FALSE;
-        else if (!all) {
+        else if (!all || (rs->acquire && !allow_multiple)) {
             if (type == rset_regular)
                 fake_grant_create(rs, RESOURCE_SET_BUSY, function,data);
             success = TRUE;
