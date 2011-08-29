@@ -340,7 +340,7 @@ static int acquire_resources(longlive_t *longlive, uint32_t resources)
     int success;
 
     success = resource_set_acquire(longlive->type, rset_longlive,
-                                   resources,0, grant_handler,longlive);
+                                   resources,0, 0, grant_handler,longlive);
     if (!success) {
         OHM_DEBUG(DBG_LLIV, "failed to acquire longlive resource set %s/%d",
                   longlive->name, longlive->type);
