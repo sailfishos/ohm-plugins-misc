@@ -25,6 +25,7 @@ USA.
 #include <stdarg.h>
 #include <errno.h>
 #include <assert.h>
+#include <glib.h>
 
 #include <res-conn.h>
 
@@ -48,7 +49,6 @@ typedef struct {
 } callback_t;
 
 typedef struct fake_grant_s {
-    struct fake_grant_s   *next;
     struct resource_set_s *rs;
     uint32_t               srcid;
     uint32_t               flags;
@@ -62,7 +62,6 @@ typedef struct resource_set_s {
     uint32_t             reqno;
     uint32_t             flags;
     callback_t           grant;
-    fake_grant_t        *fakes;
     struct {
         int    count;
         char **list;
@@ -90,7 +89,6 @@ static gboolean      fake_grant_handler(gpointer);
 static fake_grant_t *fake_grant_create(resource_set_t *, uint32_t,
                                        resource_cb_t, void *);
 static void          fake_grant_delete(fake_grant_t *);
-static fake_grant_t *fake_grant_find(resource_set_t *, resource_cb_t, void *);
 static void          update_event_list(void);
 static void          free_event_list(char **);
 static char         *strlist(char **, char *, int);
@@ -248,7 +246,6 @@ int resource_set_release(resource_set_id_t    id,
     resource_set_t *rs;
     resmsg_t        msg;
     int             success = FALSE;
-    fake_grant_t   *fake;
     const char     *typstr;
 
     if (is_valid_resource_set(type, id)) {
@@ -258,9 +255,6 @@ int resource_set_release(resource_set_id_t    id,
 
         if (rs->num_users > 0)
             rs->num_users--;
-
-        if ((fake = fake_grant_find(rs, function, data)) != NULL)
-            fake_grant_delete(fake);
 
         if (rs->grant.function == function && rs->grant.data == data) {
             rs->grant.function = NULL;
@@ -575,21 +569,17 @@ static fake_grant_t *fake_grant_create(resource_set_t *rs,
                                        resource_cb_t   function,
                                        void           *data)
 {
-    fake_grant_t *fake;
-    fake_grant_t *last;
+    fake_grant_t *fake = NULL;
 
-    for (last = (fake_grant_t *)&rs->fakes;   last->next;   last = last->next)
-        ;
+    if ((fake = g_slice_new0(fake_grant_t)) != NULL) {
 
-    if ((fake = malloc(sizeof(fake_grant_t))) != NULL) {
-        memset(fake, 0, sizeof(fake_grant_t));
+        OHM_DEBUG(DBG_RESRC, "creating fake grant %p", (void*)fake);
+
         fake->rs = rs;
         fake->srcid = g_idle_add(fake_grant_handler, fake);
         fake->flags = flags;
         fake->callback.function = function;
         fake->callback.data = data;
-
-        last->next = fake;
     }
 
     return fake;
@@ -597,47 +587,17 @@ static fake_grant_t *fake_grant_create(resource_set_t *rs,
 
 static void fake_grant_delete(fake_grant_t *fake)
 {
-    resource_set_t *rs;
-    fake_grant_t   *prev;
+    resource_set_t *rs = NULL;
 
     if (!fake || !(rs = fake->rs))
         return;
 
-    for (prev = (fake_grant_t *)&rs->fakes;  prev->next;  prev = prev->next) {
-        if (fake == prev->next) {
+    OHM_DEBUG(DBG_RESRC, "deleting fake grant %p", (void*)fake);
 
-            if (fake->srcid)
-                g_source_remove(fake->srcid);
+    if (fake->srcid)
+        g_source_remove(fake->srcid);
 
-            prev->next = fake->next;
-            free(fake);
-
-            return;
-        }
-    }
-}
-
-static fake_grant_t *fake_grant_find(resource_set_t  *rs, 
-                                       resource_cb_t  function,
-                                       void          *data)
-{
-    fake_grant_t *fake = NULL;
-    fake_grant_t *prev;
-
-    if (rs != NULL) {
-        for (prev = (fake_grant_t *)&rs->fakes;
-             (fake = prev->next) != NULL;
-             prev = prev->next)
-        {
-            if (fake->callback.function == function ||
-                fake->callback.data     == data       )
-            {
-                break;
-            }
-        }
-    }
-
-    return fake;
+    g_slice_free(fake_grant_t, fake);
 }
 
 static void update_event_list(void)
