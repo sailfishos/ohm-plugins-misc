@@ -68,12 +68,11 @@ typedef enum {
     unknown_id = -1,
 
     regular_id = 0,
-    longlive_id,
 
     max_id
 } notification_id_type_t;
 
-extern int DBG_INIT, DBG_PROXY, DBG_LLIV, DBG_SUBSCR;
+extern int DBG_INIT, DBG_PROXY, DBG_SUBSCR;
 extern int DBG_RESRC, DBG_DBUS, DBG_RULE;
 
 

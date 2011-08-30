@@ -31,7 +31,6 @@ USA.
 #include "dbusif.h"
 #include "proxy.h"
 #include "resource.h"
-#include "longlive.h"
 
 typedef enum {
     unknown_handler = 0,
@@ -1256,7 +1255,6 @@ static uint32_t status_handler(DBusMessage *msg, char *err, char *desc)
     else {
         switch (NOTIFICATION_TYPE(id)) {
         case regular_id:    success = proxy_status_request(id, msg);    break;
-        case longlive_id:   success = longlive_status_request(id, msg); break;
         default:            success = FALSE;                            break;
         }
     }

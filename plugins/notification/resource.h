@@ -44,7 +44,6 @@ typedef enum {
     rset_type_unknown = -1,
 
     rset_regular,
-    rset_longlive,
 
     rset_type_max
 } resource_set_type_t;

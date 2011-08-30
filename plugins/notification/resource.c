@@ -38,7 +38,6 @@ typedef struct {
     char              *klass;  /* resource class      */
     uint32_t           mand;   /* mandatory resources */
     uint32_t           opt;    /* optional resources  */
-    uint32_t           lliv;   /* longlive resources */
 } rset_def_t;
 
 typedef struct {
@@ -75,7 +74,6 @@ OHM_IMPORTABLE(void  , timer_del  , (void *timer));
 
 static resconn_t      *conn;
 static resource_set_t  regular_set[rset_id_max];
-static resource_set_t  longlive_set[rset_id_max];
 static resource_set_t  empty_set[rset_id_max];
 static uint32_t        reqno;
 static int             verbose;
@@ -244,7 +242,6 @@ int resource_set_release(resource_set_id_t    id,
     const char     *typstr;
 
     if (is_valid_resource_set(type, id)) {
-
         typstr = type_to_string(type);
         rs = get_resource_set(type, id);
 
@@ -272,9 +269,6 @@ int resource_set_release(resource_set_id_t    id,
             msg.possess.reqno = rs->reqno;
 
             success = resproto_send_message(rs->resset, &msg, NULL);
-
-            if (success && type == rset_longlive)
-                rs->acquire = FALSE;
         }
         success = TRUE;
     }
@@ -334,19 +328,14 @@ static void connect_to_manager(resconn_t *rc)
 #define OPT_PROCLM     0
 #define OPT_MISCALL    0
 #define OPT_NOTIF      0
-#define LLIV_PROCLM    0
-#define LLIV_DEFAULT   RESMSG_LEDS
-#define LLIV_RING      0
-#define LLIV_MISCALL   0
-#define LLIV_NOTIF     0
    
     static rset_def_t   defs[] = {
-        {rset_proclaimer, "proclaimer", MAND_PROCLM ,OPT_PROCLM ,LLIV_PROCLM },
-        {rset_ringtone  , "ringtone"  , MAND_DEFAULT,OPT_DEFAULT,LLIV_RING   },
-        {rset_missedcall, "event"     , MAND_MISCALL,OPT_MISCALL,LLIV_MISCALL},
-        {rset_alarm     , "alarm"     , MAND_DEFAULT,OPT_DEFAULT,LLIV_DEFAULT},
-        {rset_event     , "event"     , MAND_DEFAULT,OPT_DEFAULT,LLIV_DEFAULT},
-        {rset_notifier  , "ringtone"  , MAND_NOTIF  ,OPT_NOTIF  ,LLIV_NOTIF  },
+        {rset_proclaimer, "proclaimer", MAND_PROCLM ,OPT_PROCLM  },
+        {rset_ringtone  , "ringtone"  , MAND_DEFAULT,OPT_DEFAULT },
+        {rset_missedcall, "event"     , MAND_MISCALL,OPT_MISCALL },
+        {rset_alarm     , "alarm"     , MAND_DEFAULT,OPT_DEFAULT },
+        {rset_event     , "event"     , MAND_DEFAULT,OPT_DEFAULT },
+        {rset_notifier  , "ringtone"  , MAND_NOTIF  ,OPT_NOTIF   },
     };
 
     rset_def_t      *def;
@@ -377,33 +366,12 @@ static void connect_to_manager(resconn_t *rc)
             }
             success = FALSE;
         }
-
-        if (def->lliv) {
-            rec->id       = def->id + rset_id_max;
-            rec->reqno    = ++reqno;
-            rec->rset.all = def->lliv;
-            rec->rset.opt = 0;
-            rec->klass    = def->klass;
-            rec->mode     = 0;
-            
-            if (resconn_connect(rc, &msg, conn_status) == NULL) {
-                if (verbose) {
-                    OHM_ERROR("notification: can't register '%s' longlive "
-                              "resource class", def->klass);
-                }
-                success = FALSE;
-            }
-        }
     }
 
     if (success) {
         OHM_DEBUG(DBG_RESRC, "successfully registered all resource classes");
     }
 
-#undef LLIV_NOTIF
-#undef LLIV_MISCALL
-#undef LLIV_RING
-#undef LLIV_DEFAULT
 #undef OPT_NOTIF
 #undef OPT_MISCALL
 #undef OPT_PROCLM
@@ -447,19 +415,6 @@ static void conn_status(resset_t *resset, resmsg_t *msg)
                     
                     resset->userdata = rs;
                 }
-            }
-            else {
-                /* longlive set */
-                OHM_DEBUG(DBG_RESRC, "'%s' longlive resource set (id %u) "
-                          "successfully created", resset->klass, resset->id);
-
-                rs = longlive_set + (resset->id - rset_id_max);
-
-                memset(rs, 0, sizeof(resource_set_t));
-                rs->type = rset_longlive;
-                rs->resset = resset;
-                    
-                resset->userdata = rs;
             }
         }
         else {
@@ -514,10 +469,6 @@ static void grant_handler(resmsg_t *msg, resset_t *resset, void *protodata)
                 if (grant.function != NULL)
                     grant.function(rs->flags, grant.data);
             }
-            break;
-
-        case rset_longlive:
-            rs->flags = msg->notify.resrc;
             break;
 
         default:
@@ -617,7 +568,6 @@ static const char* type_to_string(resource_set_type_t type) {
 
     switch (type) {
         case rset_regular:  typstr = "regular";  break;
-        case rset_longlive: typstr = "longlive"; break;
         default:            typstr = "???";      break;
     }
 
@@ -631,7 +581,6 @@ resource_set_t* get_resource_set(resource_set_type_t type, resource_set_id_t id)
 
     switch (type) {
         case rset_regular:  rspool = regular_set;  break;
-        case rset_longlive: rspool = longlive_set; break;
         default:            rspool = empty_set;    break;
     }
 

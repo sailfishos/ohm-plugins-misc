@@ -31,15 +31,13 @@ USA.
 #include "ruleif.h"
 #include "resource.h"
 #include "proxy.h"
-#include "longlive.h"
 
-int DBG_INIT, DBG_PROXY, DBG_LLIV, DBG_RESRC, DBG_DBUS, DBG_RULE;
+int DBG_INIT, DBG_PROXY, DBG_RESRC, DBG_DBUS, DBG_RULE;
 static unsigned int id;
 
 OHM_DEBUG_PLUGIN(notification,
     OHM_DEBUG_FLAG( "init"        , "init sequence"          , &DBG_INIT   ),
     OHM_DEBUG_FLAG( "proxy"       , "proxy functions"        , &DBG_PROXY  ),
-    OHM_DEBUG_FLAG( "longlive"    , "long-live notifications", &DBG_LLIV   ),
     OHM_DEBUG_FLAG( "resource"    , "resource client"        , &DBG_RESRC  ),
     OHM_DEBUG_FLAG( "dbus"        , "D-Bus interface"        , &DBG_DBUS   ),
     OHM_DEBUG_FLAG( "rule"        , "prolog interface"       , &DBG_RULE   )
@@ -72,7 +70,6 @@ static int init_cb(void *data)
     ruleif_init(plugin);
     resource_init(plugin);
     proxy_init(plugin);
-    longlive_init(plugin);
 
     id = 0;
 
@@ -96,7 +93,7 @@ static void plugin_init(OhmPlugin *plugin)
     id = g_idle_add(init_cb, plugin);
 
 #if 0
-    DBG_PROXY = DBG_LLIV = DBG_RESRC = DBG_DBUS = DBG_RULE = TRUE;
+    DBG_PROXY = DBG_RESRC = DBG_DBUS = DBG_RULE = TRUE;
 #endif
 
     LEAVE;
