@@ -174,7 +174,6 @@ int resource_set_acquire(resource_set_id_t    id,
         typstr = type_to_string(type);
         all = mand | opt;
         rs = get_resource_set(type, id);
-        rs->num_users++;
         resset = rs->resset;
 
         if (!resset)
@@ -226,6 +225,8 @@ int resource_set_acquire(resource_set_id_t    id,
 
             success = resproto_send_message(rs->resset, &msg, NULL);
         }
+
+        rs->num_users++;
     }
 
     return success;
