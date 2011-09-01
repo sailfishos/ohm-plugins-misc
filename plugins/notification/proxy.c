@@ -133,10 +133,11 @@ static void     grant_handler(uint32_t, void *);
 
 static int evaluate_notification_request_rules(const char *, char *,
                                                uint32_t *, uint32_t *, uint32_t *,
-                                               char *);
+                                               char *, char *);
+
+static void proclaimer_handle_action(const char *);
 
 static int state_machine(proxy_t *, proxy_event_t, void *);
-
 static int forward_play_request_to_backend(proxy_t *, uint32_t, uint32_t);
 static int forward_stop_request_to_backend(proxy_t *, void *);
 static int forward_pause_request_to_backend(proxy_t *, int, void *);
@@ -200,11 +201,13 @@ int proxy_playback_request(const char *what,    /* eg. ringtone, alarm, etc */
     int            type;
     int            success;
     char           event[DBUS_DESCBUF_LEN];
+    char           proclaimer[DBUS_DESCBUF_LEN];
 
     do { /* not a loop */
 
         memset(event, 0, sizeof(char) * DBUS_DESCBUF_LEN);
-        type = evaluate_notification_request_rules(what,event,&mand,&opt,&allow_multiple,err);
+        type = evaluate_notification_request_rules(what,event,&mand,&opt,&allow_multiple,
+            proclaimer,err);
 
         if (type >= 0)
             state  = state_acquiring;
@@ -221,6 +224,9 @@ int proxy_playback_request(const char *what,    /* eg. ringtone, alarm, etc */
                 break;
             }
         }
+
+        /* process the proclaimer action */
+        proclaimer_handle_action(proclaimer);
 
         proxid = NOTIFICATION_ID(regular_id, seqno);
 
@@ -689,6 +695,7 @@ static int evaluate_notification_request_rules(const char *event,
                                                uint32_t   *mand_ret,
                                                uint32_t   *opt_ret,
                                                uint32_t    *allow_multiple_ret,
+                                               char       *proclaimer_ret,
                                                char       *errbuf)
 {
     int   success;
@@ -696,8 +703,9 @@ static int evaluate_notification_request_rules(const char *event,
     int   mand;
     int   opt;
     int   multiple;
-    char *evt   = NULL;
-    char *error = NULL;
+    char *evt        = NULL;
+    char *proclaimer = NULL;
+    char *error      = NULL;
 
     success = ruleif_notification_request(event,
                      RULEIF_INTEGER_ARG ("type"           , type     ),
@@ -706,6 +714,7 @@ static int evaluate_notification_request_rules(const char *event,
                      RULEIF_INTEGER_ARG ("mandatory"      , mand     ),
                      RULEIF_INTEGER_ARG ("optional"       , opt      ),
                      RULEIF_INTEGER_ARG ("allow_multiple" , multiple ),
+                     RULEIF_STRING_ARG  ("proclaimer", proclaimer    ),
                      RULEIF_ARGLIST_END                    );
 
     if (!success || type < 0) {
@@ -741,16 +750,46 @@ static int evaluate_notification_request_rules(const char *event,
         if (allow_multiple_ret != NULL)
             *allow_multiple_ret = (uint32_t)multiple;
 
+        if (proclaimer_ret != NULL) {
+            strncpy(proclaimer_ret, proclaimer, DBUS_DESCBUF_LEN);
+            proclaimer_ret[DBUS_DESCBUF_LEN-1] = '\0';
+        }
+
         OHM_DEBUG(DBG_PROXY, "notification request rules returned: "
                   "type=%d, event='%s', mandatory=%d optional=%d "
-                  "allow_multiple=%d, err='%s'",
-                  type, evt, mand, opt, multiple, error);
+                  "allow_multiple=%d proclaimer='%s' err='%s'",
+                  type, evt, mand, opt, multiple, proclaimer ? proclaimer : "NULL", error);
     }
 
     free(evt);
+    free(proclaimer);
     free(error);
 
     return type;
+}
+
+static void proclaimer_handle_action(const char *action)
+{
+    proxy_t *proxy;
+    void *stopdata;
+    char err[DBUS_DESCBUF_LEN];
+
+    if (action == NULL)
+        return;
+
+    if (strncmp(action, "cancel", 6) == 0) {
+        /* find all proclaimer events and force stop on them. */
+        OHM_DEBUG(DBG_PROXY, "canceling all proclaimer events");
+        for (proxy = sqlist; proxy; proxy = proxy->sqnext) {
+            if (proxy->type == rset_proclaimer) {
+                stopdata = dbusif_create_stop_data(proxy->id);
+                proxy_stop_request(proxy->id, proxy->client, stopdata, err);
+            }
+        }
+    }
+
+    /* default action is considered to be "mix", in case which
+       we don't do anything. */
 }
 
 static int state_machine(proxy_t *proxy, proxy_event_t ev, void *evdata)
