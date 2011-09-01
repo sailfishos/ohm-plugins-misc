@@ -65,7 +65,7 @@ typedef struct {
     uint32_t                 client;     /* last value client knows */
     resource_set_qhead_t     queue;      /* values waiting for EP ack */
     uint32_t                 factstore;  /* value what is in the factstore */
-} resource_set_output_t;
+} __attribute__((__may_alias__)) resource_set_output_t;
 
 
 typedef struct resource_set_s {
