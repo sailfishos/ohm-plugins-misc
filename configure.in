@@ -206,7 +206,7 @@ fi
 AC_SUBST(BUILD_PLAYBACK)
 
 # Check if resource plugin should be/can be built
-PKG_CHECK_MODULES(LIBRESOURCE, libresource0,
+PKG_CHECK_MODULES(LIBRESOURCE, libresource,
 			       [has_libresource=yes],
 			       [has_libresource=no])
 
