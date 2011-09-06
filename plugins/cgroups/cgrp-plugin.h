@@ -159,6 +159,7 @@ typedef enum {
     CGRP_GROUPFLAG_STATIC,                  /* statically partitioned group */
     CGRP_GROUPFLAG_FACT,                    /* export to factstore */
     CGRP_GROUPFLAG_REASSIGN,                /* partitioning has failed */
+    CGRP_GROUPFLAG_PRIORITY,                /* group default priority value */
 } cgrp_group_flag_t;
 
 #define CGRP_DEFAULT_PRIORITY 0xffff

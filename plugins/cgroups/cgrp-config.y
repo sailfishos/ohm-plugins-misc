@@ -102,6 +102,7 @@ static char rule_group[256];
 %type <group>    group_properties
 %type <group>    group_description
 %type <group>    group_partition
+%type <group>    group_priority
 %type <procdef>  procdef
 %type <rules>    rules
 %type <rules>    rule
@@ -764,6 +765,7 @@ group: "[" KEYWORD_GROUP TOKEN_IDENT "]" "\n" group_properties {
 
 group_properties:      group_description "\n" { $$ = $1; }
     |                  group_partition "\n" { $$ = $1; }
+    |                  group_priority "\n" { $$ = $1; }
     |                  group_fact "\n" {
         CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_FACT);
     }
@@ -775,6 +777,11 @@ group_properties:      group_description "\n" { $$ = $1; }
         $$            = $1;
         $$.partition  = $2.partition;
 	CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_STATIC);
+    }
+    | group_properties group_priority "\n" {
+        $$            = $1;
+        $$.priority   = $2.priority;
+        CGRP_SET_FLAG($$.flags, CGRP_GROUPFLAG_PRIORITY);
     }
     | group_properties group_fact "\n" {
         $$        = $1;
@@ -799,6 +806,13 @@ group_partition: KEYWORD_PARTITION TOKEN_IDENT {
 	    OHM_ERROR("cgrp: nonexisting partition '%s' in a group", $2.value);
 	    exit(1);
 	}
+    }
+    ;
+
+group_priority: KEYWORD_PRIORITY TOKEN_SINT {
+        int priority = $2.value;
+        memset(&$$, 0, sizeof($$));
+        $$.priority = priority < -20 ? -20 : (priority > 19 ? 19: priority);
     }
     ;
 

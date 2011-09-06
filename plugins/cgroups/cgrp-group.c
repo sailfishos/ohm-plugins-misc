@@ -98,7 +98,6 @@ group_add(cgrp_context_t *ctx, cgrp_group_t *g)
     group->description = STRDUP(g->description);
     group->partition   = g->partition;
     group->flags       = g->flags;
-    group->priority    = CGRP_DEFAULT_PRIORITY;
     list_init(&group->processes);
 
     if (group->name == NULL || group->description == NULL) {
@@ -109,7 +108,13 @@ group_add(cgrp_context_t *ctx, cgrp_group_t *g)
     if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_GROUP_FACTS) ||
         CGRP_TST_FLAG(g->flags, CGRP_GROUPFLAG_FACT))
         group->fact = fact_create(ctx, CGRP_FACT_GROUP, group->name);
-    
+
+    if (CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_GROUP_FACTS) ||
+        CGRP_TST_FLAG(g->flags, CGRP_GROUPFLAG_PRIORITY))
+        group->priority = g->priority;
+    else
+        group->priority = CGRP_DEFAULT_PRIORITY;
+
     return group;
 }
 
