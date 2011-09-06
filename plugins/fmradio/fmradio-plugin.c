@@ -54,6 +54,8 @@ static fmradio_context_t context;
 static void
 plugin_init(OhmPlugin *plugin)
 {
+    (void)plugin;
+
     if (!OHM_DEBUG_INIT(fmradio))
         OHM_WARNING("fmradio: failed to register for debugging");
     
