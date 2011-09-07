@@ -198,6 +198,9 @@ group_print(cgrp_context_t *ctx, cgrp_group_t *group, FILE *fp)
     if (group->partition != NULL)
         fprintf(fp, "partition '%s'\n", group->partition->name);
 
+    if (group->priority != CGRP_DEFAULT_PRIORITY)
+        fprintf(fp, "priority %d\n", group->priority);
+
     if (!list_empty(&group->processes)) {
         list_foreach(&group->processes, p, n) {
             process = list_entry(p, cgrp_process_t, group_hook);
