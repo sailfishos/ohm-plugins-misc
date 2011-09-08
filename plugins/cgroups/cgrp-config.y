@@ -74,6 +74,7 @@ static char rule_group[256];
     cgrp_procdef_t   *procdefs;
     cgrp_rule_t      *rules;
     cgrp_rule_t       rule;
+    cgrp_follower_t  *follower;
     cgrp_stmt_t      *stmt;
     cgrp_expr_t      *expr;
     cgrp_action_t    *action;
@@ -119,6 +120,8 @@ static char rule_group[256];
 %type <string>   string
 %type <time>     time_unit
 %type <time>     time_usec
+%type <follower> followers
+%type <follower> follower
 %type <uint32>   schedule_priority
 %type <sint32>   renice_priority
 %type <adjust>   adjust_action
@@ -135,6 +138,7 @@ static char rule_group[256];
 %type <action> action_priority
 %type <action> action_oom
 %type <action> action_ignore
+%type <action> action_leads
 %type <action> action_no_op
 
 %type <ctrl_settings> optional_cgroup_control_settings
@@ -171,6 +175,7 @@ static char rule_group[256];
 %token KEYWORD_PARENT
 %token KEYWORD_TYPE
 %token KEYWORD_IGNORE
+%token KEYWORD_LEADS
 %token KEYWORD_RECLASSIFY
 %token KEYWORD_RECLASS_AFTER
 %token KEYWORD_CLASSIFY
@@ -1203,6 +1208,7 @@ action: action_group     { $$ = $1; }
     |   action_priority  { $$ = $1; }
     |   action_oom       { $$ = $1; }
     |   action_ignore    { $$ = $1; }
+    |   action_leads     { $$ = $1; }
     |   action_no_op     { $$ = $1; }
     ;
 
@@ -1318,6 +1324,19 @@ action_ignore: KEYWORD_IGNORE {
     }
     ;
 
+action_leads: KEYWORD_LEADS followers {
+        cgrp_action_t *action;
+
+        action = action_leads_new($2);
+        if (action == NULL) {
+            OHM_ERROR("cgrp: failed to allocate new leads action");
+            YYABORT;
+        }
+
+        $$ = action;
+    }
+    ;
+
 action_no_op: KEYWORD_NO_OP {
         cgrp_action_t *action;
 
@@ -1347,8 +1366,31 @@ adjust_value: TOKEN_SINT { $$.value = $1.value;      }
     |         TOKEN_UINT { $$.value = (int)$1.value; }
     ;
 
+followers: follower {
+        $$ = $1;
+    }
+    | followers "," follower {
+        cgrp_follower_t *follower;
 
+        for (follower = $1; follower->next != NULL; follower = follower->next)
+            ;
+        follower->next = $3;
+        $$             = $1;
+    }
+    ;
 
+follower: path {
+        cgrp_follower_t *follower;
+
+        if (ALLOC_OBJ(follower) == NULL) {
+            OHM_ERROR("cgrp: failed to allocate a follower object");
+            exit(1);
+        }
+
+        follower->name = STRDUP($1.value);
+        $$ = follower;
+    }
+    ;
 
 /*****************************************************************************
  *                        *** miscallaneous rules ***                        *

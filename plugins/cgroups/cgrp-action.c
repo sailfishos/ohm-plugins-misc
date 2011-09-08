@@ -88,6 +88,7 @@ ACTION_FUNCTIONS(classify);
 ACTION_FUNCTIONS(priority);
 ACTION_FUNCTIONS(oom);
 ACTION_FUNCTIONS(ignore);
+ACTION_FUNCTIONS(leads);
 ACTION_FUNCTIONS(noop);
 
 
@@ -103,6 +104,7 @@ static action_handler_t actions[] = {
     ACTION(PRIORITY  , priority_exec, priority_print, priority_del),
     ACTION(OOM       , oom_exec     , oom_print     , oom_del),
     ACTION(IGNORE    , ignore_exec  , ignore_print  , ignore_del),
+    ACTION(LEADS     , leads_exec   , leads_print   , leads_del),
     ACTION(NOOP      , noop_exec    , noop_print    , noop_del)
 };
 
@@ -794,8 +796,58 @@ action_ignore_exec(cgrp_context_t *ctx,
     return TRUE;
 }
 
+cgrp_action_t* action_leads_new(cgrp_follower_t *followers)
+{
+    cgrp_action_leads_t *action;
 
+    if (ALLOC_OBJ(action) != NULL) {
+        action->type      = CGRP_ACTION_LEADS;
+        action->followers = followers;
+    }
 
+    return (cgrp_action_t *)action;
+}
+
+void action_leads_del(cgrp_action_t *action)
+{
+    FREE(action);
+}
+
+int action_leads_print(cgrp_context_t *ctx, FILE *fp, cgrp_action_t *action)
+{
+    cgrp_follower_t *followers = action->leads.followers;
+    int n = 0;
+
+    (void)ctx;
+
+    n = fprintf(fp, "leads ");
+
+    while (followers) {
+        if (followers->next)
+            n += fprintf(fp, "%s,", followers->name);
+        else
+            n += fprintf(fp, "%s", followers->name);
+        followers = followers->next;
+    }
+
+    return n;
+}
+
+int action_leads_exec(cgrp_context_t *ctx,
+                      cgrp_proc_attr_t *attr, cgrp_action_t *action)
+{
+    cgrp_process_t  *process = proc_hash_lookup(ctx, attr->pid);
+    cgrp_follower_t *follower;
+
+    if (!process)
+        return TRUE;
+
+    OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: leads", attr->pid, attr->binary);
+    for (follower = action->leads.followers; follower; follower = follower->next)
+        OHM_DEBUG(DBG_CLASSIFY, "  %s", follower->name);
+
+    return TRUE;
+}
 
 /*
  * noop

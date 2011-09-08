@@ -692,6 +692,7 @@ KEYWORD_TYPE              type
 KEYWORD_USER              user
 KEYWORD_PARENT            parent
 KEYWORD_IGNORE            ignore
+KEYWORD_LEADS             leads
 KEYWORD_RECLASS_AFTER     reclassify-after
 KEYWORD_RECLASSIFY        reclassify-count
 KEYWORD_CLASSIFY_ARGVX    classify-by-argv[0-9]+
@@ -815,6 +816,7 @@ ESCAPE		       \\
 {KEYWORD_NAME}              { PASS_KEYWORD(NAME);              }
 {KEYWORD_TYPE}              { PASS_KEYWORD(TYPE);              }
 {KEYWORD_IGNORE}            { PASS_KEYWORD(IGNORE);            }
+{KEYWORD_LEADS}             { PASS_KEYWORD(LEADS);             }
 {KEYWORD_RECLASS_AFTER}     { PASS_KEYWORD(RECLASS_AFTER);     }
 {KEYWORD_RECLASSIFY}        { PASS_KEYWORD(RECLASSIFY);        }
 {KEYWORD_CLASSIFY}          { PASS_KEYWORD(CLASSIFY);          }

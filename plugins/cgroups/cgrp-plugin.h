@@ -174,6 +174,10 @@ typedef struct {
     int               priority;             /* priority if given */
 } cgrp_group_t;
 
+typedef struct cgrp_follower_s {
+    char                   *name;           /* follower name */
+    struct cgrp_follower_s *next;           /* link to the next follower */
+} cgrp_follower_t;
 
 /*
  * classification actions
@@ -192,6 +196,7 @@ typedef enum {
     CGRP_ACTION_PRIORITY,                   /* adjust process priority */
     CGRP_ACTION_OOM,                        /* adjust OOM priority */
     CGRP_ACTION_IGNORE,                     /* apply the default rules */
+    CGRP_ACTION_LEADS,                      /* attach followers to process */
     CGRP_ACTION_NOOP,                       /* no-op action */
     CGRP_ACTION_MAX,
 } cgrp_action_type_t;
@@ -238,7 +243,10 @@ typedef struct {
     int           value;                    /* and value */
 } cgrp_action_oom_t;
 
-
+typedef struct {
+    CGRP_ACTION_COMMON;                     /* common action fields */
+    cgrp_follower_t *followers;             /* follower processes */
+} cgrp_action_leads_t;
 
 union cgrp_action_u {
     cgrp_action_type_t     type;
@@ -249,8 +257,8 @@ union cgrp_action_u {
     cgrp_action_classify_t classify;
     cgrp_action_priority_t priority;
     cgrp_action_oom_t      oom;
+    cgrp_action_leads_t    leads;
 };
-
 
 
 /*
@@ -835,6 +843,7 @@ cgrp_action_t *action_classify_new(int);
 cgrp_action_t *action_priority_new(cgrp_adjust_t, int);
 cgrp_action_t *action_oom_new(cgrp_adjust_t, int);
 cgrp_action_t *action_ignore_new  (void);
+cgrp_action_t *action_leads_new   (cgrp_follower_t *);
 cgrp_action_t *action_noop_new    (void);
 
 
