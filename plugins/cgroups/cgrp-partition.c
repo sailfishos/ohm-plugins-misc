@@ -325,15 +325,12 @@ partition_add_process(cgrp_partition_t *partition, pid_t pid)
  * partition_add_group
  ********************/
 int
-partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group, int force)
+partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
     char            pid[64];
     int             len, chk, success;
-    
-    if (group->partition == partition && !force)
-        return TRUE;
 
     OHM_DEBUG(DBG_ACTION, "adding group '%s' to partition '%s'",
               group->name, partition->name);
@@ -377,7 +374,7 @@ unfreeze_fixup(cgrp_context_t *ctx, cgrp_partition_t *partition)
             CGRP_TST_FLAG(group->flags, CGRP_GROUPFLAG_REASSIGN)) {
             OHM_DEBUG(DBG_ACTION, "reassigning group '%s' to partition '%s'",
                       group->name, partition->name);
-            partition_add_group(partition, group, TRUE);
+            partition_add_group(partition, group);
             CGRP_CLR_FLAG(group->flags, CGRP_GROUPFLAG_REASSIGN);
         }
     }

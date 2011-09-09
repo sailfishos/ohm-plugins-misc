@@ -190,8 +190,11 @@ reparent_action(cgrp_context_t *ctx, void *data)
                   action->partition);
         return FALSE;
     }
-    
-    success = partition_add_group(partition, group, FALSE);
+
+    if (group->partition == partition)
+        return TRUE;
+
+    success = partition_add_group(partition, group);
 
     OHM_DEBUG(DBG_ACTION, "reparenting group '%s' to partition '%s' %s",
               action->group, action->partition, success ? "OK" : "FAILED");
