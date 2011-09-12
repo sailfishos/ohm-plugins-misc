@@ -369,7 +369,7 @@ bus_init(const char *address)
     if (!bus_add_match("signal", TELEPHONY_INTERFACE, NULL, NULL))
         exit(1);
 
-    if (!bus_add_match("signal", TP_CHANNEL_GROUP, NULL, NULL))
+    if (!bus_add_match("signal", TP_CHANNEL_GROUP, MEMBERS_CHANGED, NULL))
         exit(1);
 
     if (!bus_add_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL))
@@ -488,7 +488,7 @@ bus_exit(void)
 
     bus_track_name(TP_STREAMENGINE_NAME, FALSE);
     bus_del_match("signal", TELEPHONY_INTERFACE, NULL, NULL);
-    bus_del_match("signal", TP_CHANNEL_GROUP, NULL, NULL);
+    bus_del_match("signal", TP_CHANNEL_GROUP, MEMBERS_CHANGED, NULL);
     bus_del_match("signal", TP_CONN_IFREQ, NEW_CHANNELS, NULL);
     bus_del_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL);
     bus_del_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL);
