@@ -1205,31 +1205,33 @@ process_ignore(cgrp_context_t *ctx, cgrp_process_t *process)
 int
 process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
 {
+    if (!process)
+        return TRUE;
+
+    OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
+              process->pid, process->binary, state);
+
     if (!strcmp(state, APP_ACTIVE)) {
         ctx->active_process = process;
-        ctx->active_group   = process ? process->group : NULL;
+        ctx->active_group   = process->group;
 
         OHM_DEBUG(DBG_ACTION, "active process: %u/%u (%s), active group: %s",
-                  ctx->active_process ? ctx->active_process->tgid   : 0,
-                  ctx->active_process ? ctx->active_process->pid    : 0,
-                  ctx->active_process ? ctx->active_process->binary : "<none>",
-                  ctx->active_group   ? ctx->active_group->name     : "<none>");
+                  process->tgid, process->pid, process->binary,
+                  process->group ? process->group->name : "<none>");
+        return TRUE;
     }
-    else if (!strcmp(state, APP_INACTIVE)) {
+    if (!strcmp(state, APP_INACTIVE)) {
         if (process == ctx->active_process) {
             ctx->active_process = NULL;
             ctx->active_group   = NULL;
 
             OHM_DEBUG(DBG_ACTION, "active process & group: <none>");
         }
-    }
-    else {
-        OHM_ERROR("cgrp: invalid process state '%s'", state);
-        return FALSE;
+        return TRUE;
     }
 
-    
-    return TRUE;
+    OHM_ERROR("cgrp: invalid process state '%s'", state);
+    return FALSE;
 }
 
 

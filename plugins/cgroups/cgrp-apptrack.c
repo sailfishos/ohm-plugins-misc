@@ -342,10 +342,7 @@ apptrack_update(gpointer data)
 
     if (standby != 0 && (old_proc = proc_hash_lookup(ctx, standby)) != NULL) {
         state = APP_INACTIVE;
-        
-        OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
-                  standby, old_proc->binary, state);
-        
+
         process_update_state(ctx, old_proc, state);
     }
     else
@@ -353,10 +350,7 @@ apptrack_update(gpointer data)
     
     if (active != 0 && (new_proc = proc_hash_lookup(ctx, active)) != NULL) {
         state = APP_ACTIVE;
-        
-        OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
-                  active, new_proc->binary, state);
-        
+
         process_update_state(ctx, new_proc, state);
     }
     else
@@ -447,10 +441,7 @@ socket_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
             *pidp++ = '\0';
 
         process = proc_hash_lookup(ctx, pid);
-        
-        OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
-                  pid, process ? process->binary : "unknown", state);
-        
+
         process_update_state(ctx, process, state);
 
         apptrack_notify(ctx, ctx->active_process);
