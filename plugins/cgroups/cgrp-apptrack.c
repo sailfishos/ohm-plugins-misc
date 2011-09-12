@@ -313,6 +313,24 @@ apptrack_notify(cgrp_context_t *ctx, cgrp_process_t *process)
     }
 }
 
+static cgrp_process_t* update_process(cgrp_context_t *ctx, char *state)
+{
+    pid_t           app;
+    GValue         *gapp;
+    cgrp_process_t *proc = NULL;
+
+    gapp = ohm_fact_get(ctx->apptrack_changes, state);
+    if (gapp && G_VALUE_TYPE(gapp) == G_TYPE_INT) {
+        app = g_value_get_int(gapp);
+        if (app) {
+            proc = proc_hash_lookup(ctx, app);
+            if (proc)
+                process_update_state(ctx, proc, state);
+        }
+    }
+
+    return proc;
+}
 
 /********************
  * apptrack_update
@@ -323,38 +341,11 @@ apptrack_update(gpointer data)
     cgrp_context_t *ctx = (cgrp_context_t *)data;
     cgrp_group_t   *old_group, *new_group;
     cgrp_process_t *old_proc, *new_proc;
-    pid_t           active, standby;
-    GValue         *gactive, *gstandby;
-    char           *state;
 
     old_group = ctx->active_group;
-    
-    active   = 0;
-    gactive  = ohm_fact_get(ctx->apptrack_changes, APP_ACTIVE);
-    standby  = 0;
-    gstandby = ohm_fact_get(ctx->apptrack_changes, APP_INACTIVE);
-    
-    if (gactive != NULL && G_VALUE_TYPE(gactive) == G_TYPE_INT)
-        active = g_value_get_int(gactive);
 
-    if (gstandby != NULL && G_VALUE_TYPE(gstandby) == G_TYPE_INT)
-        standby = g_value_get_int(gstandby);
-
-    if (standby != 0 && (old_proc = proc_hash_lookup(ctx, standby)) != NULL) {
-        state = APP_INACTIVE;
-
-        process_update_state(ctx, old_proc, state);
-    }
-    else
-        old_proc = NULL;
-    
-    if (active != 0 && (new_proc = proc_hash_lookup(ctx, active)) != NULL) {
-        state = APP_ACTIVE;
-
-        process_update_state(ctx, new_proc, state);
-    }
-    else
-        new_proc = NULL;
+    old_proc = update_process(ctx, APP_INACTIVE);
+    new_proc = update_process(ctx, APP_ACTIVE);
 
     new_group = ctx->active_group;
     if (old_group != new_group || old_proc != new_proc)
@@ -363,7 +354,7 @@ apptrack_update(gpointer data)
     apptrack_notify(ctx, ctx->active_process);
 
     ctx->apptrack_update = 0;
-    
+
     return FALSE;
 }
 
