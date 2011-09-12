@@ -1340,34 +1340,34 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     
     OHM_INFO("%s: added %d, removed %d, localpend %d, remotepend %d, actor %u",
              __FUNCTION__, nadded, nremoved, nlocalpend, nremotepend, actor);
-    
 
     p = details;
     t = "";
     l = sizeof(details);
-    
+
 #define DUMP(what, size)                              \
     n  = snprintf(p, l, "%s%s: {", t, #what);         \
     p += n;                                           \
     l -= n;                                           \
-    for (i = 0; i < size; i++, t = ",") {             \
+    t = "";                                           \
+    for (i = 0; i < size; i++, t = ", ") {            \
         n  = snprintf(p, l, "%s%u", t, what[i]);      \
         p += n;                                       \
         l -= n;                                       \
     }                                                 \
     n  = snprintf(p, l, "}");                         \
     p += n;                                           \
-    l -= n                                            \
+    l -= n;                                           \
+    t = ", "
 
     DUMP(added     , nadded);
     DUMP(removed   , nremoved);
     DUMP(localpend , nlocalpend);
     DUMP(remotepend, nremotepend);
-    
+
     OHM_INFO("signal details: %s", details);
-#undef DUMP    
-    
-    
+#undef DUMP
+
     if (nadded != 0)
         event.call->nmember += nadded;
 
