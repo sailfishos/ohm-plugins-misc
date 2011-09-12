@@ -1351,7 +1351,7 @@ members_changed(DBusConnection *c, DBusMessage *msg, void *data)
     p += n;                                           \
     l -= n;                                           \
     for (i = 0; i < size; i++, t = ",") {             \
-        n  = snprintf(p, n, "%s%u", t, what[i]);      \
+        n  = snprintf(p, l, "%s%u", t, what[i]);      \
         p += n;                                       \
         l -= n;                                       \
     }                                                 \
