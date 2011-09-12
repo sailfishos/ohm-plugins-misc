@@ -363,8 +363,9 @@ apptrack_update(gpointer data)
         new_proc = NULL;
 
     new_group = ctx->active_group;
-    apptrack_group_change(ctx, old_group, old_proc, new_group, new_proc);
-    
+    if (old_group != new_group || old_proc != new_proc)
+        apptrack_group_change(ctx, old_group, old_proc, new_group, new_proc);
+
     apptrack_notify(ctx, ctx->active_process);
 
     ctx->apptrack_update = 0;
@@ -456,7 +457,8 @@ socket_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
     }
 
     curr_active = ctx->active_group;
-    apptrack_group_change(ctx, prev_active, NULL, curr_active, NULL);
+    if (prev_active != curr_active)
+        apptrack_group_change(ctx, prev_active, NULL, curr_active, NULL);
 
  out:
     return TRUE;
@@ -475,9 +477,6 @@ apptrack_group_change(cgrp_context_t *ctx,
     char *vars[2*3 + 1];
 
     if (context == NULL)
-        return TRUE;
-
-    if (old_group == new_group && old_proc == new_proc)
         return TRUE;
 
     OHM_DEBUG(DBG_NOTIFY, "active group has changed from '%s' to '%s'",
