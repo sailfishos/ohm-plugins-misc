@@ -134,31 +134,29 @@ classify_by_parent(cgrp_context_t *ctx, pid_t pid, pid_t tgid, pid_t ppid)
     cgrp_process_t   *parent, *process;
     cgrp_proc_attr_t  attr;
 
-
-    if ((parent = proc_hash_lookup(ctx, ppid)) != NULL) {
-        attr.pid    = pid;
-        attr.tgid   = tgid;
-        attr.binary = parent->binary;
-        attr.mask = 0;
-
-        CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
-        CGRP_SET_MASK(attr.mask, CGRP_PROC_BINARY);
-        
-        process = process_create(ctx, &attr);
-        
-        if (process == NULL) {
-            OHM_ERROR("cgrp: failed to allocate new process");
-            return FALSE;
-        }
-
-        OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s",
-                  process->pid, process->binary, parent->group->name);
-        group_add_process(ctx, parent->group, process);
-
-        return TRUE;
-    }
-    else
+    parent = proc_hash_lookup(ctx, ppid);
+    if (!parent)
         return FALSE;
+
+    attr.pid    = pid;
+    attr.tgid   = tgid;
+    attr.binary = parent->binary;
+    attr.mask = 0;
+
+    CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
+    CGRP_SET_MASK(attr.mask, CGRP_PROC_BINARY);
+
+    process = process_create(ctx, &attr);
+    if (!process) {
+        OHM_ERROR("cgrp: failed to allocate new process");
+        return FALSE;
+    }
+
+    OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s",
+              process->pid, process->binary, parent->group->name);
+    group_add_process(ctx, parent->group, process);
+
+    return TRUE;
 }
 
 
