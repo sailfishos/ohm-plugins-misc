@@ -364,7 +364,7 @@ apptrack_update(gpointer data)
 
     new_group = ctx->active_group;
     if (old_group != new_group || old_proc != new_proc)
-        apptrack_group_change(ctx, new_group, new_proc);
+        apptrack_cgroup_notify(ctx, new_group, new_proc);
 
     apptrack_notify(ctx, ctx->active_process);
 
@@ -458,7 +458,7 @@ socket_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 
     curr_active = ctx->active_group;
     if (prev_active != curr_active)
-        apptrack_group_change(ctx, curr_active, NULL);
+        apptrack_cgroup_notify(ctx, curr_active, NULL);
 
  out:
     return TRUE;
@@ -466,11 +466,11 @@ socket_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
 
 
 /********************
- * apptrack_group_change
+ * apptrack_cgroup_notify
  ********************/
 int
-apptrack_group_change(cgrp_context_t *ctx,
-                      cgrp_group_t *new_group, cgrp_process_t *new_proc)
+apptrack_cgroup_notify(cgrp_context_t *ctx,
+                       cgrp_group_t *new_group, cgrp_process_t *new_proc)
 {
     char *group, *process;
     char *vars[2*3 + 1];

@@ -1153,7 +1153,7 @@ process_remove(cgrp_context_t *ctx, cgrp_process_t *process)
         ctx->active_group   = NULL;
 
         if (process->group)
-            apptrack_group_change(ctx, NULL, NULL);
+            apptrack_cgroup_notify(ctx, NULL, NULL);
     }
     
     if ((track = process->track) != NULL)
