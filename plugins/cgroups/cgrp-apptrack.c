@@ -473,7 +473,7 @@ apptrack_cgroup_notify(cgrp_context_t *ctx,
                        cgrp_group_t *new_group, cgrp_process_t *new_proc)
 {
     char *group, *process;
-    char *vars[2*3 + 1];
+    char *vars[2*2 + 1];
 
     if (context == NULL)
         return TRUE;
@@ -491,14 +491,12 @@ apptrack_cgroup_notify(cgrp_context_t *ctx,
     OHM_DEBUG(DBG_NOTIFY, "active group has changed to '%s' by '%s'",
               group, process);
 
-    vars[0] = "cgroup_group";
+    vars[0] = "group";
     vars[1] = group;
-    vars[2] = "cgroup_state";
+    vars[2] = "state";
     vars[3] = APP_ACTIVE;
-    vars[4] = "cgroup_process";
-    vars[5] = process;
-    vars[6] = NULL;
-    
+    vars[4] = NULL;
+
     return ctx->resolve("cgroup_notify", vars) == 0;
 }
 
