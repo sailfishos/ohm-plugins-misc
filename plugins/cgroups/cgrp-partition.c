@@ -331,7 +331,7 @@ partition_add_process(cgrp_partition_t *partition, cgrp_process_t *process)
  * partition_add_group
  ********************/
 int
-partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
+partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group, pid_t pid)
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
@@ -343,6 +343,9 @@ partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
     success = TRUE;
     list_foreach(&group->processes, p, n) {
         process = list_entry(p, cgrp_process_t, group_hook);
+        if (pid && process->pid != pid)
+            continue;
+
         if (process->partition != partition)
             success &= partition_add_process(partition, process);
     }
@@ -372,7 +375,7 @@ unfreeze_fixup(cgrp_context_t *ctx, cgrp_partition_t *partition)
             CGRP_TST_FLAG(group->flags, CGRP_GROUPFLAG_REASSIGN)) {
             OHM_DEBUG(DBG_ACTION, "reassigning group '%s' to partition '%s'",
                       group->name, partition->name);
-            partition_add_group(partition, group);
+            partition_add_group(partition, group, 0);
             CGRP_CLR_FLAG(group->flags, CGRP_GROUPFLAG_REASSIGN);
         }
     }

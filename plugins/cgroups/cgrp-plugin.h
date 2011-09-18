@@ -748,7 +748,7 @@ cgrp_partition_t *partition_add_root(cgrp_context_t *);
 void partition_dump(cgrp_context_t *, FILE *);
 void partition_print(cgrp_partition_t *, FILE *);
 int partition_add_process(cgrp_partition_t *, cgrp_process_t *);
-int partition_add_group(cgrp_partition_t *, cgrp_group_t *);
+int partition_add_group(cgrp_partition_t *, cgrp_group_t *, pid_t);
 int partition_freeze(cgrp_context_t *, cgrp_partition_t *, int);
 int partition_limit_cpu(cgrp_partition_t *, unsigned int);
 int partition_limit_mem(cgrp_partition_t *, unsigned int);

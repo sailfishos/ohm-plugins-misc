@@ -195,7 +195,7 @@ reparent_action(cgrp_context_t *ctx, void *data)
     if (group->partition == partition)
         return TRUE;
 
-    success = partition_add_group(partition, group);
+    success = partition_add_group(partition, group, action->pid);
 
     OHM_DEBUG(DBG_ACTION, "reparenting group %d/'%s' to partition '%s' %s",
               action->pid, action->group, action->partition, success ? "OK" : "FAILED");
