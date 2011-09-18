@@ -28,6 +28,7 @@ USA.
 typedef struct {                        /* reparent a group to a partition */
     char *group;
     char *partition;
+    int   pid;
 } reparent_t;
 
 typedef struct {                        /* freeze/unfreeze a partition */
@@ -196,8 +197,8 @@ reparent_action(cgrp_context_t *ctx, void *data)
 
     success = partition_add_group(partition, group);
 
-    OHM_DEBUG(DBG_ACTION, "reparenting group '%s' to partition '%s' %s",
-              action->group, action->partition, success ? "OK" : "FAILED");
+    OHM_DEBUG(DBG_ACTION, "reparenting group %d/'%s' to partition '%s' %s",
+              action->pid, action->group, action->partition, success ? "OK" : "FAILED");
 
     return success;
 }
@@ -580,9 +581,10 @@ typedef struct {		/* action descriptor */
 } actdsc_t;
 
 static argdsc_t reparent_args[] = {
-    { argtype_string , "group"    , STRUCT_OFFSET(reparent_t, group)     },
-    { argtype_string , "partition", STRUCT_OFFSET(reparent_t, partition) },
-    { argtype_invalid,  NULL      , 0                                     }
+    { argtype_string , "group"    , STRUCT_OFFSET(reparent_t, group)      },
+    { argtype_string , "partition", STRUCT_OFFSET(reparent_t, partition)  },
+    { argtype_integer, "pid",       STRUCT_OFFSET(reparent_t, pid)        },
+    { argtype_invalid,  NULL      , 0                                     },
 };
 
 static argdsc_t freeze_args[] = {
