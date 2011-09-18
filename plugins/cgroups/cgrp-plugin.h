@@ -454,19 +454,20 @@ typedef struct {
  */
 
 typedef struct {
-    pid_t         pid;                      /* task id */
-    pid_t         tgid;                     /* process id */
-    char         *binary;                   /* path to binary */
-    char         *argv0;                    /* argv[0] if needed */
-    char         *argvx;                    /* classified by this arg */
-    cgrp_group_t *group;                    /* current group */
-    int           priority;                 /* process priority */
-    int           prio_mode;                
-    int           oom_adj;                  /* OOM adjustment */
-    int           oom_mode;
-    list_hook_t   proc_hook;                /* hook to process table */
-    list_hook_t   group_hook;               /* hook to group */
-    cgrp_track_t *track;                    /* resolver notifications */
+    pid_t             pid;                  /* task id */
+    pid_t             tgid;                 /* process id */
+    char             *binary;               /* path to binary */
+    char             *argv0;                /* argv[0] if needed */
+    char             *argvx;                /* classified by this arg */
+    cgrp_group_t     *group;                /* current group */
+    cgrp_partition_t *partition;            /* current partition */
+    int               priority;             /* process priority */
+    int               prio_mode;
+    int               oom_adj;              /* OOM adjustment */
+    int               oom_mode;
+    list_hook_t       proc_hook;            /* hook to process table */
+    list_hook_t       group_hook;           /* hook to group */
+    cgrp_track_t     *track;                /* resolver notifications */
 } cgrp_process_t;
 
 typedef enum {
@@ -746,7 +747,7 @@ cgrp_partition_t *partition_add_root(cgrp_context_t *);
 
 void partition_dump(cgrp_context_t *, FILE *);
 void partition_print(cgrp_partition_t *, FILE *);
-int partition_add_process(cgrp_partition_t *, pid_t);
+int partition_add_process(cgrp_partition_t *, cgrp_process_t *);
 int partition_add_group(cgrp_partition_t *, cgrp_group_t *);
 int partition_freeze(cgrp_context_t *, cgrp_partition_t *, int);
 int partition_limit_cpu(cgrp_partition_t *, unsigned int);

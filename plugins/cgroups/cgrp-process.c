@@ -1191,11 +1191,10 @@ process_remove_by_pid(cgrp_context_t *ctx, pid_t pid)
 int
 process_ignore(cgrp_context_t *ctx, cgrp_process_t *process)
 {
-    pid_t pid = process->pid;
-
+    partition_add_process(ctx->root, process);
     process_remove(ctx, process);
 
-    return partition_add_process(ctx->root, pid);
+    return TRUE;
 }
 
 

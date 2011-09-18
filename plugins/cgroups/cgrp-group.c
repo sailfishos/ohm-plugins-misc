@@ -250,9 +250,9 @@ group_add_process(cgrp_context_t *ctx,
         fact_add_process(group->fact, process);
 
     if (group->partition)
-        success = partition_add_process(group->partition, process->pid);
+        success = partition_add_process(group->partition, process);
     else if (old && old->partition)
-        success = partition_add_process(ctx->root, process->pid);
+        success = partition_add_process(ctx->root, process);
     else
         success = TRUE;
 

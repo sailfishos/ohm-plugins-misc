@@ -306,18 +306,24 @@ partition_print(cgrp_partition_t *partition, FILE *fp)
  * partition_add_process
  ********************/
 int
-partition_add_process(cgrp_partition_t *partition, pid_t pid)
+partition_add_process(cgrp_partition_t *partition, cgrp_process_t *process)
 {
     char tasks[PIDLEN + 1];
-    int  len, chk;
+    int  len, chk, success = TRUE;
 
-    OHM_DEBUG(DBG_ACTION, "adding process %u to partition '%s'", pid,
-              partition->name);
-    
-    len = sprintf(tasks, "%u\n", pid); 
+    len = sprintf(tasks, "%u\n", process->pid);
     chk = write(partition->control.tasks, tasks, len);
 
-    return (chk == len || (chk < 0 && errno == ESRCH));
+    if (chk == len)
+        process->partition = partition;
+    else if (chk >= 0 || errno != ESRCH)
+        success = FALSE;
+
+    OHM_DEBUG(DBG_ACTION, "adding process %u (%s) to partition '%s': %s",
+              process->pid, process->binary, partition->name,
+              success ? "OK" : "FAILED");
+
+    return success;
 }
 
 
@@ -329,31 +335,23 @@ partition_add_group(cgrp_partition_t *partition, cgrp_group_t *group)
 {
     cgrp_process_t *process;
     list_hook_t    *p, *n;
-    char            pid[64];
-    int             len, chk, success;
+    int             success;
 
     OHM_DEBUG(DBG_ACTION, "adding group '%s' to partition '%s'",
               group->name, partition->name);
-    
+
     success = TRUE;
     list_foreach(&group->processes, p, n) {
         process = list_entry(p, cgrp_process_t, group_hook);
-
-        len = sprintf(pid, "%u", process->pid);
-        chk = write(partition->control.tasks, pid, len);
-
-        OHM_DEBUG(DBG_ACTION, "adding process %s (%s) to partition '%s': %s",
-                  pid, process->binary, partition->name,
-                  chk == len ? "OK" : "FAILED");
-
-        success &= (chk == len || (chk < 0 && errno == ESRCH)) ? TRUE : FALSE;
+        if (process->partition != partition)
+            success &= partition_add_process(partition, process);
     }
 
     group->partition = partition;
 
     if (!success)
         CGRP_SET_FLAG(group->flags, CGRP_GROUPFLAG_REASSIGN);
-    
+
     return success;
 }
 
