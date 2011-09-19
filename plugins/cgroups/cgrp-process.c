@@ -1117,27 +1117,28 @@ process_create(cgrp_context_t *ctx, cgrp_proc_attr_t *attr)
 {
     cgrp_process_t *process;
 
-    if (ALLOC_OBJ(process) != NULL) {
-        list_init(&process->proc_hook);
-        list_init(&process->group_hook);
-        
-        process->pid  = attr->pid;
-        process->tgid = attr->tgid;
+    if (!ALLOC_OBJ(process))
+        return NULL;
 
-        if (ctx->oom_curve != NULL)
-            process->oom_adj = ctx->oom_default;
-        
-        if ((process->binary = STRDUP(attr->binary)) != NULL)
-            proc_hash_insert(ctx, process);
-        else {
-            process_remove(ctx, process);
-            process = NULL;
-        }
+    process->binary = STRDUP(attr->binary);
+    if (!process->binary) {
+        FREE(process);
+        return NULL;
     }
+
+    list_init(&process->proc_hook);
+    list_init(&process->group_hook);
+
+    process->pid  = attr->pid;
+    process->tgid = attr->tgid;
+
+    if (ctx->oom_curve)
+        process->oom_adj = ctx->oom_default;
+
+    proc_hash_insert(ctx, process);
 
     return process;
 }
-
 
 
 /********************
