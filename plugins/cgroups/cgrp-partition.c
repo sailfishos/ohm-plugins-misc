@@ -320,7 +320,7 @@ partition_add_process(cgrp_partition_t *partition, cgrp_process_t *process)
         success = FALSE;
 
     OHM_DEBUG(DBG_ACTION, "adding process %u (%s) to partition '%s': %s",
-              process->pid, process->binary, partition->name,
+              process->pid, process->name, partition->name,
               success ? "OK" : "FAILED");
 
     return success;

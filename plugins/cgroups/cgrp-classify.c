@@ -153,7 +153,7 @@ classify_by_parent(cgrp_context_t *ctx, pid_t pid, pid_t tgid, pid_t ppid)
     }
 
     OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s",
-              process->pid, process->binary, parent->group->name);
+              process->pid, process->name, parent->group->name);
     group_add_process(ctx, parent->group, process);
 
     return TRUE;

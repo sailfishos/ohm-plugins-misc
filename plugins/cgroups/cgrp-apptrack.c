@@ -466,7 +466,7 @@ apptrack_cgroup_notify(cgrp_context_t *ctx,
         group = "<none>";
 
     if (new_proc != NULL)
-        process = new_proc->argvx ? new_proc->argvx : new_proc->binary;
+        process = new_proc->name;
     else
         process = "<none>";
 

@@ -305,7 +305,7 @@ proc_hash_lookup(cgrp_context_t *ctx, pid_t pid)
     list_foreach(ctx->proctbl + idx, p, n) {
         proc = list_entry(p, cgrp_process_t, proc_hook);
         if (proc->pid == pid) {
-            OHM_DEBUG(DBG_ACTION, "pid %u -> %s", pid, proc->binary);
+            OHM_DEBUG(DBG_ACTION, "pid %u -> %s", pid, proc->name);
             return proc;
         }
     }

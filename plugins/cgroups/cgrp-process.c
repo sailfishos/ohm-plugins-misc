@@ -1210,14 +1210,14 @@ process_update_state(cgrp_context_t *ctx, cgrp_process_t *process, char *state)
         return TRUE;
 
     OHM_DEBUG(DBG_NOTIFY, "process <%u,%s> is now in state <%s>",
-              process->pid, process->binary, state);
+              process->pid, process->name, state);
 
     if (!strcmp(state, APP_ACTIVE)) {
         ctx->active_process = process;
         ctx->active_group   = process->group;
 
         OHM_DEBUG(DBG_ACTION, "active process: %u/%u (%s), active group: %s",
-                  process->tgid, process->pid, process->binary,
+                  process->tgid, process->pid, process->name,
                   process->group ? process->group->name : "<none>");
         return TRUE;
     }
@@ -1260,7 +1260,7 @@ process_set_priority(cgrp_context_t *ctx,
     }
 
     OHM_DEBUG(DBG_ACTION, "%u/%u (%s), %sing priority (req: %d)",
-              process->tgid, process->pid, process->binary,
+              process->tgid, process->pid, process->name,
               preserve ? "preserv" : "overrid", priority);
     
     if (preserve)
@@ -1367,7 +1367,7 @@ process_adjust_priority(cgrp_context_t *ctx, cgrp_process_t *process,
 #endif
 
     OHM_DEBUG(DBG_ACTION, "%u/%u (%s), %sing priority (req: %d)",
-              process->tgid, process->pid, process->binary,
+              process->tgid, process->pid, process->name,
               preserve ? "preserv" : "sett", priority);
     
     if (preserve)
@@ -1470,7 +1470,7 @@ process_adjust_oom(cgrp_context_t *ctx,
         mapped = 15;
 
     OHM_DEBUG(DBG_ACTION, "%u/%u (%s), adjusting OOM score %d/%d:%d",
-              process->tgid, process->pid, process->binary,
+              process->tgid, process->pid, process->name,
               oom_adj, process->oom_adj, mapped);
     
     /*

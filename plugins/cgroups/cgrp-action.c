@@ -308,7 +308,7 @@ action_group_exec(cgrp_context_t *ctx,
         return FALSE;
     }
 
-    OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid, process->binary,
+    OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid, process->name,
               group->name);
     group_add_process(ctx, group, process);
 
