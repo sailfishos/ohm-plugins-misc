@@ -459,6 +459,7 @@ typedef struct {
     char             *binary;               /* path to binary */
     char             *argv0;                /* argv[0] if needed */
     char             *argvx;                /* classified by this arg */
+    char             *name;                 /* classified by this name */
     cgrp_group_t     *group;                /* current group */
     cgrp_partition_t *partition;            /* current partition */
     int               priority;             /* process priority */

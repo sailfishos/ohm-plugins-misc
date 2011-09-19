@@ -1131,6 +1131,7 @@ process_create(cgrp_context_t *ctx, cgrp_proc_attr_t *attr)
 
     process->pid  = attr->pid;
     process->tgid = attr->tgid;
+    process->name = process->binary;
 
     if (ctx->oom_curve)
         process->oom_adj = ctx->oom_default;

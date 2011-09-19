@@ -211,15 +211,17 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
              * to perform a proper cleanup procedure later
              */
             return FALSE;
-        } else {
-            if (event->any.type == CGRP_EVENT_EXEC && attr.process != NULL) {
-                FREE(attr.process->binary);
-                attr.process->binary = STRDUP(attr.binary);
-            }
-
-            return classify_by_rules(ctx, event, &attr);
         }
-        
+
+        if (event->any.type == CGRP_EVENT_EXEC && attr.process) {
+            FREE(attr.process->binary);
+            attr.process->binary = STRDUP(attr.binary);
+            if (!attr.byargvx)
+                attr.process->name = attr.process->binary;
+        }
+
+        return classify_by_rules(ctx, event, &attr);
+
     case CGRP_EVENT_EXIT:
         attr.process = proc_hash_lookup(ctx, event->any.pid);;
         if (attr.process != NULL && attr.process->track)
@@ -260,19 +262,23 @@ classify_by_binary(cgrp_context_t *ctx, pid_t pid, int reclassify)
     attr.cmdline = cmdl;
     attr.retry   = reclassify;
     attr.process = proc_hash_lookup(ctx, pid);
-    
-    if (attr.process != NULL) {
-        attr.binary = attr.process->binary;
-        attr.tgid   = attr.process->tgid;
-        CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
-        CGRP_SET_MASK(attr.mask, CGRP_PROC_BINARY);
-    }
-    else {
+
+    if (!attr.process) {
         if (!process_get_binary(&attr))
             return -ENOENT;                  /* we assume it's gone already */
 
         process_get_tgid(&attr);
         attr.process = process_create(ctx, &attr);
+
+        if (!attr.process) {
+            OHM_ERROR("cgrp: failed to allocate new process");
+            return -ENOMEM;
+        }
+    } else {
+        attr.binary = attr.process->binary;
+        attr.tgid   = attr.process->tgid;
+        CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
+        CGRP_SET_MASK(attr.mask, CGRP_PROC_BINARY);
     }
 
     event.exec.type = CGRP_EVENT_EXEC;
@@ -293,14 +299,14 @@ classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *attr, int argn)
 
     if (attr->byargvx) {
         OHM_ERROR("cgrp: classify-by-argvx loop for process <%u>", attr->pid);
-        return -EINVAL;
+        return FALSE;
     }
-    
+
     OHM_DEBUG(DBG_CLASSIFY, "%sclassifying process <%u> by argv%d",
               attr->retry ? "re" : "", attr->pid, argn);
 
-    if (process_get_argv(attr, CGRP_MAX_ARGS) == NULL)
-        return -ENOENT;                       /* we assume it's gone already */
+    if (!process_get_argv(attr, CGRP_MAX_ARGS))
+        return FALSE;                     /* we assume it's gone already */
 
     if (argn >= attr->argc) {
         OHM_WARNING("cgrp: classify-by-argv%d found only %d arguments",
@@ -309,24 +315,25 @@ classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *attr, int argn)
     }
     else
         attr->binary = attr->argv[argn];
-    
-    attr->byargvx = TRUE;    
-    
+
+    attr->byargvx = TRUE;
+
     event.exec.type = CGRP_EVENT_EXEC;
     event.exec.pid  = attr->pid;
     event.exec.tgid = attr->tgid;
 
-    if (classify_by_rules(ctx, &event, attr)) {
-        if (attr->process == NULL)
-            attr->process = proc_hash_lookup(ctx, attr->pid);
-        
-        if (attr->process != NULL && attr->process->argvx == NULL)
-            attr->process->argvx = STRDUP(attr->binary);
-        
-        return TRUE;
-    }
-    else
+    if (!classify_by_rules(ctx, &event, attr))
         return FALSE;
+
+    if (!attr->process)
+        attr->process = proc_hash_lookup(ctx, attr->pid);
+
+    if (attr->process && !attr->process->argvx) {
+        attr->process->argvx = STRDUP(attr->binary);
+        attr->process->name = attr->process->argvx;
+    }
+
+    return TRUE;
 }
 
 
