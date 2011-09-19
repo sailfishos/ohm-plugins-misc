@@ -23,8 +23,6 @@ USA.
 
 #include "cgrp-plugin.h"
 
-#define PROC_BUCKETS 1024
-
 /********************
  * classify_init
  ********************/
