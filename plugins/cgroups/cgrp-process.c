@@ -1600,26 +1600,17 @@ process_track_notify(cgrp_context_t *ctx, cgrp_process_t *process,
                      cgrp_event_type_t event)
 {
     cgrp_track_t *track = process->track;
-    char         *what, *vars[8];
-    pid_t         pid;
+    char         *what  = classify_event_name(event), *vars[2 * 3 + 1];
 
     if (unlikely(track == NULL))
         return;
-    
+
     if (!(track->events & (1 << event)))
         return;
- 
-    pid = process->tgid;
-
-    switch (event) {
-    case CGRP_EVENT_EXIT: what = "exit";  break;
-    case CGRP_EVENT_EXEC: what = "exec";  break;
-    default:              what = "other"; break;
-    }
 
     OHM_DEBUG(DBG_NOTIFY, "triggering hook '%s' for event '%s' of process %u",
-              track->target, what, pid);
-    
+              track->target, what, process->tgid);
+
     vars[0] = "pid";
     vars[1] = (char *)'i';
     vars[2] = (char *)process->tgid;
@@ -1627,7 +1618,7 @@ process_track_notify(cgrp_context_t *ctx, cgrp_process_t *process,
     vars[4] = (char *)'s';
     vars[5] = what;
     vars[6] = NULL;
-    
+
     ctx->resolve(track->target, vars);
 }
 

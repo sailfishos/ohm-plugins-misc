@@ -23,6 +23,46 @@ USA.
 
 #include "cgrp-plugin.h"
 
+char *classify_event_name(cgrp_event_type_t type)
+{
+    char *str;
+
+    switch (type) {
+    case CGRP_EVENT_FORCE:
+        str = "force";
+        break;
+    case CGRP_EVENT_FORK:
+        str = "fork";
+        break;
+    case CGRP_EVENT_THREAD:
+        str = "thread";
+        break;
+    case CGRP_EVENT_EXEC:
+        str = "exec";
+        break;
+    case CGRP_EVENT_EXIT:
+        str = "exit";
+        break;
+    case CGRP_EVENT_UID:
+        str = "uid";
+        break;
+    case CGRP_EVENT_GID:
+        str = "gid";
+        break;
+    case CGRP_EVENT_SID:
+        str = "sid";
+        break;
+    case CGRP_EVENT_NAME:
+        str = "name";
+        break;
+    default:
+        str = "unknown";
+        break;
+    }
+
+    return str;
+}
+
 /********************
  * classify_init
  ********************/
@@ -133,17 +173,18 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
     char              args[CGRP_MAX_CMDLINE];
     char              cmdl[CGRP_MAX_CMDLINE];
     char              bin[PATH_MAX];
-    
-    OHM_DEBUG(DBG_CLASSIFY, "classification event 0x%x for <%u/%u>",
-              event->any.type, event->any.tgid, event->any.pid);
-    
+
+    OHM_DEBUG(DBG_CLASSIFY, "classification event '%s' for <%u/%u>",
+              classify_event_name(event->any.type),
+              event->any.tgid, event->any.pid);
+
     switch (event->any.type) {
     case CGRP_EVENT_FORK:
         if (classify_by_parent(ctx, event->fork.pid, event->fork.tgid,
                                event->fork.ppid))
             return TRUE;
         /* intentional fallthrough */
-    
+
     case CGRP_EVENT_FORCE:
     case CGRP_EVENT_EXEC:
     case CGRP_EVENT_UID:
@@ -303,10 +344,9 @@ classify_by_rules(cgrp_context_t *ctx,
     cgrp_action_t  *actions;
 
     OHM_DEBUG(DBG_CLASSIFY, "classifying process <%u:%s> by rules "
-                            "for event 0x%x",
-              event->any.pid,
+              "for event '%s'", event->any.pid,
               attr->binary[0] ? attr->binary : "-",
-              event->any.type);
+              classify_event_name(event->any.type));
 
     if (attr->process != NULL && attr->process->track)
         process_track_notify(ctx, attr->process, event->any.type);
@@ -410,10 +450,7 @@ classify_schedule(cgrp_context_t *ctx, pid_t pid, unsigned int delay,
         OHM_ERROR("cgrp: failed to allocate reclassification data");
 }
 
-
-
-
-/* 
+/*
  * Local Variables:
  * c-basic-offset: 4
  * indent-tabs-mode: nil
