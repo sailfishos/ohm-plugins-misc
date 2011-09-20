@@ -338,7 +338,7 @@ classify_by_rules(cgrp_context_t *ctx,
                   cgrp_event_t *event, cgrp_proc_attr_t *attr)
 {
     cgrp_procdef_t *def;
-    cgrp_rule_t    *rules;
+    cgrp_rule_t    *rules = NULL;
     cgrp_action_t  *actions;
 
     OHM_DEBUG(DBG_CLASSIFY, "classifying process <%u:%s> by rules "
@@ -346,9 +346,9 @@ classify_by_rules(cgrp_context_t *ctx,
               attr->binary[0] ? attr->binary : "-",
               classify_event_name(event->any.type));
 
-    if (attr->process != NULL && attr->process->track)
+    if (attr->process && attr->process->track)
         process_track_notify(ctx, attr->process, event->any.type);
-    
+
     /*
      * The basic algorithm here is roughly the following:
      *
@@ -367,14 +367,14 @@ classify_by_rules(cgrp_context_t *ctx,
      *
      *      3.3) If any actions were found execute them.
      */
-    
-    if ((def = rule_hash_lookup(ctx, attr->binary))  != NULL ||
-        (def = addon_hash_lookup(ctx, attr->binary)) != NULL)
+    def = rule_hash_lookup(ctx, attr->binary);
+    if (!def)
+        def = addon_hash_lookup(ctx, attr->binary);
+
+    if (def)
         rules = rule_find(def->rules, event);
-    else
-        rules = NULL;
-    
-    if (rules == NULL) {
+
+    if (!rules) {
         if (!CGRP_TST_FLAG(ctx->options.flags, CGRP_FLAG_ALWAYS_FALLBACK) &&
             (event->any.type == CGRP_EVENT_GID  ||
              event->any.type == CGRP_EVENT_UID  ||
@@ -388,22 +388,20 @@ classify_by_rules(cgrp_context_t *ctx,
             rules = ctx->fallback;
     }
 
-    if (rules != NULL) {
+    if (rules) {
         actions = rule_eval(ctx, rules, attr);
 
-        if (actions == NULL && rules != ctx->fallback && ctx->fallback != NULL)
+        if (!actions && rules != ctx->fallback && ctx->fallback)
             actions = rule_eval(ctx, ctx->fallback, attr);
 
-        if (actions != NULL) {
+        if (actions) {
             procattr_dump(attr);
             return action_exec(ctx, attr, actions);
         }
     }
-    
+
     return FALSE;
 }
-
-
 
 
 /********************
