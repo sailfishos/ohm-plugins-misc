@@ -546,16 +546,20 @@ action_classify_exec(cgrp_context_t *ctx,
                       attr->pid, attr->binary);
 
             process = proc_hash_lookup(ctx, attr->pid);
-            if (process != NULL)
+            if (process)
                 process_ignore(ctx, process);
         }
-        
+
         return TRUE;
     }
-    else {
-        argn = -action->classify.delay - 1;   /* -1: 0, -2: 1, -3: 2, ... */
-        return classify_by_argvx(ctx, attr, argn);
-    }
+
+    /* Negative delay hides argument number to classify by */
+    argn = -action->classify.delay - 1;   /* -1: 0, -2: 1, -3: 2, ... */
+
+    OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: classify by %d argx",
+              attr->pid, attr->binary, argn);
+
+    return classify_by_argvx(ctx, attr, argn);
 }
 
 
