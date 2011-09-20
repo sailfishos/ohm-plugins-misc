@@ -26,7 +26,7 @@ USA.
 
 /* debug flags */
 int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
-int DBG_SYSMON, DBG_CONFIG, DBG_CURVE;
+int DBG_SYSMON, DBG_CONFIG, DBG_CURVE, DBG_LEADER;
 
 OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("event"   , "process events"        , &DBG_EVENT),
@@ -36,9 +36,9 @@ OHM_DEBUG_PLUGIN(cgroups,
     OHM_DEBUG_FLAG("action"  , "policy actions"        , &DBG_ACTION),
     OHM_DEBUG_FLAG("sysmon"  , "system monitoring"     , &DBG_SYSMON),
     OHM_DEBUG_FLAG("config"  , "configuration"         , &DBG_CONFIG),
-    OHM_DEBUG_FLAG("curve"   , "response curves"       , &DBG_CURVE)
+    OHM_DEBUG_FLAG("curve"   , "response curves"       , &DBG_CURVE),
+    OHM_DEBUG_FLAG("leader"  , "process leaders"       , &DBG_LEADER)
 );
-
 
 
 OHM_IMPORTABLE(GObject *, signaling_register  , (gchar *uri, gchar **interested));

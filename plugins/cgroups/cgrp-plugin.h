@@ -702,7 +702,7 @@ typedef struct {
 
 /* cgrp-plugin.c */
 extern int DBG_EVENT, DBG_PROCESS, DBG_CLASSIFY, DBG_NOTIFY, DBG_ACTION;
-extern int DBG_SYSMON, DBG_CONFIG, DBG_CURVE;
+extern int DBG_SYSMON, DBG_CONFIG, DBG_CURVE, DBG_LEADER;
 
 /* cgrp-process.c */
 int  proc_init(cgrp_context_t *);
