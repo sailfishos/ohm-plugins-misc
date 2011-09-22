@@ -876,7 +876,7 @@ rules: rule {
 
 
 optional_newline: /* empty */
-    | "\n"
+    | newline
     ;
 
 newline: "\n"
