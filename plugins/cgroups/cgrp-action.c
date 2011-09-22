@@ -300,15 +300,14 @@ action_group_exec(cgrp_context_t *ctx,
     group   = action->group.group;
     process = proc_hash_lookup(ctx, attr->pid);
 
-    if (process == NULL)
+    if (!process)
         process = process_create(ctx, attr);
-    
-    if (process == NULL) {
-        OHM_ERROR("cgrp: failed to assign process %u to group %s",
-                  attr->pid, group->name);
+
+    if (!process) {
+        OHM_ERROR("cgrp: failed to allocate new process");
         return FALSE;
     }
-    
+
     OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s", process->pid, process->binary,
               group->name);
     group_add_process(ctx, group, process);
