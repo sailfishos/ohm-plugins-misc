@@ -301,10 +301,6 @@ partition_print(cgrp_partition_t *partition, FILE *fp)
         fprintf(fp, "%s %s\n", cs->name, cs->value);
 }
 
-
-/********************
- * partition_add_process
- ********************/
 int
 partition_add_process(cgrp_partition_t *partition, cgrp_process_t *process)
 {
@@ -314,9 +310,10 @@ partition_add_process(cgrp_partition_t *partition, cgrp_process_t *process)
     len = sprintf(tasks, "%u\n", process->pid);
     chk = write(partition->control.tasks, tasks, len);
 
-    if (chk == len)
+    if (chk == len) {
         process->partition = partition;
-    else if (chk >= 0 || errno != ESRCH)
+        leader_acts(process);
+    } else if (chk >= 0 || errno != ESRCH)
         success = FALSE;
 
     OHM_DEBUG(DBG_ACTION, "adding process %u (%s) to partition '%s': %s",

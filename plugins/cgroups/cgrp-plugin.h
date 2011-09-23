@@ -771,6 +771,8 @@ void ctrl_del(cgrp_ctrl_t *);
 void ctrl_setting_del(cgrp_ctrl_setting_t *);
 int ctrl_apply(cgrp_context_t *, cgrp_partition_t *, cgrp_ctrl_setting_t *);
 
+int  cgroup_set_option(cgrp_context_t *, char *);
+
 /* cgrp-group.c */
 int  group_init(cgrp_context_t *);
 void group_exit(cgrp_context_t *);
@@ -892,9 +894,6 @@ cgrp_partition_t *part_hash_lookup(cgrp_context_t *, const char *);
 void part_hash_foreach(cgrp_context_t *, GHFunc , void *);
 cgrp_partition_t *part_hash_find_by_path(cgrp_context_t *, const char *);
 
-int  cgroup_set_option(cgrp_context_t *, char *);
-
-
 
 /* cgrp-eval.c */
 cgrp_expr_t *bool_expr(cgrp_bool_op_t, cgrp_expr_t *, cgrp_expr_t *);
@@ -971,14 +970,15 @@ void sysmon_exit(cgrp_context_t *);
 
 estim_t *estim_alloc(char *, int);
 
-
+/* cgrp-leader.c */
+int  leader_init(cgrp_context_t *);
+void leader_exit(cgrp_context_t *);
+int  leader_add_follower(const char *, const char *);
+void leader_acts(cgrp_process_t *);
 
 #endif /* __OHM_PLUGIN_CGRP_H__ */
 
-
-
-
-/* 
+/*
  * Local Variables:
  * c-basic-offset: 4
  * indent-tabs-mode: nil

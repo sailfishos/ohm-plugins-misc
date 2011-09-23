@@ -98,9 +98,9 @@ plugin_init(OhmPlugin *plugin)
     if (!ep_init(ctx, signaling_register))
         plugin_exit(plugin);
 
-    if (!fact_init(ctx) || !partition_init(ctx) || !group_init(ctx) || 
+    if (!fact_init(ctx) || !partition_init(ctx) || !group_init(ctx) ||
         !procdef_init(ctx) || !classify_init(ctx) || !proc_init(ctx) ||
-        !curve_init(ctx)) {
+        !curve_init(ctx) || !leader_init(ctx)) {
         plugin_exit(plugin);
         exit(1);
     }
@@ -166,14 +166,15 @@ plugin_exit(OhmPlugin *plugin)
     apptrack_exit(ctx);
     ep_exit(ctx, signaling_unregister);
     sysmon_exit(ctx);
+    leader_exit(ctx);
     curve_exit(ctx);
     proc_exit(ctx);
-    
+
     if (!unregister_method("track_process", cgrp_track_process))
         OHM_ERROR("cgrp: failed to register track_process to resolver");
     if (!unregister_method("untrack_process", cgrp_untrack_process))
         OHM_ERROR("cgrp: failed to register untrack_process to resolver");
-    
+
     classify_exit(ctx);
     procdef_exit(ctx);
     group_exit(ctx);

@@ -844,7 +844,7 @@ int action_leads_exec(cgrp_context_t *ctx,
 
     OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: leads", attr->pid, attr->binary);
     for (follower = action->leads.followers; follower; follower = follower->next)
-        OHM_DEBUG(DBG_CLASSIFY, "  %s", follower->name);
+        leader_add_follower(attr->binary, follower->name);
 
     return TRUE;
 }
