@@ -169,6 +169,9 @@ static void lead_followers(cgrp_context_t *ctx, cgrp_process_t *proc, void *data
         return;
     }
 
+    if (!leader)
+        return;
+
     list_foreach(&leader->followers, p, n) {
         follower = list_entry(p, process_t, followers);
         if (strcmp(follower->name, proc->name))
@@ -200,14 +203,9 @@ int leader_add_follower(const char *l, const char *name)
 
 void leader_acts(cgrp_process_t *process)
 {
-    process_t *leader;
     leader_t   l;
 
-    leader = leader_hash_lookup(&cgrp_leader, process->name);
-    if (!leader)
-        return;
-
-    l.leader  = leader;
+    l.leader  = leader_hash_lookup(&cgrp_leader, process->name);
     l.process = process;
 
     proc_hash_foreach(cgrp_leader.ctx, lead_followers, &l);
