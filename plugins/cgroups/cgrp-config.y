@@ -1172,8 +1172,8 @@ simple_rule: path {
             statement_free_all(stmt);
 	    YYABORT;
         }
-	rule->event_mask = (1 << CGRP_EVENT_EXEC);
-	rule->statements = stmt;
+        rule->event_mask = (1 << CGRP_EVENT_EXEC) | (1 << CGRP_EVENT_THREAD);
+        rule->statements = stmt;
 
         procdef.binary = $1.value;
         procdef.rules  = rule;
