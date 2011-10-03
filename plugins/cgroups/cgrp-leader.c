@@ -157,9 +157,10 @@ static void lead_followers(cgrp_context_t *ctx, cgrp_process_t *proc, void *data
 
     (void)ctx;
 
-    if (process->tgid == proc->tgid &&
-        process->partition != proc->partition &&
-        !strcmp(process->name, proc->name)) {
+    if (process->partition == proc->partition)
+        return;
+
+    if (process->tgid == proc->tgid && !strcmp(process->name, proc->name)) {
         OHM_DEBUG(DBG_LEADER, "leader %d/%d '%s' orders %d/%d '%s' to follow!",
                   process->pid, process->tgid, process->name,
                   proc->pid, proc->tgid, proc->name);
@@ -170,8 +171,7 @@ static void lead_followers(cgrp_context_t *ctx, cgrp_process_t *proc, void *data
 
     list_foreach(&leader->followers, p, n) {
         follower = list_entry(p, process_t, followers);
-        if (strcmp(follower->name, proc->name) ||
-            process->partition == proc->partition)
+        if (strcmp(follower->name, proc->name))
             continue;
 
         OHM_DEBUG(DBG_LEADER, "leader %d/%d '%s' orders %d/%d '%s' to follow!",
