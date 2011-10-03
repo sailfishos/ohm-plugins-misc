@@ -153,29 +153,32 @@ static void lead_followers(cgrp_context_t *ctx, cgrp_process_t *proc, void *data
     list_hook_t *p, *n;
     leader_t    *l = (leader_t *)data;
     process_t   *leader = l->leader, *follower;
+    cgrp_process_t *process = l->process;
 
     (void)ctx;
 
-    if (l->process->tgid == proc->tgid &&
-        l->process->partition != proc->partition &&
-        !strcmp(l->process->name, proc->name)) {
-            OHM_DEBUG(DBG_LEADER, "leader '%s' orders %d/%d '%s' to follow!",
-                      leader->name, proc->pid, proc->tgid, proc->name);
+    if (process->tgid == proc->tgid &&
+        process->partition != proc->partition &&
+        !strcmp(process->name, proc->name)) {
+        OHM_DEBUG(DBG_LEADER, "leader %d/%d '%s' orders %d/%d '%s' to follow!",
+                  process->pid, process->tgid, process->name,
+                  proc->pid, proc->tgid, proc->name);
 
-            partition_add_process(l->process->partition, proc);
-            return;
+        partition_add_process(process->partition, proc);
+        return;
     }
 
     list_foreach(&leader->followers, p, n) {
         follower = list_entry(p, process_t, followers);
         if (strcmp(follower->name, proc->name) ||
-            l->process->partition == proc->partition)
+            process->partition == proc->partition)
             continue;
 
-        OHM_DEBUG(DBG_LEADER, "leader '%s' orders %d '%s' to follow!",
-                  leader->name, proc->pid, proc->name);
+        OHM_DEBUG(DBG_LEADER, "leader %d/%d '%s' orders %d/%d '%s' to follow!",
+                  process->pid, process->tgid, process->name,
+                  proc->pid, proc->tgid, proc->name);
 
-        partition_add_process(l->process->partition, proc);
+        partition_add_process(process->partition, proc);
     }
 }
 
