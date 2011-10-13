@@ -622,7 +622,13 @@ static void screen_synchronize(randr_screen_t *screen)
 
     for (i = 0, crtc_x = crtc_y = 0;  i < screen->ncrtc;  i++) {
         crtc_synchronize(screen->crtcs + i, DRYRUN); /* sets crtc_[xy] */
+        /*
+         * The necessary conditions of CRTC disabling are undetermined, and
+         * disabling of it leads to nasty blinking outputs, so let's update
+         * screen size without disabling CRTC beforehand.
+
         crtc_disable(screen->crtcs + i);
+         */
     }
 
     screen_set_size(screen, crtc_x, crtc_y);
