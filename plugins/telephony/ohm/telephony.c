@@ -242,6 +242,7 @@ typedef enum {
     HOOK_CALL_ACTIVE,
     HOOK_CALL_ONHOLD,
     HOOK_CALL_OFFHOLD,
+    HOOK_LOCAL_HUNGUP,
     HOOK_DIALSTRING_START,
     HOOK_DIALSTRING_END,
     HOOK_DTMF_START,
@@ -258,6 +259,7 @@ static char *resolver_hooks[] = {
     [HOOK_CALL_ACTIVE]  = "telephony_call_active_hook",
     [HOOK_CALL_ONHOLD]  = "telephony_call_onhold_hook",
     [HOOK_CALL_OFFHOLD] = "telephony_call_offhold_hook",
+    [HOOK_LOCAL_HUNGUP] = "telephony_local_hungup_hook",
 
     [HOOK_DIALSTRING_START] = "telephony_sending_dialstring",
     [HOOK_DIALSTRING_END]   = "telephony_stopped_dialstring",
@@ -2734,7 +2736,11 @@ event_handler(event_t *event)
         break;
 
     case EVENT_CALL_PEER_HUNGUP:  event->any.state = STATE_PEER_HUNGUP;  break;
-    case EVENT_CALL_LOCAL_HUNGUP: event->any.state = STATE_LOCAL_HUNGUP; break;
+    case EVENT_CALL_LOCAL_HUNGUP:
+        event->any.state = STATE_LOCAL_HUNGUP;
+        run_hook(HOOK_LOCAL_HUNGUP);
+        break;
+
     case EVENT_CALL_HELD:         event->any.state = STATE_ON_HOLD;      break;
     case EVENT_CHANNEL_CLOSED:    event->any.state = STATE_DISCONNECTED; break;
     case EVENT_CALL_ENDED:        event->any.state = STATE_DISCONNECTED; break;
