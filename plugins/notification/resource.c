@@ -325,10 +325,12 @@ static void connect_to_manager(resconn_t *rc)
 #define MAND_PROCLM    RESMSG_AUDIO_PLAYBACK
 #define MAND_MISCALL   RESMSG_LEDS
 #define MAND_NOTIF     RESMSG_LEDS
+#define MAND_BATTERY   RESMSG_AUDIO_PLAYBACK
 #define OPT_DEFAULT    RESMSG_BACKLIGHT
 #define OPT_PROCLM     0
 #define OPT_MISCALL    0
 #define OPT_NOTIF      0
+#define OPT_BATTERY    0
    
     static rset_def_t   defs[] = {
         {rset_proclaimer, "proclaimer", MAND_PROCLM ,OPT_PROCLM  },
@@ -337,6 +339,7 @@ static void connect_to_manager(resconn_t *rc)
         {rset_alarm     , "alarm"     , MAND_DEFAULT,OPT_DEFAULT },
         {rset_event     , "event"     , MAND_DEFAULT,OPT_DEFAULT },
         {rset_notifier  , "ringtone"  , MAND_NOTIF  ,OPT_NOTIF   },
+        {rset_battery   , "battery"   , MAND_BATTERY,OPT_BATTERY },
     };
 
     rset_def_t      *def;
