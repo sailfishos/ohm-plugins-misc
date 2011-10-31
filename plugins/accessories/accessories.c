@@ -24,12 +24,11 @@ USA.
 
 #define FACT_DEVICE_ACCESSIBLE "com.nokia.policy.audio_device_accessible"
 
-static int DBG_HEADSET, DBG_BT, DBG_GCONF, DBG_INFO, DBG_WIRED;
+static int DBG_BT, DBG_GCONF, DBG_INFO, DBG_WIRED;
 
 static gboolean plugin_is_real;
 
 OHM_DEBUG_PLUGIN(accessories,
-    OHM_DEBUG_FLAG("headset", "Wired headset events" , &DBG_HEADSET),
     OHM_DEBUG_FLAG("info", "Info signal events" , &DBG_INFO),
     OHM_DEBUG_FLAG("wired", "wired accessory events", &DBG_WIRED),
     OHM_DEBUG_FLAG("bluetooth", "Bluetooth headset events", &DBG_BT),
