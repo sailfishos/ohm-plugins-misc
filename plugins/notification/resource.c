@@ -246,6 +246,9 @@ int resource_set_release(resource_set_id_t    id,
         typstr = type_to_string(type);
         rs = get_resource_set(type, id);
 
+        if (!rs->resset)
+            return FALSE;
+
         if (rs->num_users > 0)
             rs->num_users--;
 
