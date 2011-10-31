@@ -33,54 +33,11 @@ OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("mode", "Mode parameters", &DBG_GCONF)
 );
 
-
-#ifdef BUILD_HAL
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
-OHM_IMPORTABLE(gboolean, set_observer, (gchar *capability, hal_cb cb, void *user_data));
-OHM_IMPORTABLE(gboolean, unset_observer, (void *user_data));
-
-
-OHM_PLUGIN_REQUIRES_METHODS(accessories, 3, 
-   OHM_IMPORT("dres.resolve", resolve),
-   OHM_IMPORT("hal.set_observer", set_observer),
-   OHM_IMPORT("hal.unset_observer", unset_observer)
-);
-
-#else /* !BUILD_HAL */
-
-OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
-
-static gboolean set_observer(gchar *capability, hal_cb cb, void *userdata)
-{
-    (void) capability;
-    (void) cb;
-    (void) userdata;
-
-    return 1;
-}
-
-static gboolean unset_observer(void *userdata)
-{
-    (void) userdata;
-
-    return 1;
-}
 
 OHM_PLUGIN_REQUIRES_METHODS(accessories, 1, 
    OHM_IMPORT("dres.resolve", resolve)
 );
-#endif /* !BUILD_HAL */
-
-
-gboolean local_set_observer(gchar *capability, hal_cb cb, void *userdata)
-{
-    return set_observer(capability, cb, userdata);
-}
-
-gboolean local_unset_observer(void *userdata)
-{
-    return unset_observer(userdata);
-}
 
 static gboolean bluetooth_init_later(gpointer data)
 {
@@ -104,7 +61,6 @@ static void plugin_init(OhmPlugin *plugin)
 
     /* bluetooth*/
     g_idle_add(bluetooth_init_later, plugin);
-
 }
 
 

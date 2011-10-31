@@ -49,19 +49,13 @@ int dres_accessory_request(const char *, int, int);
 int dres_update_accessory_mode(const char *, const char *);
 int dres_all(void);
 gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[]);
-gboolean local_set_observer(gchar *capability, hal_cb cb, void *userdata);
-gboolean local_unset_observer(void *userdata);
 
 /* bluetooth */
 gboolean bluetooth_init(OhmPlugin *, int);
 gboolean bluetooth_deinit(OhmPlugin *);
+
 /* callbacks */
 DBusHandlerResult check_bluez(DBusConnection * c, DBusMessage * msg, void *user_data);
 DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg, void *data);
 DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
 DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
-
-/*
-gboolean set_observer(gchar *capability, hal_cb cb, void *userdata);
-gboolean unset_observer(void *userdata);
-*/
