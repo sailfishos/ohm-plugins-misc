@@ -22,8 +22,6 @@ USA.
 #include "wired.h"
 #include "gconf-triggers.h"
 
-#define FACT_DEVICE_ACCESSIBLE "com.nokia.policy.audio_device_accessible"
-
 static int DBG_BT, DBG_GCONF, DBG_INFO, DBG_WIRED;
 
 static gboolean plugin_is_real;

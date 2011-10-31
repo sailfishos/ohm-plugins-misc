@@ -671,7 +671,7 @@ lookup_facts(void)
      */
 
     store = ohm_fact_store_get_fact_store();
-    list  = ohm_fact_store_get_facts_by_name(store, FACT_NAME_DEV_ACCESSIBLE);
+    list  = ohm_fact_store_get_facts_by_name(store, FACT_DEVICE_ACCESSIBLE);
     
     while (list != NULL) {
         fact = (OhmFact *)list->data;
@@ -679,7 +679,7 @@ lookup_facts(void)
         
         if (gnam == NULL || G_VALUE_TYPE(gnam) != G_TYPE_STRING) {
             OHM_WARNING("accessories: ignoring malformed fact %s",
-                        FACT_NAME_DEV_ACCESSIBLE);
+                        FACT_DEVICE_ACCESSIBLE);
             continue;
         }
         

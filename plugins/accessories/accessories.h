@@ -30,6 +30,8 @@ USA.
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin-debug.h>
 
+#define FACT_DEVICE_ACCESSIBLE "com.nokia.policy.audio_device_accessible"
+
 typedef gboolean (*hal_cb) (OhmFact *hal_fact, gchar *capability, gboolean added, gboolean removed, void *user_data);
 
 typedef struct dres_arg {
