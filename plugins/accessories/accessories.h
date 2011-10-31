@@ -50,10 +50,6 @@ gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[]
 gboolean local_set_observer(gchar *capability, hal_cb cb, void *userdata);
 gboolean local_unset_observer(void *userdata);
 
-/* headset */
-gboolean headset_init(OhmPlugin *, int);
-gboolean headset_deinit(OhmPlugin *);
-
 /* bluetooth */
 gboolean bluetooth_init(OhmPlugin *, int);
 gboolean bluetooth_deinit(OhmPlugin *);
