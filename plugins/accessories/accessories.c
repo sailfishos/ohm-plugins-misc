@@ -85,25 +85,22 @@ static int is_spurious_event(char *device, int driver, int connected)
     GSList  *list;
     OhmFact *fact;
     GValue  *gval;
-    int      val, dmatch, cmatch, spurious;
+    int      val, dmatch, cmatch, spurious = FALSE;
+    OhmFactStore *store;
 
+    store = ohm_fact_store_get_fact_store();
+    list  = ohm_fact_store_get_facts_by_name(store, FACT_DEVICE_ACCESSIBLE);
 
-    spurious = FALSE;
-    for (list = ohm_fact_store_get_facts_by_name(ohm_get_fact_store(),
-                                                 FACT_DEVICE_ACCESSIBLE);
-         list != NULL;
-         list = list->next) {
+    while (list) {
         fact = (OhmFact *)list->data;
-        
-        if ((gval = ohm_fact_get(fact, "name")) == NULL)
+        gval = ohm_fact_get(fact, "name");
+
+        if (!gval || G_VALUE_TYPE(gval) != G_TYPE_STRING)
             continue;
-        
-        if (G_VALUE_TYPE(gval) != G_TYPE_STRING)
-            continue;
-        
+
         if (strcmp(g_value_get_string(gval), device))
             continue;
-        
+
         if (driver != -1 && (gval = ohm_fact_get(fact, "driver")) != NULL) {
             switch (G_VALUE_TYPE(gval)) {
             case G_TYPE_INT:   val = g_value_get_int(gval);   break;
@@ -132,6 +129,8 @@ static int is_spurious_event(char *device, int driver, int connected)
         
         spurious = dmatch && cmatch; /* no change is a spurious event */
         break;
+
+        list = list->next;
     }
 
     OHM_DEBUG(DBG_INFO, "%s, driver: %d, connected: %d is %sa spurious event",
