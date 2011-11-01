@@ -217,8 +217,8 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 
             dbus_message_iter_get_basic(&devit, (void *)&device);
 
-            OHM_DEBUG(DBG_INFO, "info, setting device '%s' with driver value: '%d' to connected value: '%d'",
-                    device ? device : "NULL", driver, connected);
+            OHM_DEBUG(DBG_INFO, "device: '%s', driver: '%d', connected: '%d'",
+                      device ? device : "NULL", driver, connected);
             if (!is_spurious_event(device, driver, connected))
                 dres_accessory_request(device, driver, connected);
       
