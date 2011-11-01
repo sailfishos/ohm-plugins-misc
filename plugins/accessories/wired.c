@@ -174,9 +174,6 @@ static device_state_t states[] = {
 };
 
 
-
-static OhmFactStore *store;
-
 /*
  * debug flags
  */
@@ -655,29 +652,25 @@ eci_update_mode(device_state_t *device)
 /*****************************************************************************
  *                           *** factstore interface ***                     *
  *****************************************************************************/
-static int
-lookup_facts(void)
+static int lookup_facts(void)
 {
     device_state_t  *state;
     GSList          *list;
     OhmFact         *fact;
     GValue          *gnam;
     const char      *name;
-    int              success;
+    int              success = TRUE;
+    OhmFactStore    *store;
 
-
-    /*
-     * find device availability
-     */
-
+    /* find device availability */
     store = ohm_fact_store_get_fact_store();
     list  = ohm_fact_store_get_facts_by_name(store, FACT_DEVICE_ACCESSIBLE);
-    
-    while (list != NULL) {
+
+    while (list) {
         fact = (OhmFact *)list->data;
         gnam = ohm_fact_get(fact, "name");
-        
-        if (gnam == NULL || G_VALUE_TYPE(gnam) != G_TYPE_STRING) {
+
+        if (!gnam || G_VALUE_TYPE(gnam) != G_TYPE_STRING) {
             OHM_WARNING("accessories: ignoring malformed fact %s",
                         FACT_DEVICE_ACCESSIBLE);
             continue;
@@ -694,8 +687,6 @@ lookup_facts(void)
         
         list = list->next;
     }
-
-    success = TRUE;
 
     for (state = states; state->name != NULL; state++) {
         if (state->fact == NULL) {
