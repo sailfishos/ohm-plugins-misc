@@ -151,10 +151,11 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
     char            *string;
     char            *end;
     char            *device;
+    gboolean         is_info;
 
     (void) c;
     (void) data;
-    
+
     /* This is an example of what we should get:
 
        string "connected"
@@ -165,71 +166,69 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 
     */
 
-    if (dbus_message_is_signal(msg, "com.nokia.policy", "info")) {
-    
-        OHM_DEBUG(DBG_INFO, "received an info message");
-
-        dbus_message_iter_init(msg, &msgit);
-
-        for (;;) {
-            if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING) {
-                goto done;
-            }
-
-            dbus_message_iter_get_basic(&msgit, (void *)&string);
-
-            if (!strcmp(string, "driver")) {
-                valueptr = &driver;
-
-                if (!dbus_message_iter_next(&msgit))
-                    goto done;
-            }
-            else if (!strcmp(string, "connected")) {
-                valueptr = &connected;
-
-                if (!dbus_message_iter_next(&msgit))
-                    goto done;
-            }
-            else if (!strcmp(string, "media")) {
-                goto not_our_signal;
-            }
-            else {
-                value = strtol(string, &end, 10);
-
-                if (*end == '\0' && (value == 0 || value == 1)) {
-                    *valueptr = value;
-                    break;
-                }
-
-                goto done;
-            }
-        }
-        
-        if (!dbus_message_iter_next(&msgit) ||
-            dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_ARRAY)
-            goto done;
-   
-        dbus_message_iter_recurse(&msgit, &devit);
-
-        do {
-            if (dbus_message_iter_get_arg_type(&devit) != DBUS_TYPE_STRING)
-                continue;
-
-            dbus_message_iter_get_basic(&devit, (void *)&device);
-
-            OHM_DEBUG(DBG_INFO, "device: '%s', driver: '%d', connected: '%d'",
-                      device ? device : "NULL", driver, connected);
-            if (!is_spurious_event(device, driver, connected))
-                dres_accessory_request(device, driver, connected);
-      
-        } while (dbus_message_iter_next(&devit));
-
-        dres_all();
-
-    done:
+    is_info = dbus_message_is_signal(msg, "com.nokia.policy", "info");
+    if (!is_info)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    OHM_DEBUG(DBG_INFO, "received an info message");
+
+    dbus_message_iter_init(msg, &msgit);
+
+    for (;;) {
+        if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING)
+            goto done;
+
+        dbus_message_iter_get_basic(&msgit, (void *)&string);
+
+        if (!strcmp(string, "media"))
+            goto not_our_signal;
+
+        if (!strcmp(string, "driver")) {
+            valueptr = &driver;
+
+            if (!dbus_message_iter_next(&msgit))
+                goto done;
+        }
+        else if (!strcmp(string, "connected")) {
+            valueptr = &connected;
+
+            if (!dbus_message_iter_next(&msgit))
+                goto done;
+        }
+        else {
+            value = strtol(string, &end, 10);
+
+            if (*end == '\0' && (value == 0 || value == 1)) {
+                *valueptr = value;
+                break;
+            }
+
+            goto done;
+        }
     }
 
+    if (!dbus_message_iter_next(&msgit) ||
+        dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_ARRAY)
+        goto done;
+
+    dbus_message_iter_recurse(&msgit, &devit);
+
+    do {
+        if (dbus_message_iter_get_arg_type(&devit) != DBUS_TYPE_STRING)
+            continue;
+
+        dbus_message_iter_get_basic(&devit, (void *)&device);
+
+        OHM_DEBUG(DBG_INFO, "device: '%s', driver: '%d', connected: '%d'",
+                  device ? device : "NULL", driver, connected);
+        if (!is_spurious_event(device, driver, connected))
+            dres_accessory_request(device, driver, connected);
+
+    } while (dbus_message_iter_next(&devit));
+
+    dres_all();
+
+ done:
  not_our_signal:
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
