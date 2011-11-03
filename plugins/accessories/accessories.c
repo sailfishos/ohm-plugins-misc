@@ -90,8 +90,7 @@ static int is_spurious_event(char *device, int driver, int connected)
 
     store = ohm_fact_store_get_fact_store();
     list  = ohm_fact_store_get_facts_by_name(store, FACT_DEVICE_ACCESSIBLE);
-
-    while (list) {
+    for ( ; list ; list = list->next) {
         fact = (OhmFact *)list->data;
         gval = ohm_fact_get(fact, "name");
 
@@ -129,8 +128,6 @@ static int is_spurious_event(char *device, int driver, int connected)
         
         spurious = dmatch && cmatch; /* no change is a spurious event */
         break;
-
-        list = list->next;
     }
 
     OHM_DEBUG(DBG_INFO, "%s, driver: %d, connected: %d is %sa spurious event",
