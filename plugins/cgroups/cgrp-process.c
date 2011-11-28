@@ -292,7 +292,7 @@ proc_recv(unsigned char *buf, size_t bufsize, int block)
     
     memset(buf, 0, bufsize);
     nl_hdr = (struct nlmsghdr *)buf;
-    size   = NLMSG_SPACE(sizeof(*cn_hdr) + sizeof(*event));
+    size   = NLMSG_SPACE(sizeof(*cn_hdr) + sizeof(*event) + 16);
     
     if (size > bufsize) {
         errno = EINVAL;
