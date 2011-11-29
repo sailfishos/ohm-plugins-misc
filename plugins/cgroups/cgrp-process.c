@@ -411,6 +411,21 @@ proc_dump_event(struct proc_event *event)
         break;
     }
 
+#ifdef HAVE_PROC_EVENT_PTRACE
+    case PROC_EVENT_PTRACE: {
+        struct ptrace_proc_event *e = &event->event_data.ptrace;
+
+        if (e->tracer_pid)
+            OHM_DEBUG(DBG_EVENT, "task %u/%u is traced by task %u/%u",
+                      e->process_tgid, e->process_pid,
+                      e->tracer_tgid,  e->tracer_pid);
+        else
+            OHM_DEBUG(DBG_EVENT, "task %u/%u has released from tracing",
+                      e->process_tgid, e->process_pid);
+        break;
+    }
+#endif
+
 #ifdef HAVE_PROC_EVENT_NAME
     case PROC_EVENT_NAME: {
         struct name_proc_event *e = &event->event_data.name;
@@ -421,11 +436,11 @@ proc_dump_event(struct proc_event *event)
         break;
     }
 #endif
-        
+
     case PROC_EVENT_NONE:
         OHM_DEBUG(DBG_EVENT, "process event <none> (ACK)");
         break;
-        
+
     default:
         OHM_DEBUG(DBG_EVENT, "unknown process event 0x%x", event->what);
     }
@@ -497,7 +512,7 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
                 event.any.pid  = pevt->event_data.exit.process_pid;
                 event.any.tgid = pevt->event_data.exit.process_tgid;
                 break;
-             
+
 #ifdef HAVE_PROC_EVENT_SID
             case PROC_EVENT_SID:
                 event.any.type = CGRP_EVENT_SID;
@@ -505,7 +520,15 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
                 event.any.tgid = pevt->event_data.sid.process_tgid;
                 break;
 #endif
-
+#ifdef HAVE_PROC_EVENT_PTRACE
+            case PROC_EVENT_PTRACE:
+                event.ptrace.type = CGRP_EVENT_PTRACE;
+                event.ptrace.pid  = pevt->event_data.ptrace.process_pid;
+                event.ptrace.tgid = pevt->event_data.ptrace.process_tgid;
+                event.ptrace.tracer_pid  = pevt->event_data.ptrace.tracer_pid;
+                event.ptrace.tracer_tgid = pevt->event_data.ptrace.tracer_tgid;
+                break;
+#endif
 #ifdef HAVE_PROC_EVENT_NAME
             case PROC_EVENT_NAME:
                 event.any.type = CGRP_EVENT_NAME;

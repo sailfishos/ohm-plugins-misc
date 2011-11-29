@@ -267,6 +267,7 @@ events_print(int event_mask, cgrp_rule_t *rule, FILE *fp)
         EVENT(UID    , "user-change"),
         EVENT(GID    , "group-change"),
         EVENT(SID    , "session-change"),
+        EVENT(PTRACE , "ptrace-change"),
         EVENT(NAME   , "name-change"),
         NULL
     };

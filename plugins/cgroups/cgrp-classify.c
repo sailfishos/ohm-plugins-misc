@@ -52,6 +52,9 @@ char *classify_event_name(cgrp_event_type_t type)
     case CGRP_EVENT_SID:
         str = "sid";
         break;
+    case CGRP_EVENT_PTRACE:
+        str = "ptrace";
+        break;
     case CGRP_EVENT_NAME:
         str = "name";
         break;
@@ -221,6 +224,12 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
         }
 
         return classify_by_rules(ctx, event, &attr);
+
+    case CGRP_EVENT_PTRACE:
+        OHM_DEBUG(DBG_CLASSIFY, "process <%u/%u> is traced by <%u/%u>",
+                  event->any.tgid, event->any.pid,
+                  event->ptrace.tracer_tgid, event->ptrace.tracer_pid);
+        return TRUE;
 
     case CGRP_EVENT_EXIT:
         attr.process = proc_hash_lookup(ctx, event->any.pid);;

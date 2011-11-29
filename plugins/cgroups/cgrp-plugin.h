@@ -376,6 +376,7 @@ typedef enum {
     CGRP_EVENT_UID,                         /* user ID changed */
     CGRP_EVENT_GID,                         /* group ID changed */
     CGRP_EVENT_SID,                         /* session ID changed */
+    CGRP_EVENT_PTRACE,                      /* process tracer changed */
     CGRP_EVENT_NAME,                        /* process name changed */
 } cgrp_event_type_t;
 
@@ -402,6 +403,12 @@ typedef struct {
     uint32_t eid;                           /* effective uid/gid */
 } cgrp_event_id_t;
 
+typedef struct {
+    CGRP_EVENT_COMMON;
+    uint32_t tracer_pid;                    /* tracer pid */
+    uint32_t tracer_tgid;                   /* tracer tgid */
+} cgrp_event_ptrace_t;
+
 union cgrp_event_u {
     cgrp_event_any_t  any;                  /* any event */
     cgrp_event_fork_t fork;                 /* new process forked */
@@ -409,6 +416,7 @@ union cgrp_event_u {
     cgrp_event_id_t   id;                   /* process uid/gid changed */
     cgrp_event_any_t  exit;                 /* process exited */
     cgrp_event_any_t  sid;                  /* session id changed */
+    cgrp_event_ptrace_t ptrace;             /* process tracer changed */
     cgrp_event_any_t  name;                 /* process name changed */
 };
 
