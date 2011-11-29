@@ -569,7 +569,7 @@ fi
 AC_SUBST(BUILD_FMRADIO)
 
 
-# Check for PROC_EVENT_{SID,NAME} kernel process connector events.
+# Check for PROC_EVENT_SID kernel process connector event.
 AC_MSG_CHECKING([for PROC_EVENT_SID connector event])
 AC_COMPILE_IFELSE([
 #include <linux/cn_proc.h>
@@ -590,25 +590,47 @@ fi
 AM_CONDITIONAL(HAVE_PROC_EVENT_SID, test "x$has_proc_event_sid" = "xyes")
 AC_SUBST(HAVE_PROC_EVENT_SID)
 
-AC_MSG_CHECKING([for PROC_EVENT_NAME connector event])
+# Check for PROC_EVENT_PTRACE kernel process connector event.
+AC_MSG_CHECKING([for PROC_EVENT_PTRACE connector event])
 AC_COMPILE_IFELSE([
 #include <linux/cn_proc.h>
 
 int main(int argc, char **argv)
 {
-    return PROC_EVENT_NAME;
-}], [has_proc_event_name=yes],
-    [has_proc_event_name=no])
+    return PROC_EVENT_PTRACE;
+}], [has_proc_event_ptrace=yes],
+    [has_proc_event_ptrace=no])
 
-AC_MSG_RESULT($has_proc_event_name)
+AC_MSG_RESULT($has_proc_event_ptrace)
 
-if test x$has_proc_event_name = xyes;
+if test x$has_proc_event_ptrace = xyes;
 then
-  AC_DEFINE([HAVE_PROC_EVENT_NAME], 1, [Have PROC_EVENT_NAME support ?])
+  AC_DEFINE([HAVE_PROC_EVENT_PTRACE], 1, [Have PROC_EVENT_PTRACE support ?])
 fi
 
-AM_CONDITIONAL(HAVE_PROC_EVENT_NAME, test "x$has_proc_event_name" = "xyes")
-AC_SUBST(HAVE_PROC_EVENT_NAME)
+AM_CONDITIONAL(HAVE_PROC_EVENT_PTRACE, test "x$has_proc_event_ptrace" = "xyes")
+AC_SUBST(HAVE_PROC_EVENT_PTRACE)
+
+# Check for PROC_EVENT_COMM kernel process connector event.
+AC_MSG_CHECKING([for PROC_EVENT_COMM connector event])
+AC_COMPILE_IFELSE([
+#include <linux/cn_proc.h>
+
+int main(int argc, char **argv)
+{
+    return PROC_EVENT_COMM;
+}], [has_proc_event_comm=yes],
+    [has_proc_event_comm=no])
+
+AC_MSG_RESULT($has_proc_event_comm)
+
+if test x$has_proc_event_comm = xyes;
+then
+  AC_DEFINE([HAVE_PROC_EVENT_COMM], 1, [Have PROC_EVENT_COMM support ?])
+fi
+
+AM_CONDITIONAL(HAVE_PROC_EVENT_COMM, test "x$has_proc_event_comm" = "xyes")
+AC_SUBST(HAVE_PROC_EVENT_COMM)
 
 
 # Check whether we have the input layer events for the accessories plugin.
