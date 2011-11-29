@@ -965,8 +965,8 @@ rule_event: TOKEN_IDENT {
               $$.event_mask = (1 << CGRP_EVENT_THREAD);
           else if (!strcmp($1.value, "session-change"))
               $$.event_mask = (1 << CGRP_EVENT_SID);
-          else if (!strcmp($1.value, "name-change"))
-              $$.event_mask = (1 << CGRP_EVENT_NAME);
+          else if (!strcmp($1.value, "comm-change"))
+              $$.event_mask = (1 << CGRP_EVENT_COMM);
           else {
               OHM_ERROR("cgrp: invalid rule event '%s'", $1.value);
               YYABORT;

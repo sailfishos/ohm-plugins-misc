@@ -426,13 +426,12 @@ proc_dump_event(struct proc_event *event)
     }
 #endif
 
-#ifdef HAVE_PROC_EVENT_NAME
-    case PROC_EVENT_NAME: {
-        struct name_proc_event *e = &event->event_data.name;
-    
-        if (e->process_pid == name->process_tgid)
-            OHM_DEBUG(DBG_EVENT, "process %u has changed its process name",
-                      e->process_tgid);
+#ifdef HAVE_PROC_EVENT_COMM
+    case PROC_EVENT_COMM: {
+        struct comm_proc_event *e = &event->event_data.comm;
+
+        OHM_DEBUG(DBG_EVENT, "task %u/%u has changed its comm value: %s",
+                  e->process_tgid,e->process_pid, e->comm);
         break;
     }
 #endif
@@ -529,11 +528,12 @@ netlink_cb(GIOChannel *chnl, GIOCondition mask, gpointer data)
                 event.ptrace.tracer_tgid = pevt->event_data.ptrace.tracer_tgid;
                 break;
 #endif
-#ifdef HAVE_PROC_EVENT_NAME
-            case PROC_EVENT_NAME:
-                event.any.type = CGRP_EVENT_NAME;
-                event.any.pid  = pevt->event_data.name.process_id;
-                event.any.tgid = pevt->event_data.name.process_tgid;
+#ifdef HAVE_PROC_EVENT_COMM
+            case PROC_EVENT_COMM:
+                event.comm.type = CGRP_EVENT_COMM;
+                event.comm.pid  = pevt->event_data.comm.process_pid;
+                event.comm.tgid = pevt->event_data.comm.process_tgid;
+                memcpy(event.comm.comm, pevt->event_data.comm.comm, 16);
                 break;
 #endif
             default:

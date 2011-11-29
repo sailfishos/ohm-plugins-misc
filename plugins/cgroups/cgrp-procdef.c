@@ -268,7 +268,7 @@ events_print(int event_mask, cgrp_rule_t *rule, FILE *fp)
         EVENT(GID    , "group-change"),
         EVENT(SID    , "session-change"),
         EVENT(PTRACE , "ptrace-change"),
-        EVENT(NAME   , "name-change"),
+        EVENT(COMM   , "comm-change"),
         NULL
     };
 #undef EVENT
@@ -385,7 +385,7 @@ rule_find(cgrp_rule_t *rules, cgrp_event_t *event)
             break;
         
         case CGRP_EVENT_SID:
-        case CGRP_EVENT_NAME:
+        case CGRP_EVENT_COMM:
             return r;
             
         default:

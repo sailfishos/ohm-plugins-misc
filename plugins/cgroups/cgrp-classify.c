@@ -55,8 +55,8 @@ char *classify_event_name(cgrp_event_type_t type)
     case CGRP_EVENT_PTRACE:
         str = "ptrace";
         break;
-    case CGRP_EVENT_NAME:
-        str = "name";
+    case CGRP_EVENT_COMM:
+        str = "comm";
         break;
     default:
         str = "unknown";
@@ -191,7 +191,7 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
     case CGRP_EVENT_UID:
     case CGRP_EVENT_GID:
     case CGRP_EVENT_SID:
-    case CGRP_EVENT_NAME:
+    case CGRP_EVENT_COMM:
     case CGRP_EVENT_THREAD:
         if ((ctx->event_mask & (1 << event->any.type)) == 0)
             return TRUE;
@@ -395,7 +395,7 @@ classify_by_rules(cgrp_context_t *ctx,
             (event->any.type == CGRP_EVENT_GID  ||
              event->any.type == CGRP_EVENT_UID  ||
              event->any.type == CGRP_EVENT_SID  ||
-             event->any.type == CGRP_EVENT_NAME ||
+             event->any.type == CGRP_EVENT_COMM ||
              event->any.type == CGRP_EVENT_THREAD)) {
             OHM_DEBUG(DBG_CLASSIFY, "no matching rule, omitting fallback.");
             return TRUE;
