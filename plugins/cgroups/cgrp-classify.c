@@ -132,21 +132,21 @@ classify_reconfig(cgrp_context_t *ctx)
 
 
 /********************
- * classify_by_parent
+ * classify_by_process
  ********************/
-static int classify_by_parent(cgrp_context_t *ctx, pid_t pid,
-			      pid_t tgid, pid_t ppid)
+static int classify_by_process(cgrp_context_t *ctx, pid_t pid,
+			       pid_t tgid, pid_t ppid)
 {
-    cgrp_process_t   *parent, *process;
+    cgrp_process_t   *classified, *process;
     cgrp_proc_attr_t  attr;
 
-    parent = proc_hash_lookup(ctx, ppid);
-    if (!parent)
+    classified = proc_hash_lookup(ctx, ppid);
+    if (!classified)
         return FALSE;
 
     attr.pid    = pid;
     attr.tgid   = tgid;
-    attr.binary = parent->binary;
+    attr.binary = classified->binary;
     attr.mask = 0;
 
     CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
@@ -159,8 +159,8 @@ static int classify_by_parent(cgrp_context_t *ctx, pid_t pid,
     }
 
     OHM_DEBUG(DBG_CLASSIFY, "<%u, %s>: group %s",
-              process->pid, process->name, parent->group->name);
-    group_add_process(ctx, parent->group, process);
+              process->pid, process->name, classified->group->name);
+    group_add_process(ctx, classified->group, process);
 
     return TRUE;
 }
@@ -184,8 +184,9 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
 
     switch (event->any.type) {
     case CGRP_EVENT_FORK:
-        if (classify_by_parent(ctx, event->fork.pid, event->fork.tgid,
-                               event->fork.ppid))
+	/* Forked process is classified by its parent process */
+	if (classify_by_process(ctx, event->fork.pid, event->fork.tgid,
+				event->fork.ppid))
             return TRUE;
         /* intentional fallthrough */
 
