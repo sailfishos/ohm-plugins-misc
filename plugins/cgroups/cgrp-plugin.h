@@ -477,6 +477,7 @@ typedef struct {
 typedef struct {
     pid_t             pid;                  /* task id */
     pid_t             tgid;                 /* process id */
+    pid_t             tracer;               /* tracer task id */
     char             *binary;               /* path to binary */
     char             *argv0;                /* argv[0] if needed */
     char             *argvx;                /* classified by this arg */
@@ -522,6 +523,7 @@ typedef struct {
     pid_t              pid;                 /* task id */
     pid_t              tgid;                /* process id */
     pid_t              ppid;                /* parent process id */
+    pid_t              tracer;              /* tracer task id */
     char              *binary;              /* path to binary */
     char               name[CGRP_COMM_LEN]; /* task_struct.comm */
     cgrp_proc_type_t   type;                /* user or kernel process */

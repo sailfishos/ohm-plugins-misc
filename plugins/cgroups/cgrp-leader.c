@@ -203,12 +203,23 @@ int leader_add_follower(const char *l, const char *name)
 
 void leader_acts(cgrp_process_t *process)
 {
+    cgrp_process_t *tracer;
     leader_t   l;
 
     l.leader  = leader_hash_lookup(&cgrp_leader, process->name);
     l.process = process;
 
     proc_hash_foreach(cgrp_leader.ctx, lead_followers, &l);
+
+    if (process->tracer) {
+        tracer = proc_hash_lookup(cgrp_leader.ctx, process->tracer);
+        if (tracer)
+            /* Lead tracer process */
+            partition_add_process(process->partition, tracer);
+        else
+            /* Tracer process exited */
+            process->tracer = 0;
+    }
 }
 
 int leader_init(cgrp_context_t *ctx)

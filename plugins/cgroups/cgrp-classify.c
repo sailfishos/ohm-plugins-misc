@@ -165,6 +165,34 @@ static int classify_by_process(cgrp_context_t *ctx, pid_t pid,
     return TRUE;
 }
 
+static int classify_by_tracee(cgrp_context_t *ctx, pid_t tracee,
+			      pid_t pid, pid_t tgid)
+{
+    int status;
+    cgrp_process_t   *process;
+
+    process = proc_hash_lookup(ctx, tracee);
+    if (!process)
+	return TRUE;
+
+    if (tgid) {
+	/* On attach tracer process shall be classified by tracee */
+	status = classify_by_process(ctx, pid, tgid, tracee);
+	if (!status)
+	    return FALSE;
+
+	process->tracer = tgid;
+    } else {
+	if (process->tracer) {
+	    /* After detaching former tracer process should be reclassified */
+	    classify_by_binary(ctx, process->tracer, 0);
+
+	    process->tracer = 0;
+	}
+    }
+
+    return TRUE;
+}
 
 /********************
  * classify_event
@@ -231,9 +259,12 @@ classify_event(cgrp_context_t *ctx, cgrp_event_t *event)
 
     case CGRP_EVENT_PTRACE:
         OHM_DEBUG(DBG_CLASSIFY, "process <%u/%u> is traced by <%u/%u>",
-                  event->any.tgid, event->any.pid,
+                  event->ptrace.tgid, event->ptrace.pid,
                   event->ptrace.tracer_tgid, event->ptrace.tracer_pid);
-        return TRUE;
+
+	return classify_by_tracee(ctx, event->ptrace.tgid,
+				  event->ptrace.tracer_pid,
+				  event->ptrace.tracer_tgid);
 
     case CGRP_EVENT_EXIT:
         attr.process = proc_hash_lookup(ctx, event->any.pid);;
