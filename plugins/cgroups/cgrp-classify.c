@@ -23,6 +23,9 @@ USA.
 
 #include "cgrp-plugin.h"
 
+static int classify_by_rules(cgrp_context_t *ctx, cgrp_event_t *event,
+			     cgrp_proc_attr_t *attr);
+
 char *classify_event_name(cgrp_event_type_t type)
 {
     char *str;
@@ -131,8 +134,8 @@ classify_reconfig(cgrp_context_t *ctx)
 /********************
  * classify_by_parent
  ********************/
-int
-classify_by_parent(cgrp_context_t *ctx, pid_t pid, pid_t tgid, pid_t ppid)
+static int classify_by_parent(cgrp_context_t *ctx, pid_t pid,
+			      pid_t tgid, pid_t ppid)
 {
     cgrp_process_t   *parent, *process;
     cgrp_proc_attr_t  attr;
@@ -349,9 +352,8 @@ classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *attr, int argn)
 /********************
  * classify_by_rules
  ********************/
-int
-classify_by_rules(cgrp_context_t *ctx,
-                  cgrp_event_t *event, cgrp_proc_attr_t *attr)
+static int classify_by_rules(cgrp_context_t *ctx, cgrp_event_t *event,
+			     cgrp_proc_attr_t *attr)
 {
     cgrp_procdef_t *def;
     cgrp_rule_t    *rules = NULL;

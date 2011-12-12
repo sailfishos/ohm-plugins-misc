@@ -836,8 +836,6 @@ int  classify_reconfig(cgrp_context_t *);
 int  classify_event(cgrp_context_t *, cgrp_event_t *);
 int  classify_by_binary(cgrp_context_t *, pid_t, int);
 int  classify_by_argvx(cgrp_context_t *, cgrp_proc_attr_t *, int);
-int  classify_by_parent(cgrp_context_t *, pid_t, pid_t, pid_t);
-int  classify_by_rules(cgrp_context_t *, cgrp_event_t *, cgrp_proc_attr_t *);
 void classify_schedule(cgrp_context_t *, pid_t, unsigned int, int);
 char *classify_event_name(cgrp_event_type_t);
 
