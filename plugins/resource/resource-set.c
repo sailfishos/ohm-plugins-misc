@@ -367,9 +367,15 @@ static gboolean idle_task(gpointer data)
 {
     resource_set_t *rs = (resource_set_t *)data;
 
-    if (rs && rs->idle.task)
-        rs->idle.task(rs);
+    if (rs) {
+        if (rs->idle.task)
+            rs->idle.task(rs);
 
+        if (rs->idle.srcid) {
+            g_source_remove(rs->idle.srcid);
+            rs->idle.srcid = 0;
+        }
+    }
     return FALSE;
 }
 
