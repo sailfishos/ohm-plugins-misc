@@ -144,10 +144,10 @@ static int classify_by_process(cgrp_context_t *ctx, pid_t pid,
     if (!classified)
         return FALSE;
 
+    memset(&attr, 0, sizeof(attr));
     attr.pid    = pid;
     attr.tgid   = tgid;
     attr.binary = classified->binary;
-    attr.mask = 0;
 
     CGRP_SET_MASK(attr.mask, CGRP_PROC_TGID);
     CGRP_SET_MASK(attr.mask, CGRP_PROC_BINARY);
