@@ -373,6 +373,7 @@ classify_by_argvx(cgrp_context_t *ctx, cgrp_proc_attr_t *attr, int argn)
         attr->process = proc_hash_lookup(ctx, attr->pid);
 
     if (attr->process && !attr->process->argvx) {
+        FREE(attr->process->argvx);
         attr->process->argvx = STRDUP(attr->binary);
         attr->process->name = attr->process->argvx;
     }
