@@ -445,28 +445,26 @@ int tracker_window_create(tracker_wintype_t type, uint32_t xid)
 int tracker_window_set_type(tracker_wintype_t type, uint32_t xid)
 {
     tracker_window_t *win;
-    int               sts;
+    int               sts = -1;
 
-    if ((win = find_in_winhash(xid)) == NULL)
-        sts = -1;
-    else {
-        switch (win->any.type) {
+    win = find_in_winhash(xid);
+    if (!win)
+        return -1;
 
-        case tracker_newwin:
-            if (type == tracker_appwin)
-                sts = change_newwin_to_appwin(&win->new);
-            else
-                sts = -1;
-            break;
+    switch (win->any.type) {
+    case tracker_newwin:
+        if (type == tracker_appwin)
+            sts = change_newwin_to_appwin(&win->new);
+        break;
 
-        case tracker_appwin:
-            sts = (type == tracker_appwin) ? 0 : -1;
-            break;
+    case tracker_appwin:
+        if (type == tracker_appwin)
+            sts = 0;
+        break;
 
-        default:
-            sts = -1;
-            break;
-        }
+    default:
+        /* silently ignore it */
+        break;
     }
 
     return sts;
@@ -605,60 +603,60 @@ static tracker_newwin_t *create_newwin(uint32_t xid)
     tracker_propdef_t  *tpd;
     tracker_propinst_t *tpi;
     size_t              size;
-    int                 err;
+    int                 err = 0;
     uint32_t            i;
 
-    neww = NULL;
     size = sizeof(tracker_newwin_t) + sizeof(tracker_propinst_t) * nnewwprop;
 
-    if ((win = malloc(size)) == NULL)
+    win = malloc(size);
+    if (!win) {
         OHM_ERROR("videoep: can't allocate memory for tracker window");
-    else {
-        window_create(xid, window_destroyed,NULL);
+        return NULL;
+    }
 
-        neww = &win->new;
+    window_create(xid, window_destroyed,NULL);
 
-        memset(neww, 0, size);
-        neww->type   = tracker_newwin;
-        neww->xid    = xid;
-        neww->nprinst = nnewwprop;
+    neww = &win->new;
 
-        for (i = 0;   i < PROPERTY_MAX;   i++)
-            neww->def2idx[i] = INVALID_INDEX;
+    memset(neww, 0, size);
+    neww->type   = tracker_newwin;
+    neww->xid    = xid;
+    neww->nprinst = nnewwprop;
 
-        add_to_winhash(win);
+    for (i = 0;   i < PROPERTY_MAX;   i++)
+        neww->def2idx[i] = INVALID_INDEX;
 
-        OHM_DEBUG(DBG_TRACK, "adding %d property to newwin 0x%x",
-                  nnewwprop, xid);
+    add_to_winhash(win);
 
-        for (i = 0, err = 0;  i < nnewwprop;  i++) {
-            tpd = newwprdefs + i;
-            tpi = neww->prinsts + i;
-            
-            tpi->propdef = tpd;
+    OHM_DEBUG(DBG_TRACK, "adding %d property to newwin 0x%x",
+              nnewwprop, xid);
 
-            if (exec_instance_setup(&tpi->exinst, &tpd->exdef) < 0)
-                err++;
-            else  {
-                neww->def2idx[tpd->def] = i;
-                window_add_property(xid,tpd->def,window_property_changed,NULL);
-            }
-        }
+    for (i = 0; i < nnewwprop; i++) {
+        tpd = newwprdefs + i;
+        tpi = neww->prinsts + i;
 
+        tpi->propdef = tpd;
 
-        if (err) {
-            OHM_ERROR("videoep: failed to setup %d exec.values", err);
-            
-            delete_from_winhash(neww->xid);
-            destroy_newwin(neww);
-            neww = NULL;
-        }
+        if (exec_instance_setup(&tpi->exinst, &tpd->exdef) < 0)
+            err++;
         else {
-            for (i = 0;  i < nnewwprop;  i++) {
-                tpi = neww->prinsts + i;
-                exec_instance_finalize(&tpi->exinst, &neww->xid);
-            }
+            neww->def2idx[tpd->def] = i;
+            window_add_property(xid, tpd->def, window_property_changed, NULL);
         }
+    }
+
+    if (err) {
+        OHM_ERROR("videoep: failed to setup %d exec.values", err);
+
+        delete_from_winhash(neww->xid);
+        destroy_newwin(neww);
+
+        return NULL;
+    }
+
+    for (i = 0; i < nnewwprop; i++) {
+        tpi = neww->prinsts + i;
+        exec_instance_finalize(&tpi->exinst, &neww->xid);
     }
 
     return neww;
@@ -699,59 +697,60 @@ static tracker_appwin_t *create_appwin(uint32_t xid)
     tracker_propdef_t  *tpd;
     tracker_propinst_t *tpi;
     size_t              size;
-    int                 err;
+    int                 err = 0;
     uint32_t            i;
 
-    appw = NULL;
     size = sizeof(tracker_appwin_t) + sizeof(tracker_propinst_t) * nappwprop;
 
-    if ((win = malloc(size)) == NULL)
+    win = malloc(size);
+    if (!win) {
         OHM_ERROR("videoep: can't allocate memory for tracker window");
-    else {
-        window_create(xid, window_destroyed,NULL);
+        return NULL;
+    }
 
-        appw = &win->app;
+    window_create(xid, window_destroyed, NULL);
 
-        memset(appw, 0, size);
-        appw->type    = tracker_appwin;
-        appw->xid     = xid;
-        appw->nprinst = nappwprop;
+    appw = &win->app;
 
-        for (i = 0;   i < PROPERTY_MAX;   i++)
-            appw->def2idx[i] = INVALID_INDEX;
+    memset(appw, 0, size);
+    appw->type    = tracker_appwin;
+    appw->xid     = xid;
+    appw->nprinst = nappwprop;
 
-        add_to_winhash(win);
+    for (i = 0; i < PROPERTY_MAX; i++)
+        appw->def2idx[i] = INVALID_INDEX;
 
-        OHM_DEBUG(DBG_TRACK, "adding %d property to appwin 0x%x",
-                  nappwprop, xid);
+    add_to_winhash(win);
 
-        for (i = 0, err = 0;  i < nappwprop;  i++) {
-            tpd = appwprdefs + i;
-            tpi = appw->prinsts + i;
-            
-            tpi->propdef = tpd;
+    OHM_DEBUG(DBG_TRACK, "adding %d property to appwin 0x%x",
+              nappwprop, xid);
 
-            if (exec_instance_setup(&tpi->exinst, &tpd->exdef) < 0)
-                err++;
-            else  {
-                appw->def2idx[tpd->def] = i;
-                window_add_property(xid,tpd->def,window_property_changed,NULL);
-            }
-        }
+    for (i = 0; i < nappwprop; i++) {
+        tpd = appwprdefs + i;
+        tpi = appw->prinsts + i;
 
-        if (!err) {
-            for (i = 0;  i < nappwprop;  i++) {
-                tpi = appw->prinsts + i;
-                exec_instance_finalize(&tpi->exinst, &appw->xid);
-            }
-        }
+        tpi->propdef = tpd;
+
+        if (exec_instance_setup(&tpi->exinst, &tpd->exdef) < 0)
+            err++;
         else {
-            OHM_ERROR("videoep: failed to setup %d exec.values", err);
-
-            delete_from_winhash(xid);
-            destroy_appwin(appw);
-            appw = NULL;
+            appw->def2idx[tpd->def] = i;
+            window_add_property(xid, tpd->def, window_property_changed, NULL);
         }
+    }
+
+    if (err) {
+        OHM_ERROR("videoep: failed to setup %d exec.values", err);
+
+        delete_from_winhash(xid);
+        destroy_appwin(appw);
+
+        return NULL;
+    }
+
+    for (i = 0; i < nappwprop; i++) {
+        tpi = appw->prinsts + i;
+        exec_instance_finalize(&tpi->exinst, &appw->xid);
     }
 
     return appw;
@@ -764,61 +763,62 @@ static int change_newwin_to_appwin(tracker_newwin_t *neww)
     tracker_propdef_t  *tpd;
     tracker_propinst_t *tpi;
     size_t              size;
-    int                 err;
+    int                 err = 0;
     uint32_t            i;
 
     size = sizeof(tracker_appwin_t) + sizeof(tracker_propinst_t) * nappwprop;
 
-    if (neww != NULL && (win = malloc(size)) != NULL) {
-        appw = &win->app;
+    win = malloc(size);
+    if (!win)
+        return 0;
 
-        memset(appw, 0, size);
-        appw->type    = tracker_appwin;
-        appw->xid     = neww->xid;
-        appw->nprinst = nappwprop;
+    appw = &win->app;
 
-        memcpy(appw->def2idx, neww->def2idx, sizeof(appw->def2idx));
+    memset(appw, 0, size);
+    appw->type    = tracker_appwin;
+    appw->xid     = neww->xid;
+    appw->nprinst = nappwprop;
 
-        delete_from_winhash(neww->xid);
-        destroy_newwin(neww);
+    memcpy(appw->def2idx, neww->def2idx, sizeof(appw->def2idx));
 
-        add_to_winhash(win);
+    delete_from_winhash(neww->xid);
+    destroy_newwin(neww);
 
-        OHM_DEBUG(DBG_TRACK, "adding %d property to appwin 0x%x",
-                  nappwprop, appw->xid);
+    add_to_winhash(win);
 
-        for (i = 0, err = 0;  i < nappwprop;  i++) {
-            tpd = appwprdefs + i;
-            tpi = appw->prinsts + i;
-            
-            tpi->propdef = tpd;
+    OHM_DEBUG(DBG_TRACK, "adding %d property to appwin 0x%x",
+              nappwprop, appw->xid);
 
-            if (exec_instance_setup(&tpi->exinst, &tpd->exdef) < 0)
-                err++;
-            else
-                appw->def2idx[tpd->def] = i;
+    for (i = 0; i < nappwprop; i++) {
+        tpd = appwprdefs + i;
+        tpi = appw->prinsts + i;
 
-                window_add_property(appw->xid, tpd->def,
-                                    window_property_changed,NULL);
-        }
+        tpi->propdef = tpd;
 
-        if (!err) {
-            for (i = 0;  i < nappwprop;  i++) {
-                tpi = appw->prinsts + i;
-                exec_instance_finalize(&tpi->exinst, &appw->xid);
-            }
-        }
+        if (exec_instance_setup(&tpi->exinst, &tpd->exdef) < 0)
+            err++;
         else {
-            OHM_ERROR("videoep: failed to setup %d exec.values", err);
-
-            delete_from_winhash(appw->xid);
-            free(win);
-
-            return -1;
+            appw->def2idx[tpd->def] = i;
+            window_add_property(appw->xid, tpd->def,
+                                window_property_changed, NULL);
         }
-
-        OHM_DEBUG(DBG_TRACK, "newwin 0x%x => appwin", appw->xid);
     }
+
+    if (err) {
+        OHM_ERROR("videoep: failed to setup %d exec.values", err);
+
+        delete_from_winhash(appw->xid);
+        free(win);
+
+        return -1;
+    }
+
+    for (i = 0; i < nappwprop; i++) {
+        tpi = appw->prinsts + i;
+        exec_instance_finalize(&tpi->exinst, &appw->xid);
+    }
+
+    OHM_DEBUG(DBG_TRACK, "newwin 0x%x => appwin", appw->xid);
 
     return 0;
 }
@@ -994,27 +994,28 @@ static void window_destroyed(uint32_t xid, void *data)
 
     (void)data;
 
-    if ((win = delete_from_winhash(xid)) != NULL) {
-        switch (win->any.type) {
+    win = delete_from_winhash(xid);
+    if (!win)
+        return;
 
-        case tracker_newwin:
-            neww = &win->new;
-            destroy_newwin(neww);
-            break;
+    switch (win->any.type) {
+    case tracker_newwin:
+        neww = &win->new;
+        destroy_newwin(neww);
+        break;
 
-        case tracker_appwin:
-            appw = &win->app;
+    case tracker_appwin:
+        appw = &win->app;
 
-            if (appwinxid == appw->xid)
-                tracker_window_set_current(WINDOW_INVALID_ID);
+        if (appwinxid == appw->xid)
+            tracker_window_set_current(WINDOW_INVALID_ID);
 
-            destroy_appwin(appw);
-            break;
+        destroy_appwin(appw);
+        break;
 
-        default:
-            /* silently ignore it */
-            break;
-        }
+    default:
+        /* silently ignore it */
+        break;
     }
 }
 
