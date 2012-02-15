@@ -912,22 +912,20 @@ static void crtc_update(xif_crtc_t *xif_crtc, void *usrdata)
                   xif_crtc->xid, xif_crtc->noutput);
         return;
     }
-    else {
-        for (i = 0;   i < randr_crtc->noutput;   i++)
-            outputs[i] = xif_crtc->outputs[i];
-    }
 
     if (!(possibles = malloc(sizeof(uint32_t) * xif_crtc->npossible))) {
         OHM_ERROR("videoep: crtc 0x%x update failed: can't allocate memory "
                   "for %d possible outputs",
                   xif_crtc->xid, xif_crtc->npossible);
+        free(outputs);
         return;
     }
-    else {
-        for (i = 0;   i < randr_crtc->npossible;   i++)
-            possibles[i] = xif_crtc->possibles[i];
-    }
 
+    for (i = 0; i < randr_crtc->noutput; i++)
+        outputs[i] = xif_crtc->outputs[i];
+
+    for (i = 0; i < randr_crtc->npossible; i++)
+        possibles[i] = xif_crtc->possibles[i];
 
     free(randr_crtc->outputs);
     free(randr_crtc->possibles);
