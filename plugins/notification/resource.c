@@ -392,7 +392,6 @@ static void connect_to_manager(resconn_t *rc)
 static void conn_status(resset_t *resset, resmsg_t *msg)
 {
     resource_set_t *rs;
-    char           *kl;
     char          **evs;
     int             len;
     char            buf[256];
@@ -401,7 +400,7 @@ static void conn_status(resset_t *resset, resmsg_t *msg)
         if (msg->status.errcod == 0) {
             if (resset->id < rset_id_max) {
                 /* regular set */
-                if (!ruleif_notification_events(resset->id, &kl, &evs, &len)) {
+                if (!ruleif_notification_events(resset->id, &evs, &len)) {
                     OHM_ERROR("notification: creation of '%s' resource set "
                               "(id %u) failed: querying event list failed",
                               resset->klass, resset->id);

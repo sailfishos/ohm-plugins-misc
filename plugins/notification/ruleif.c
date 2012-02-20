@@ -193,7 +193,6 @@ int ruleif_notification_request(const char *what, ...)
 
 
 int ruleif_notification_events(int     id,
-                               char  **class_ret,
                                char ***events_ret,
                                int    *length_ret)
 {
@@ -232,8 +231,6 @@ int ruleif_notification_events(int     id,
                 if (entry[0] && !strcmp(entry[0], "name") &&
                     (int)entry[1] == 's' && entry[2] )
                 {
-                    *class_ret = strdup(entry[2]);
-
                     for (m = 3, n = 0;    entry[m];   m += 3, n++)
                         ;
 
