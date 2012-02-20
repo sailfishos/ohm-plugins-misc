@@ -766,39 +766,29 @@ static void queue_flush(void)
     msg_que = NULL;
 }
 
-
 static void queue_purge(bus_type_t bus)
 {
-    msg_queue_t *prev, *entry, *next;
-    
-    entry   = msg_que;
-    msg_que = prev = NULL;
-    
+    msg_queue_t *entry = msg_que, *prev = NULL, *next;
 
-    while (entry != NULL) {
-        next = entry->next;        
-        
+    while (entry) {
+        next = entry->next;
+
         if (entry->bus == bus) {
-            if (msg_que == NULL)
-                msg_que = entry->next;
-            else
-                prev->next = entry->next;
+            if (entry == msg_que)
+                msg_que = next;
+
+            if (prev)
+                prev->next = next;
 
             dbus_message_unref(entry->msg);
             free(entry);
-        }
-        else {
-            if (msg_que == NULL)
-                msg_que = entry;
-
+        } else {
             prev = entry;
         }
-        
+
         entry = next;
     }
 }
-
-
 
 /* 
  * Local Variables:
