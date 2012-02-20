@@ -173,48 +173,48 @@ void dbusif_query_pid(char *addr, dbusif_pid_query_cb_t func, void *data)
     DBusPendingCall *pend;
     int              success;
 
-    if (func != NULL) {
+    if (!func)
+        return;
 
-        do { /* not a loop */
-            if (!conn || !(query = malloc(sizeof(query_t))))
-                break;
+    do { /* not a loop */
+        if (!conn || !(query = malloc(sizeof(query_t))))
+            break;
 
-            memset(query, 0, sizeof(query_t));
-            query->addr = strdup(addr);
-            query->func = func;
-            query->data = data;
+        memset(query, 0, sizeof(query_t));
+        query->addr = strdup(addr);
+        query->func = func;
+        query->data = data;
 
-            msg = dbus_message_new_method_call(DBUS_ADMIN_NAME,
-                                               DBUS_ADMIN_PATH,
-                                               DBUS_ADMIN_INTERFACE,
-                                               DBUS_QUERY_PID_METHOD);
-            if (!msg)
-                break;
+        msg = dbus_message_new_method_call(DBUS_ADMIN_NAME,
+                                           DBUS_ADMIN_PATH,
+                                           DBUS_ADMIN_INTERFACE,
+                                           DBUS_QUERY_PID_METHOD);
+        if (!msg)
+            break;
 
-            success = dbus_message_append_args(msg,
-                                               DBUS_TYPE_STRING, &addr,
-                                               DBUS_TYPE_INVALID);
+        success = dbus_message_append_args(msg,
+                                           DBUS_TYPE_STRING, &addr,
+                                           DBUS_TYPE_INVALID);
 
-            if (!success                                                    ||
-                !dbus_connection_send_with_reply(conn, msg, &pend, -1)      ||
-                !dbus_pending_call_set_notify(pend, pid_queried, query,NULL)  )
-                break;
+        if (!success                                                    ||
+            !dbus_connection_send_with_reply(conn, msg, &pend, -1)      ||
+            !dbus_pending_call_set_notify(pend, pid_queried, query, NULL))
+            break;
 
-            dbus_message_unref(msg);
+        dbus_message_unref(msg);
 
-            OHM_DEBUG(DBG_DBUS, "quering PID for address %s on %s bus",
-                      query->addr, use_system_bus ? "system" : "session");
-            
-            return;
-        } while (0);
+        OHM_DEBUG(DBG_DBUS, "quering PID for address %s on %s bus",
+                  query->addr, use_system_bus ? "system" : "session");
 
-        if (query) {
-            free(query->addr);
-            free(query);
-        }
-    
-        func(0, data);
+        return;
+    } while (0);
+
+    if (query) {
+        free(query->addr);
+        free(query);
     }
+
+    func(0, data);
 }
 
 
