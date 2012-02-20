@@ -303,28 +303,26 @@ static void pid_queried(DBusPendingCall *pend, void *data)
 
     } while(0);
 
+    if (query) {
+        if (success)
+            OHM_DEBUG(DBG_DBUS, "pid query succeeded: %s -> %u",
+                      query->addr, pid);
+        else
+            OHM_DEBUG(DBG_DBUS, "pid query for %s failed: %s",
+                      query->addr, error);
 
-    if (success) {
-        OHM_DEBUG(DBG_DBUS, "pid query succeeded: %s -> %u", query->addr, pid);
-    }
-    else {
-        OHM_DEBUG(DBG_DBUS, "pid query for %s failed: %s", query->addr, error);
-    }
+        query->cb.func(pid, error, query->cb.data);
 
-    query->cb.func(pid, error, query->cb.data);
+        free(query->bus);
+        free(query->addr);
+        free(query);
+    }
 
     if (reply)
         dbus_message_unref(reply);
 
     dbus_pending_call_unref(pend);
-
-    if (query) {
-        free(query->bus);
-        free(query->addr);
-        free(query);
-    }
 }
-
 
 
 /* 
