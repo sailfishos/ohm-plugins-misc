@@ -1463,44 +1463,47 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
 {
     const char   *path;
     call_t       *call;
-    unsigned int  id, handle, type;
+    unsigned int  id = 0, handle = 0, type = 0;
 
     (void)c;
     (void)data;
 
-    if ((path = dbus_message_get_path(msg)) != NULL) {
-        
-        id = handle = type = 0U;
-        dbus_message_get_args(msg, NULL,
-                              DBUS_TYPE_UINT32, &id,
-                              DBUS_TYPE_UINT32, &handle,
-                              DBUS_TYPE_UINT32, &type,
-                              DBUS_TYPE_INVALID);
-        
-        if ((call = call_lookup(path)) != NULL) {
-            if (call->timeout != 0) {
-                g_source_remove(call->timeout);
-                call->timeout = 0;
-            }
-            
-            if (type == TP_STREAM_TYPE_VIDEO) {
-                call->video = (char *)id;
-                policy_call_update(call, UPDATE_VIDEO);
+    path = dbus_message_get_path(msg);
+    if (!path)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-                nvideo++;
-                if (nvideo >= 1)
-                    RESCTL_UPDATE(TRUE);
-            }
-            else
-                call->audio = (char *)id;
-        }
-        else
-            event_enqueue(path, c, msg, data);
-        
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_UINT32, &id,
+                               DBUS_TYPE_UINT32, &handle,
+                               DBUS_TYPE_UINT32, &type,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse StreamAdded signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    call = call_lookup(path);
+    if (!call) {
+        event_enqueue(path, c, msg, data);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
+
+    if (call->timeout != 0) {
+        g_source_remove(call->timeout);
+        call->timeout = 0;
+    }
+
+    if (type == TP_STREAM_TYPE_VIDEO) {
+        call->video = (char *)id;
+        policy_call_update(call, UPDATE_VIDEO);
+
+        nvideo++;
+        if (nvideo >= 1)
+            RESCTL_UPDATE(TRUE);
+    }
     else
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+        call->audio = (char *)id;
+
+    return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 
