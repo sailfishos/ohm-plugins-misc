@@ -85,7 +85,6 @@ static gboolean      fake_grant_handler(gpointer);
 static fake_grant_t *fake_grant_create(resource_set_t *, uint32_t,
                                        resource_cb_t, void *);
 static void          fake_grant_delete(fake_grant_t *);
-static fake_grant_t *fake_grant_find(resource_set_t *, resource_cb_t, void *);
 static char         *strlist(char **, char *, int);
 
 static const char     *type_to_string(resource_set_type_t);
