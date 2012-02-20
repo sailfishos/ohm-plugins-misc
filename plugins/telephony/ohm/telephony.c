@@ -1515,36 +1515,39 @@ stream_removed(DBusConnection *c, DBusMessage *msg, void *data)
 {
     const char   *path;
     call_t       *call;
-    unsigned int  id;
+    unsigned int  id = 0;
 
     (void)c;
     (void)data;
 
-    if ((path = dbus_message_get_path(msg)) != NULL) {
-        
-        id = 0U;
-        dbus_message_get_args(msg, NULL, DBUS_TYPE_UINT32, &id,
-                              DBUS_TYPE_INVALID);
-        
-        if ((call = call_lookup(path)) != NULL) {
-            if ((char *)id == call->audio)
-                call->audio = NULL;
-            else if ((char *)id == call->video) {
-                call->video = NULL;
-                policy_call_update(call, UPDATE_VIDEO);
+    path = dbus_message_get_path(msg);
+    if (!path)
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-                nvideo--;
-                if (nvideo <= 0)
-                    RESCTL_UPDATE(FALSE);
-            }
-        }
-        else
-            event_enqueue(path, c, msg, data);
-        
+    if (!dbus_message_get_args(msg, NULL, DBUS_TYPE_UINT32, &id,
+                               DBUS_TYPE_INVALID)) {
+        OHM_ERROR("Failed to parse StreamRemoved signal.");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    call = call_lookup(path);
+    if (!call) {
+        event_enqueue(path, c, msg, data);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
-    else
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    if ((char *)id == call->audio)
+        call->audio = NULL;
+    else if ((char *)id == call->video) {
+        call->video = NULL;
+        policy_call_update(call, UPDATE_VIDEO);
+
+        nvideo--;
+        if (nvideo <= 0)
+            RESCTL_UPDATE(FALSE);
+    }
+
+    return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 
