@@ -57,8 +57,8 @@ typedef struct resource_set_queue_s {
 } resource_set_queue_t;
 
 typedef struct {
-    resource_set_queue_t    *first;
-    resource_set_queue_t    *last;
+    resource_set_queue_t    *head;
+    resource_set_queue_t    *tail;
 } resource_set_qhead_t;
 
 typedef struct {

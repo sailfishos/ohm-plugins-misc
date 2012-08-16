@@ -97,13 +97,7 @@ resource_set_t *resource_set_create(pid_t client_pid, resset_t *resset)
             rs->manager_id = manager_id++;
             rs->resset     = resset;
             rs->request    = strdup("release");
-            
-            rs->granted.queue.first = (void *)&rs->granted.queue;
-            rs->granted.queue.last  = (void *)&rs->granted.queue;
-            
-            rs->advice.queue.first = (void *)&rs->advice.queue;
-            rs->advice.queue.last  = (void *)&rs->advice.queue;
-            
+
             resset->userdata = rs;
             add_to_hash_table(rs);
             add_factstore_entry(rs);
@@ -379,6 +373,41 @@ static gboolean idle_task(gpointer data)
     return FALSE;
 }
 
+static resource_set_queue_t* queue_pop_head(resource_set_qhead_t *qhead)
+{
+    resource_set_queue_t *qentry;
+
+    if (!qhead)
+        return NULL;
+
+    qentry = qhead->head;
+
+    if (qhead->head) {
+        qhead->head = qhead->head->next;
+
+        if (qhead->head)
+            qhead->head->prev = NULL;
+        else
+            qhead->tail = NULL;
+    }
+
+    return qentry;
+}
+
+static void queue_push_tail(resource_set_qhead_t *qhead, resource_set_queue_t *qentry)
+{
+    if (!qhead || !qentry)
+        return;
+
+    if (qhead->tail) {
+        qhead->tail->next = qentry;
+        qentry->prev = qhead->tail;
+        qhead->tail = qentry;
+    } else {
+        qhead->head = qentry;
+        qhead->tail = qentry;
+    }
+}
 
 static void enqueue_send_request(resource_set_t          *rs,
                                  resource_set_field_id_t  what,
@@ -409,14 +438,11 @@ static void enqueue_send_request(resource_set_t          *rs,
         qhead = &value->queue;
 
         memset(qentry, 0, sizeof(resource_set_queue_t));
-        qentry->next  = (void *)qhead;
-        qentry->prev  = qhead->last;
         qentry->txid  = txid;
         qentry->reqno = reqno;
         qentry->value = value->factstore;
 
-        qhead->last->next = qentry;
-        qhead->last = qentry;
+        queue_push_tail(qhead, qentry);
 
         OHM_DEBUG(DBG_SET, "%s/%u (manager_id %u) enqued %s value %s",
                   resset->peer, resset->id, rs->manager_id, type,
@@ -433,7 +459,6 @@ static void dequeue_and_send(resource_set_t          *rs,
     resource_set_output_t *value;
     resource_set_qhead_t  *qhead;
     resource_set_queue_t  *qentry;
-    resource_set_queue_t  *qnext;
     int32_t                block;
     resmsg_t               msg;
     char                   buf[128];
@@ -452,13 +477,11 @@ static void dequeue_and_send(resource_set_t          *rs,
     qhead = &value->queue;
     block = rs->block;
 
-    qnext = (void *) qhead->first;
-
     /*
      * we assume that the queue contains strictly monoton increasing txid's
      * and this function is called with strictly monoton txid's
      */
-    while ((void *)(qentry = qnext) != (void *)qhead) {
+    while ((qentry = queue_pop_head(qhead)) != NULL) {
         if (qentry->txid > txid)
             return;             /* nothing to send */
 
@@ -502,9 +525,6 @@ static void dequeue_and_send(resource_set_t          *rs,
                       resset->peer, resset->id, rs->manager_id, txid);
         }
 
-        qentry->prev->next = qentry->next;
-        qentry->next->prev = qentry->prev;
-        qnext = (void *) qhead->first;
         free(qentry);
     } /* while */
 }
@@ -513,7 +533,6 @@ static void destroy_queue(resource_set_t *rs, resource_set_field_id_t what)
 {
     resource_set_qhead_t *qhead;
     resource_set_queue_t *qentry;
-    resource_set_queue_t *qnext;
 
     switch (what) {
     case resource_set_granted:    qhead = &rs->granted.queue;    break;
@@ -521,17 +540,8 @@ static void destroy_queue(resource_set_t *rs, resource_set_field_id_t what)
     default:                                                     return;
     }
 
-    qnext = (void *) qhead->first;
-
-    while ((void *)(qentry = qnext) != (void *)qhead) {
-
-        qentry->prev->next = qentry->next;
-        qentry->next->prev = qentry->prev;
-
-        qnext = (void *) qhead->first;
-
+    while ((qentry = queue_pop_head(qhead)) != NULL)
         free(qentry);
-    }
 }
 
 
