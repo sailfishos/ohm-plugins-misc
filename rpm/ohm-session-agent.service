@@ -1,0 +1,6 @@
+[Unit]
+Description=OHM Session Agent
+Requires=dbus.socket
+
+[Service]
+ExecStart=/usr/bin/ohm-session-agent

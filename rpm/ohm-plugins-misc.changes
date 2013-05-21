@@ -1,0 +1,44 @@
+* Mon Jan 28 2013 Juho Hamalainen <juho.hamalainen@tieto.com> - 1.1.60
+- New version of accessories plugin.
+- Update packaging.
+
+* Mon Jan 07 2013 Juho Hamalainen <juho.hamalainen@tieto.com> - 1.1.59
+- Add service file for ohm-session-agent and add dbus session config
+  for root connecting to session bus.
+
+* Mon Dec 10 2012 Marko Saukko <marko.saukko@jollamobile.com> - 1.1.59
+- Updated packaging.
+
+* Thu Aug 23 2012 Dmitry Rozhkov <dmitry.rozhkov@jollamobile.com> - 1.1.59
+- Enabled videoep
+- Split binary package
+- Disable upstart
+
+* Wed Aug 16 2012 Juho Hämäläinen <juho.hamalainen@tieto.com> - 1.1.59
+- Fixes NEMO#331: Update resource-set queue implementation.
+
+* Tue Jul 24 2012 Dmitry Rozhkov <dmitry.rozhkov@jollamobile.com> - 1.1.59
+- Disable apptrack and cgroups as the cgroups plugin seems to be
+  incompatible with systemd.
+
+* Tue May 29 2012 Marko Saukko <sage@merproject.org> - 1.1.59
+- Changed libresource0 to libresource dependency.
+- Updated to git commit 264ebb3986b91aa0a6e7ccbb0c8bb35d60fc1872
+
+* Thu Nov 10 2011 Marko Saukko <marko.saukko@cybercom.com> - 1.1.59
+- Disabled videoep.
+
+* Fri Mar 11 2011 Kalle Lampila <kalle.lampila@cybercom.com> - 1.1.59
+- Separated console to own package (BMC#14387)
+
+* Thu Dec 09 2010 Kalle Lampila <kalle.lampila@cybercom.com> - 1.1.59
+- Packaging now uses spectacle
+- Version update
+- Part of FEA#6701
+- Package group change to System/Resource Policy
+
+* Wed Jun 30 2010 Markus Lehtonen <markus.lehtonen@nokia.com> - 0.1.2
+- Initial import to MeeGo
+
+* Tue Jun 29 2010 Krisztian Litkey <mmf-audio-bounces@projects.maemo.org> - 0.1.2
+- Quick'n dirty initial packaging.

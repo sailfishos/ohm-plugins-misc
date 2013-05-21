@@ -1,0 +1,117 @@
+Name: ohm-plugins-misc
+Summary: A miscallaneous set of Nokia OHM plugins
+Version: 1.1.60
+Release: 1
+Group: System/Resource Policy
+License: LGPLv2.1
+URL: https://github.com/nemomobile/ohm-plugins-misc
+Sources:
+    - "%{name}-%{version}.tar.gz"
+    - ohm-session-agent.service
+    - ohm-session-agent.conf
+Description: A miscallaneous set of OHM plugins by Nokia.
+
+Patches:
+    - disable-cgroups-plugin.patch
+    - disable-upstart-plugin.patch
+
+Requires:
+    - ohm
+PkgBR:
+    - bison
+    - flex
+PkgConfigBR:
+    - glib-2.0
+    - x11-xcb
+    - dbus-glib-1
+    - check
+    - gconf-2.0
+    - bluez
+    - libresource
+    - ohm
+    - libdres
+    - videoipc
+Configure: autogen
+ConfigOptions:
+    - --enable-telephony
+    - --enable-videoep
+    - --disable-notification      # for now (excluded from basic ruleset)
+Builder: single-make
+SubPackages:
+    - Name: ohm-plugin-console
+      AsWholeName: yes
+      Group: Development/Tools
+      Summary: Console OHM plugin
+      Description: |
+            OHM console plugin for debug interface.
+      AutoDepend: no
+    - Name: ohm-plugin-videoep
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: Video enforcement point for OHM
+      Description: |
+            OHM videoep plugin provides policy enforcement point for |
+            video.
+      Requires:
+          - ohm
+          - ohm-plugin-signaling
+          - xserver-policy-enforcement
+    - Name: ohm-plugin-fmradio
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: FM radio enforcement point for OHM
+      Description: |
+            OHM fmradio plugin provides policy enforcement point for |
+            FM Radio.
+      Requires:
+          - ohm
+    - Name: ohm-plugin-dspep
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: DSP enforcement point for OHM
+      Description: |
+            OHM dspep plugin provides policy enforcement point for |
+            DSP.
+      Requires:
+          - ohm
+          - ohm-plugin-signaling
+    - Name: ohm-plugins-dbus
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: DBus plugins for OHM
+      Description: DBus related plugins for OHM.
+      Requires:
+          - ohm
+    - Name: ohm-plugin-telephony
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: Telephony plugin for OHM
+      Description: |
+            OHM telephony plugin provides policy control points for telephony.
+      Requires:
+          - ohm
+    - Name: ohm-plugin-signaling
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: Signaling plugin for OHM
+      Description: |
+            OHM signaling plugin provides functionality required by videoep |
+            and dspep.
+    - Name: ohm-plugin-media
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: Media playback enforcement point for OHM
+      Description: |
+            OHM media plugin provides policy enforcement point for |
+            media playback.
+      Requires:
+          - ohm
+    - Name: ohm-plugin-accessories
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: Sensor OHM plugin for device accessories
+      Description: |
+            OHM accessories plugin provides functionality to detect plugged |
+            in device accessories.
+      Requires:
+          - ohm
