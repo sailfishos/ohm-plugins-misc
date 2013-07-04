@@ -17,6 +17,8 @@ Patches:
 
 Requires:
     - ohm
+    - systemd
+    - systemd-user-session-targets
 PkgBR:
     - bison
     - flex
