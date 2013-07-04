@@ -4,3 +4,7 @@ Requires=dbus.socket
 
 [Service]
 ExecStart=/usr/bin/ohm-session-agent
+
+[Install]
+WantedBy=pre-user-session.target
+
