@@ -1,5 +1,6 @@
 /*************************************************************************
 Copyright (C) 2010 Nokia Corporation.
+              2013 Jolla Ltd.
 
 These OHM Modules are free software; you can redistribute
 it and/or modify it under the terms of the GNU Lesser General Public
@@ -32,6 +33,7 @@ USA.
 #include "privacy.h"
 #include "mute.h"
 #include "bluetooth.h"
+#include "resource_control.h"
 
 #define DIM(a) (sizeof(a) / sizeof(a[0]))
 
@@ -76,7 +78,6 @@ static void queue_message(bus_type_t, DBusMessage *);
 static void queue_flush(void);
 static void queue_purge(bus_type_t);
 
-
 /*! \addtogroup pubif
  *  Functions
  *  @{
@@ -111,8 +112,14 @@ void dbusif_init(OhmPlugin *plugin)
      */
     
     system_bus_init();
+    resctl_init();
 }
 
+void dbusif_exit(OhmPlugin *plugin)
+{
+	(void)plugin;
+	resctl_exit();
+}
 
 DBusHandlerResult dbusif_session_notification(DBusConnection *conn,
                                               DBusMessage    *msg,
@@ -498,6 +505,12 @@ DBusHandlerResult dbusif_info(DBusConnection *conn, DBusMessage *msg, void *ud)
 #if 0
                 media_state_request(epid, media, group, reqstate);
 #endif
+               if (!strcmp(group, "ringtone")) {
+                   if (!strcmp(reqstate, "on"))
+                       resctl_acquire();  
+                   else
+                       resctl_release();
+               }
             }
         }
     }

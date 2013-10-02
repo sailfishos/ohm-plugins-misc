@@ -70,6 +70,7 @@ USA.
 
 
 void dbusif_init(OhmPlugin *);
+void dbusif_exit(OhmPlugin *);
 DBusHandlerResult dbusif_session_notification(DBusConnection *, DBusMessage *,
                                               void *);
 DBusHandlerResult dbusif_info(DBusConnection *, DBusMessage *, void *);
