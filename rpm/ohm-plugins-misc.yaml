@@ -33,6 +33,7 @@ PkgConfigBR:
     - ohm
     - libdres
     - videoipc
+    - profile
 Configure: autogen
 ConfigOptions:
     - --enable-telephony
@@ -115,5 +116,13 @@ SubPackages:
       Description: |
             OHM accessories plugin provides functionality to detect plugged |
             in device accessories.
+      Requires:
+          - ohm
+    - Name: ohm-plugin-profile
+      AsWholeName: yes
+      Group: System/Resource Policy
+      Summary: OHM plugin for profile
+      Description: |
+            OHM profile plugin provides functionality to detect profile changes.
       Requires:
           - ohm
