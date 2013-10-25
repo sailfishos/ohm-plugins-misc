@@ -33,6 +33,7 @@ BuildRequires:  pkgconfig(libresource)
 BuildRequires:  pkgconfig(ohm)
 BuildRequires:  pkgconfig(libdres)
 BuildRequires:  pkgconfig(videoipc)
+BuildRequires:  pkgconfig(profile)
 BuildRequires:  bison
 BuildRequires:  flex
 
@@ -132,6 +133,16 @@ Requires:   ohm
 %description -n ohm-plugin-accessories
 OHM accessories plugin provides functionality to detect plugged |
 in device accessories.
+
+
+%package -n ohm-plugin-profile
+Summary:    OHM plugin for profile
+Group:      System/Resource Policy
+Requires:   %{name} = %{version}-%{release}
+Requires:   ohm
+
+%description -n ohm-plugin-profile
+OHM profile plugin provides functionality to detect profile changes.
 
 
 %prep
@@ -272,3 +283,9 @@ fi
 # >> files ohm-plugin-accessories
 %{_libdir}/ohm/libohm_accessories.so
 # << files ohm-plugin-accessories
+
+%files -n ohm-plugin-profile
+%defattr(-,root,root,-)
+# >> files ohm-plugin-profile
+%{_libdir}/ohm/libohm_profile.so
+# << files ohm-plugin-profile
