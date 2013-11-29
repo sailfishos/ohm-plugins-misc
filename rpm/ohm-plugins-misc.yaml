@@ -14,6 +14,7 @@ Description: A miscallaneous set of OHM plugins by Nokia.
 Patches:
     - disable-cgroups-plugin.patch
     - disable-upstart-plugin.patch
+    - disable-x11-configure-checks.patch
 
 Requires:
     - ohm
@@ -24,7 +25,7 @@ PkgBR:
     - flex
 PkgConfigBR:
     - glib-2.0
-    - x11-xcb
+    #- x11-xcb
     - dbus-glib-1
     - check
     - gconf-2.0
@@ -32,12 +33,12 @@ PkgConfigBR:
     - libresource
     - ohm
     - libdres
-    - videoipc
+    #- videoipc
     - profile
 Configure: autogen
 ConfigOptions:
     - --enable-telephony
-    - --enable-videoep
+    #- --enable-videoep
     - --disable-notification      # for now (excluded from basic ruleset)
 Builder: single-make
 SubPackages:
@@ -48,17 +49,17 @@ SubPackages:
       Description: |
             OHM console plugin for debug interface.
       AutoDepend: no
-    - Name: ohm-plugin-videoep
-      AsWholeName: yes
-      Group: System/Resource Policy
-      Summary: Video enforcement point for OHM
-      Description: |
-            OHM videoep plugin provides policy enforcement point for |
-            video.
-      Requires:
-          - ohm
-          - ohm-plugin-signaling
-          - xserver-policy-enforcement
+    #- Name: ohm-plugin-videoep
+    #  AsWholeName: yes
+    #  Group: System/Resource Policy
+    #  Summary: Video enforcement point for OHM
+    #  Description: |
+    #        OHM videoep plugin provides policy enforcement point for |
+    #        video.
+    #  Requires:
+    #      - ohm
+    #      - ohm-plugin-signaling
+    #      - xserver-policy-enforcement
     - Name: ohm-plugin-fmradio
       AsWholeName: yes
       Group: System/Resource Policy
