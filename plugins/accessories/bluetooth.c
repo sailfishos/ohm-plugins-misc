@@ -34,6 +34,7 @@ USA.
 
 #define BT_TYPE_A2DP "bta2dp"
 #define BT_TYPE_HSP  "bthsp"
+#define BT_TYPE_AUDIO "audio"
 
 #define BT_DEVICE "com.nokia.policy.connected_bt_device"
 
@@ -303,6 +304,42 @@ static gboolean bt_state_changed(const gchar *type,
     OhmFact *bt_connected = bt_get_connected(path);
     gboolean run_dres = FALSE;
     GValue *gval_state;
+    gboolean bt_audio_connected = FALSE;
+
+    //OHM_DEBUG(DBG_BT, "type: %s, state: %s", type, state);
+
+    if (strcmp(type, BT_TYPE_AUDIO) == 0) {
+        if (bt_connected) {
+            gval_state = ohm_value_from_string(state);
+            ohm_fact_set(bt_connected, type, gval_state);
+        }
+
+        if (strcmp(state, BT_STATE_CONNECTED_S) == 0) {
+            /* Get a2dp and hsp status if AudioSink or Headset changed to
+             * connected or playing before Audio state changed to connected. */
+            get_properties(path, BT_INTERFACE_A2DP, get_properties_cb);
+            get_properties(path, BT_INTERFACE_HSP, get_properties_cb);
+        }
+
+        return TRUE;
+    }
+
+    if(bt_connected) {
+        gval_state = ohm_fact_get(bt_connected, BT_TYPE_AUDIO);
+        if (gval_state != NULL && G_VALUE_TYPE(gval_state) == G_TYPE_STRING) {
+            bt_audio_connected =
+                strcmp(g_value_get_string(gval_state), BT_STATE_CONNECTED_S) == 0 ? TRUE : FALSE;
+        }
+    }
+
+    /* In pulseaudio module-bluetooth-device is loaded after BT Audio interface
+     * gets connected. Need to wait until then to be able to route audio. */
+    if ((strcmp(state, BT_STATE_CONNECTED_S) == 0 || strcmp(state, BT_STATE_PLAYING_S) == 0)
+            && !bt_audio_connected) {
+        OHM_DEBUG(DBG_BT, "type: %s, state: %s transition not allowed.", type, state);
+        return TRUE;
+    }
+
 
     /* Type is either HSP or A2DP. HFP is distinguished from HSW by a
      * flag in the BT fact. */
@@ -373,6 +410,18 @@ static gboolean bt_state_changed(const gchar *type,
 
     OHM_DEBUG(DBG_BT, "running state transition from %s to %s from BT status_changed cb",
             prev_state ? prev_state : "NULL", state ? state : "NULL");
+
+    if (prev_state && state && strcmp(prev_state, BT_STATE_CONNECTING_S) == 0
+        && strcmp(state, BT_STATE_PLAYING_S) == 0) {
+        /* When state transition is not allowed state might change to playing.
+         * In this case state change is from connecting to playing, and connected state
+         * transition is not done. We need manually do it first */
+        run_dres = bt_state_transition(type, path,
+            map_to_state(prev_state), map_to_state(BT_STATE_CONNECTED_S));
+
+        if (run_dres)
+            dres_all();
+    }
 
     run_dres = bt_state_transition(type, path, 
             map_to_state(prev_state), map_to_state(state));
@@ -450,6 +499,14 @@ DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, voi
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
+DBusHandlerResult audio_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
+{
+    (void) data;
+    (void) c;
+
+    bt_property_changed(msg, BT_TYPE_AUDIO);
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
 
 static gboolean bt_delete_all_facts()
 {

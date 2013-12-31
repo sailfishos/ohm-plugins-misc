@@ -391,7 +391,8 @@ OHM_PLUGIN_DBUS_SIGNALS(
      {NULL, "com.nokia.policy", "info", NULL, info, NULL},
      {NULL, "org.bluez.AudioSink", "PropertyChanged", NULL, a2dp_property_changed, NULL},
      {NULL, "org.bluez.Headset", "PropertyChanged", NULL, hsp_property_changed, NULL},
-     {NULL, "org.bluez.Adapter", "DeviceRemoved", NULL, bt_device_removed, NULL});
+     {NULL, "org.bluez.Adapter", "DeviceRemoved", NULL, bt_device_removed, NULL},
+     {NULL, "org.bluez.Audio", "PropertyChanged", NULL, audio_property_changed, NULL});
 
 /* 
  * Local Variables:
