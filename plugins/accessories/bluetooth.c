@@ -543,7 +543,6 @@ static gboolean bt_any_to_disconnected(const gchar *type,
         enum bt_state prev_state,
         enum bt_state new_state)
 {
-    (void) prev_state;
     (void) new_state;
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
     OhmFact *bt_connected = bt_get_connected(path);
@@ -554,7 +553,10 @@ static gboolean bt_any_to_disconnected(const gchar *type,
     if (!bt_connected)
         return FALSE;
 
-    if (!disconnect_device(bt_connected, type)) {
+    if (prev_state == BT_STATE_NONE ||
+        prev_state == BT_STATE_CONNECTING ||
+        prev_state == BT_STATE_DISCONNECTED ||
+        !disconnect_device(bt_connected, type)) {
         OHM_DEBUG(DBG_BT, "there was nothing to disconnect");
     }
 
