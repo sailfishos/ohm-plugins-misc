@@ -1,0 +1,28 @@
+From 0aa8a9d132e611dda998a064c30771b1225170b4 Mon Sep 17 00:00:00 2001
+From: Mohammed Sameer <msameer@foolab.org>
+Date: Mon, 25 Nov 2013 13:44:11 +0200
+Subject: [PATCH] disable x11 configure checks
+
+---
+ configure.in | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/configure.in b/configure.in
+index 2481c96..a9872d4 100644
+--- a/configure.in
++++ b/configure.in
+@@ -71,9 +71,9 @@ else
+ fi
+ 
+ # Check for xlib (videoep)
+-PKG_CHECK_MODULES(X11, x11)
+-AC_SUBST(X11_CFLAGS)
+-AC_SUBST(X11_LIBS)
++dnl PKG_CHECK_MODULES(X11, x11)
++dnl AC_SUBST(X11_CFLAGS)
++dnl AC_SUBST(X11_LIBS)
+ 
+ # Checks for glib and gobject.
+ PKG_CHECK_MODULES(GLIB, glib-2.0 gobject-2.0)
+-- 
+1.8.4.rc3
