@@ -59,3 +59,4 @@ DBusHandlerResult check_bluez(DBusConnection * c, DBusMessage * msg, void *user_
 DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg, void *data);
 DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
 DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
+DBusHandlerResult audio_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
