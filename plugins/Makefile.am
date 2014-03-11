@@ -1,7 +1,6 @@
 SUBDIRS = 	     \
 	signaling    \
 	console      \
-	gconf        \
 	delay        \
 	auth         \
 	dbus         \
@@ -88,6 +87,10 @@ SUBDIRS += \
 	facttool
 endif
 
+if BUILD_GCONF
+SUBDIRS += \
+	gconf
+endif
 
 clean-local:
 	rm -f *~
