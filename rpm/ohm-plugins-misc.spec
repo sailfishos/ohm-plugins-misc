@@ -21,6 +21,7 @@ Source100:  ohm-plugins-misc.yaml
 Patch0:     disable-cgroups-plugin.patch
 Patch1:     disable-upstart-plugin.patch
 Patch2:     disable-x11-configure-checks.patch
+Patch3:     0001-packaging-Make-building-gconf-plugin-optional.patch
 Requires:   ohm
 Requires:   systemd
 Requires:   systemd-user-session-targets
@@ -140,6 +141,8 @@ OHM profile plugin provides functionality to detect profile changes.
 %patch1 -p1
 # disable-x11-configure-checks.patch
 %patch2 -p1
+# 0001-packaging-Make-building-gconf-plugin-optional.patch
+%patch3 -p1
 # >> setup
 # << setup
 
@@ -201,7 +204,6 @@ fi
 %{_libdir}/ohm/libohm_auth.so
 %{_libdir}/ohm/libohm_auth_test.so
 %{_libdir}/ohm/libohm_delay.so
-%{_libdir}/ohm/libohm_gconf.so
 %{_libdir}/ohm/libohm_resource.so
 %{_bindir}/ohm-session-agent
 %config %{_sysconfdir}/ohm/plugins.d/auth.ini
