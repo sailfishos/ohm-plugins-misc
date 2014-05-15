@@ -15,6 +15,7 @@ Patches:
     - disable-cgroups-plugin.patch
     - disable-upstart-plugin.patch
     - disable-x11-configure-checks.patch
+    - 0001-packaging-Make-building-gconf-plugin-optional.patch
 
 Requires:
     - ohm
