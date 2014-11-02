@@ -10,7 +10,6 @@ Source1:    ohm-session-agent.service
 Source2:    ohm-session-agent.conf
 Source100:  ohm-plugins-misc.yaml
 Patch2:     disable-x11-configure-checks.patch
-Patch3:     0001-packaging-Make-building-gconf-plugin-optional.patch
 Requires:   ohm
 Requires:   systemd
 Requires:   systemd-user-session-targets
@@ -126,8 +125,6 @@ OHM profile plugin provides functionality to detect profile changes.
 
 # disable-x11-configure-checks.patch
 %patch2 -p1
-# 0001-packaging-Make-building-gconf-plugin-optional.patch
-%patch3 -p1
 
 %build
 %autogen --disable-static
