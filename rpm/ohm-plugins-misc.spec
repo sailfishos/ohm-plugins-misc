@@ -6,9 +6,6 @@ Group:      System/Resource Policy
 License:    LGPLv2.1
 URL:        https://github.com/nemomobile/ohm-plugins-misc
 Source0:    %{name}-%{version}.tar.gz
-Source1:    ohm-session-agent.service
-Source2:    ohm-session-agent.conf
-Source100:  ohm-plugins-misc.yaml
 Requires:   ohm
 Requires:   systemd
 Requires:   systemd-user-session-targets
@@ -126,7 +123,8 @@ OHM profile plugin provides functionality to detect profile changes.
 %autogen --disable-static
 %configure --disable-static \
     --enable-telephony \
-    --disable-notification
+    --disable-notification \
+    --disable-videoep
 
 make
 
@@ -135,15 +133,9 @@ rm -rf %{buildroot}
 %make_install
 
 # FIXME: install maemo-specific files distro-conditionally
-rm -f -- $RPM_BUILD_ROOT%{_sysconfdir}/X11/Xsession.post/55ohm-session-agent
 rm -f -- $RPM_BUILD_ROOT%{_libdir}/ohm/*.la
 rm -f -- $RPM_BUILD_ROOT%{_libdir}/ohm/libohm_call_test.so
-rm -f -- $RPM_BUILD_ROOT%{_datadir}/ohm-session-agent/start-session-agent.sh
 
-install -d %{buildroot}%{_sysconfdir}/dbus-1/session.d
-install -d %{buildroot}%{_libdir}/systemd/user
-install -m 644 %{SOURCE1} %{buildroot}%{_libdir}/systemd/user
-install -m 644 %{SOURCE2} %{buildroot}%{_sysconfdir}/dbus-1/session.d
 mkdir -p %{buildroot}%{_libdir}/systemd/user/pre-user-session.target.wants
 ln -s ../ohm-session-agent.service %{buildroot}%{_libdir}/systemd/user/pre-user-session.target.wants/
 
