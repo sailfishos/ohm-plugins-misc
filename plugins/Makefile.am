@@ -2,13 +2,13 @@ SUBDIRS = 	     \
 	signaling    \
 	console      \
 	gconf        \
-	cgroups      \
 	delay        \
 	upstart      \
 	auth         \
 	dbus         \
 	dbus-signal
 
+#	cgroups
 #	apptrack
 #	fmradio
 #	notification

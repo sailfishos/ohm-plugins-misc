@@ -9,7 +9,6 @@ Source0:    %{name}-%{version}.tar.gz
 Source1:    ohm-session-agent.service
 Source2:    ohm-session-agent.conf
 Source100:  ohm-plugins-misc.yaml
-Patch0:     disable-cgroups-plugin.patch
 Patch1:     disable-upstart-plugin.patch
 Patch2:     disable-x11-configure-checks.patch
 Patch3:     0001-packaging-Make-building-gconf-plugin-optional.patch
@@ -126,8 +125,6 @@ OHM profile plugin provides functionality to detect profile changes.
 %prep
 %setup -q -n %{name}-%{version}
 
-# disable-cgroups-plugin.patch
-%patch0 -p1
 # disable-upstart-plugin.patch
 %patch1 -p1
 # disable-x11-configure-checks.patch
