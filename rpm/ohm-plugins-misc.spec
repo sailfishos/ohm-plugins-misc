@@ -9,7 +9,6 @@ Source0:    %{name}-%{version}.tar.gz
 Source1:    ohm-session-agent.service
 Source2:    ohm-session-agent.conf
 Source100:  ohm-plugins-misc.yaml
-Patch2:     disable-x11-configure-checks.patch
 Requires:   ohm
 Requires:   systemd
 Requires:   systemd-user-session-targets
@@ -122,9 +121,6 @@ OHM profile plugin provides functionality to detect profile changes.
 
 %prep
 %setup -q -n %{name}-%{version}
-
-# disable-x11-configure-checks.patch
-%patch2 -p1
 
 %build
 %autogen --disable-static
