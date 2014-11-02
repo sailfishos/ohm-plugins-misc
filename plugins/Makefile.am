@@ -3,11 +3,11 @@ SUBDIRS = 	     \
 	console      \
 	gconf        \
 	delay        \
-	upstart      \
 	auth         \
 	dbus         \
 	dbus-signal
 
+#	upstart
 #	cgroups
 #	apptrack
 #	fmradio
