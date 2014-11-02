@@ -161,6 +161,7 @@ fi
 %config %{_sysconfdir}/ohm/plugins.d/auth.ini
 %config %{_sysconfdir}/ohm/plugins.d/resource.ini
 %{_sysconfdir}/dbus-1/session.d/*.conf
+%{_datadir}/dbus-1/services/org.freedesktop.ohm-session-agent.service
 %{_libdir}/systemd/user/*.service
 %{_libdir}/systemd/user/pre-user-session.target.wants/ohm-session-agent.service
 %doc README COPYING AUTHORS
