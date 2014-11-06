@@ -1,14 +1,13 @@
 SUBDIRS = 	     \
 	signaling    \
 	console      \
-	gconf        \
-	cgroups      \
 	delay        \
-	upstart      \
 	auth         \
 	dbus         \
 	dbus-signal
 
+#	upstart
+#	cgroups
 #	apptrack
 #	fmradio
 #	notification
@@ -88,6 +87,10 @@ SUBDIRS += \
 	facttool
 endif
 
+if BUILD_GCONF
+SUBDIRS += \
+	gconf
+endif
 
 clean-local:
 	rm -f *~

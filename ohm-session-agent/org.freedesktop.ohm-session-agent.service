@@ -1,3 +1,4 @@
 [D-BUS Service]
 Name=org.freedesktop.ohm_session_agent
 Exec=/usr/bin/ohm-session-agent
+SystemdService=ohm-session-agent.service

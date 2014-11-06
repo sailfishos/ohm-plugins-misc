@@ -12,6 +12,9 @@
 /* Build dspep plugin ? */
 #undef BUILD_DSPEP
 
+/* Build facttool plugin ? */
+#undef BUILD_FACTTOOL
+
 /* Build FM radio plugin ? */
 #undef BUILD_FMRADIO
 
@@ -76,8 +79,11 @@
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
 
-/* Have PROC_EVENT_NAME support ? */
-#undef HAVE_PROC_EVENT_NAME
+/* Have PROC_EVENT_COMM support ? */
+#undef HAVE_PROC_EVENT_COMM
+
+/* Have PROC_EVENT_PTRACE support ? */
+#undef HAVE_PROC_EVENT_PTRACE
 
 /* Have PROC_EVENT_SID support ? */
 #undef HAVE_PROC_EVENT_SID
@@ -152,6 +158,9 @@
 
 /* Define to the one symbol short name of this package. */
 #undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
