@@ -386,14 +386,14 @@ bus_init(const char *address)
     if (!bus_add_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL))
         exit(1);
 
-    if (!bus_add_match("signal", TP_CHANNEL_CALL_DRAFT, CALL_STATE_CHANGED,
+    if (!bus_add_match("signal", TP_CHANNEL_CALL, CALL_STATE_CHANGED,
                        NULL))
         exit(1);
 
-    if (!bus_add_match("signal", TP_CHANNEL_CALL_DRAFT, CONTENT_ADDED, NULL))
+    if (!bus_add_match("signal", TP_CHANNEL_CALL, CONTENT_ADDED, NULL))
         exit(1);
 
-    if (!bus_add_match("signal", TP_CHANNEL_CALL_DRAFT, CONTENT_REMOVED, NULL))
+    if (!bus_add_match("signal", TP_CHANNEL_CALL, CONTENT_REMOVED, NULL))
         exit(1);
     
     if (!bus_add_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL))
@@ -495,7 +495,7 @@ bus_exit(void)
     bus_del_match("signal", TP_CHANNEL, CHANNEL_CLOSED, NULL);
     bus_del_match("signal", TP_CHANNEL_HOLD, HOLD_STATE_CHANGED, NULL);
     bus_del_match("signal", TP_CHANNEL_STATE, CALL_STATE_CHANGED, NULL);
-    bus_del_match("signal", TP_CHANNEL_CALL_DRAFT, CALL_STATE_CHANGED, NULL);
+    bus_del_match("signal", TP_CHANNEL_CALL, CALL_STATE_CHANGED, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, SENDING_DIALSTRING, NULL);
     bus_del_match("signal", TP_DIALSTRINGS, STOPPED_DIALSTRING, NULL);
     bus_del_match("signal", TP_CHANNEL_MEDIA, STREAM_ADDED, NULL);
@@ -926,10 +926,10 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
     if (MATCHES(TP_CHANNEL_MEDIA, STREAM_REMOVED))
         return stream_removed(c, msg, data);
 
-    if (MATCHES(TP_CHANNEL_CALL_DRAFT, CONTENT_ADDED))
+    if (MATCHES(TP_CHANNEL_CALL, CONTENT_ADDED))
         return content_added(c, msg, data);
 
-    if (MATCHES(TP_CHANNEL_CALL_DRAFT, CONTENT_REMOVED))
+    if (MATCHES(TP_CHANNEL_CALL, CONTENT_REMOVED))
         return content_removed(c, msg, data);
     
     if (MATCHES(TP_CHANNEL_HOLD, HOLD_STATE_CHANGED))
@@ -938,7 +938,7 @@ dispatch_signal(DBusConnection *c, DBusMessage *msg, void *data)
     if (MATCHES(TP_CHANNEL_STATE, CALL_STATE_CHANGED))
         return call_state_changed(c, msg, data);
 
-    if (MATCHES(TP_CHANNEL_CALL_DRAFT, CALL_STATE_CHANGED))
+    if (MATCHES(TP_CHANNEL_CALL, CALL_STATE_CHANGED))
         return call_draft_state_changed(c, msg, data);
 
     if (MATCHES(TP_CHANNEL_CONF_DRAFT, CHANNEL_MERGED))
@@ -1178,7 +1178,7 @@ channels_new(DBusConnection *c, DBusMessage *msg, void *data)
                         return DBUS_HANDLER_RESULT_HANDLED;
                     if (!strcmp(type, TP_CHANNEL_MEDIA))
                         event.call_type = CALL_TYPE_SM;
-                    else if (!strcmp(type, TP_CHANNEL_CALL_DRAFT))
+                    else if (!strcmp(type, TP_CHANNEL_CALL))
                         event.call_type = CALL_TYPE_DRAFT;
                     else
                         return DBUS_HANDLER_RESULT_HANDLED;
@@ -3258,7 +3258,7 @@ tp_call_disconnect(call_t *call, unsigned int why)
     expl   = (why == TP_CHANGE_REASON_BUSY) ? "Busy" : "";
     
     msg = dbus_message_new_method_call(name, path,
-                                       TP_CHANNEL_CALL_DRAFT, HANGUP);
+                                       TP_CHANNEL_CALL, HANGUP);
     
     if (msg == NULL) {
         OHM_ERROR("Failed to allocate D-BUS request for disconnect.");
@@ -3546,7 +3546,7 @@ tp_call_accept(call_t *call)
     path = call->path;
 
     msg = dbus_message_new_method_call(name, path,
-                                       TP_CHANNEL_CALL_DRAFT, ACCEPT);
+                                       TP_CHANNEL_CALL, ACCEPT);
     
     if (msg != NULL) {
         TIMESTAMP_ADD("telephony: request telepathy to disconnect");
