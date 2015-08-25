@@ -37,7 +37,7 @@ USA.
 #define TP_CHANNEL_DTMF   TP_CHANNEL".Interface.DTMF"
 #define TP_CHANNEL_MEDIA  TP_CHANNEL".Type.StreamedMedia"
 
-#define TP_CHANNEL_CALL_DRAFT TP_CHANNEL".Type.Call.DRAFT"
+#define TP_CHANNEL_CALL TP_CHANNEL".Type.Call1"
 #define TP_CHANNEL_CONF_DRAFT TP_CHANNEL".Interface.Conference.DRAFT"
 #define TP_CHANNEL_CONF       TP_CHANNEL".Interface.Conference"
 
