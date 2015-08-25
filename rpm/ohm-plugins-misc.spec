@@ -120,6 +120,7 @@ OHM profile plugin provides functionality to detect profile changes.
 %setup -q -n %{name}-%{version}
 
 %build
+echo "%{version}" > .tarball-version
 %autogen --disable-static
 %configure --disable-static \
     --enable-telephony \
