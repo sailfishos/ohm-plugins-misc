@@ -77,6 +77,8 @@ USA.
 #define SW_INCOMPATIBLE_INSERT 14
 static int incompatible_insert_quirk;
 
+#define RETRY_TIMEOUT_S (2)
+
 /*
  * input device descriptors
  */
@@ -84,7 +86,7 @@ static int incompatible_insert_quirk;
 struct input_dev_s;
 typedef struct input_dev_s input_dev_t;
 
-typedef int (*dev_init_t)(OhmPlugin *, input_dev_t *);
+typedef int (*dev_init_t)(input_dev_t *);
 typedef int (*dev_exit_t)(input_dev_t *);
 typedef int (*dev_event_cb_t)(struct input_event *, void *);
 
@@ -96,12 +98,15 @@ typedef struct {
 
 
 struct input_dev_s {
+    OhmPlugin       *plugin;
     const char      *name;               /* device name */
     int              fd;                 /* event file descriptor */
     input_dev_ops_t  ops;                /* device operations */
     void            *user_data;          /* callback user data */
     GIOChannel      *gioc;               /* GMainLoop I/O channel */
     gulong           gsrc;               /*       and I/O source */
+    int              retry;              /* Retry count if initial init fails */
+    guint            retry_source;
 };
 
 
@@ -132,12 +137,12 @@ typedef struct {
  * private prototypes
  */
 
-static int  jack_init (OhmPlugin *plugin, input_dev_t *dev);
+static int  jack_init (input_dev_t *dev);
 static int  jack_exit (input_dev_t *dev);
 static int  jack_event(struct input_event *event, void *user_data);
 static void jack_update_facts(int initial_query);
 
-static int   eci_init  (OhmPlugin *plugin, input_dev_t *dev);
+static int   eci_init  (input_dev_t *dev);
 static int   eci_exit  (input_dev_t *dev);
 static int   eci_event (struct input_event *event, void *user_data);
 static int   eci_read  (char *buf, size_t size);
@@ -147,14 +152,17 @@ static void  eci_cancel_update(void);
 
 static void find_device(const char *, input_dev_t *);
 
+static void device_init(input_dev_t *dev);
+static int add_event_handler(input_dev_t *dev);
+
 /*
  * devices of interest
  */
 
 static input_dev_t devices[] = {
-    { "jack", -1, { jack_init, jack_exit, jack_event }, NULL, NULL, 0 },
-    { "eci" , -1, { eci_init , eci_exit , eci_event  }, NULL, NULL, 0 },
-    { NULL, -1, { NULL, NULL, NULL }, NULL, NULL, 0 }
+    { NULL, "jack", -1, { jack_init, jack_exit, jack_event }, NULL, NULL, 0, 3, 0 },
+    { NULL, "eci" , -1, { eci_init , eci_exit , eci_event  }, NULL, NULL, 0, 0, 0 },
+    { NULL, NULL, -1, { NULL, NULL, NULL }, NULL, NULL, 0, 0, 0 }
 };
 
 
@@ -252,22 +260,45 @@ jack_query(int fd)
     return TRUE;
 }
 
+static gboolean
+wired_init_retry_cb(input_dev_t *dev)
+{
+    OHM_INFO("accessories: retrying %s init..", dev->name);
+    dev->retry_source = 0;
+    device_init(dev);
+
+    return FALSE;
+}
+
+static void
+device_init(input_dev_t *dev)
+{
+    if (!dev->ops.init(dev)) {
+        if (dev->retry > 0) {
+            OHM_INFO("accessories: could not initialize '%s', retrying in %d seconds", dev->name, RETRY_TIMEOUT_S);
+            dev->retry--;
+            dev->retry_source = g_timeout_add_seconds(RETRY_TIMEOUT_S, (GSourceFunc) wired_init_retry_cb, dev);
+        } else {
+            OHM_WARNING("accessories: could not initialize '%s'", dev->name);
+        }
+    }
+}
 
 /********************
  * jack_init
  ********************/
 static int
-jack_init(OhmPlugin *plugin, input_dev_t *dev)
+jack_init(input_dev_t *dev)
 {
     const char *device;
     const char *pattern;
     const char *invert;
     const char *disable_quirk;
 
-    invert = ohm_plugin_get_param(plugin, "inverted-jack-events");
-    device = ohm_plugin_get_param(plugin, "jack-device");
+    invert = ohm_plugin_get_param(dev->plugin, "inverted-jack-events");
+    device = ohm_plugin_get_param(dev->plugin, "jack-device");
     /* Default to enabling incompatible quirk */
-    disable_quirk = ohm_plugin_get_param(plugin, "disable-incompatible-quirk");
+    disable_quirk = ohm_plugin_get_param(dev->plugin, "disable-incompatible-quirk");
 
     if (disable_quirk && !strcasecmp(disable_quirk, "true"))
         incompatible_insert_quirk = 0;
@@ -290,7 +321,7 @@ jack_init(OhmPlugin *plugin, input_dev_t *dev)
     }
 
     if (dev->fd < 0) {
-        pattern = ohm_plugin_get_param(plugin, "jack-match");
+        pattern = ohm_plugin_get_param(dev->plugin, "jack-match");
 
         if (pattern == NULL)
             pattern = " Jack";
@@ -301,6 +332,7 @@ jack_init(OhmPlugin *plugin, input_dev_t *dev)
     
     if (dev->fd >= 0) {
         jack_query(dev->fd);
+        add_event_handler(dev);
         return TRUE;
     }
     else {
@@ -477,13 +509,13 @@ jack_update_facts(int initial_query)
  * eci_init
  ********************/
 static int
-eci_init(OhmPlugin *plugin, input_dev_t *dev)
+eci_init(input_dev_t *dev)
 {
     const char *device;
     const char *pattern;
     const char *delay;
 
-    delay = ohm_plugin_get_param(plugin, "eci-probe-delay");
+    delay = ohm_plugin_get_param(dev->plugin, "eci-probe-delay");
 
     if (delay != NULL) {
         errno = 0;
@@ -497,7 +529,7 @@ eci_init(OhmPlugin *plugin, input_dev_t *dev)
         errno = 0;
     }
 
-    device = ohm_plugin_get_param(plugin, "eci-device");
+    device = ohm_plugin_get_param(dev->plugin, "eci-device");
 
     if (device != NULL) {
         OHM_INFO("accessories: using device %s for ECI events", device);
@@ -508,7 +540,7 @@ eci_init(OhmPlugin *plugin, input_dev_t *dev)
     }
 
     if (dev->fd < 0) {
-        pattern = ohm_plugin_get_param(plugin, "eci-match");
+        pattern = ohm_plugin_get_param(dev->plugin, "eci-match");
 
         if (pattern == NULL)
             pattern = "ECI ";
@@ -517,9 +549,10 @@ eci_init(OhmPlugin *plugin, input_dev_t *dev)
         find_device(pattern, dev);
     }
     
-    if (dev->fd >= 0)
+    if (dev->fd >= 0) {
+        add_event_handler(dev);
         return TRUE;
-    else {
+    } else {
         OHM_ERROR("accessories: failed to open ECI detection device");
         return FALSE;
     }
@@ -867,17 +900,13 @@ wired_init(OhmPlugin *plugin, int dbg_wired)
 {
     input_dev_t *dev;
 
-    (void)plugin;
-
     DBG_WIRED = dbg_wired;
 
     lookup_facts();
 
     for (dev = devices; dev->name != NULL; dev++) {
-        if (!dev->ops.init(plugin, dev))
-            OHM_WARNING("accessories: could not initialize '%s'", dev->name); 
-        else
-            add_event_handler(dev);
+        dev->plugin = plugin;
+        device_init(dev);
     }
 }
 
@@ -894,6 +923,8 @@ wired_exit(void)
     eci_cancel_update();
 
     for (dev = devices; dev->name != NULL; dev++) {
+        if (dev->retry_source > 0)
+            g_source_remove(dev->retry_source);
         del_event_handler(dev);
         dev->ops.exit(dev);
     }
