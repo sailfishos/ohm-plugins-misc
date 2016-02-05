@@ -463,14 +463,6 @@ jack_update_facts(int initial_query)
 
     if (current != NULL && current->name == NULL)   /* filter out line-out */
         current = NULL;
-    
-    for (device = states; device->name != NULL; device++) {
-        if (device != current && device->connected) {
-            jack_disconnect(device);
-            if (!initial_query)
-                dres_accessory_request(device->name, -1, 0);
-        }
-    }
 
     if (current != NULL) {
         jack_connect(current);
@@ -496,6 +488,14 @@ jack_update_facts(int initial_query)
         
         if (!incompatible)
             eci_schedule_update(current, probe_delay);
+    }
+
+    for (device = states; device->name != NULL; device++) {
+        if (device != current && device->connected) {
+            jack_disconnect(device);
+            if (!initial_query)
+                dres_accessory_request(device->name, -1, 0);
+        }
     }
 }
 
