@@ -245,6 +245,44 @@ static int fsif_update_factstore_entry(char         *name,
 }
 
 
+static int fsif_destroy_factstore_entry(fsif_entry_t *fact)
+{
+    char  *dump;
+    int    success;
+
+    if (fact == NULL)
+        success = FALSE;
+    else {
+        dump = ohm_structure_to_string(OHM_STRUCTURE(fact));
+        ohm_fact_store_remove(fs, fact);
+        g_object_unref(fact);
+        OHM_DEBUG(DBG_FS, "Factstore entry deleted: %s", dump);
+        g_free(dump);
+        success = TRUE;
+    }
+
+    return success;
+}
+
+
+static fsif_entry_t *fsif_get_entry(char           *name,
+                                    fsif_field_t   *selist)
+{
+    OhmFact  *fact;
+    char     *selstr;
+    char      selb[256];
+    char     *result;
+
+    selstr = print_selector(selist, selb, sizeof(selb));
+    fact   = find_entry(name, selist);
+    result = (fact != NULL) ? "" : "not ";
+
+    OHM_DEBUG(DBG_FS, "Factsore lookup %s%s %ssucceeded", name,selstr, result);
+
+    return fact;
+}
+
+
 static void fsif_get_field_by_entry(fsif_entry_t   *entry,
                                     fsif_fldtype_t  type,
                                     char           *name,
@@ -252,6 +290,17 @@ static void fsif_get_field_by_entry(fsif_entry_t   *entry,
 {
     if (entry != NULL && name != NULL && vptr != NULL) {
         get_field(entry, type, name, vptr);
+    }
+}
+
+
+static void fsif_set_field_by_entry(fsif_entry_t *entry,
+                                    fsif_fldtype_t type,
+                                    char *name,
+                                    void *vptr)
+{
+    if (entry != NULL && name != NULL && vptr != NULL) {
+        set_field(entry, type, name, vptr);
     }
 }
 
@@ -926,6 +975,24 @@ OHM_EXPORTABLE(int, update_factstore_entry, (char *name,
 
 
 /****************************
+ * destroy_factstore_entry
+ ****************************/
+OHM_EXPORTABLE(int, destroy_factstore_entry, (fsif_entry_t *fact))
+{
+    return fsif_destroy_factstore_entry(fact);
+}
+
+
+/****************************
+ * get_entry
+ ****************************/
+OHM_EXPORTABLE(fsif_entry_t *, get_entry, (char           *name,
+                                           fsif_field_t   *selist))
+{
+    return fsif_get_entry(name, selist);
+}
+
+/****************************
  * get_field_by_entry
  ****************************/
 OHM_EXPORTABLE(void, get_field_by_entry, (fsif_entry_t *entry,
@@ -946,6 +1013,15 @@ OHM_EXPORTABLE(int, get_field_by_name, (const char *name,
                                         void *vptr))
 {
     return fsif_get_field_by_name(name, type, field, vptr);
+}
+
+
+OHM_EXPORTABLE(void, set_field_by_entry, (fsif_entry_t *entry,
+                                          fsif_fldtype_t type,
+                                          char *name,
+                                          void *vptr))
+{
+    fsif_set_field_by_entry(entry, type, name, vptr);
 }
 
 
@@ -984,11 +1060,14 @@ OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        OHM_LICENSE_LGPL, /* OHM_LICENSE_LGPL */
                        plugin_init, plugin_exit, NULL);
 
-OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 7,
+OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 10,
                             OHM_EXPORT(add_factstore_entry,     "add_factstore_entry"),
                             OHM_EXPORT(delete_factstore_entry,  "delete_factstore_entry"),
                             OHM_EXPORT(update_factstore_entry,  "update_factstore_entry"),
+                            OHM_EXPORT(destroy_factstore_entry, "destroy_factstore_entry"),
+                            OHM_EXPORT(get_entry,               "get_entry"),
                             OHM_EXPORT(get_field_by_entry,      "get_field_by_entry"),
+                            OHM_EXPORT(set_field_by_entry,      "set_field_by_entry"),
                             OHM_EXPORT(get_field_by_name,       "get_field_by_name"),
                             OHM_EXPORT(add_fact_watch,          "add_fact_watch"),
                             OHM_EXPORT(add_field_watch,         "add_field_watch")
