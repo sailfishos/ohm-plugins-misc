@@ -24,6 +24,7 @@ USA.
 #include <ohm/ohm-fact.h>
 #include <ohm/ohm-plugin-log.h>
 #include <ohm/ohm-plugin-debug.h>
+#include "../fsif/fsif.h"
 
 #define FACTSTORE_PREFIX    "com.nokia.policy"
 #define FACTSTORE_TIMER     FACTSTORE_PREFIX ".timer"
@@ -32,6 +33,26 @@ typedef void (*delay_cb_t)(char *id, char *argt, void **argv);
 
 static void plugin_init(OhmPlugin *);
 static void plugin_exit(OhmPlugin *);
+
+/* From fsif plugin. */
+int fsif_add_factstore_entry(char *name,
+                             fsif_field_t *fldlist);
+
+void fsif_get_field_by_entry(fsif_entry_t   *entry,
+                             fsif_fldtype_t  type,
+                             char           *name,
+                             void           *vptr);
+
+void fsif_set_field_by_entry(fsif_entry_t *entry,
+                             fsif_fldtype_t type,
+                             char *name,
+                             void *vptr);
+
+fsif_entry_t * fsif_get_entry(char           *name,
+                              fsif_field_t   *selist);
+
+int fsif_destroy_factstore_entry(fsif_entry_t *fact);
+
 
 #endif /* __OHM_DELAY_H__ */
 
