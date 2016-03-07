@@ -760,6 +760,7 @@ AC_CONFIG_FILES([build-aux/shave
 		 plugins/auth/Makefile
                  plugins/accessories/Makefile
                  plugins/console/Makefile
+                 plugins/fsif/Makefile
                  plugins/gconf/Makefile
                  plugins/hal/Makefile
                  plugins/hal/tests/Makefile

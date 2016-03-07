@@ -4,7 +4,8 @@ SUBDIRS = 	     \
 	delay        \
 	auth         \
 	dbus         \
-	dbus-signal
+	dbus-signal  \
+	fsif
 
 #	upstart
 #	cgroups
