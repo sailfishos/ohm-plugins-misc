@@ -182,31 +182,26 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
 
         if (!strcmp(string, "driver")) {
             valueptr = &driver;
-
-            if (!dbus_message_iter_next(&msgit))
-                goto done;
         }
         else if (!strcmp(string, "connected")) {
             valueptr = &connected;
-
-            if (!dbus_message_iter_next(&msgit))
-                goto done;
         }
         else {
             value = strtol(string, &end, 10);
 
-            if (*end == '\0' && (value == 0 || value == 1)) {
+            if (*end == '\0' && (value == 0 || value == 1))
                 *valueptr = value;
-                break;
-            }
+            else
+                goto done;
 
-            goto done;
         }
-    }
 
-    if (!dbus_message_iter_next(&msgit) ||
-        dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_ARRAY)
-        goto done;
+        if (!dbus_message_iter_next(&msgit))
+            goto done;
+
+        if (dbus_message_iter_get_arg_type(&msgit) == DBUS_TYPE_ARRAY)
+            break;
+    }
 
     dbus_message_iter_recurse(&msgit, &devit);
 
