@@ -157,6 +157,7 @@ fi
 %{_libdir}/ohm/libohm_auth.so
 %{_libdir}/ohm/libohm_auth_test.so
 %{_libdir}/ohm/libohm_delay.so
+%{_libdir}/ohm/libohm_fsif.so
 %{_libdir}/ohm/libohm_resource.so
 %{_bindir}/ohm-session-agent
 %config %{_sysconfdir}/ohm/plugins.d/auth.ini
