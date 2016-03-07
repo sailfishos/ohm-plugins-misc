@@ -155,7 +155,8 @@ static void plugin_exit(OhmPlugin *plugin)
  *  @{
  */
 
-static int fsif_add_factstore_entry(char *name, fsif_field_t *fldlist)
+static int fsif_add_factstore_entry(char           *name,
+                                    fsif_field_t   *fldlist)
 {
     OhmFact      *fact;
     fsif_field_t *fld;
@@ -185,7 +186,8 @@ static int fsif_add_factstore_entry(char *name, fsif_field_t *fldlist)
     return TRUE;
 }
 
-static int fsif_delete_factstore_entry(char *name, fsif_field_t *selist)
+static int fsif_delete_factstore_entry(char            *name,
+                                       fsif_field_t    *selist)
 {
     OhmFact *fact;
     char     selb[256];
@@ -315,17 +317,17 @@ static int fsif_get_field_by_name(const char     *name,
 
     if (name == NULL || field == NULL || vptr == NULL)
         return FALSE;
-    
+
     list = ohm_fact_store_get_facts_by_name(fs, name);
 
     if (g_slist_length(list) != 1)
         return FALSE;
 
     fact = (OhmFact *)list->data;
-    
+
     return get_field(fact, type, field, vptr);
 }
-    
+
 
 static int fsif_add_fact_watch(char                 *factname,
                                fsif_fact_watch_e     type,
@@ -338,7 +340,7 @@ static int fsif_add_fact_watch(char                 *factname,
 
     if (!factname || !callback)
         return -1;
-    
+
     switch(type) {
     case fact_watch_insert:    wfact_head = &wfact_inserts;    break;
     case fact_watch_remove:    wfact_head = &wfact_removes;    break;
@@ -366,7 +368,7 @@ static int fsif_add_fact_watch(char                 *factname,
         wentry->id                  = watch_id++;
         wentry->callback.fact_watch = callback;
         wentry->usrdata             = usrdata;
-        
+
         wfact->entries = wentry;
     }
 
@@ -410,7 +412,7 @@ static int fsif_add_field_watch(char                  *factname,
         wentry->fldname              = fldname ? strdup(fldname) : NULL;
         wentry->callback.field_watch = callback;
         wentry->usrdata              = usrdata;
-        
+
         wfact->entries = wentry;
     }
 
@@ -425,7 +427,8 @@ static int fsif_add_field_watch(char                  *factname,
  */
 
 
-static OhmFact *find_entry(char *name, fsif_field_t *selist)
+static OhmFact *find_entry(char            *name,
+                           fsif_field_t    *selist)
 {
     OhmFact            *fact;
     GSList             *list;
@@ -440,11 +443,11 @@ static OhmFact *find_entry(char *name, fsif_field_t *selist)
             return fact;
     }
 
-
     return NULL;
 }
 
-static int matching_entry(OhmFact *fact, fsif_field_t *selist)
+static int matching_entry(OhmFact      *fact,
+                          fsif_field_t *selist)
 {
     fsif_field_t       *se;
     char               *strval;
@@ -458,37 +461,37 @@ static int matching_entry(OhmFact *fact, fsif_field_t *selist)
 
     for (se = selist;   se->type != fldtype_invalid;   se++) {
         switch (se->type) {
-                        
+
         case fldtype_string:
             get_field(fact, fldtype_string, se->name, &strval);
             if (strval == NULL || strcmp(strval, se->value.string))
                 return FALSE;
             break;
-                
+
         case fldtype_integer:
             get_field(fact, fldtype_integer, se->name, &intval);
             if (intval != se->value.integer)
                 return FALSE;
             break;
-            
+
         case fldtype_unsignd:
             get_field(fact, fldtype_unsignd, se->name, &unsval);
             if (unsval != se->value.unsignd)
                 return FALSE;
             break;
-            
+
         case fldtype_floating:
             get_field(fact, fldtype_floating, se->name, &fltval);
             if (fltval != se->value.floating)
                 return FALSE;
             break;
-            
+
         case fldtype_time:
             get_field(fact, fldtype_time, se->name, &timeval);
             if (timeval != se->value.time)
                 return FALSE;
             break;
-            
+
         default:
             return FALSE;
         } /* switch type */
@@ -497,7 +500,10 @@ static int matching_entry(OhmFact *fact, fsif_field_t *selist)
     return TRUE;
 }
 
-static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
+static int get_field(OhmFact           *fact,
+                     fsif_fldtype_t     type,
+                     char              *name,
+                     void              *vptr)
 {
     GValue  *gv;
 
@@ -566,9 +572,13 @@ static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
     }
 
     return FALSE;
-} 
+}
 
-static void set_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
+
+static void set_field(OhmFact          *fact,
+                      fsif_fldtype_t    type,
+                      char             *name,
+                      void             *vptr)
 {
     fsif_value_t *v = (fsif_value_t *)vptr;
     GValue       *gv;
@@ -585,7 +595,8 @@ static void set_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
     ohm_fact_set(fact, name, gv);
 }
 
-static watch_fact_t *find_watch(char *name, watch_type_e type)
+static watch_fact_t *find_watch(char           *name,
+                                watch_type_e    type)
 {
     watch_fact_t *wfact;
 
@@ -625,39 +636,39 @@ static fsif_field_t *copy_selector(fsif_field_t *selist)
     else {
         for (last = selist;  last->type != fldtype_invalid;  last++)
             ;
-        
+
         dim = (last - selist) + 1;
         len = dim * sizeof(fsif_field_t);
-        
+
         if ((cplist = malloc(len)) != NULL) {
             memset(cplist, 0, len);
-            
+
             for (se = selist, cp = cplist;    se < last;    se++, cp++) {
                 cp->type = se->type;
                 cp->name = strdup(se->name);
-                
+
                 switch (se->type) {
-                    
+
                 case fldtype_string:
                     cp->value.string = strdup(se->value.string);
                     break;
-                    
+
                 case fldtype_integer:
                     cp->value.integer = se->value.integer;
                     break;
-                    
+
                 case fldtype_unsignd:
                     cp->value.unsignd = se->value.unsignd;
                     break;
-                    
+
                 case fldtype_floating:
                     cp->value.floating = se->value.floating;
                     break;
-                    
+
                 case fldtype_time:
                     cp->value.time = se->value.time;
                     break;
-                    
+
                 default:
                     OHM_ERROR("fsif: [%s] unsupported type", __FUNCTION__);
                     memset(&cp->value, 0, sizeof(cp->value));
@@ -728,7 +739,9 @@ static void  free_string_list(char **list)
 
 #endif
 
-static char *print_selector(fsif_field_t *selist, char *buf, int len)
+static char *print_selector(fsif_field_t   *selist,
+                            char           *buf,
+                            int             len)
 {
     fsif_field_t *se;
     fsif_value_t *v;
@@ -766,7 +779,11 @@ static char *print_selector(fsif_field_t *selist, char *buf, int len)
     return buf;
 }
 
-static char *print_value(fsif_fldtype_t type, void *vptr, char *buf, int len)
+
+static char *print_value(fsif_fldtype_t     type,
+                         void              *vptr,
+                         char              *buf,
+                         int                len)
 {
     fsif_value_t *v = (fsif_value_t *)vptr;
     char         *s;
@@ -786,19 +803,21 @@ static char *print_value(fsif_fldtype_t type, void *vptr, char *buf, int len)
     return s;
 }
 
-static void inserted_cb(void *data, OhmFact *fact)
+
+static void inserted_cb(void    *data,
+                        OhmFact *fact)
 {
     (void)data;
 
     char          *name;
     watch_fact_t  *wfact;
     watch_entry_t *wentry;
-    
+
     if (fact == NULL) {
         OHM_ERROR("fsif: %s() called with null fact pointer",__FUNCTION__);
         return;
     }
-        
+
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
     if ((wfact = find_watch(name, watch_insert)) != NULL) {
@@ -813,19 +832,21 @@ static void inserted_cb(void *data, OhmFact *fact)
     } /* if find_watch */
 }
 
-static void removed_cb(void *data, OhmFact *fact)
+
+static void removed_cb(void    *data,
+                       OhmFact *fact)
 {
     (void)data;
 
     char          *name;
     watch_fact_t  *wfact;
     watch_entry_t *wentry;
-    
+
     if (fact == NULL) {
         OHM_ERROR("fsif: %s() called with null fact pointer",__FUNCTION__);
         return;
     }
-        
+
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
     if ((wfact = find_watch(name, watch_remove)) != NULL) {
@@ -840,7 +861,11 @@ static void removed_cb(void *data, OhmFact *fact)
     } /* if find_watch */
 }
 
-static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
+
+static void updated_cb(void    *data,
+                       OhmFact *fact,
+                       GQuark   fldquark,
+                       gpointer value)
 {
     (void)data;
 
@@ -851,12 +876,12 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
     fsif_field_t   fld;
     char           valb[256];
     char          *valstr;
-    
+
     if (fact == NULL) {
         OHM_ERROR("fsif: %s() called with null fact pointer",__FUNCTION__);
         return;
     }
-        
+
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
     if (value != NULL && (wfact = find_watch(name, watch_update)) != NULL) {
@@ -867,14 +892,14 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
 
             if (matching_entry(fact, wentry->selist) &&
                 (!wentry->fldname || !strcmp(fld.name, wentry->fldname))) {
-                
+
                 switch (G_VALUE_TYPE(gval)) {
-                    
+
                 case G_TYPE_STRING:
                     fld.type = fldtype_string;
                     fld.value.string = (char *)g_value_get_string(gval);
                     break;
-                    
+
                 case G_TYPE_LONG:
                     fld.type = fldtype_integer;
                     fld.value.integer = g_value_get_long(gval);
@@ -884,43 +909,46 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
                     fld.type = fldtype_integer;
                     fld.value.integer = g_value_get_int(gval);
                     break;
-                    
+
                 case G_TYPE_ULONG:
                     fld.type = fldtype_unsignd;
                     fld.value.unsignd = g_value_get_ulong(gval);
                     break;
-                    
+
                 case G_TYPE_DOUBLE:
                     fld.type = fldtype_floating;
                     fld.value.floating = g_value_get_double(gval);
                     break;
-                    
+
                 case G_TYPE_UINT64:
                     fld.type = fldtype_time;
                     fld.value.time = g_value_get_uint64(gval);
                     break;
-                    
+
                 default:
                     OHM_ERROR("fsif: [%s] Unsupported data type (%d) "
                               "for field '%s'",
                               __FUNCTION__, G_VALUE_TYPE(gval), fld.name);
                     return;
                 }
-                
+
                 valstr = print_value(fld.type, (void *)&fld.value,
                                      valb, sizeof(valb)); 
                 OHM_DEBUG(DBG_FS, "field watch point: field '%s:%s' "
                           "changed to '%s'", name, fld.name, valstr);
 
                 wentry->callback.field_watch(fact, name, &fld,wentry->usrdata);
-                
+
                 return;
             } /* if matching_entry */
         } /* for */
     } /* if find_watch */
 }
 
-static char *time_str(unsigned long long t, char *buf , int len)
+
+static char *time_str(unsigned long long    t,
+                      char                 *buf,
+                      int                   len)
 {
     time_t       sec;
     unsigned int ms;
@@ -936,8 +964,6 @@ static char *time_str(unsigned long long t, char *buf , int len)
 
     return buf;
 }
-
-
 
 
 /*****************************************************************************
