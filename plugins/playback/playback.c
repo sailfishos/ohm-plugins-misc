@@ -37,7 +37,7 @@ USA.
 #include "sm.h"
 #include "dbusif.h"
 #include "dresif.h"
-#include "fsif.h"
+#include "../fsif/fsif.h"
 
 static int DBG_CLIENT, DBG_MEDIA, DBG_DBUS, DBG_DRES, DBG_FS, \
            DBG_SM, DBG_TRANS, DBG_QUE;
@@ -55,6 +55,63 @@ OHM_DEBUG_PLUGIN(playback,
 
 
 OHM_IMPORTABLE(void, timestamp_add, (const char *step));
+
+OHM_IMPORTABLE(int, add_field_watch, (char                  *factname,
+                                      fsif_field_t          *selist,
+                                      char                  *fldname,
+                                      fsif_field_watch_cb_t  callback,
+                                      void                  *usrdata));
+
+OHM_IMPORTABLE(void, get_field_by_entry, (fsif_entry_t   *entry,
+                                          fsif_fldtype_t  type,
+                                          char           *name,
+                                          void           *vptr));
+
+OHM_IMPORTABLE(int, add_factstore_entry, (char *name,
+                                          fsif_field_t *fldlist));
+
+OHM_IMPORTABLE(int, delete_factstore_entry, (char *name,
+                                             fsif_field_t *selist));
+
+OHM_IMPORTABLE(int, update_factstore_entry, (char *name,
+                                             fsif_field_t *selist,
+                                             fsif_field_t *fldlist));
+
+int fsif_add_field_watch(char                  *factname,
+                         fsif_field_t          *selist,
+                         char                  *fldname,
+                         fsif_field_watch_cb_t  callback,
+                         void                  *usrdata)
+{
+    return add_field_watch(factname, selist, fldname, callback, usrdata);
+}
+
+void fsif_get_field_by_entry(fsif_entry_t   *entry,
+                             fsif_fldtype_t  type,
+                             char           *name,
+                             void           *vptr)
+{
+    get_field_by_entry(entry, type, name, vptr);
+}
+
+int fsif_add_factstore_entry(char *name,
+                             fsif_field_t *fldlist)
+{
+    return add_factstore_entry(name, fldlist);
+}
+
+int fsif_delete_factstore_entry(char *name,
+                                fsif_field_t *selist)
+{
+    return delete_factstore_entry(name, selist);
+}
+
+int fsif_update_factstore_entry(char *name,
+                                fsif_field_t *selist,
+                                fsif_field_t *fldlist)
+{
+    return update_factstore_entry(name, selist, fldlist);
+}
 
 static void timestamp_init(void)
 {
@@ -78,14 +135,13 @@ static void plugin_init(OhmPlugin *plugin)
     sm_init(plugin);
     dbusif_init(plugin);
     dresif_init(plugin);
-    fsif_init(plugin);
 
     timestamp_init();
 }
 
 static void plugin_destroy(OhmPlugin *plugin)
 {
-    fsif_exit(plugin);
+    (void)plugin;
 }
 
 
@@ -98,8 +154,13 @@ static void plugin_destroy(OhmPlugin *plugin)
 #include "fsif.c"
 
 
-OHM_PLUGIN_REQUIRES_METHODS(playback, 1, 
-   OHM_IMPORT("dres.resolve", resolve)
+OHM_PLUGIN_REQUIRES_METHODS(playback, 6,
+    OHM_IMPORT("dres.resolve", resolve)
+    OHM_IMPORT("fsif.add_field_watch", add_field_watch),
+    OHM_IMPORT("fsif.get_field_by_entry", get_field_by_entry),
+    OHM_IMPORT("fsif.add_factstore_entry", add_factstore_entry),
+    OHM_IMPORT("fsif.update_factstore_entry", update_factstore_entry),
+    OHM_IMPORT("fsif.delete_factstore_entry", delete_factstore_entry)
 );
 
 OHM_PLUGIN_PROVIDES_METHODS(playback, 1,

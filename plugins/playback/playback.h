@@ -23,6 +23,7 @@ USA.
 
 #include <ohm/ohm-plugin-log.h>
 #include <ohm/ohm-plugin-debug.h>
+#include "../fsif/fsif.h"
 
 /* FactStore prefix */
 #define FACTSTORE_PREFIX                "com.nokia.policy"
@@ -48,6 +49,30 @@ static void plugin_destroy(OhmPlugin *);
         if (timestamp_add)                      \
             timestamp_add(step);                \
     } while (0)
+
+
+/* From fsif plugin. */
+int fsif_add_field_watch(char                  *factname,
+                         fsif_field_t          *selist,
+                         char                  *fldname,
+                         fsif_field_watch_cb_t  callback,
+                         void                  *usrdata);
+
+void fsif_get_field_by_entry(fsif_entry_t   *entry,
+                             fsif_fldtype_t  type,
+                             char           *name,
+                             void           *vptr);
+
+int fsif_add_factstore_entry(char *name,
+                             fsif_field_t *fldlist);
+
+int fsif_delete_factstore_entry(char *name,
+                                fsif_field_t *selist);
+
+int fsif_update_factstore_entry(char *name,
+                                fsif_field_t *selist,
+                                fsif_field_t *fldlist);
+
 
 #endif /* __OHM_PLAYBACK_H__ */
 

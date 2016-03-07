@@ -18,6 +18,8 @@ USA.
 *************************************************************************/
 
 
+#include "playback.h"
+
 #define SELIST_DIM 3
 
 static client_listhead_t  cl_head;
