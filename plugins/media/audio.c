@@ -30,7 +30,6 @@ USA.
 #include "plugin.h"
 #include "audio.h"
 #include "dbusif.h"
-#include "fsif.h"
 
 static void  audio_stream_changed_cb(fsif_entry_t *, char *,
 				     fsif_fact_watch_e,void *);
@@ -68,6 +67,7 @@ static void  audio_stream_changed_cb(fsif_entry_t      *entry,
     char     *method  = "<unknown>";
     char     *pattern = "<unknown>";
 
+    (void)name;
     (void)usrdata;
 
     switch (event) {

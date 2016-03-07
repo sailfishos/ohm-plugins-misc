@@ -27,6 +27,7 @@ USA.
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-plugin-log.h>
 #include <ohm/ohm-plugin-debug.h>
+#include "../fsif/fsif.h"
 
 #define EXPORT __attribute__ ((visibility ("default")))
 #define HIDE   __attribute__ ((visibility ("hidden")))
@@ -49,6 +50,27 @@ USA.
 extern int DBG_PRIVACY, DBG_MUTE, DBG_BT, DBG_AUDIO, DBG_DBUS, DBG_FS,DBG_DRES;
 
 
+/* From fsif plugin. */
+int fsif_add_field_watch(char                  *factname,
+                         fsif_field_t          *selist,
+                         char                  *fldname,
+                         fsif_field_watch_cb_t  callback,
+                         void                  *usrdata);
+
+int fsif_add_fact_watch(char                 *factname,
+                        fsif_fact_watch_e     type,
+                        fsif_fact_watch_cb_t  callback,
+                        void                 *usrdata);
+
+int fsif_get_field_by_name(const char     *name,
+                           fsif_fldtype_t  type,
+                           char           *field,
+                           void           *vptr);
+
+void fsif_get_field_by_entry(fsif_entry_t   *entry,
+                             fsif_fldtype_t  type,
+                             char           *name,
+                             void           *vptr);
 /*
 static void plugin_init(OhmPlugin *);
 static void plugin_destroy(OhmPlugin *);

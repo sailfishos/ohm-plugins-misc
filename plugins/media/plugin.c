@@ -27,14 +27,42 @@ USA.
 
 #include "plugin.h"
 #include "dbusif.h"
-#include "fsif.h"
 #include "dresif.h"
 #include "privacy.h"
 #include "mute.h"
 #include "bluetooth.h"
 #include "audio.h"
+#include "../fsif/fsif.h"
 
 int DBG_PRIVACY, DBG_MUTE, DBG_BT, DBG_AUDIO, DBG_DBUS, DBG_FS, DBG_DRES;
+
+OHM_IMPORTABLE(int, add_field_watch, (char                  *factname,
+                                      fsif_field_t          *selist,
+                                      char                  *fldname,
+                                      fsif_field_watch_cb_t  callback,
+                                      void                  *usrdata));
+
+OHM_IMPORTABLE(int, add_fact_watch, (char                 *factname,
+                                     fsif_fact_watch_e     type,
+                                     fsif_fact_watch_cb_t  callback,
+                                     void                 *usrdata));
+
+OHM_IMPORTABLE(int, get_field_by_name, (const char     *name,
+                                        fsif_fldtype_t  type,
+                                        char           *field,
+                                        void           *vptr));
+
+OHM_IMPORTABLE(void, get_field_by_entry, (fsif_entry_t   *entry,
+                                          fsif_fldtype_t  type,
+                                          char           *name,
+                                          void           *vptr));
+
+OHM_PLUGIN_REQUIRES_METHODS(media, 4,
+    OHM_IMPORT("fsif.add_field_watch", add_field_watch),
+    OHM_IMPORT("fsif.add_fact_watch", add_fact_watch),
+    OHM_IMPORT("fsif.get_field_by_name", get_field_by_name),
+    OHM_IMPORT("fsif.get_field_by_entry", get_field_by_entry)
+);
 
 OHM_DEBUG_PLUGIN(media,
     OHM_DEBUG_FLAG("privacy"  , "privacy override"   , &DBG_PRIVACY ),
@@ -46,13 +74,44 @@ OHM_DEBUG_PLUGIN(media,
     OHM_DEBUG_FLAG("dres"     , "dres interface"     , &DBG_DRES    )
 );
 
+int fsif_add_field_watch(char                  *factname,
+                         fsif_field_t          *selist,
+                         char                  *fldname,
+                         fsif_field_watch_cb_t  callback,
+                         void                  *usrdata)
+{
+    return add_field_watch(factname, selist, fldname, callback, usrdata);
+}
+
+int fsif_add_fact_watch(char                 *factname,
+                        fsif_fact_watch_e     type,
+                        fsif_fact_watch_cb_t  callback,
+                        void                 *usrdata)
+{
+    return add_fact_watch(factname, type, callback, usrdata);
+}
+
+int fsif_get_field_by_name(const char     *name,
+                           fsif_fldtype_t  type,
+                           char           *field,
+                           void           *vptr)
+{
+    return get_field_by_name(name, type, field, vptr);
+}
+
+void fsif_get_field_by_entry(fsif_entry_t   *entry,
+                             fsif_fldtype_t  type,
+                             char           *name,
+                             void           *vptr)
+{
+    get_field_by_entry(entry, type, name, vptr);
+}
 
 static void plugin_init(OhmPlugin *plugin)
 {
     OHM_DEBUG_INIT(media);
 
     dbusif_init(plugin);
-    fsif_init(plugin);
     dresif_init(plugin);
     privacy_init(plugin);
     mute_init(plugin);
@@ -67,7 +126,6 @@ static void plugin_init(OhmPlugin *plugin)
 
 static void plugin_destroy(OhmPlugin *plugin)
 {
-    fsif_exit(plugin);
     dbusif_exit(plugin);
 }
 
