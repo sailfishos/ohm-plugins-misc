@@ -29,7 +29,6 @@ USA.
 
 #include "plugin.h"
 #include "resource-spec.h"
-#include "fsif.h"
 
 
 #define INTEGER_FIELD(n,v) { fldtype_integer, n, .value.integer = v }

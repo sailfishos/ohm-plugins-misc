@@ -29,7 +29,6 @@ USA.
 
 #include "plugin.h"
 #include "resource-spec.h"
-#include "fsif.h"
 #include "transaction.h"
 
 #define HASH_BITS      8

@@ -31,7 +31,6 @@ USA.
 #include "plugin.h"
 #include "manager.h"
 #include "resource-spec.h"
-#include "fsif.h"
 #include "dresif.h"
 #include "ruleif.h"
 #include "dbusif.h"

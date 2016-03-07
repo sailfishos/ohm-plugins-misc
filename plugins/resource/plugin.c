@@ -32,10 +32,10 @@ USA.
 #include "manager.h"
 #include "resource-spec.h"
 #include "transaction.h"
-#include "fsif.h"
 #include "dresif.h"
 #include "ruleif.h"
 #include "auth.h"
+#include "../fsif/fsif.h"
 
 /* these are the manually set up equivalents of OHM_EXPORTABLE */
 static const char *OHM_VAR(internalif_timer_add,_SIGNATURE) =
@@ -63,6 +63,64 @@ OHM_DEBUG_PLUGIN(resource,
     OHM_DEBUG_FLAG( "auth"    , "security"           , &DBG_AUTH     ),
     OHM_DEBUG_FLAG( "rule"    , "prolog interface"   , &DBG_RULE     )
 );
+
+
+OHM_IMPORTABLE(int, add_field_watch, (char                  *factname,
+                                      fsif_field_t          *selist,
+                                      char                  *fldname,
+                                      fsif_field_watch_cb_t  callback,
+                                      void                  *usrdata));
+
+OHM_IMPORTABLE(void, get_field_by_entry, (fsif_entry_t   *entry,
+                                          fsif_fldtype_t  type,
+                                          char           *name,
+                                          void           *vptr));
+
+OHM_IMPORTABLE(int, add_factstore_entry, (char *name,
+                                          fsif_field_t *fldlist));
+
+OHM_IMPORTABLE(int, delete_factstore_entry, (char *name,
+                                             fsif_field_t *selist));
+
+OHM_IMPORTABLE(int, update_factstore_entry, (char *name,
+                                             fsif_field_t *selist,
+                                             fsif_field_t *fldlist));
+
+int fsif_add_field_watch(char                  *factname,
+                         fsif_field_t          *selist,
+                         char                  *fldname,
+                         fsif_field_watch_cb_t  callback,
+                         void                  *usrdata)
+{
+    return add_field_watch(factname, selist, fldname, callback, usrdata);
+}
+
+void fsif_get_field_by_entry(fsif_entry_t   *entry,
+                             fsif_fldtype_t  type,
+                             char           *name,
+                             void           *vptr)
+{
+    get_field_by_entry(entry, type, name, vptr);
+}
+
+int fsif_add_factstore_entry(char *name,
+                             fsif_field_t *fldlist)
+{
+    return add_factstore_entry(name, fldlist);
+}
+
+int fsif_delete_factstore_entry(char *name,
+                                fsif_field_t *selist)
+{
+    return delete_factstore_entry(name, selist);
+}
+
+int fsif_update_factstore_entry(char *name,
+                                fsif_field_t *selist,
+                                fsif_field_t *fldlist)
+{
+    return update_factstore_entry(name, selist, fldlist);
+}
 
 
 void plugin_print_timestamp(const char *function, const char *phase)
@@ -93,7 +151,6 @@ static void plugin_init(OhmPlugin *plugin)
     dbusif_init(plugin);
     ruleif_init(plugin);
     internalif_init(plugin);
-    fsif_init(plugin);
     dresif_init(plugin);
     manager_init(plugin);
     resource_set_init(plugin);
@@ -112,7 +169,6 @@ static void plugin_init(OhmPlugin *plugin)
 static void plugin_destroy(OhmPlugin *plugin)
 {
     auth_exit(plugin);
-    fsif_exit(plugin);
 }
 
 
@@ -137,6 +193,15 @@ OHM_PLUGIN_REQUIRES("dres");
 OHM_PLUGIN_DBUS_SIGNALS(
     { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_POLICY_NEW_SESSION_SIGNAL,
       NULL, dbusif_session_notification, NULL }
+);
+
+
+OHM_PLUGIN_REQUIRES_METHODS(resource, 5,
+    OHM_IMPORT("fsif.add_field_watch", add_field_watch),
+    OHM_IMPORT("fsif.get_field_by_entry", get_field_by_entry),
+    OHM_IMPORT("fsif.add_factstore_entry", add_factstore_entry),
+    OHM_IMPORT("fsif.update_factstore_entry", update_factstore_entry),
+    OHM_IMPORT("fsif.delete_factstore_entry", delete_factstore_entry)
 );
 
 
