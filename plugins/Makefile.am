@@ -5,7 +5,8 @@ SUBDIRS = 	     \
 	auth         \
 	dbus         \
 	dbus-signal  \
-	fsif
+	fsif         \
+	route
 
 #	upstart
 #	cgroups
