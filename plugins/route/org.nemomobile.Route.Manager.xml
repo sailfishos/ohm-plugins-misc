@@ -1,0 +1,30 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+    <interface name="org.nemomobile.Route.Manager">
+        <method name="InterfaceVersion">
+            <arg name="version" type="u" direction="out"/>
+        </method>
+        <method name="GetAll">
+            <arg name="output_device" type="s" direction="out"/>
+            <arg name="output_device_mask" type="u" direction="out"/>
+            <arg name="input_device" type="s" direction="out"/>
+            <arg name="input_device_mask" type="u" direction="out"/>
+            <arg name="features" type="a(suu)" direction="out"/>
+        </method>
+        <method name="Enable">
+            <arg name="feature" type="s" direction="in"/>
+        </method>
+        <method name="Disable">
+            <arg name="feature" type="s" direction="in"/>
+        </method>
+        <signal name="AudioRouteChanged">
+            <arg name="device" type="s"/>
+            <arg name="device_mask" type="u"/>
+        </signal>
+        <signal name="AudioFeatureChanged">
+            <arg name="name" type="s"/>
+            <arg name="allowed" type="u"/>
+            <arg name="enabled" type="u"/>
+        </signal>
+    </interface>
+</node>
