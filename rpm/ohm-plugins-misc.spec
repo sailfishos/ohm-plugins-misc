@@ -106,6 +106,16 @@ OHM accessories plugin provides functionality to detect plugged |
 in device accessories.
 
 
+%package -n ohm-plugin-route
+Summary:    OHM plugin for querying and requesting audio routes
+Group:      System/Resource Policy
+Requires:   %{name} = %{version}-%{release}
+Requires:   ohm
+
+%description -n ohm-plugin-route
+OHM plugin for querying and requesting audio routes.
+
+
 %package -n ohm-plugin-profile
 Summary:    OHM plugin for profile
 Group:      System/Resource Policy
@@ -202,6 +212,11 @@ fi
 %files -n ohm-plugin-accessories
 %defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_accessories.so
+
+%files -n ohm-plugin-route
+%defattr(-,root,root,-)
+%{_libdir}/ohm/libohm_route.so
+%{_sysconfdir}/dbus-1/system.d/ohm-plugin-route.conf
 
 %files -n ohm-plugin-profile
 %defattr(-,root,root,-)
