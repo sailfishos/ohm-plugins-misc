@@ -29,6 +29,7 @@ USA.
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <glib.h>
 
 #include <ohm/ohm-fact.h>
 
@@ -326,6 +327,19 @@ static int fsif_get_field_by_name(const char     *name,
     fact = (OhmFact *)list->data;
 
     return get_field(fact, type, field, vptr);
+}
+
+
+static GSList *fsif_get_entries_by_name(const char   *name)
+{
+    GSList *list;
+
+    if (name == NULL)
+        return NULL;
+
+    list = ohm_fact_store_get_facts_by_name(fs, name);
+
+    return list;
 }
 
 
@@ -1042,6 +1056,15 @@ OHM_EXPORTABLE(int, get_field_by_name, (const char *name,
 }
 
 
+/****************************
+ * get_entries_by_name
+ ****************************/
+OHM_EXPORTABLE(GSList*, get_entries_by_name, (const char *name))
+{
+    return fsif_get_entries_by_name(name);
+}
+
+
 OHM_EXPORTABLE(void, set_field_by_entry, (fsif_entry_t *entry,
                                           fsif_fldtype_t type,
                                           char *name,
@@ -1086,12 +1109,13 @@ OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        OHM_LICENSE_LGPL, /* OHM_LICENSE_LGPL */
                        plugin_init, plugin_exit, NULL);
 
-OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 10,
+OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 11,
                             OHM_EXPORT(add_factstore_entry,     "add_factstore_entry"),
                             OHM_EXPORT(delete_factstore_entry,  "delete_factstore_entry"),
                             OHM_EXPORT(update_factstore_entry,  "update_factstore_entry"),
                             OHM_EXPORT(destroy_factstore_entry, "destroy_factstore_entry"),
                             OHM_EXPORT(get_entry,               "get_entry"),
+                            OHM_EXPORT(get_entries_by_name,     "get_entries_by_name"),
                             OHM_EXPORT(get_field_by_entry,      "get_field_by_entry"),
                             OHM_EXPORT(set_field_by_entry,      "set_field_by_entry"),
                             OHM_EXPORT(get_field_by_name,       "get_field_by_name"),
