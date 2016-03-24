@@ -66,6 +66,19 @@ static void resctl_status(resset_t *rset, resmsg_t *msg);
 void
 resctl_init(void)
 {
+    char *name;
+    char *sig;
+
+    name = (char *)"resource.restimer_add"; sig = (char *)timer_add_SIGNATURE;
+    ohm_module_find_method(name, &sig, (void *)&timer_add);
+    name = (char *)"resource.restimer_del"; sig = (char *)timer_del_SIGNATURE;
+    ohm_module_find_method(name, &sig, (void *)&timer_del);
+
+    if (timer_add == NULL || timer_del == NULL) {
+        OHM_ERROR("media: can't find mandatory resource methods.");
+        exit(1);
+    }
+
     rctl.conn = resproto_init(RESPROTO_ROLE_CLIENT, RESPROTO_TRANSPORT_INTERNAL,
                               resctl_manager_up, "media", timer_add, timer_del);
     if (rctl.conn == NULL) {
@@ -209,11 +222,6 @@ resctl_status(resset_t *rset, resmsg_t *msg)
     else
         OHM_ERROR("media resctl: status message of type 0x%x", msg->type);
 }
-
-OHM_PLUGIN_REQUIRES_METHODS(media, 2,
-   OHM_IMPORT("resource.restimer_add", timer_add),
-   OHM_IMPORT("resource.restimer_del", timer_del)
-);
 
 /* 
  * Local Variables:

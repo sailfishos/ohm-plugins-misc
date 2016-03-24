@@ -29,7 +29,6 @@ USA.
 #include "plugin.h"
 #include "mute.h"
 #include "dbusif.h"
-#include "fsif.h"
 #include "dresif.h"
 
 static void  mute_changed_cb(fsif_entry_t *, char *, fsif_field_t *,void *);

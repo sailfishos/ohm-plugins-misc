@@ -1,5 +1,6 @@
 /*************************************************************************
 Copyright (C) 2010 Nokia Corporation.
+              2016 Jolla Ltd.
 
 These OHM Modules are free software; you can redistribute
 it and/or modify it under the terms of the GNU Lesser General Public
@@ -17,6 +18,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
 USA.
 *************************************************************************/
 
+#define PLUGIN_PREFIX   fsif
+#define PLUGIN_NAME    "fsif"
+#define PLUGIN_VERSION "0.0.1"
+
 
 /*! \defgroup pubif Public Interfaces */
 #include <stdlib.h>
@@ -24,11 +29,17 @@ USA.
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <glib.h>
 
 #include <ohm/ohm-fact.h>
 
-#include "plugin.h"
 #include "fsif.h"
+
+/* debug flags */
+int DBG_FS;
+
+OHM_DEBUG_PLUGIN(fsif,
+    OHM_DEBUG_FLAG("fsif", "FactStore interface", &DBG_FS));
 
 
 typedef enum {
@@ -91,16 +102,17 @@ static guint         inserted_id;
 static guint         removed_id;
 
 
-/*! \addtogroup pubif
- *  Functions
- *  @{
- */
-
-void fsif_init(OhmPlugin *plugin)
+/********************
+ * plugin_init
+ ********************/
+static void plugin_init(OhmPlugin *plugin)
 {
     (void)plugin;
 
-    ENTER;
+    if (!OHM_DEBUG_INIT(fsif))
+        OHM_WARNING("fsif: failed to register for debugging");
+
+    OHM_INFO("fsif: initializing...");
 
     fs = ohm_fact_store_get_fact_store();
 
@@ -112,11 +124,13 @@ void fsif_init(OhmPlugin *plugin)
 
     removed_id  = g_signal_connect(G_OBJECT(fs), "removed" ,
                                    G_CALLBACK(removed_cb) , NULL);
-
-    LEAVE;
 }
 
-void fsif_exit(OhmPlugin *plugin)
+
+/********************
+ * plugin_exit
+ ********************/
+static void plugin_exit(OhmPlugin *plugin)
 {
     (void)plugin;
 
@@ -136,18 +150,25 @@ void fsif_exit(OhmPlugin *plugin)
     }
 }
 
-int fsif_add_factstore_entry(char *name, fsif_field_t *fldlist)
+
+/*! \addtogroup pubif
+ *  Functions
+ *  @{
+ */
+
+static int fsif_add_factstore_entry(char           *name,
+                                    fsif_field_t   *fldlist)
 {
     OhmFact      *fact;
     fsif_field_t *fld;
 
     if (!name || !fldlist) {
-        OHM_ERROR("resource: [%s] invalid arument", __FUNCTION__);
+        OHM_ERROR("fsif: [%s] invalid arument", __FUNCTION__);
         return FALSE;
     }
 
     if ((fact = ohm_fact_new(name)) == NULL) {
-        OHM_ERROR("resource: [%s] Can't create new fact", __FUNCTION__);
+        OHM_ERROR("fsif: [%s] Can't create new fact", __FUNCTION__);
         return FALSE;
     }
 
@@ -158,7 +179,7 @@ int fsif_add_factstore_entry(char *name, fsif_field_t *fldlist)
     if (ohm_fact_store_insert(fs, fact))
         OHM_DEBUG(DBG_FS, "factstore entry %s created", name);
     else {
-        OHM_ERROR("resource: [%s] Can't add %s to factsore",
+        OHM_ERROR("fsif: [%s] Can't add %s to factsore",
                   __FUNCTION__, name);
         return FALSE;
     }
@@ -166,7 +187,8 @@ int fsif_add_factstore_entry(char *name, fsif_field_t *fldlist)
     return TRUE;
 }
 
-int fsif_delete_factstore_entry(char *name, fsif_field_t *selist)
+static int fsif_delete_factstore_entry(char            *name,
+                                       fsif_field_t    *selist)
 {
     OhmFact *fact;
     char     selb[256];
@@ -176,7 +198,7 @@ int fsif_delete_factstore_entry(char *name, fsif_field_t *selist)
     selstr = print_selector(selist, selb, sizeof(selb));
 
     if ((fact = find_entry(name, selist)) == NULL) {
-        OHM_ERROR("resource: [%s] Failed to delete '%s%s' entry: "
+        OHM_ERROR("fsif: [%s] Failed to delete '%s%s' entry: "
                   "no entry found", __FUNCTION__, name, selstr);
         success = FALSE;
     }
@@ -193,9 +215,9 @@ int fsif_delete_factstore_entry(char *name, fsif_field_t *selist)
     return success;
 }
 
-int fsif_update_factstore_entry(char         *name,
-                                fsif_field_t *selist,
-                                fsif_field_t *fldlist)
+static int fsif_update_factstore_entry(char         *name,
+                                       fsif_field_t *selist,
+                                       fsif_field_t *fldlist)
 {
     OhmFact      *fact;
     fsif_field_t *fld;
@@ -207,7 +229,7 @@ int fsif_update_factstore_entry(char         *name,
     selstr = print_selector(selist, selb, sizeof(selb));
 
     if ((fact = find_entry(name, selist)) == NULL) {
-        OHM_ERROR("resource: [%s] Failed to update '%s%s' entry: "
+        OHM_ERROR("fsif: [%s] Failed to update '%s%s' entry: "
                   "no entry found", __FUNCTION__, name, selstr);
         return FALSE;
     }
@@ -226,10 +248,48 @@ int fsif_update_factstore_entry(char         *name,
 }
 
 
-void fsif_get_field_by_entry(fsif_entry_t   *entry,
-                             fsif_fldtype_t  type,
-                             char           *name,
-                             void           *vptr)
+static int fsif_destroy_factstore_entry(fsif_entry_t *fact)
+{
+    char  *dump;
+    int    success;
+
+    if (fact == NULL)
+        success = FALSE;
+    else {
+        dump = ohm_structure_to_string(OHM_STRUCTURE(fact));
+        ohm_fact_store_remove(fs, fact);
+        g_object_unref(fact);
+        OHM_DEBUG(DBG_FS, "Factstore entry deleted: %s", dump);
+        g_free(dump);
+        success = TRUE;
+    }
+
+    return success;
+}
+
+
+static fsif_entry_t *fsif_get_entry(char           *name,
+                                    fsif_field_t   *selist)
+{
+    OhmFact  *fact;
+    char     *selstr;
+    char      selb[256];
+    char     *result;
+
+    selstr = print_selector(selist, selb, sizeof(selb));
+    fact   = find_entry(name, selist);
+    result = (fact != NULL) ? "" : "not ";
+
+    OHM_DEBUG(DBG_FS, "Factsore lookup %s%s %ssucceeded", name,selstr, result);
+
+    return fact;
+}
+
+
+static void fsif_get_field_by_entry(fsif_entry_t   *entry,
+                                    fsif_fldtype_t  type,
+                                    char           *name,
+                                    void           *vptr)
 {
     if (entry != NULL && name != NULL && vptr != NULL) {
         get_field(entry, type, name, vptr);
@@ -237,32 +297,56 @@ void fsif_get_field_by_entry(fsif_entry_t   *entry,
 }
 
 
-int fsif_get_field_by_name(const char     *name,
-                           fsif_fldtype_t  type,
-                           char           *field,
-                           void           *vptr)
+static void fsif_set_field_by_entry(fsif_entry_t *entry,
+                                    fsif_fldtype_t type,
+                                    char *name,
+                                    void *vptr)
+{
+    if (entry != NULL && name != NULL && vptr != NULL) {
+        set_field(entry, type, name, vptr);
+    }
+}
+
+
+static int fsif_get_field_by_name(const char     *name,
+                                 fsif_fldtype_t  type,
+                                 char           *field,
+                                 void           *vptr)
 {
     OhmFact *fact;
     GSList  *list;
 
     if (name == NULL || field == NULL || vptr == NULL)
         return FALSE;
-    
+
     list = ohm_fact_store_get_facts_by_name(fs, name);
 
     if (g_slist_length(list) != 1)
         return FALSE;
 
     fact = (OhmFact *)list->data;
-    
+
     return get_field(fact, type, field, vptr);
 }
-    
 
-int fsif_add_fact_watch(char                 *factname,
-                        fsif_fact_watch_e     type,
-                        fsif_fact_watch_cb_t  callback,
-                        void                 *usrdata)
+
+static GSList *fsif_get_entries_by_name(const char   *name)
+{
+    GSList *list;
+
+    if (name == NULL)
+        return NULL;
+
+    list = ohm_fact_store_get_facts_by_name(fs, name);
+
+    return list;
+}
+
+
+static int fsif_add_fact_watch(char                 *factname,
+                               fsif_fact_watch_e     type,
+                               fsif_fact_watch_cb_t  callback,
+                               void                 *usrdata)
 {
     watch_fact_t   *wfact;
     watch_fact_t  **wfact_head;
@@ -270,7 +354,7 @@ int fsif_add_fact_watch(char                 *factname,
 
     if (!factname || !callback)
         return -1;
-    
+
     switch(type) {
     case fact_watch_insert:    wfact_head = &wfact_inserts;    break;
     case fact_watch_remove:    wfact_head = &wfact_removes;    break;
@@ -298,7 +382,7 @@ int fsif_add_fact_watch(char                 *factname,
         wentry->id                  = watch_id++;
         wentry->callback.fact_watch = callback;
         wentry->usrdata             = usrdata;
-        
+
         wfact->entries = wentry;
     }
 
@@ -308,11 +392,11 @@ int fsif_add_fact_watch(char                 *factname,
     return wentry->id;
 }
 
-int fsif_add_field_watch(char                  *factname,
-                         fsif_field_t          *selist,
-                         char                  *fldname,
-                         fsif_field_watch_cb_t  callback,
-                         void                  *usrdata)
+static int fsif_add_field_watch(char                  *factname,
+                                fsif_field_t          *selist,
+                                char                  *fldname,
+                                fsif_field_watch_cb_t  callback,
+                                void                  *usrdata)
 {
     watch_fact_t  *wfact;
     watch_entry_t *wentry;
@@ -342,7 +426,7 @@ int fsif_add_field_watch(char                  *factname,
         wentry->fldname              = fldname ? strdup(fldname) : NULL;
         wentry->callback.field_watch = callback;
         wentry->usrdata              = usrdata;
-        
+
         wfact->entries = wentry;
     }
 
@@ -357,7 +441,8 @@ int fsif_add_field_watch(char                  *factname,
  */
 
 
-static OhmFact *find_entry(char *name, fsif_field_t *selist)
+static OhmFact *find_entry(char            *name,
+                           fsif_field_t    *selist)
 {
     OhmFact            *fact;
     GSList             *list;
@@ -372,11 +457,11 @@ static OhmFact *find_entry(char *name, fsif_field_t *selist)
             return fact;
     }
 
-
     return NULL;
 }
 
-static int matching_entry(OhmFact *fact, fsif_field_t *selist)
+static int matching_entry(OhmFact      *fact,
+                          fsif_field_t *selist)
 {
     fsif_field_t       *se;
     char               *strval;
@@ -390,37 +475,37 @@ static int matching_entry(OhmFact *fact, fsif_field_t *selist)
 
     for (se = selist;   se->type != fldtype_invalid;   se++) {
         switch (se->type) {
-                        
+
         case fldtype_string:
             get_field(fact, fldtype_string, se->name, &strval);
             if (strval == NULL || strcmp(strval, se->value.string))
                 return FALSE;
             break;
-                
+
         case fldtype_integer:
             get_field(fact, fldtype_integer, se->name, &intval);
             if (intval != se->value.integer)
                 return FALSE;
             break;
-            
+
         case fldtype_unsignd:
             get_field(fact, fldtype_unsignd, se->name, &unsval);
             if (unsval != se->value.unsignd)
                 return FALSE;
             break;
-            
+
         case fldtype_floating:
             get_field(fact, fldtype_floating, se->name, &fltval);
             if (fltval != se->value.floating)
                 return FALSE;
             break;
-            
+
         case fldtype_time:
             get_field(fact, fldtype_time, se->name, &timeval);
             if (timeval != se->value.time)
                 return FALSE;
             break;
-            
+
         default:
             return FALSE;
         } /* switch type */
@@ -429,12 +514,15 @@ static int matching_entry(OhmFact *fact, fsif_field_t *selist)
     return TRUE;
 }
 
-static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
+static int get_field(OhmFact           *fact,
+                     fsif_fldtype_t     type,
+                     char              *name,
+                     void              *vptr)
 {
     GValue  *gv;
 
     if (!fact || !name || !(gv = ohm_fact_get(fact, name))) {
-        OHM_ERROR("resource: [%s] Cant find field %s",
+        OHM_ERROR("fsif: [%s] Cant find field %s",
                   __FUNCTION__, name?name:"<null>");
         goto return_empty_value;
     }
@@ -484,7 +572,7 @@ static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
     return TRUE;
 
  type_mismatch:
-    OHM_ERROR("resource: [%s] Type mismatch when fetching field '%s'",
+    OHM_ERROR("fsif: [%s] Type mismatch when fetching field '%s'",
               __FUNCTION__,name);
 
  return_empty_value:
@@ -498,9 +586,13 @@ static int get_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
     }
 
     return FALSE;
-} 
+}
 
-static void set_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
+
+static void set_field(OhmFact          *fact,
+                      fsif_fldtype_t    type,
+                      char             *name,
+                      void             *vptr)
 {
     fsif_value_t *v = (fsif_value_t *)vptr;
     GValue       *gv;
@@ -511,13 +603,14 @@ static void set_field(OhmFact *fact, fsif_fldtype_t type,char *name,void *vptr)
     case fldtype_unsignd:   gv = ohm_value_from_unsigned(v->unsignd);   break;
     case fldtype_floating:  gv = ohm_value_from_double(v->floating);    break;
     case fldtype_time:      gv = ohm_value_from_time(v->time);          break;
-    default:          OHM_ERROR("resource: invalid type for %s", name); return;
+    default:          OHM_ERROR("fsif: invalid type for %s", name); return;
     }
 
     ohm_fact_set(fact, name, gv);
 }
 
-static watch_fact_t *find_watch(char *name, watch_type_e type)
+static watch_fact_t *find_watch(char           *name,
+                                watch_type_e    type)
 {
     watch_fact_t *wfact;
 
@@ -557,41 +650,41 @@ static fsif_field_t *copy_selector(fsif_field_t *selist)
     else {
         for (last = selist;  last->type != fldtype_invalid;  last++)
             ;
-        
+
         dim = (last - selist) + 1;
         len = dim * sizeof(fsif_field_t);
-        
+
         if ((cplist = malloc(len)) != NULL) {
             memset(cplist, 0, len);
-            
+
             for (se = selist, cp = cplist;    se < last;    se++, cp++) {
                 cp->type = se->type;
                 cp->name = strdup(se->name);
-                
+
                 switch (se->type) {
-                    
+
                 case fldtype_string:
                     cp->value.string = strdup(se->value.string);
                     break;
-                    
+
                 case fldtype_integer:
                     cp->value.integer = se->value.integer;
                     break;
-                    
+
                 case fldtype_unsignd:
                     cp->value.unsignd = se->value.unsignd;
                     break;
-                    
+
                 case fldtype_floating:
                     cp->value.floating = se->value.floating;
                     break;
-                    
+
                 case fldtype_time:
                     cp->value.time = se->value.time;
                     break;
-                    
+
                 default:
-                    OHM_ERROR("resource: [%s] unsupported type", __FUNCTION__);
+                    OHM_ERROR("fsif: [%s] unsupported type", __FUNCTION__);
                     memset(&cp->value, 0, sizeof(cp->value));
                     break;
                 } /* switch */
@@ -660,7 +753,9 @@ static void  free_string_list(char **list)
 
 #endif
 
-static char *print_selector(fsif_field_t *selist, char *buf, int len)
+static char *print_selector(fsif_field_t   *selist,
+                            char           *buf,
+                            int             len)
 {
     fsif_field_t *se;
     fsif_value_t *v;
@@ -698,7 +793,11 @@ static char *print_selector(fsif_field_t *selist, char *buf, int len)
     return buf;
 }
 
-static char *print_value(fsif_fldtype_t type, void *vptr, char *buf, int len)
+
+static char *print_value(fsif_fldtype_t     type,
+                         void              *vptr,
+                         char              *buf,
+                         int                len)
 {
     fsif_value_t *v = (fsif_value_t *)vptr;
     char         *s;
@@ -718,19 +817,21 @@ static char *print_value(fsif_fldtype_t type, void *vptr, char *buf, int len)
     return s;
 }
 
-static void inserted_cb(void *data, OhmFact *fact)
+
+static void inserted_cb(void    *data,
+                        OhmFact *fact)
 {
     (void)data;
 
     char          *name;
     watch_fact_t  *wfact;
     watch_entry_t *wentry;
-    
+
     if (fact == NULL) {
-        OHM_ERROR("resource: %s() called with null fact pointer",__FUNCTION__);
+        OHM_ERROR("fsif: %s() called with null fact pointer",__FUNCTION__);
         return;
     }
-        
+
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
     if ((wfact = find_watch(name, watch_insert)) != NULL) {
@@ -745,19 +846,21 @@ static void inserted_cb(void *data, OhmFact *fact)
     } /* if find_watch */
 }
 
-static void removed_cb(void *data, OhmFact *fact)
+
+static void removed_cb(void    *data,
+                       OhmFact *fact)
 {
     (void)data;
 
     char          *name;
     watch_fact_t  *wfact;
     watch_entry_t *wentry;
-    
+
     if (fact == NULL) {
-        OHM_ERROR("resource: %s() called with null fact pointer",__FUNCTION__);
+        OHM_ERROR("fsif: %s() called with null fact pointer",__FUNCTION__);
         return;
     }
-        
+
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
     if ((wfact = find_watch(name, watch_remove)) != NULL) {
@@ -772,7 +875,11 @@ static void removed_cb(void *data, OhmFact *fact)
     } /* if find_watch */
 }
 
-static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
+
+static void updated_cb(void    *data,
+                       OhmFact *fact,
+                       GQuark   fldquark,
+                       gpointer value)
 {
     (void)data;
 
@@ -783,12 +890,12 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
     fsif_field_t   fld;
     char           valb[256];
     char          *valstr;
-    
+
     if (fact == NULL) {
-        OHM_ERROR("resource: %s() called with null fact pointer",__FUNCTION__);
+        OHM_ERROR("fsif: %s() called with null fact pointer",__FUNCTION__);
         return;
     }
-        
+
     name = (char *)ohm_structure_get_name(OHM_STRUCTURE(fact));
 
     if (value != NULL && (wfact = find_watch(name, watch_update)) != NULL) {
@@ -799,14 +906,14 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
 
             if (matching_entry(fact, wentry->selist) &&
                 (!wentry->fldname || !strcmp(fld.name, wentry->fldname))) {
-                
+
                 switch (G_VALUE_TYPE(gval)) {
-                    
+
                 case G_TYPE_STRING:
                     fld.type = fldtype_string;
                     fld.value.string = (char *)g_value_get_string(gval);
                     break;
-                    
+
                 case G_TYPE_LONG:
                     fld.type = fldtype_integer;
                     fld.value.integer = g_value_get_long(gval);
@@ -816,43 +923,46 @@ static void updated_cb(void *data,OhmFact *fact,GQuark fldquark,gpointer value)
                     fld.type = fldtype_integer;
                     fld.value.integer = g_value_get_int(gval);
                     break;
-                    
+
                 case G_TYPE_ULONG:
                     fld.type = fldtype_unsignd;
                     fld.value.unsignd = g_value_get_ulong(gval);
                     break;
-                    
+
                 case G_TYPE_DOUBLE:
                     fld.type = fldtype_floating;
                     fld.value.floating = g_value_get_double(gval);
                     break;
-                    
+
                 case G_TYPE_UINT64:
                     fld.type = fldtype_time;
                     fld.value.time = g_value_get_uint64(gval);
                     break;
-                    
+
                 default:
-                    OHM_ERROR("resource: [%s] Unsupported data type (%d) "
+                    OHM_ERROR("fsif: [%s] Unsupported data type (%d) "
                               "for field '%s'",
                               __FUNCTION__, G_VALUE_TYPE(gval), fld.name);
                     return;
                 }
-                
+
                 valstr = print_value(fld.type, (void *)&fld.value,
                                      valb, sizeof(valb)); 
                 OHM_DEBUG(DBG_FS, "field watch point: field '%s:%s' "
                           "changed to '%s'", name, fld.name, valstr);
 
                 wentry->callback.field_watch(fact, name, &fld,wentry->usrdata);
-                
+
                 return;
             } /* if matching_entry */
         } /* for */
     } /* if find_watch */
 }
 
-static char *time_str(unsigned long long t, char *buf , int len)
+
+static char *time_str(unsigned long long    t,
+                      char                 *buf,
+                      int                   len)
 {
     time_t       sec;
     unsigned int ms;
@@ -869,7 +979,151 @@ static char *time_str(unsigned long long t, char *buf , int len)
     return buf;
 }
 
-/* 
+
+/*****************************************************************************
+ *                           *** public plugin API ***                       *
+ *****************************************************************************/
+
+
+/****************************
+ * add_factstore_entry
+ ****************************/
+OHM_EXPORTABLE(int, add_factstore_entry, (char *name, fsif_field_t *fldlist))
+{
+    return fsif_add_factstore_entry(name, fldlist);
+}
+
+
+/****************************
+ * delete_factstore_entry
+ ****************************/
+OHM_EXPORTABLE(int, delete_factstore_entry, (char *name, fsif_field_t *selist))
+{
+    return fsif_delete_factstore_entry(name, selist);
+}
+
+
+/****************************
+ * update_factstore_entry
+ ****************************/
+OHM_EXPORTABLE(int, update_factstore_entry, (char *name,
+                                             fsif_field_t *selist,
+                                             fsif_field_t *fldlist))
+{
+    return fsif_update_factstore_entry(name, selist, fldlist);
+}
+
+
+/****************************
+ * destroy_factstore_entry
+ ****************************/
+OHM_EXPORTABLE(int, destroy_factstore_entry, (fsif_entry_t *fact))
+{
+    return fsif_destroy_factstore_entry(fact);
+}
+
+
+/****************************
+ * get_entry
+ ****************************/
+OHM_EXPORTABLE(fsif_entry_t *, get_entry, (char           *name,
+                                           fsif_field_t   *selist))
+{
+    return fsif_get_entry(name, selist);
+}
+
+/****************************
+ * get_field_by_entry
+ ****************************/
+OHM_EXPORTABLE(void, get_field_by_entry, (fsif_entry_t *entry,
+                                               fsif_fldtype_t type,
+                                               char *name,
+                                               void *vptr))
+{
+    fsif_get_field_by_entry(entry, type, name, vptr);
+}
+
+
+/****************************
+ * get_field_by_name
+ ****************************/
+OHM_EXPORTABLE(int, get_field_by_name, (const char *name,
+                                        fsif_fldtype_t type,
+                                        char *field,
+                                        void *vptr))
+{
+    return fsif_get_field_by_name(name, type, field, vptr);
+}
+
+
+/****************************
+ * get_entries_by_name
+ ****************************/
+OHM_EXPORTABLE(GSList*, get_entries_by_name, (const char *name))
+{
+    return fsif_get_entries_by_name(name);
+}
+
+
+OHM_EXPORTABLE(void, set_field_by_entry, (fsif_entry_t *entry,
+                                          fsif_fldtype_t type,
+                                          char *name,
+                                          void *vptr))
+{
+    fsif_set_field_by_entry(entry, type, name, vptr);
+}
+
+
+/****************************
+ * add_fact_watch
+ ****************************/
+OHM_EXPORTABLE(int, add_fact_watch, (char *factname,
+                                     fsif_fact_watch_e type,
+                                     fsif_fact_watch_cb_t callback,
+                                     void *usrdata))
+{
+    return fsif_add_fact_watch(factname, type, callback, usrdata);
+}
+
+
+/****************************
+ * add_field_watch
+ ****************************/
+OHM_EXPORTABLE(int, add_field_watch, (char                  *factname,
+                                      fsif_field_t          *selist,
+                                      char                  *fldname,
+                                      fsif_field_watch_cb_t  callback,
+                                      void                  *usrdata))
+{
+    return fsif_add_field_watch(factname, selist, fldname, callback, usrdata);
+}
+
+
+/*****************************************************************************
+ *                            *** OHM plugin glue ***                        *
+ *****************************************************************************/
+
+OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
+                       PLUGIN_VERSION,
+                       "juho.hamalainen@jolla.com",
+                       OHM_LICENSE_LGPL, /* OHM_LICENSE_LGPL */
+                       plugin_init, plugin_exit, NULL);
+
+OHM_PLUGIN_PROVIDES_METHODS(PLUGIN_PREFIX, 11,
+                            OHM_EXPORT(add_factstore_entry,     "add_factstore_entry"),
+                            OHM_EXPORT(delete_factstore_entry,  "delete_factstore_entry"),
+                            OHM_EXPORT(update_factstore_entry,  "update_factstore_entry"),
+                            OHM_EXPORT(destroy_factstore_entry, "destroy_factstore_entry"),
+                            OHM_EXPORT(get_entry,               "get_entry"),
+                            OHM_EXPORT(get_entries_by_name,     "get_entries_by_name"),
+                            OHM_EXPORT(get_field_by_entry,      "get_field_by_entry"),
+                            OHM_EXPORT(set_field_by_entry,      "set_field_by_entry"),
+                            OHM_EXPORT(get_field_by_name,       "get_field_by_name"),
+                            OHM_EXPORT(add_fact_watch,          "add_fact_watch"),
+                            OHM_EXPORT(add_field_watch,         "add_field_watch")
+);
+
+/*
  * Local Variables:
  * c-basic-offset: 4
  * indent-tabs-mode: nil

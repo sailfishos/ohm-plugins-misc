@@ -18,6 +18,8 @@ USA.
 *************************************************************************/
 
 
+#include "playback.h"
+
 /*! \defgroup pubif Public Interfaces */
 
 typedef struct {

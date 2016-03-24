@@ -1,5 +1,5 @@
 /*************************************************************************
-Copyright (C) 2010 Nokia Corporation.
+Copyright (C) 2016 Jolla Ltd.
 
 These OHM Modules are free software; you can redistribute
 it and/or modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
 USA.
 *************************************************************************/
 
+#define PLUGIN_PREFIX   route
+#define PLUGIN_NAME    "route"
+#define PLUGIN_VERSION "0.0.1"
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,13 +32,10 @@ USA.
 #include "plugin.h"
 #include "dbusif.h"
 #include "dresif.h"
-#include "privacy.h"
-#include "mute.h"
-#include "bluetooth.h"
-#include "audio.h"
+#include "route.h"
 #include "../fsif/fsif.h"
 
-int DBG_PRIVACY, DBG_MUTE, DBG_BT, DBG_AUDIO, DBG_DBUS, DBG_FS, DBG_DRES;
+int DBG_ROUTE, DBG_DBUS, DBG_DRES;
 
 OHM_IMPORTABLE(int, add_field_watch, (char                  *factname,
                                       fsif_field_t          *selist,
@@ -57,20 +58,23 @@ OHM_IMPORTABLE(void, get_field_by_entry, (fsif_entry_t   *entry,
                                           char           *name,
                                           void           *vptr));
 
-OHM_PLUGIN_REQUIRES_METHODS(media, 4,
+OHM_IMPORTABLE(fsif_entry_t *, get_entry, (char           *name,
+                                           fsif_field_t   *selist));
+
+OHM_IMPORTABLE(GSList *, get_entries_by_name, (char       *name));
+
+OHM_PLUGIN_REQUIRES_METHODS(route, 6,
     OHM_IMPORT("fsif.add_field_watch", add_field_watch),
     OHM_IMPORT("fsif.add_fact_watch", add_fact_watch),
     OHM_IMPORT("fsif.get_field_by_name", get_field_by_name),
-    OHM_IMPORT("fsif.get_field_by_entry", get_field_by_entry)
+    OHM_IMPORT("fsif.get_field_by_entry", get_field_by_entry),
+    OHM_IMPORT("fsif.get_entry", get_entry),
+    OHM_IMPORT("fsif.get_entries_by_name", get_entries_by_name)
 );
 
-OHM_DEBUG_PLUGIN(media,
-    OHM_DEBUG_FLAG("privacy"  , "privacy override"   , &DBG_PRIVACY ),
-    OHM_DEBUG_FLAG("mute"     , "mute"               , &DBG_MUTE    ),
-    OHM_DEBUG_FLAG("bluetooth", "bluetooth override" , &DBG_BT      ),
-    OHM_DEBUG_FLAG("audio"    , "audio streams"      , &DBG_AUDIO   ),
+OHM_DEBUG_PLUGIN(route,
+    OHM_DEBUG_FLAG("route"    , "audio routes"       , &DBG_ROUTE   ),
     OHM_DEBUG_FLAG("dbus"     , "D-Bus interface"    , &DBG_DBUS    ),
-    OHM_DEBUG_FLAG("fact"     , "factstore interface", &DBG_FS      ),
     OHM_DEBUG_FLAG("dres"     , "dres interface"     , &DBG_DRES    )
 );
 
@@ -107,56 +111,46 @@ void fsif_get_field_by_entry(fsif_entry_t   *entry,
     get_field_by_entry(entry, type, name, vptr);
 }
 
+fsif_entry_t *fsif_get_entry(char           *name,
+                             fsif_field_t   *selist)
+{
+    return get_entry(name, selist);
+}
+
+GSList *fsif_get_entries_by_name(char       *name)
+{
+    return get_entries_by_name(name);
+}
+
 static void plugin_init(OhmPlugin *plugin)
 {
-    OHM_DEBUG_INIT(media);
+    OHM_DEBUG_INIT(route);
 
     dbusif_init(plugin);
     dresif_init(plugin);
-    privacy_init(plugin);
-    mute_init(plugin);
-    bluetooth_init(plugin);
-    audio_init(plugin);
-
-#if 0
-    DBG_PRIVACY = DBG_MUTE = DBG_BT = DBG_AUDIO = TRUE;
-    DBG_DBUS = DBG_FS = DBG_DRES = TRUE;
-#endif
+    route_init(plugin);
 }
 
 static void plugin_destroy(OhmPlugin *plugin)
 {
+    route_exit(plugin);
     dbusif_exit(plugin);
 }
 
 
 
 OHM_PLUGIN_DESCRIPTION(
-    "OHM media manager",              /* description */
-    "0.0.1",                          /* version */
-    "janos.f.kovacs@nokia.com",       /* author */
-    OHM_LICENSE_LGPL,             /* license */
-    plugin_init,                      /* initalize */
-    plugin_destroy,                   /* destroy */
-    NULL                              /* notify */
+    "OHM route manager",            /* description */
+    "0.0.1",                        /* version */
+    "juho.hamalainen@jolla.com",    /* author */
+    OHM_LICENSE_LGPL,               /* license */
+    plugin_init,                    /* initalize */
+    plugin_destroy,                 /* destroy */
+    NULL                            /* notify */
 );
 
 OHM_PLUGIN_PROVIDES(
-    "maemo.media"
+    "nemomobile.route"
 );
 
-OHM_PLUGIN_DBUS_SIGNALS(
-    { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_INFO_SIGNAL,
-      NULL, dbusif_info, NULL },
-    { NULL, DBUS_POLICY_DECISION_INTERFACE, DBUS_POLICY_NEW_SESSION_SIGNAL,
-      NULL, dbusif_session_notification, NULL }
-);
-
-
-/* 
- * Local Variables:
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- * vim:set expandtab shiftwidth=4:
- */
+OHM_PLUGIN_REQUIRES("dres");
