@@ -3651,6 +3651,25 @@ call_hold(call_t *call, const char *action, event_t *event)
 
 }
 
+/********************
+ * call_held
+ ********************/
+static int
+call_held(call_t *call, const char *action, event_t *event)
+{
+    (void)action;
+
+    OHM_INFO("%s HELD %s.", short_path(call->path),
+             state_name(event->any.state));
+
+    call->state = event->any.state;
+    if (IS_CONF_MEMBER(call)) {
+        call->conf_state = call->state;
+    }
+    policy_call_update(call, UPDATE_STATE);
+    run_hook(HOOK_CALL_ONHOLD);
+    return 0;
+}
 
 /********************
  * tp_start_dtmf
@@ -3734,23 +3753,6 @@ call_activate(call_t *call, const char *action, event_t *event)
     OHM_INFO("ACTIVATE (%s) %s.", action, short_path(call->path));
     
     if (call == event->any.call && event->any.state == STATE_ACTIVE) {        
-        if (event->type == EVENT_CALL_ACCEPT_REQUEST) {
-            if (tp_accept(call) != 0) {
-                accept_call_reply(event->call.req, "failed to accept call");
-                return EINVAL;
-            }
-            else
-                accept_call_reply(event->call.req, NULL);
-        }
-        else if (event->type == EVENT_CALL_ACTIVATE_REQUEST) {
-            if (tp_hold(call, FALSE) != 0) {
-                hold_call_reply(event->call.req, "failed to unhold call");
-                return EINVAL;
-            }
-            else
-                hold_call_reply(event->call.req, NULL);
-        }
-    
         call->state     = STATE_ACTIVE;
         call->order     = 0;
         was_connected   = call->connected;
@@ -3852,6 +3854,7 @@ call_action(call_t *call, const char *action, event_t *event)
         { "active"         , call_activate   },
         { "cmtautoactivate", call_activate   },
         { "created"        , call_create     },
+        { "held"           , call_held       },
         { NULL             , NULL }
     }, *h;
     
