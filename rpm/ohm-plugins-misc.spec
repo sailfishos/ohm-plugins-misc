@@ -12,7 +12,6 @@ Requires:   systemd-user-session-targets
 BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:  pkgconfig(dbus-glib-1)
 BuildRequires:  pkgconfig(check)
-BuildRequires:  pkgconfig(gconf-2.0)
 BuildRequires:  pkgconfig(bluez)
 BuildRequires:  pkgconfig(libresource)
 BuildRequires:  pkgconfig(ohm)
