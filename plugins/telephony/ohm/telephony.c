@@ -1706,6 +1706,17 @@ hold_state_changed(DBusConnection *c, DBusMessage *msg, void *data)
             (state == TP_HELD ? STATE_ON_HOLD : STATE_ACTIVE);
         OHM_INFO("Updated state of conference member %s to %s.",
                  short_path(event.path), state_name(event.call->conf_state));
+
+        if (event.call->parent) {
+            /*
+             * Ofono doesn't send hold state changes for conference calls.
+             * Update it to match it's child.
+             */
+            OHM_INFO("Update conference call state to match child %s to %s",
+                     short_path(event.call->parent->path), state_name(event.call->conf_state));
+            event.call->parent->state = event.call->conf_state;
+        }
+
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     
@@ -3077,6 +3088,9 @@ call_register(call_type_t type, const char *path, const char *name,
 
     if (has_interface(interfaces, TP_CONFERENCE))
         conference = TRUE;
+
+    if (has_interface(interfaces, TP_CHANNEL_CONF))
+        conference = TRUE;
     
     if (conference)
         call->parent = call;
@@ -3119,7 +3133,7 @@ call_register(call_type_t type, const char *path, const char *name,
         call->holdable = FALSE;
 #endif
 
-    if (!audio && !video)
+    if (!conference && !audio && !video)
         call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
                                            CALL_TIMEOUT,
                                            call_timeout, g_strdup(call->path),
