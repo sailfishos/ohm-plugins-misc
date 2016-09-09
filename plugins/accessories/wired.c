@@ -553,7 +553,7 @@ eci_init(input_dev_t *dev)
         add_event_handler(dev);
         return TRUE;
     } else {
-        OHM_ERROR("accessories: failed to open ECI detection device");
+        OHM_INFO("accessories: ECI detection device not found.");
         return FALSE;
     }
 }
