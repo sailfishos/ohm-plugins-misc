@@ -1,5 +1,6 @@
 /*************************************************************************
 Copyright (C) 2010 Nokia Corporation.
+              2016 Jolla Ltd.
 
 These OHM Modules are free software; you can redistribute
 it and/or modify it under the terms of the GNU Lesser General Public
@@ -50,6 +51,18 @@ USA.
 
 
 #define BLUEZ_DBUS_NAME          "org.bluez"
+
+static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
+static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
+static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg, void *data);
+static DBusHandlerResult audio_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
+
+static ohm_dbus_signal_t bluez4_signals[4] = {
+     {NULL, "org.bluez.AudioSink", "PropertyChanged", NULL, a2dp_property_changed, NULL},
+     {NULL, "org.bluez.Headset", "PropertyChanged", NULL, hsp_property_changed, NULL},
+     {NULL, "org.bluez.Adapter", "DeviceRemoved", NULL, bt_device_removed, NULL},
+     {NULL, "org.bluez.Audio", "PropertyChanged", NULL, audio_property_changed, NULL}
+};
 
 static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_data);
 static void get_properties_cb (DBusPendingCall *pending, void *user_data);
@@ -236,7 +249,7 @@ static gboolean disconnect_device(OhmFact *fact, const gchar *type)
     return FALSE;
 }
 
-DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg, void *data)
+static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg, void *data)
 {
 
     /* This is called apparently anytime a device does not tell that it
@@ -481,7 +494,7 @@ static void bt_property_changed(DBusMessage * msg, gchar *type)
     return;
 }
 
-DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
+static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
 {
     (void) data;
     (void) c;
@@ -490,7 +503,7 @@ DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, vo
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
+static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
 {
     (void) data;
     (void) c;
@@ -499,7 +512,7 @@ DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, voi
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-DBusHandlerResult audio_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
+static DBusHandlerResult audio_property_changed(DBusConnection *c, DBusMessage * msg, void *data)
 {
     (void) data;
     (void) c;
@@ -681,12 +694,23 @@ static gboolean bt_noop(const gchar *type,
     return FALSE;
 }
 
-gboolean bluetooth_init(OhmPlugin *plugin, int flag_bt)
+gboolean bluetooth_bluez4_init(OhmPlugin *plugin, int flag_bt)
 {
     (void) plugin;
     int i, j;
+    unsigned int k;
 
     DBG_BT = flag_bt;
+
+    OHM_INFO("accessories: Initializing bluez4 bluetooth accessory.");
+
+    for (k = 0; k < sizeof(bluez4_signals) / sizeof(ohm_dbus_signal_t); k++)
+        ohm_dbus_add_signal(bluez4_signals[k].sender,
+                            bluez4_signals[k].interface,
+                            bluez4_signals[k].signal,
+                            bluez4_signals[k].path,
+                            bluez4_signals[k].handler,
+                            bluez4_signals[k].data);
 
     if ((sys_conn = dbus_bus_get(DBUS_BUS_SYSTEM, NULL)) == NULL) {
         OHM_ERROR("Failed to get connection to system D-BUS.");
@@ -722,9 +746,19 @@ gboolean bluetooth_init(OhmPlugin *plugin, int flag_bt)
 
 }
 
-gboolean bluetooth_deinit(OhmPlugin *plugin)
+gboolean bluetooth_bluez4_deinit(OhmPlugin *plugin)
 {
     (void) plugin;
+
+    unsigned int k;
+
+    for (k = 0; k < sizeof(bluez4_signals) / sizeof(ohm_dbus_signal_t); k++)
+        ohm_dbus_del_signal(bluez4_signals[k].sender,
+                            bluez4_signals[k].interface,
+                            bluez4_signals[k].signal,
+                            bluez4_signals[k].path,
+                            bluez4_signals[k].handler,
+                            bluez4_signals[k].data);
 
     if (sys_conn) {
         watch_dbus_addr(BLUEZ_DBUS_NAME, FALSE, bluez_change, NULL);
