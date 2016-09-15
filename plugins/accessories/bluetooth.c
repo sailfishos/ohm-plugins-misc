@@ -55,6 +55,7 @@ gboolean bluetooth_init(OhmPlugin *plugin, int flag_bt)
 
     switch (bluez_version) {
         case 4: return bluetooth_bluez4_init(plugin, flag_bt);
+        case 5: return bluetooth_bluez5_init(plugin, flag_bt);
         default:
             OHM_ERROR("accessories: No implementation for BlueZ version %d.", bluez_version);
             bluez_version = -1;
@@ -66,6 +67,7 @@ gboolean bluetooth_deinit(OhmPlugin *plugin)
 {
     switch (bluez_version) {
         case 4: return bluetooth_bluez4_deinit(plugin);
+        case 5: return bluetooth_bluez5_deinit(plugin);
         default:
             return FALSE;
     }

@@ -18,14 +18,26 @@ USA.
 *************************************************************************/
 
 
-#ifndef __BLUETOOTH_H__
-#define __BLUETOOTH_H__
+/* This file contains the logic for following Bluez audio device state. */
 
-#include <ohm/ohm-plugin.h>
+#include "accessories.h"
 
-gboolean bluetooth_bluez4_init(OhmPlugin *plugin, int flag_bt);
-gboolean bluetooth_bluez4_deinit(OhmPlugin *plugin);
-gboolean bluetooth_bluez5_init(OhmPlugin *plugin, int flag_bt);
-gboolean bluetooth_bluez5_deinit(OhmPlugin *plugin);
+static int DBG_BT;
 
-#endif
+gboolean bluetooth_bluez5_init(OhmPlugin *plugin, int flag_bt)
+{
+    (void) plugin;
+
+    DBG_BT = flag_bt;
+
+    OHM_INFO("accessories: Initializing bluez5 bluetooth accessory.");
+
+    return TRUE;
+}
+
+gboolean bluetooth_bluez5_deinit(OhmPlugin *plugin)
+{
+    (void) plugin;
+
+    return TRUE;
+}

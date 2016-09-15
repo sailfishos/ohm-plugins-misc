@@ -3,6 +3,7 @@ plugin_LTLIBRARIES = libohm_accessories.la
 libohm_accessories_la_SOURCES = accessories.c       \
                                 bluetooth.c         \
                                 bluetooth-bluez4.c  \
+                                bluetooth-bluez5.c  \
                                 wired.c             \
                                 gconf-triggers.c
 libohm_accessories_la_LIBADD = @OHM_PLUGIN_LIBS@
