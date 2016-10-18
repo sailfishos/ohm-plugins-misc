@@ -12,7 +12,6 @@ Requires:   systemd-user-session-targets
 BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:  pkgconfig(dbus-glib-1)
 BuildRequires:  pkgconfig(check)
-BuildRequires:  pkgconfig(bluez)
 BuildRequires:  pkgconfig(libresource)
 BuildRequires:  pkgconfig(ohm)
 BuildRequires:  pkgconfig(libdres)
@@ -29,17 +28,6 @@ Group:      Development/Tools
 
 %description -n ohm-plugin-console
 OHM console plugin for debug interface.
-
-
-%package -n ohm-plugin-fmradio
-Summary:    FM radio enforcement point for OHM
-Group:      System/Resource Policy
-Requires:   %{name} = %{version}-%{release}
-Requires:   ohm
-
-%description -n ohm-plugin-fmradio
-OHM fmradio plugin provides policy enforcement point for |
-FM Radio.
 
 
 %package -n ohm-plugin-dspep
@@ -134,7 +122,8 @@ echo "%{version}" > .tarball-version
 %configure --disable-static \
     --enable-telephony \
     --disable-notification \
-    --disable-videoep
+    --disable-videoep \
+    --disable-fmradio
 
 make
 
@@ -181,10 +170,6 @@ fi
 %defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_console.so
 %doc COPYING AUTHORS
-
-%files -n ohm-plugin-fmradio
-%defattr(-,root,root,-)
-%{_libdir}/ohm/libohm_fmradio.so
 
 %files -n ohm-plugin-dspep
 %defattr(-,root,root,-)
