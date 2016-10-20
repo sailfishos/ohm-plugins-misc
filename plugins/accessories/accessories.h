@@ -53,10 +53,3 @@ gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[]
 /* bluetooth */
 gboolean bluetooth_init(OhmPlugin *, int);
 gboolean bluetooth_deinit(OhmPlugin *);
-
-/* callbacks */
-DBusHandlerResult check_bluez(DBusConnection * c, DBusMessage * msg, void *user_data);
-DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg, void *data);
-DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
-DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
-DBusHandlerResult audio_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
