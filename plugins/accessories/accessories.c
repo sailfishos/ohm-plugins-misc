@@ -67,7 +67,7 @@ static void plugin_init(OhmPlugin *plugin)
 static void plugin_exit(OhmPlugin *plugin)
 {
     /* bluetooth*/
-    bluetooth_deinit(plugin);
+    bluetooth_deinit();
     gconf_triggers_exit(plugin);
 
     plugin_is_real = FALSE;
