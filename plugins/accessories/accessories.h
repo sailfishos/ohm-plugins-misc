@@ -51,5 +51,5 @@ int dres_all(void);
 gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[]);
 
 /* bluetooth */
-gboolean bluetooth_init(OhmPlugin *, int);
-gboolean bluetooth_deinit(OhmPlugin *);
+void bluetooth_init(OhmPlugin *, int);
+void bluetooth_deinit();

@@ -1,6 +1,6 @@
 /*************************************************************************
 Copyright (C) 2010 Nokia Corporation.
-              2016 Jolla Ltd.
+              2016-2017 Jolla Ltd.
 
 These OHM Modules are free software; you can redistribute
 it and/or modify it under the terms of the GNU Lesser General Public
@@ -22,22 +22,12 @@ USA.
 /* This file contains the logic for following Bluez audio device state. */
 
 #include "accessories.h"
+#include "bluetooth.h"
+#include "bluetooth-common.h"
 
-/* TODO: these must be in some bluez headers */
-#define HSP_UUID  "00001108-0000-1000-8000-00805f9b34fb"
-#define HFP_UUID  "0000111e-0000-1000-8000-00805f9b34fb"
-#define A2DP_UUID "0000110b-0000-1000-8000-00805f9b34fb"
-
-/* TODO: also these*/
 #define BT_INTERFACE_DEVICE "org.bluez.Device"
 #define BT_INTERFACE_A2DP   "org.bluez.AudioSink"
 #define BT_INTERFACE_HSP    "org.bluez.Headset"
-
-#define BT_TYPE_A2DP "bta2dp"
-#define BT_TYPE_HSP  "bthsp"
-#define BT_TYPE_AUDIO "audio"
-
-#define BT_DEVICE "com.nokia.policy.connected_bt_device"
 
 #define BT_STATE_NONE_S          "none"
 #define BT_STATE_CONNECTING_S    "connecting"
@@ -45,12 +35,9 @@ USA.
 #define BT_STATE_PLAYING_S       "playing"
 #define BT_STATE_DISCONNECTED_S  "disconnected"
 
-#define DBUS_ADMIN_INTERFACE       "org.freedesktop.DBus"
-#define DBUS_ADMIN_PATH            "/org/freedesktop/DBus"
-#define DBUS_NAME_OWNER_CHANGED    "NameOwnerChanged"
+#define BT_DEVICE                "com.nokia.policy.connected_bt_device"
+#define BT_DEVICE_PATH           "bt_path"
 
-
-#define BLUEZ_DBUS_NAME          "org.bluez"
 
 static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
 static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
@@ -72,12 +59,6 @@ static gboolean get_properties(const gchar *device_path,
         const gchar *interface,
         DBusPendingCallNotifyFunction cb);
 
-static int watch_dbus_addr(const char *addr, int watchit,
-                           DBusHandlerResult (*filter)(DBusConnection *,
-                                                       DBusMessage *, void *),
-                           void *user_data);
-static DBusHandlerResult bluez_change(DBusConnection *c,
-                                      DBusMessage *msg, void *data);
 static DBusConnection *sys_conn;
 
 enum bt_state { BT_STATE_NONE,
@@ -136,7 +117,7 @@ static OhmFact * bt_get_connected(const gchar *path)
 
     for (e = list; e != NULL; e = g_slist_next(e)) {
         OhmFact *tmp = (OhmFact *) e->data;
-        GValue *gval = ohm_fact_get(tmp, "bt_path");
+        GValue *gval = ohm_fact_get(tmp, BT_DEVICE_PATH);
         if (gval && G_VALUE_TYPE(gval) == G_TYPE_STRING
                 && strcmp(path, g_value_get_string(gval)) == 0) {
             ret = e->data;
@@ -376,7 +357,7 @@ static gboolean bt_state_changed(const gchar *type,
              * remember the device */
 
             gval = ohm_value_from_string(path);
-            ohm_fact_set(bt_connected, "bt_path", gval);
+            ohm_fact_set(bt_connected, BT_DEVICE_PATH, gval);
 
             ohm_fact_store_insert(fs, bt_connected);
         }
@@ -694,13 +675,13 @@ static gboolean bt_noop(const gchar *type,
     return FALSE;
 }
 
-gboolean bluetooth_bluez4_init(OhmPlugin *plugin, int flag_bt)
+void bluetooth_bluez4_init(DBusConnection *connection, int flag_bt)
 {
-    (void) plugin;
     int i, j;
     unsigned int k;
 
     DBG_BT = flag_bt;
+    sys_conn = dbus_connection_ref(connection);
 
     OHM_INFO("accessories: Initializing bluez4 bluetooth accessory.");
 
@@ -711,13 +692,6 @@ gboolean bluetooth_bluez4_init(OhmPlugin *plugin, int flag_bt)
                             bluez4_signals[k].path,
                             bluez4_signals[k].handler,
                             bluez4_signals[k].data);
-
-    if ((sys_conn = dbus_bus_get(DBUS_BUS_SYSTEM, NULL)) == NULL) {
-        OHM_ERROR("Failed to get connection to system D-BUS.");
-        return FALSE;
-    }
-
-    watch_dbus_addr(BLUEZ_DBUS_NAME, TRUE, bluez_change, NULL);
 
     /* initialize the state transtitions */
 
@@ -742,14 +716,12 @@ gboolean bluetooth_bluez4_init(OhmPlugin *plugin, int flag_bt)
 
     /* start the D-Bus method chain that queries the already
      * connected BT audio devices */
-    return get_default_adapter();
+    get_default_adapter();
 
 }
 
-gboolean bluetooth_bluez4_deinit(OhmPlugin *plugin)
+void bluetooth_bluez4_deinit()
 {
-    (void) plugin;
-
     unsigned int k;
 
     for (k = 0; k < sizeof(bluez4_signals) / sizeof(ohm_dbus_signal_t); k++)
@@ -761,16 +733,12 @@ gboolean bluetooth_bluez4_deinit(OhmPlugin *plugin)
                             bluez4_signals[k].data);
 
     if (sys_conn) {
-        watch_dbus_addr(BLUEZ_DBUS_NAME, FALSE, bluez_change, NULL);
-        
         dbus_connection_unref(sys_conn);
         sys_conn = NULL;
     }
 
     if (bt_delete_all_facts())
         dres_all();
-
-    return TRUE;
 }
 
 static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_data)
@@ -843,10 +811,10 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
                     if (!uuid)
                         break;
 
-                    else if (strcmp(uuid, HFP_UUID) == 0) {
+                    else if (strcmp(uuid, BLUEZ_UUID_HFP_HF) == 0) {
                         is_hfp = TRUE;
                     }
-                    else if (strcmp(uuid, HSP_UUID) == 0) {
+                    else if (strcmp(uuid, BLUEZ_UUID_HSP_HS) == 0) {
                         is_hsp = TRUE;
                     }
                     dbus_message_iter_next(&uuid_iter);
@@ -978,13 +946,13 @@ static void get_properties_cb (DBusPendingCall *pending, void *user_data)
                     if (!uuid)
                         break;
 
-                    if (strcmp(uuid, HSP_UUID) == 0) {
+                    if (strcmp(uuid, BLUEZ_UUID_HSP_HS) == 0) {
                         is_hsp = TRUE;
                     }
-                    else if (strcmp(uuid, HFP_UUID) == 0) {
+                    else if (strcmp(uuid, BLUEZ_UUID_HFP_HF) == 0) {
                         is_hfp = TRUE;
                     }
-                    else if (strcmp(uuid, A2DP_UUID) == 0) {
+                    else if (strcmp(uuid, BLUEZ_UUID_A2DP_SINK) == 0) {
                         is_a2dp = TRUE;
                     }
                     dbus_message_iter_next(&uuid_iter);
@@ -1214,46 +1182,54 @@ static void get_default_adapter_cb (DBusPendingCall *pending, void *user_data)
 {
     DBusMessage *reply = NULL;
     gchar *result = NULL;
+    int state_reply = BLUEZ_IMPLEMENTATION_FAIL;
     OHM_DEBUG(DBG_BT, "> get_default_adapter_cb\n");
 
     (void) user_data;
 
     if (pending == NULL) 
-        goto error;
+        goto done;
 
     reply = dbus_pending_call_steal_reply(pending);
     dbus_pending_call_unref(pending);
     pending = NULL;
 
     if (reply == NULL) {
-        goto error;
+        goto done;
     }
 
+    if (dbus_message_is_error(reply, DBUS_ERROR_UNKNOWN_METHOD)) {
+        OHM_INFO("accessories: BlueZ4 DBus org.bluez.Adapter.ListDevices unavailable.");
+        state_reply = BLUEZ_IMPLEMENTATION_UNKNOWN;
+        goto done;
+    }
+
+
     if (dbus_message_get_type (reply) == DBUS_MESSAGE_TYPE_ERROR) {
-        goto error;
+        goto done;
     }
 
     if (!dbus_message_get_args (reply, NULL,
                 DBUS_TYPE_OBJECT_PATH, &result,
                 DBUS_TYPE_INVALID)) {
-        goto error;
+        goto done;
     }
 
     /* ok, then ask the adapter (whose object path we now know) about
      * the listed devices */
 
     if (!get_device_list(result)) {
-        goto error;
+        goto done;
     }
 
-    return;
+    state_reply = BLUEZ_IMPLEMENTATION_OK;
 
-error:
+done:
 
     if (reply)
         dbus_message_unref (reply);
 
-    return;
+    bluetooth_bluez_init_result(state_reply);
 }
 
 
@@ -1308,87 +1284,12 @@ error:
 }
 
 
-static int watch_dbus_addr(const char *addr, int watchit,
-                           DBusHandlerResult (*filter)(DBusConnection *,
-                                                       DBusMessage *, void *),
-                           void *user_data)
+void bluetooth_bluez4_daemon_state(int running)
 {
-    char      match[1024];
-    DBusError err;
-    
-    snprintf(match, sizeof(match),
-             "type='signal',"
-             "sender='%s',interface='%s',member='%s',path='%s',"
-             "arg0='%s'",
-             DBUS_ADMIN_INTERFACE, DBUS_ADMIN_INTERFACE,
-             DBUS_NAME_OWNER_CHANGED, DBUS_ADMIN_PATH,
-             addr);
-    
-    if (filter) {
-        if (watchit) {
-            if (!dbus_connection_add_filter(sys_conn, filter, user_data,NULL)) {
-                OHM_ERROR("Failed to install dbus filter %p.", filter);
-                return FALSE;
-            }
-        }
-        else
-            dbus_connection_remove_filter(sys_conn, filter, user_data);
-    }
-    
-    
-    /*
-     * Notes:
-     *   We block when adding filters, to minimize (= eliminate ?) the time
-     *   window for the client to crash after it has let us know about itself
-     *   but before we managed to install the filter. According to the docs
-     *   we do not re-enter the main loop and all other messages than the
-     *   reply to AddMatch will get queued and processed once we're back in the
-     *   main loop. On the watch removal path we do not care about errors and
-     *   we do not want to block either.
-     */
-
-    if (watchit) {
-        dbus_error_init(&err);
-        dbus_bus_add_match(sys_conn, match, &err);
-
-        if (dbus_error_is_set(&err)) {
-            OHM_ERROR("Can't add match \"%s\": %s", match, err.message);
-            dbus_error_free(&err);
-            return FALSE;
-        }
-    }
-    else
-        dbus_bus_remove_match(sys_conn, match, NULL);
-    
-    return TRUE;
-}
-
-
-static DBusHandlerResult bluez_change(DBusConnection *c,
-                                      DBusMessage *msg, void *data)
-{
-    char *name, *before, *after;
-
-    (void)c;
-    (void)data;
-
-    if (!dbus_message_get_args(msg, NULL,
-                               DBUS_TYPE_STRING, &name,
-                               DBUS_TYPE_STRING, &before,
-                               DBUS_TYPE_STRING, &after,
-                               DBUS_TYPE_INVALID) ||
-        strcmp(name, BLUEZ_DBUS_NAME))
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    
-    if (!after[0]) {                              /* bluez gone */
-        OHM_INFO("BlueZ is down.");
+    if (!running) {
         bt_delete_all_facts();
         dres_all();
     }
-    else
-        OHM_INFO("BlueZ is up.");
-
-    return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 
