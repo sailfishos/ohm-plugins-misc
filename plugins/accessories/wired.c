@@ -40,24 +40,6 @@ USA.
 #include "wired.h"
 #include "accessories.h"
 
-#define REARM_TIMER TRUE
-#define CLEAR_TIMER FALSE
-
-
-/*
- * non-ECI: ENXIO
- * ECI:     0 (OK), or EAGAIN
- *
- * cat /sys/devices/platform/ECI_accessory.0/memory | od -tx1 -Ax
- * 000000 b3 08 00 3c 00 01 00 79 b4 03 11 02 0e 01 08 01
- * 000010 07 0b 0c 0e 0d 0f 10 08 00 03 16 00 1d 01 e1 c0
- * 000020 00 53 19 f1 40 2d f2 4f 94 7c c3 e6 3f 00 1f 05
- * 000030 0d c0 00 01 68 03 85 b2 44 69 5f ff ff ff ff ff
- * 000040 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
- * *
- * 000060
- */
-
 
 #define NBITS(x) ((((x)-1)/BITS_PER_U32)+1)
 #define BITS_PER_U32 (sizeof(uint32_t) * 8)
@@ -143,15 +125,11 @@ typedef struct {
 static int  jack_init (input_dev_t *dev);
 static int  jack_exit (input_dev_t *dev);
 static int  jack_event(struct input_event *event, void *user_data);
-static void jack_update_facts(int initial_query);
+static void jack_update_facts(void);
 
-static int   eci_init  (input_dev_t *dev);
-static int   eci_exit  (input_dev_t *dev);
-static int   eci_event (struct input_event *event, void *user_data);
-static int   eci_read  (char *buf, size_t size);
-static int   eci_update_mode(device_state_t *device);
-static void  eci_schedule_update(device_state_t *device, int msecs);
-static void  eci_cancel_update(void);
+static gboolean initial_jack_query_cb(input_dev_t *dev);
+static void initial_jack_query_schedule(input_dev_t *device);
+static void initial_jack_query_cancel(void);
 
 static void find_device(const char *, input_dev_t *);
 
@@ -164,7 +142,6 @@ static int add_event_handler(input_dev_t *dev);
 
 static input_dev_t devices[] = {
     { NULL, "jack", -1, { jack_init, jack_exit, jack_event }, NULL, NULL, 0, 3, 0 },
-    { NULL, "eci" , -1, { eci_init , eci_exit , eci_event  }, NULL, NULL, 0, 0, 0 },
     { NULL, NULL, -1, { NULL, NULL, NULL }, NULL, NULL, 0, 0, 0 }
 };
 
@@ -208,8 +185,7 @@ static int inverted;                              /* inverted jack events */
  * timers
  */
 
-static gulong eci_timer;                          /* eci detection timer */
-static int    probe_delay = ECI_PROBE_DELAY;      /* eci detection delay */
+static guint  initial_jack_query_source;          /* timer for initial jack query */
 
 /*****************************************************************************
  *                             *** jack insertion ***                        *
@@ -249,17 +225,9 @@ jack_query(int fd)
 
     if (incompatible)
         OHM_INFO("accessories: incompatible accessory connected");
-    
-    /*
-     * Notes: Some of the plugins and facts might not be fully initialized
-     *     at this point. If we tried to resolve 'accessory_request' (which
-     *     resolves 'all'), predicates that are not taking this into account
-     *     might fail (for instance the resource handling predicates). Hence
-     *     we suppress resolving during initial query.
-     */
-    
-    jack_update_facts(TRUE);
-    
+
+    jack_update_facts();
+
     return TRUE;
 }
 
@@ -286,6 +254,47 @@ device_init(input_dev_t *dev)
         }
     }
 }
+
+
+/********************
+ * initial_jack_query_cb
+ ********************/
+static gboolean
+initial_jack_query_cb(input_dev_t *dev)
+{
+    jack_query(dev->fd);
+    add_event_handler(dev);
+    initial_jack_query_source = 0;
+
+    return FALSE;
+}
+
+
+/********************
+ * initial_jack_query_cancel
+ ********************/
+static void
+initial_jack_query_cancel(void)
+{
+    if (initial_jack_query_source > 0) {
+        g_source_remove(initial_jack_query_source);
+        initial_jack_query_source = 0;
+    }
+}
+
+
+/********************
+ * initial_jack_query_schedule
+ ********************/
+static void
+initial_jack_query_schedule(input_dev_t *device)
+{
+    initial_jack_query_cancel();
+    initial_jack_query_source = g_timeout_add_seconds(RETRY_TIMEOUT_S,
+                                                      (GSourceFunc) initial_jack_query_cb,
+                                                      device);
+}
+
 
 /********************
  * jack_init
@@ -334,8 +343,7 @@ jack_init(input_dev_t *dev)
     }
     
     if (dev->fd >= 0) {
-        jack_query(dev->fd);
-        add_event_handler(dev);
+        initial_jack_query_schedule(dev);
         return TRUE;
     }
     else {
@@ -412,7 +420,7 @@ jack_event(struct input_event *event, void *user_data)
         break;
 
     SYN_EVENT:
-        jack_update_facts(FALSE);
+        jack_update_facts();
         break;
 
     default:
@@ -432,6 +440,7 @@ jack_connect(device_state_t *device)
 {
     if (!device->connected) {
         device->connected = 1;
+        dres_accessory_request(device->name, -1, 1);
     }
 }
 
@@ -444,6 +453,7 @@ jack_disconnect(device_state_t *device)
 {
     if (device->connected) {
         device->connected = 0;
+        dres_accessory_request(device->name, -1, 0);
     }
 }
 
@@ -452,7 +462,7 @@ jack_disconnect(device_state_t *device)
  * jack_update_facts
  ********************/
 static void
-jack_update_facts(int initial_query)
+jack_update_facts(void)
 {
     device_state_t *device, *current;
 
@@ -467,229 +477,13 @@ jack_update_facts(int initial_query)
     if (current != NULL && current->name == NULL)   /* filter out line-out */
         current = NULL;
 
-    if (current != NULL) {
+    if (current != NULL)
         jack_connect(current);
-        
-        /*
-         * Currently on { 0x44, 0x61, 0x6c, 0x69 } ECI support is in a
-         * pretty bad shape. Accessory memory is not read and cached
-         * upon detection on the driver side. Instead every single time
-         * userspace tries to access it a read attempt is made. Reads
-         * fail very often (depending on CPU load) with EAGAIN. However,
-         * as initial detection is slowish the first read attempt fails
-         * with ENXIO, which normally indicates non-ECI accessory.
-         *
-         * Therefore, regardless of the result of the initial ECI read,
-         * we always schedule a deferred update.
-         */
-
-        if (!initial_query) {
-            if (!incompatible)
-                eci_update_mode(current);
-            dres_accessory_request(current->name, -1, 1);
-        }
-        
-        if (!incompatible)
-            eci_schedule_update(current, probe_delay);
-    }
 
     for (device = states; device->name != NULL; device++) {
-        if (device != current && device->connected) {
+        if (device != current && device->connected)
             jack_disconnect(device);
-            if (!initial_query)
-                dres_accessory_request(device->name, -1, 0);
-        }
     }
-}
-
-
-/*****************************************************************************
- *                              *** ECI headsets ***                         *
- *****************************************************************************/
-
-
-/********************
- * eci_init
- ********************/
-static int
-eci_init(input_dev_t *dev)
-{
-    const char *device;
-    const char *pattern;
-    const char *delay;
-
-    delay = ohm_plugin_get_param(dev->plugin, "eci-probe-delay");
-
-    if (delay != NULL) {
-        errno = 0;
-        probe_delay = (int)strtoul(delay, NULL, 10);
-        if (errno != 0) {
-            OHM_ERROR("accessories: invalid probe delay '%s'", delay);
-            probe_delay = ECI_PROBE_DELAY;
-        }
-        else
-            OHM_INFO("accessories: using ECI probe delay %d", probe_delay);
-        errno = 0;
-    }
-
-    device = ohm_plugin_get_param(dev->plugin, "eci-device");
-
-    if (device != NULL) {
-        OHM_INFO("accessories: using device %s for ECI events", device);
-        dev->fd = open(device, O_RDONLY);
-
-        if (dev->fd <= 0)
-            OHM_ERROR("accessories: failed to open device %s", device);
-    }
-
-    if (dev->fd < 0) {
-        pattern = ohm_plugin_get_param(dev->plugin, "eci-match");
-
-        if (pattern == NULL)
-            pattern = "ECI ";
-        
-        OHM_INFO("accessories: discover ECI device by matching '%s'", pattern);
-        find_device(pattern, dev);
-    }
-    
-    if (dev->fd >= 0) {
-        add_event_handler(dev);
-        return TRUE;
-    } else {
-        OHM_INFO("accessories: ECI detection device not found.");
-        return FALSE;
-    }
-}
-
-
-/********************
- * eci_exit
- ********************/
-static int
-eci_exit(input_dev_t *dev)
-{
-    if (dev->fd >= 0) {
-        close(dev->fd);
-        dev->fd = -1;
-    }
-    
-    return TRUE;
-}
-
-
-/********************
- * eci_event
- ********************/
-static int
-eci_event(struct input_event *event, void *user_data)
-{
-    (void)user_data;
-    (void)event;
-
-    return TRUE;
-}
-
-
-/********************
- * eci_read
- ********************/
-static int
-eci_read(char *buf, size_t size)
-{
-    int fd, status;
-
-    if ((fd = open(ECI_MEMORY_PATH, O_RDONLY)) < 0) {
-        if (errno == ENOENT)
-            status = ENXIO;
-        else
-            status = errno;
-    }
-    else {
-        if (read(fd, buf, size) < 0)
-            status = errno;
-        else
-            status = 0;
-
-        close(fd);
-    }
-
-    OHM_DEBUG(DBG_WIRED, "eci_read status: %d (%s)", status, strerror(status));
-
-    return status;
-}
-
-
-/********************
- * eci_timer_cb
- ********************/
-static gboolean
-eci_timer_cb(gpointer data)
-{
-    device_state_t *device = (device_state_t *)data;
-    int             success;
-    
-    success = eci_update_mode(device);
-    dres_accessory_request(device->name, -1, device->connected);
-    
-    if (success)
-        return CLEAR_TIMER;
-    else
-        return REARM_TIMER;
-}
-
-
-/********************
- * eci_schedule_update
- ********************/
-static void
-eci_schedule_update(device_state_t *device, int delay_msecs)
-{
-    eci_cancel_update();
-    eci_timer = g_timeout_add_full(G_PRIORITY_DEFAULT, delay_msecs,
-                                   eci_timer_cb, device, NULL);
-}
-
-
-/********************
- * eci_cancel_update
- ********************/
-static void
-eci_cancel_update(void)
-{
-    if (eci_timer != 0) {
-        g_source_remove(eci_timer);
-        eci_timer = 0;
-    }
-}
-
-
-/********************
- * eci_update_mode
- ********************/
-static int
-eci_update_mode(device_state_t *device)
-{
-    const char *mode;
-    char        data[4096];
-    int         status;
-
-    status = eci_read(data, sizeof(data));
-
-    if (status == EAGAIN || status == 0)
-        mode = DEVICE_MODE_ECI;
-    else if (status == ENXIO)
-        mode = DEVICE_MODE_DEFAULT;
-    else {
-        OHM_ERROR("accessories: ECI detection failed with errno %d (%s)",
-                  errno, strerror(errno));
-        return TRUE;                             /* don't retry */
-    }
-    
-    OHM_INFO("accessories: accessory %s is in %s mode", device->name, mode);
-    dres_update_accessory_mode(device->name, mode);
-    
-
-    return TRUE;                                 /* don't retry */
 }
 
 
@@ -914,7 +708,6 @@ wired_init(OhmPlugin *plugin, int dbg_wired)
 }
 
 
-
 /********************
  * wired_exit
  ********************/
@@ -923,7 +716,7 @@ wired_exit(void)
 {
     input_dev_t *dev;
 
-    eci_cancel_update();
+    initial_jack_query_cancel();
 
     for (dev = devices; dev->name != NULL; dev++) {
         if (dev->retry_source > 0)

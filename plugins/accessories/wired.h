@@ -23,11 +23,6 @@ USA.
 
 #include <ohm/ohm-plugin.h>
 
-#define DEVICE_MODE_ECI          "eci"
-#define DEVICE_MODE_DEFAULT      "default"
-#define ECI_MEMORY_PATH          "/sys/devices/platform/ECI_accessory.0/memory"
-#define ECI_PROBE_DELAY          2500
-
 
 void wired_init(OhmPlugin *plugin, int dbg_wired);
 void wired_exit(void);
