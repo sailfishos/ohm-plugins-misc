@@ -587,14 +587,12 @@ find_device(const char *pattern, input_dev_t *dev)
     struct dirent *de;
     char           path[PATH_MAX];
     char           name[64];
-    int            fd, status;
+    int            fd;
     
     if ((dir = opendir("/dev/input")) == NULL) {
         OHM_ERROR("accessories: failed to open directory /dev/input");
         return;
     }
-
-    status = FALSE;
 
     while ((de = readdir(dir)) != NULL) {
         if (de->d_type != DT_CHR && de->d_type != DT_LNK)
