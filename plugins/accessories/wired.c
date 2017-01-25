@@ -67,15 +67,18 @@ USA.
                            (0x1 << ((n) % BITS_PER_U32)))
 
 /*
- * Notes: AFAICT from the patches, the latest driver emits
- *   SW_JACK_PHYSICAL_INSERT (5:7) instead of 5:14 when it
+ * Notes: With some legacy driver, the driver emits
+ *   SW_JACK_PHYSICAL_INSERT (5:7) instead of 5:16 when it
  *   detects an incompatible heaset.
- *   By default we use that, but if disable-incompatible-quirk
- *   is set true, we'll use SW_JACK_PHYSICAL_INSERT for
- *   what it says.
+ *   By default we use SW_JACK_PHYSICAL_INSERT for what it is,
+ *   but if incompatible-quirk is set we interpret PHYSICAL_INSERT
+ *   as incompatible insert.
  */
-#define SW_INCOMPATIBLE_INSERT 14
 static int incompatible_insert_quirk;
+
+#ifndef SW_UNSUPPORT_INSERT
+#define SW_UNSUPPORT_INSERT     (0x10)
+#endif
 
 #define RETRY_TIMEOUT_S (2)
 
@@ -236,7 +239,7 @@ jack_query(int fd)
     if (incompatible_insert_quirk)
         incompatible = test_bit(SW_JACK_PHYSICAL_INSERT, bitmask);
     else
-        incompatible = test_bit(SW_INCOMPATIBLE_INSERT , bitmask);
+        incompatible = test_bit(SW_UNSUPPORT_INSERT , bitmask);
 
     OHM_INFO("accessories: headphone is %sconnected" , headphone  ? "" : "dis");
     OHM_INFO("accessories: microphone is %sconnected", microphone ? "" : "dis");
@@ -293,17 +296,17 @@ jack_init(input_dev_t *dev)
     const char *device;
     const char *pattern;
     const char *invert;
-    const char *disable_quirk;
+    const char *quirk;
 
     invert = ohm_plugin_get_param(dev->plugin, "inverted-jack-events");
     device = ohm_plugin_get_param(dev->plugin, "jack-device");
-    /* Default to enabling incompatible quirk */
-    disable_quirk = ohm_plugin_get_param(dev->plugin, "disable-incompatible-quirk");
+    /* Default to disabling incompatible quirk */
+    quirk = ohm_plugin_get_param(dev->plugin, "incompatible-quirk");
 
-    if (disable_quirk && !strcasecmp(disable_quirk, "true"))
-        incompatible_insert_quirk = 0;
-    else
+    if (quirk && !strcasecmp(quirk, "true"))
         incompatible_insert_quirk = 1;
+    else
+        incompatible_insert_quirk = 0;
 
     if (invert != NULL && !strcasecmp(invert, "true")) {
         OHM_INFO("accessories: jack events have inverted semantics");
@@ -397,7 +400,7 @@ jack_event(struct input_event *event, void *user_data)
         videoout = value;
         break;
 
-    case SW_INCOMPATIBLE_INSERT:
+    case SW_UNSUPPORT_INSERT:
         incompatible = value;
         break;
 
