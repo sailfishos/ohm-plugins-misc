@@ -131,7 +131,7 @@ static gboolean initial_jack_query_cb(input_dev_t *dev);
 static void initial_jack_query_schedule(input_dev_t *device);
 static void initial_jack_query_cancel(void);
 
-static void find_device(const char *, input_dev_t *);
+static int  find_device(const char *, input_dev_t *);
 
 static void device_init(input_dev_t *dev);
 static int add_event_handler(input_dev_t *dev);
@@ -303,7 +303,7 @@ static int
 jack_init(input_dev_t *dev)
 {
     const char *device;
-    const char *pattern;
+    const char *patterns[] = { NULL, "Headset Jack", " Jack" };
     const char *invert;
     const char *quirk;
 
@@ -333,13 +333,20 @@ jack_init(input_dev_t *dev)
     }
 
     if (dev->fd < 0) {
-        pattern = ohm_plugin_get_param(dev->plugin, "jack-match");
+        unsigned int i;
 
-        if (pattern == NULL)
-            pattern = " Jack";
+        patterns[0] = ohm_plugin_get_param(dev->plugin, "jack-match");
+        if (patterns[0])
+            memset(patterns + 1, 0, sizeof(patterns) - sizeof(const char *));
 
-        OHM_INFO("accessories: discover jack device by matching '%s'", pattern);
-        find_device(pattern, dev);
+        for (i = 0; i < sizeof(patterns) / sizeof(const char *); i++) {
+            if (!patterns[i])
+                continue;
+
+            OHM_INFO("accessories: discover jack device by matching '%s'", patterns[i]);
+            if (find_device(patterns[i], dev))
+                break;
+        }
     }
     
     if (dev->fd >= 0) {
@@ -580,7 +587,7 @@ check_device(const char *pattern, int fd, char *name, size_t name_size)
 /********************
  * find_device
  ********************/
-static void
+static int
 find_device(const char *pattern, input_dev_t *dev)
 {
     DIR           *dir;
@@ -588,10 +595,12 @@ find_device(const char *pattern, input_dev_t *dev)
     char           path[PATH_MAX];
     char           name[64];
     int            fd;
-    
+
+    dev->fd = -1;
+
     if ((dir = opendir("/dev/input")) == NULL) {
         OHM_ERROR("accessories: failed to open directory /dev/input");
-        return;
+        return 0;
     }
 
     while ((de = readdir(dir)) != NULL) {
@@ -615,6 +624,8 @@ find_device(const char *pattern, input_dev_t *dev)
     }
     
     closedir(dir);
+
+    return dev->fd < 0 ? 0 : 1;
 }
 
 
