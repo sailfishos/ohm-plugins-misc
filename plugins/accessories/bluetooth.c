@@ -165,7 +165,7 @@ static void get_bluez_state_reply(DBusPendingCall *pending, void *user_data)
         goto done;
 
     if (dbus_message_is_error(reply, DBUS_ERROR_NAME_HAS_NO_OWNER)) {
-        BT_TRACE("BlueZ not running.");
+        BT_INFO("BlueZ not running.");
         goto done;
     }
 

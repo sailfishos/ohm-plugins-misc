@@ -43,22 +43,26 @@ static DBusHandlerResult a2dp_property_changed(DBusConnection *c, DBusMessage * 
 static DBusHandlerResult hsp_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
 static DBusHandlerResult bt_device_removed(DBusConnection *c, DBusMessage * msg, void *data);
 static DBusHandlerResult audio_property_changed(DBusConnection *c, DBusMessage * msg, void *data);
+static DBusHandlerResult bt_adapter_added(DBusConnection *c, DBusMessage *msg, void *data);
 
-static ohm_dbus_signal_t bluez4_signals[4] = {
+static ohm_dbus_signal_t bluez4_signals[5] = {
      {NULL, "org.bluez.AudioSink", "PropertyChanged", NULL, a2dp_property_changed, NULL},
      {NULL, "org.bluez.Headset", "PropertyChanged", NULL, hsp_property_changed, NULL},
      {NULL, "org.bluez.Adapter", "DeviceRemoved", NULL, bt_device_removed, NULL},
-     {NULL, "org.bluez.Audio", "PropertyChanged", NULL, audio_property_changed, NULL}
+     {NULL, "org.bluez.Audio", "PropertyChanged", NULL, audio_property_changed, NULL},
+     {NULL, "org.bluez.Manager", "AdapterAdded", NULL, bt_adapter_added, NULL}
 };
 
 static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_data);
 static void get_properties_cb (DBusPendingCall *pending, void *user_data);
 
 static gboolean get_default_adapter(void);
+static gboolean get_device_list(const gchar *adapter_path);
 static gboolean get_properties(const gchar *device_path,
         const gchar *interface,
         DBusPendingCallNotifyFunction cb);
 
+static gboolean bluez_init_done;
 static DBusConnection *sys_conn;
 
 enum bt_state { BT_STATE_NONE,
@@ -273,6 +277,27 @@ end:
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
+static DBusHandlerResult bt_adapter_added(DBusConnection *c, DBusMessage *msg, void *data)
+{
+    const char *adapter_path = NULL;
+
+    (void) c;
+    (void) data;
+
+    if (!dbus_message_get_args (msg, NULL,
+                                DBUS_TYPE_OBJECT_PATH, &adapter_path,
+                                DBUS_TYPE_INVALID)) {
+        OHM_ERROR("accessories: Couldn't get arguments from org.bluez.Manager.AdapterAdded");
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    if (adapter_path) {
+        OHM_INFO("accessories: Bluez4 adapter %s added.", adapter_path);
+        get_device_list(adapter_path);
+    }
+
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
 
 static gboolean bt_state_transition(const gchar *type,
         const gchar *path,
@@ -508,7 +533,7 @@ static gboolean bt_delete_all_facts()
     GSList *list = ohm_fact_store_get_facts_by_name(fs, BT_DEVICE);
     gboolean resolve_all = FALSE;
 
-    OHM_DEBUG(DBG_BT, "Bluez went away!");
+    OHM_DEBUG(DBG_BT, "accessories: Removing all Bluez facts.");
 
     while (list) {
 
@@ -680,6 +705,10 @@ void bluetooth_bluez4_init(DBusConnection *connection, int flag_bt)
     int i, j;
     unsigned int k;
 
+    if (bluez_init_done)
+        return;
+    bluez_init_done = TRUE;
+
     DBG_BT = flag_bt;
     sys_conn = dbus_connection_ref(connection);
 
@@ -739,6 +768,8 @@ void bluetooth_bluez4_deinit()
 
     if (bt_delete_all_facts())
         dres_all();
+
+    bluez_init_done = FALSE;
 }
 
 static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_data)
@@ -1129,7 +1160,7 @@ error:
     return;
 }
 
-static gboolean get_device_list(gchar *adapter_path)
+static gboolean get_device_list(const gchar *adapter_path)
 {
 
     DBusMessage *request = NULL;
@@ -1181,7 +1212,7 @@ error:
 static void get_default_adapter_cb (DBusPendingCall *pending, void *user_data)
 {
     DBusMessage *reply = NULL;
-    gchar *result = NULL;
+    const gchar *result = NULL;
     int state_reply = BLUEZ_IMPLEMENTATION_FAIL;
     OHM_DEBUG(DBG_BT, "> get_default_adapter_cb\n");
 
@@ -1199,13 +1230,17 @@ static void get_default_adapter_cb (DBusPendingCall *pending, void *user_data)
     }
 
     if (dbus_message_is_error(reply, DBUS_ERROR_UNKNOWN_METHOD)) {
-        OHM_INFO("accessories: BlueZ4 DBus org.bluez.Adapter.ListDevices unavailable.");
+        OHM_INFO("accessories: BlueZ4 DBus org.bluez.Manager.DefaultAdapter method doesn't exist.");
         state_reply = BLUEZ_IMPLEMENTATION_UNKNOWN;
         goto done;
     }
 
+    /* We already know that the bluez4 D-Bus API is there, so even
+     * if bluez doesn't have adapter up yet we can say init ok. */
+    state_reply = BLUEZ_IMPLEMENTATION_OK;
 
     if (dbus_message_get_type (reply) == DBUS_MESSAGE_TYPE_ERROR) {
+        OHM_INFO("accessories: BlueZ4 no default adapter.");
         goto done;
     }
 
@@ -1221,8 +1256,6 @@ static void get_default_adapter_cb (DBusPendingCall *pending, void *user_data)
     if (!get_device_list(result)) {
         goto done;
     }
-
-    state_reply = BLUEZ_IMPLEMENTATION_OK;
 
 done:
 
