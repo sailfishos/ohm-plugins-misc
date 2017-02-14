@@ -52,6 +52,10 @@ static DBusMessage *handle_get_all1(DBusMessage *msg);
 static DBusMessage *set_feature(DBusMessage *msg, int enable);
 static DBusMessage *handle_enable(DBusMessage *msg);
 static DBusMessage *handle_disable(DBusMessage *msg);
+/* Since InterfaceVersion 2 */
+static DBusMessage *handle_features(DBusMessage *msg);
+static DBusMessage *handle_features_allowed(DBusMessage *msg);
+static DBusMessage *handle_features_enabled(DBusMessage *msg);
 
 static void send_signal(DBusMessage *msg);
 
@@ -196,7 +200,11 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg, void *ud
         { DBUS_ROUTE_INTERFACE_VERSION_METHOD   ,   handle_interface_version   },
         { DBUS_ROUTE_GET_ALL1_METHOD            ,   handle_get_all1            },
         { DBUS_ROUTE_ENABLE_METHOD              ,   handle_enable              },
-        { DBUS_ROUTE_DISABLE_METHOD             ,   handle_disable             }
+        { DBUS_ROUTE_DISABLE_METHOD             ,   handle_disable             },
+        /* Since InterfaceVersion 2 */
+        { DBUS_ROUTE_FEATURES_METHOD            ,   handle_features            },
+        { DBUS_ROUTE_FEATURES_ALLOWED_METHOD    ,   handle_features_allowed    },
+        { DBUS_ROUTE_FEATURES_ENABLED_METHOD    ,   handle_features_enabled    }
     };
 
     int               type;
@@ -384,6 +392,51 @@ static DBusMessage *handle_enable(DBusMessage *msg)
 static DBusMessage *handle_disable(DBusMessage *msg)
 {
     return set_feature(msg, FALSE);
+}
+
+static DBusMessage *feature_lists(DBusMessage *msg, int allowed, int enabled)
+{
+    DBusMessage *reply;
+    DBusMessageIter append;
+    DBusMessageIter array;
+    const struct audio_feature *feature;
+    const GSList *i;
+
+    reply = dbus_message_new_method_return(msg);
+    dbus_message_iter_init_append(reply, &append);
+
+    dbus_message_iter_open_container(&append,
+                                     DBUS_TYPE_ARRAY,
+                                       DBUS_TYPE_STRING_AS_STRING,
+                                     &array);
+
+    for (i = route_get_features(); i; i = g_slist_next(i)) {
+        feature = i->data;
+
+        if ((allowed && feature->allowed) ||
+            (enabled && feature->enabled) ||
+            (!allowed && !enabled))
+            dbus_message_iter_append_basic(&array, DBUS_TYPE_STRING, &feature->name);
+    }
+
+    dbus_message_iter_close_container(&append, &array);
+
+    return reply;
+}
+
+static DBusMessage *handle_features(DBusMessage *msg)
+{
+    return feature_lists(msg, 0, 0);
+}
+
+static DBusMessage *handle_features_allowed(DBusMessage *msg)
+{
+    return feature_lists(msg, 1, 0);
+}
+
+static DBusMessage *handle_features_enabled(DBusMessage *msg)
+{
+    return feature_lists(msg, 0, 1);
 }
 
 static void send_signal(DBusMessage *msg)

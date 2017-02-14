@@ -24,7 +24,7 @@ USA.
 
 #include <dbus/dbus.h>
 
-#define DBUSIF_INTERFACE_VERSION            (1)
+#define DBUSIF_INTERFACE_VERSION            (2)
 
 /* D-Bus errors */
 #define DBUS_NEMOMOBILE_ERROR_PREFIX        "org.nemomobile.Error"
@@ -50,6 +50,11 @@ USA.
 #define DBUS_ROUTE_GET_ALL1_METHOD          "GetAll"
 #define DBUS_ROUTE_ENABLE_METHOD            "Enable"    /* arg: string fmradio|voicecallrecord */
 #define DBUS_ROUTE_DISABLE_METHOD           "Disable"
+
+/* Since InterfaceVersion 2 */
+#define DBUS_ROUTE_FEATURES_METHOD          "Features"
+#define DBUS_ROUTE_FEATURES_ALLOWED_METHOD  "FeaturesAllowed"
+#define DBUS_ROUTE_FEATURES_ENABLED_METHOD  "FeaturesEnabled"
 
 
 void dbusif_init(OhmPlugin *plugin);
