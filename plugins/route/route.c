@@ -39,13 +39,20 @@ enum audio_device_type {
     AUDIO_DEVICE_TYPE_INPUT     = 1 << 2,   /* source   */
     AUDIO_DEVICE_TYPE_BUILTIN   = 1 << 3,
     AUDIO_DEVICE_TYPE_WIRED     = 1 << 4,
-    AUDIO_DEVICE_TYPE_WIRELESS  = 1 << 5
+    AUDIO_DEVICE_TYPE_WIRELESS  = 1 << 5,
+    AUDIO_DEVICE_TYPE_VOICE     = 1 << 6
 };
 
 struct audio_device_mapping {
+    char *name;
     int type;
-    char *common_name;
-    GSList *names;
+    GSList *routes;
+};
+
+struct audio_device_mapping_route {
+    const struct audio_device_mapping *common;
+    char *name;
+    int type;
 };
 
 /* FactStore fact names */
@@ -72,8 +79,11 @@ struct audio_device_mapping {
 #define AUDIO_DEVICE_WIRED              "wired"
 #define AUDIO_DEVICE_WIRELESS           "wireless"
 
-static struct audio_device_mapping *audio_route_sink;
-static struct audio_device_mapping *audio_route_source;
+#define AUDIO_DEVICE_VOICE_SUFFIX_1     "forcall"
+#define AUDIO_DEVICE_VOICE_SUFFIX_2     "foralien"
+
+static struct audio_device_mapping_route   *audio_route_sink;
+static struct audio_device_mapping_route   *audio_route_source;
 static GSList *mappings;
 static GSList *features;
 
@@ -98,7 +108,7 @@ static struct audio_device_mapping *mapping_by_commonname_and_type(const char *c
 
     for (i = mappings; i; i = g_slist_next(i)) {
         struct audio_device_mapping *m = g_slist_nth_data(i, 0);
-        if (strcmp(commonname, m->common_name) == 0 &&
+        if (strcmp(commonname, m->name) == 0 &&
             m->type & type)
             return m;
     }
@@ -106,19 +116,21 @@ static struct audio_device_mapping *mapping_by_commonname_and_type(const char *c
     return NULL;
 }
 
-static struct audio_device_mapping *mapping_by_device_name_and_type(const char *device,
-                                                                    int         type)
+static struct audio_device_mapping_route *route_by_device_name_and_type(const char *device,
+                                                                        int         type)
 {
     GSList *i, *n;
+    struct audio_device_mapping_route *r;
 
     for (i = mappings; i; i = g_slist_next(i)) {
         struct audio_device_mapping *m = g_slist_nth_data(i, 0);
 
-        for (n = m->names; n; n = g_slist_next(n)) {
-            const char *name = g_slist_nth_data(n, 0);
-            if (strcmp(name, device) == 0 &&
-                m->type & type)
-                return m;
+        if (m->type & type) {
+            for (n = m->routes; n; n = g_slist_next(n)) {
+                r = g_slist_nth_data(n, 0);
+                if (strcmp(r->name, device) == 0)
+                    return r;
+            }
         }
     }
 
@@ -140,11 +152,12 @@ static struct audio_feature *feature_by_name(const char *name)
 
 static void read_devices(fsif_entry_t *entry, gpointer userdata)
 {
-    struct audio_device_mapping    *m;
-    int                             device_type;
-    char                           *device;
-    char                           *type;
-    char                           *common;
+    struct audio_device_mapping        *m;
+    struct audio_device_mapping_route  *r;
+    int                                 device_type;
+    char                               *device;
+    char                               *type;
+    char                               *common;
 
     device_type = GPOINTER_TO_INT(userdata);
 
@@ -171,13 +184,20 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
             m->type |= AUDIO_DEVICE_TYPE_WIRED;
         else if (strcmp(type, AUDIO_DEVICE_WIRELESS) == 0)
             m->type |= AUDIO_DEVICE_TYPE_WIRELESS;
-        m->common_name = g_strdup(common);
+        m->name = g_strdup(common);
         mappings = g_slist_append(mappings, m);
-        OHM_DEBUG(DBG_ROUTE, "init new device %s type %d", m->common_name, m->type);
+        OHM_DEBUG(DBG_ROUTE, "init new device %s type %d", m->name, m->type);
     }
 
-    m->names = g_slist_append(m->names, g_strdup(device));
-    OHM_DEBUG(DBG_ROUTE, "init     device %s policy name %s", m->common_name, device);
+    r = g_new0(struct audio_device_mapping_route, 1);
+    r->common = m;
+    r->name = g_strdup(device);
+    if (g_str_has_suffix(r->name, AUDIO_DEVICE_VOICE_SUFFIX_1) ||
+        g_str_has_suffix(r->name, AUDIO_DEVICE_VOICE_SUFFIX_2))
+        r->type |= AUDIO_DEVICE_TYPE_VOICE;
+
+    m->routes = g_slist_append(m->routes, r);
+    OHM_DEBUG(DBG_ROUTE, "init     device %s policy route %s", m->name, r->name);
 }
 
 static void read_features(fsif_entry_t *entry, gpointer userdata)
@@ -239,10 +259,16 @@ void route_init(OhmPlugin *plugin)
                          audio_feature_changed_cb, NULL);
 }
 
+static void route_free(struct audio_device_mapping_route *r)
+{
+    g_free(r->name);
+    g_free(r);
+}
+
 static void mapping_free(struct audio_device_mapping *m)
 {
-    g_slist_free_full(m->names, (GDestroyNotify) g_free);
-    g_free(m->common_name);
+    g_slist_free_full(m->routes, (GDestroyNotify) route_free);
+    g_free(m->name);
     g_free(m);
 }
 
@@ -253,6 +279,21 @@ void route_exit(OhmPlugin *plugin)
     g_slist_free_full(mappings, (GDestroyNotify) mapping_free);
 }
 
+static int route_type(const struct audio_device_mapping_route *route)
+{
+    return route->type | route->common->type;
+}
+
+int route_mapping_type(const struct audio_device_mapping *mapping)
+{
+    return mapping->type;
+}
+
+const char *route_mapping_name(const struct audio_device_mapping *mapping)
+{
+    return mapping->name;
+}
+
 static void audio_route_changed_cb(fsif_entry_t   *entry,
                                    char           *name,
                                    fsif_field_t   *fld,
@@ -261,8 +302,8 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
     char                               *type_str    = "<unknown>";
     char                               *device      = "<unknown>";
     int                                 type;
-    struct audio_device_mapping        *mapping     = NULL;
-    struct audio_device_mapping       **active      = NULL;
+    struct audio_device_mapping_route  *route       = NULL;
+    struct audio_device_mapping_route **active      = NULL;
 
     (void) name;
     (void) userdata;
@@ -276,27 +317,26 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_TYPE, &type_str);
     type = type_from_string(type_str);
 
-    if ((mapping = mapping_by_device_name_and_type(device, type))) {
-
-        if (mapping->type & AUDIO_DEVICE_TYPE_OUTPUT)
+    if ((route = route_by_device_name_and_type(device, type))) {
+        if (route->common->type & AUDIO_DEVICE_TYPE_OUTPUT)
             active = &audio_route_sink;
         else
             active = &audio_route_source;
 
-        /* no change in real routing */
-        if (*active == mapping)
+        /* no change in routing */
+        if (*active == route)
             return;
 
-        *active = mapping;
+        *active = route;
 
         OHM_DEBUG(DBG_ROUTE, "audio route: type=%s device=%s common_name=%s",
-                             type_str, device, mapping->common_name);
+                             type_str, route->name, route->common->name);
     }
 
+    if (route)
+        dbusif_signal_route_changed(route->common->name, route_type(route));
     /* For unknown devices we will directly pass on
      * what the routing fact contains. */
-    if (mapping)
-        dbusif_signal_route_changed(mapping->common_name, mapping->type);
     else {
         OHM_ERROR("route [%s]: unknown device %s", __FUNCTION__, device);
         dbusif_signal_route_changed(device, type);
@@ -349,58 +389,69 @@ static void audio_feature_changed_cb(fsif_entry_t   *entry,
 int route_query_active(const char **sink, unsigned int *sink_mask,
                        const char **source, unsigned int *source_mask)
 {
-    fsif_entry_t *entry;
-    fsif_field_t  selist[2];
-    struct audio_device_mapping *mapping = NULL;
-
-    /* If we have current routes already cached
-     * no need to do queries to fact database. */
-    if (audio_route_sink != NULL &&
-        audio_route_source != NULL) {
-
-        *sink = audio_route_sink->common_name;
-        *sink_mask = audio_route_sink->type;
-        *source = audio_route_source->common_name;
-        *source_mask = audio_route_source->type;
-
-        return TRUE;
-    }
+    fsif_entry_t                       *entry;
+    fsif_field_t                        selist[2];
+    struct audio_device_mapping_route  *route = NULL;
 
     *sink   = NULL;
     *source = NULL;
     *sink_mask   = AUDIO_DEVICE_TYPE_UNKNOWN;
     *source_mask = AUDIO_DEVICE_TYPE_UNKNOWN;
 
+    /* If we have current routes already cached
+     * no need to do queries to fact database. */
+    if (audio_route_sink) {
+        OHM_DEBUG(DBG_ROUTE, "get sink %p from cache", (void*)audio_route_sink);
+        *sink = audio_route_sink->common->name;
+        *sink_type = route_type(audio_route_sink);
+    }
+
+    if (audio_route_source) {
+        OHM_DEBUG(DBG_ROUTE, "get source %p from cache", (void*)audio_route_source);
+        *source = audio_route_source->common->name;
+        *source_type = route_type(audio_route_source);
+    }
+
+    if (*sink && *source)
+        return TRUE;
+
     memset(selist, 0, sizeof(selist));
     selist[0].type = fldtype_string;
     selist[0].name = FACTSTORE_AUDIO_ARG_TYPE;
 
-    selist[0].value.string = AUDIO_DEVICE_SINK;
+    if (!*sink) {
+        selist[0].value.string = AUDIO_DEVICE_SINK;
 
-    if (!(entry = fsif_get_entry(FACTSTORE_AUDIO_ROUTE, selist)))
-        OHM_ERROR("route [%s]: couldn't get sink route value.", __FUNCTION__);
-    else
-        fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, sink);
+        if (!(entry = fsif_get_entry(FACTSTORE_AUDIO_ROUTE, selist)))
+            OHM_ERROR("route [%s]: couldn't get sink route value.", __FUNCTION__);
+        else
+            fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, sink);
 
-    selist[0].value.string = AUDIO_DEVICE_SOURCE;
+        OHM_DEBUG(DBG_ROUTE, "query with device %s", *sink);
+        if ((route = route_by_device_name_and_type(*sink, AUDIO_DEVICE_TYPE_OUTPUT))) {
+            *sink = route->common->name;
+            *sink_type = route_type(route);
+            audio_route_sink = route;
+        }
+    }
 
-    if (!(entry = fsif_get_entry(FACTSTORE_AUDIO_ROUTE, selist)))
-        OHM_ERROR("route [%s]: couldn't get source route value.", __FUNCTION__);
-    else
-        fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, source);
+    if (!*source) {
+        selist[0].value.string = AUDIO_DEVICE_SOURCE;
+
+        if (!(entry = fsif_get_entry(FACTSTORE_AUDIO_ROUTE, selist)))
+            OHM_ERROR("route [%s]: couldn't get source route value.", __FUNCTION__);
+        else
+            fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, source);
+
+        if ((route = route_by_device_name_and_type(*source, AUDIO_DEVICE_TYPE_INPUT))) {
+            *source = route->common->name;
+            *source_type = route_type(route);
+            audio_route_source = route;
+        }
+    }
 
     if (!*sink || !*source)
         return FALSE;
-
-    if ((mapping = mapping_by_device_name_and_type(*sink, AUDIO_DEVICE_TYPE_OUTPUT))) {
-        *sink = mapping->common_name;
-        *sink_mask = mapping->type;
-    }
-
-    if ((mapping = mapping_by_device_name_and_type(*source, AUDIO_DEVICE_TYPE_INPUT))) {
-        *source = mapping->common_name;
-        *source_mask = mapping->type;
-    }
 
     return TRUE;
 }
@@ -448,4 +499,9 @@ int route_feature_request(const char *name, int enable)
 const GSList *route_get_features()
 {
     return features;
+}
+
+const GSList *route_get_mappings()
+{
+    return mappings;
 }

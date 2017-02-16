@@ -55,6 +55,8 @@ USA.
 #define DBUS_ROUTE_FEATURES_METHOD          "Features"
 #define DBUS_ROUTE_FEATURES_ALLOWED_METHOD  "FeaturesAllowed"
 #define DBUS_ROUTE_FEATURES_ENABLED_METHOD  "FeaturesEnabled"
+#define DBUS_ROUTE_ROUTES_METHOD            "Routes"
+#define DBUS_ROUTE_ACTIVE_ROUTES_METHOD     "ActiveRoutes"
 
 
 void dbusif_init(OhmPlugin *plugin);

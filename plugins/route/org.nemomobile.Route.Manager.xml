@@ -37,5 +37,14 @@
         <method name="FeaturesEnabled">
             <arg name="features_enabled" type="as" direction="out"/>
         </method>
+        <method name="Routes">
+            <arg name="routes" type="a{su}" direction="out"/>
+        </method>
+        <method name="ActiveRoutes">
+            <arg name="output_device" type="s" direction="out"/>
+            <arg name="output_device_mask" type="u" direction="out"/>
+            <arg name="input_device" type="s" direction="out"/>
+            <arg name="input_device_mask" type="u" direction="out"/>
+        </method>
     </interface>
 </node>

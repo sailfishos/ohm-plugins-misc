@@ -56,6 +56,8 @@ static DBusMessage *handle_disable(DBusMessage *msg);
 static DBusMessage *handle_features(DBusMessage *msg);
 static DBusMessage *handle_features_allowed(DBusMessage *msg);
 static DBusMessage *handle_features_enabled(DBusMessage *msg);
+static DBusMessage *handle_routes(DBusMessage *msg);
+static DBusMessage *handle_active_routes(DBusMessage *msg);
 
 static void send_signal(DBusMessage *msg);
 
@@ -204,7 +206,9 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg, void *ud
         /* Since InterfaceVersion 2 */
         { DBUS_ROUTE_FEATURES_METHOD            ,   handle_features            },
         { DBUS_ROUTE_FEATURES_ALLOWED_METHOD    ,   handle_features_allowed    },
-        { DBUS_ROUTE_FEATURES_ENABLED_METHOD    ,   handle_features_enabled    }
+        { DBUS_ROUTE_FEATURES_ENABLED_METHOD    ,   handle_features_enabled    },
+        { DBUS_ROUTE_ROUTES_METHOD              ,   handle_routes              },
+        { DBUS_ROUTE_ACTIVE_ROUTES_METHOD       ,   handle_active_routes       }
     };
 
     int               type;
@@ -277,31 +281,42 @@ static DBusMessage *handle_introspect(DBusMessage *msg)
     return reply;
 }
 
-static DBusMessage *handle_get_all1(DBusMessage *msg)
+static DBusMessage *msg_append_active_routes(DBusMessage *msg, DBusMessageIter *append)
 {
     DBusMessage *reply;
-    DBusMessageIter append;
-    DBusMessageIter entry;
-    DBusMessageIter struct_entry;
     const char *sink;
     const char *source;
     unsigned int sink_mask;
     unsigned int source_mask;
-    const struct audio_feature *feature;
-    const GSList *i;
 
     if (!route_query_active(&sink, &sink_mask, &source, &source_mask)) {
         reply = dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_FAILED,
                                        "Policy error");
     } else {
         reply = dbus_message_new_method_return(msg);
-        dbus_message_iter_init_append(reply, &append);
+        dbus_message_iter_init_append(reply, append);
 
-        dbus_message_iter_append_basic(&append, DBUS_TYPE_STRING, &sink);
-        dbus_message_iter_append_basic(&append, DBUS_TYPE_UINT32, &sink_mask);
-        dbus_message_iter_append_basic(&append, DBUS_TYPE_STRING, &source);
-        dbus_message_iter_append_basic(&append, DBUS_TYPE_UINT32, &source_mask);
+        dbus_message_iter_append_basic(append, DBUS_TYPE_STRING, &sink);
+        dbus_message_iter_append_basic(append, DBUS_TYPE_UINT32, &sink_mask);
+        dbus_message_iter_append_basic(append, DBUS_TYPE_STRING, &source);
+        dbus_message_iter_append_basic(append, DBUS_TYPE_UINT32, &source_mask);
+    }
 
+    return reply;
+}
+
+static DBusMessage *handle_get_all1(DBusMessage *msg)
+{
+    DBusMessage *reply;
+    DBusMessageIter append;
+    DBusMessageIter entry;
+    DBusMessageIter struct_entry;
+    const struct audio_feature *feature;
+    const GSList *i;
+
+    reply = msg_append_active_routes(msg, &append);
+
+    if (dbus_message_get_type(reply) != DBUS_MESSAGE_TYPE_ERROR) {
         dbus_message_iter_open_container(&append,
                                          DBUS_TYPE_ARRAY,
                                          DBUS_STRUCT_BEGIN_CHAR_AS_STRING
@@ -437,6 +452,56 @@ static DBusMessage *handle_features_allowed(DBusMessage *msg)
 static DBusMessage *handle_features_enabled(DBusMessage *msg)
 {
     return feature_lists(msg, 0, 1);
+}
+
+static DBusMessage *handle_routes(DBusMessage *msg)
+{
+    DBusMessage *reply;
+    DBusMessageIter append;
+    DBusMessageIter dict_entry;
+    DBusMessageIter entry;
+    const struct audio_device_mapping *mapping;
+    const char *m_name;
+    int m_type;
+    const GSList *i;
+
+    reply = dbus_message_new_method_return(msg);
+    dbus_message_iter_init_append(reply, &append);
+
+    dbus_message_iter_open_container(&append,
+                                     DBUS_TYPE_ARRAY,
+                                     DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
+                                       DBUS_TYPE_STRING_AS_STRING
+                                       DBUS_TYPE_UINT32_AS_STRING
+                                     DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
+                                     &dict_entry);
+
+    for (i = route_get_mappings(); i; i = g_slist_next(i)) {
+        mapping = i->data;
+
+        dbus_message_iter_open_container(&dict_entry,
+                                         DBUS_TYPE_DICT_ENTRY,
+                                         NULL,
+                                         &entry);
+
+        m_name = route_mapping_name(mapping);
+        m_type = route_mapping_type(mapping);
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &m_name);
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_UINT32, &m_type);
+
+        dbus_message_iter_close_container(&dict_entry, &entry);
+    }
+
+    dbus_message_iter_close_container(&append, &dict_entry);
+
+    return reply;
+}
+
+static DBusMessage *handle_active_routes(DBusMessage *msg)
+{
+    DBusMessageIter append;
+
+    return msg_append_active_routes(msg, &append);
 }
 
 static void send_signal(DBusMessage *msg)

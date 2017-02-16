@@ -34,6 +34,8 @@ struct audio_feature {
     unsigned int enabled;
 };
 
+struct audio_device_mapping;
+
 void route_init(OhmPlugin *plugin);
 void route_exit(OhmPlugin *plugin);
 int route_query_active(const char **sink, unsigned int *sink_mask,
@@ -43,5 +45,8 @@ int context_variable_query(char *name, char **value);
 int route_feature_request(const char *name, int enable);
 
 const GSList *route_get_features();
+const GSList *route_get_mappings();
+const char *route_mapping_name(const struct audio_device_mapping *mapping);
+int route_mapping_type(const struct audio_device_mapping *mapping);
 
 #endif
