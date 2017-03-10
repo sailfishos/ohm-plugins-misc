@@ -243,8 +243,14 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg, void *ud
                 break;
             }
         }
+
+        if (!reply)
+            reply = dbus_message_new_error(msg, DBUS_ERROR_UNKNOWN_METHOD, NULL);
+
     } else if (!strcmp(interface, "org.freedesktop.DBus.Introspectable"))
         reply = handle_introspect(msg);
+    else
+        reply = dbus_message_new_error(msg, DBUS_ERROR_UNKNOWN_INTERFACE, NULL);
 
     if (reply) {
         dbus_connection_send(conn, reply, &serial);
