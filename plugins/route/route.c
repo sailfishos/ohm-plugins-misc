@@ -386,8 +386,8 @@ static void audio_feature_changed_cb(fsif_entry_t   *entry,
         dbusif_signal_feature_changed(feature->name, feature->allowed, feature->enabled);
 }
 
-int route_query_active(const char **sink, unsigned int *sink_mask,
-                       const char **source, unsigned int *source_mask)
+int route_query_active(const char **sink, unsigned int *sink_type,
+                       const char **source, unsigned int *source_type)
 {
     fsif_entry_t                       *entry;
     fsif_field_t                        selist[2];
@@ -395,8 +395,8 @@ int route_query_active(const char **sink, unsigned int *sink_mask,
 
     *sink   = NULL;
     *source = NULL;
-    *sink_mask   = AUDIO_DEVICE_TYPE_UNKNOWN;
-    *source_mask = AUDIO_DEVICE_TYPE_UNKNOWN;
+    *sink_type   = AUDIO_DEVICE_TYPE_UNKNOWN;
+    *source_type = AUDIO_DEVICE_TYPE_UNKNOWN;
 
     /* If we have current routes already cached
      * no need to do queries to fact database. */

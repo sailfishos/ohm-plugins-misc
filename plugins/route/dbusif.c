@@ -76,7 +76,7 @@ void dbusif_exit(OhmPlugin *plugin)
     system_bus_cleanup();
 }
 
-void dbusif_signal_route_changed(const char *device, unsigned int type_mask)
+void dbusif_signal_route_changed(const char *device, unsigned int device_type)
 {
     DBusMessage    *msg;
     int             success;
@@ -90,7 +90,7 @@ void dbusif_signal_route_changed(const char *device, unsigned int type_mask)
     else {
         success = dbus_message_append_args(msg,
                                            DBUS_TYPE_STRING, &device,
-                                           DBUS_TYPE_UINT32, &type_mask,
+                                           DBUS_TYPE_UINT32, &device_type,
                                            DBUS_TYPE_INVALID);
 
         if (success)
@@ -292,10 +292,10 @@ static DBusMessage *msg_append_active_routes(DBusMessage *msg, DBusMessageIter *
     DBusMessage *reply;
     const char *sink;
     const char *source;
-    unsigned int sink_mask;
-    unsigned int source_mask;
+    unsigned int sink_type;
+    unsigned int source_type;
 
-    if (!route_query_active(&sink, &sink_mask, &source, &source_mask)) {
+    if (!route_query_active(&sink, &sink_type, &source, &source_type)) {
         reply = dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_FAILED,
                                        "Policy error");
     } else {
@@ -303,9 +303,9 @@ static DBusMessage *msg_append_active_routes(DBusMessage *msg, DBusMessageIter *
         dbus_message_iter_init_append(reply, append);
 
         dbus_message_iter_append_basic(append, DBUS_TYPE_STRING, &sink);
-        dbus_message_iter_append_basic(append, DBUS_TYPE_UINT32, &sink_mask);
+        dbus_message_iter_append_basic(append, DBUS_TYPE_UINT32, &sink_type);
         dbus_message_iter_append_basic(append, DBUS_TYPE_STRING, &source);
-        dbus_message_iter_append_basic(append, DBUS_TYPE_UINT32, &source_mask);
+        dbus_message_iter_append_basic(append, DBUS_TYPE_UINT32, &source_type);
     }
 
     return reply;

@@ -61,7 +61,7 @@ USA.
 
 void dbusif_init(OhmPlugin *plugin);
 void dbusif_exit(OhmPlugin *plugin);
-void dbusif_signal_route_changed(const char *device, unsigned int type_mask);
+void dbusif_signal_route_changed(const char *device, unsigned int device_type);
 void dbusif_signal_feature_changed(const char *name,
                                    unsigned int allowed,
                                    unsigned int enabled);

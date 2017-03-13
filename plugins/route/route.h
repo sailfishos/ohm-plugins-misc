@@ -38,8 +38,8 @@ struct audio_device_mapping;
 
 void route_init(OhmPlugin *plugin);
 void route_exit(OhmPlugin *plugin);
-int route_query_active(const char **sink, unsigned int *sink_mask,
-                       const char **source, unsigned int *source_mask);
+int route_query_active(const char **sink, unsigned int *sink_type,
+                       const char **source, unsigned int *source_type);
 int context_variable_query(char *name, char **value);
 
 int route_feature_request(const char *name, int enable);
