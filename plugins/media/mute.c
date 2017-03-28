@@ -33,7 +33,6 @@ USA.
 
 static void  mute_changed_cb(fsif_entry_t *, char *, fsif_field_t *,void *);
 static char *mute_str(int);
-static int   mute_value(const char *);
 
 /*! \addtogroup pubif
  *  Functions
@@ -45,7 +44,6 @@ void mute_init(OhmPlugin *plugin)
     (void)plugin;
 
     fsif_add_field_watch(FACTSTORE_MUTE, NULL, "value", mute_changed_cb, NULL);
-    fsif_add_field_watch(FACTSTORE_MUTE, NULL, "forced", mute_changed_cb, NULL);
 }
 
 int mute_request(int value)
@@ -92,8 +90,7 @@ static void mute_changed_cb(fsif_entry_t *entry,
     (void)name;
     (void)usrdata;
 
-    int  mute;
-    int  forced = TRUE;
+    int  mute = 0;
 
     if (fld->type == fldtype_integer)
         mute = fld->value.integer;
@@ -102,14 +99,8 @@ static void mute_changed_cb(fsif_entry_t *entry,
         return;
     }
 
-    fsif_get_field_by_entry(entry, fldtype_integer, "forced", &forced);
-
-    if (!strcmp(fld->name, "forced"))
-        fsif_get_field_by_entry(entry, fldtype_integer, "value" , &mute);
-    
-    if (forced) {
-        OHM_DEBUG(DBG_MUTE, "ignoring forced mute change to '%s'",
-                  mute_str(mute));
+    if (!fsif_get_field_by_entry(entry, fldtype_integer, "value" , &mute)) {
+        OHM_ERROR("media [%s]: failed to get mute value", __FUNCTION__);
         return;
     }
 
@@ -121,17 +112,6 @@ static void mute_changed_cb(fsif_entry_t *entry,
 static char *mute_str(int value)
 {
     return value ? "muted" : "unmuted";
-}
-
-static int mute_value(const char *str)
-{
-    if (!strcmp(str, "muted"))
-        return 1;
-
-    if (!strcmp(str, "unmuted"))
-        return 0;
-
-    return -1;
 }
 
 
