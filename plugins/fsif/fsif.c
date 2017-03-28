@@ -286,14 +286,15 @@ static fsif_entry_t *fsif_get_entry(char           *name,
 }
 
 
-static void fsif_get_field_by_entry(fsif_entry_t   *entry,
+static int fsif_get_field_by_entry(fsif_entry_t   *entry,
                                     fsif_fldtype_t  type,
                                     char           *name,
                                     void           *vptr)
 {
-    if (entry != NULL && name != NULL && vptr != NULL) {
-        get_field(entry, type, name, vptr);
-    }
+    if (entry == NULL || name == NULL || vptr == NULL)
+        return FALSE;
+
+    return get_field(entry, type, name, vptr);
 }
 
 
@@ -1035,12 +1036,12 @@ OHM_EXPORTABLE(fsif_entry_t *, get_entry, (char           *name,
 /****************************
  * get_field_by_entry
  ****************************/
-OHM_EXPORTABLE(void, get_field_by_entry, (fsif_entry_t *entry,
-                                               fsif_fldtype_t type,
-                                               char *name,
-                                               void *vptr))
+OHM_EXPORTABLE(int, get_field_by_entry, (fsif_entry_t *entry,
+                                         fsif_fldtype_t type,
+                                         char *name,
+                                         void *vptr))
 {
-    fsif_get_field_by_entry(entry, type, name, vptr);
+    return fsif_get_field_by_entry(entry, type, name, vptr);
 }
 
 
