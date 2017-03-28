@@ -54,10 +54,10 @@ OHM_DEBUG_PLUGIN(delay,
 OHM_IMPORTABLE(int, add_factstore_entry, (char *name,
                                           fsif_field_t *fldlist));
 
-OHM_IMPORTABLE(void, get_field_by_entry, (fsif_entry_t   *entry,
-                                          fsif_fldtype_t  type,
-                                          char           *name,
-                                          void           *vptr));
+OHM_IMPORTABLE(int, get_field_by_entry, (fsif_entry_t   *entry,
+                                         fsif_fldtype_t  type,
+                                         char           *name,
+                                         void           *vptr));
 
 OHM_IMPORTABLE(void, set_field_by_entry, (fsif_entry_t *entry,
                                           fsif_fldtype_t type,
@@ -75,12 +75,12 @@ int fsif_add_factstore_entry(char *name,
     return add_factstore_entry(name, fldlist);
 }
 
-void fsif_get_field_by_entry(fsif_entry_t   *entry,
-                             fsif_fldtype_t  type,
-                             char           *name,
-                             void           *vptr)
+int fsif_get_field_by_entry(fsif_entry_t   *entry,
+                            fsif_fldtype_t  type,
+                            char           *name,
+                            void           *vptr)
 {
-    get_field_by_entry(entry, type, name, vptr);
+    return get_field_by_entry(entry, type, name, vptr);
 }
 
 void fsif_set_field_by_entry(fsif_entry_t *entry,

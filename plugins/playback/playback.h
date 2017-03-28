@@ -58,10 +58,10 @@ int fsif_add_field_watch(char                  *factname,
                          fsif_field_watch_cb_t  callback,
                          void                  *usrdata);
 
-void fsif_get_field_by_entry(fsif_entry_t   *entry,
-                             fsif_fldtype_t  type,
-                             char           *name,
-                             void           *vptr);
+int fsif_get_field_by_entry(fsif_entry_t   *entry,
+                            fsif_fldtype_t  type,
+                            char           *name,
+                            void           *vptr);
 
 int fsif_add_factstore_entry(char *name,
                              fsif_field_t *fldlist);

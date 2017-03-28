@@ -67,10 +67,10 @@ int fsif_get_field_by_name(const char     *name,
                            char           *field,
                            void           *vptr);
 
-void fsif_get_field_by_entry(fsif_entry_t   *entry,
-                             fsif_fldtype_t  type,
-                             char           *name,
-                             void           *vptr);
+int fsif_get_field_by_entry(fsif_entry_t   *entry,
+                            fsif_fldtype_t  type,
+                            char           *name,
+                            void           *vptr);
 /*
 static void plugin_init(OhmPlugin *);
 static void plugin_destroy(OhmPlugin *);

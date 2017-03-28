@@ -52,10 +52,10 @@ OHM_IMPORTABLE(int, get_field_by_name, (const char     *name,
                                         char           *field,
                                         void           *vptr));
 
-OHM_IMPORTABLE(void, get_field_by_entry, (fsif_entry_t   *entry,
-                                          fsif_fldtype_t  type,
-                                          char           *name,
-                                          void           *vptr));
+OHM_IMPORTABLE(int, get_field_by_entry, (fsif_entry_t   *entry,
+                                         fsif_fldtype_t  type,
+                                         char           *name,
+                                         void           *vptr));
 
 OHM_PLUGIN_REQUIRES_METHODS(media, 4,
     OHM_IMPORT("fsif.add_field_watch", add_field_watch),
@@ -99,12 +99,12 @@ int fsif_get_field_by_name(const char     *name,
     return get_field_by_name(name, type, field, vptr);
 }
 
-void fsif_get_field_by_entry(fsif_entry_t   *entry,
-                             fsif_fldtype_t  type,
-                             char           *name,
-                             void           *vptr)
+int fsif_get_field_by_entry(fsif_entry_t   *entry,
+                            fsif_fldtype_t  type,
+                            char           *name,
+                            void           *vptr)
 {
-    get_field_by_entry(entry, type, name, vptr);
+    return get_field_by_entry(entry, type, name, vptr);
 }
 
 static void plugin_init(OhmPlugin *plugin)

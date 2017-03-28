@@ -53,10 +53,10 @@ OHM_IMPORTABLE(int, get_field_by_name, (const char     *name,
                                         char           *field,
                                         void           *vptr));
 
-OHM_IMPORTABLE(void, get_field_by_entry, (fsif_entry_t   *entry,
-                                          fsif_fldtype_t  type,
-                                          char           *name,
-                                          void           *vptr));
+OHM_IMPORTABLE(int, get_field_by_entry, (fsif_entry_t   *entry,
+                                         fsif_fldtype_t  type,
+                                         char           *name,
+                                         void           *vptr));
 
 OHM_IMPORTABLE(fsif_entry_t *, get_entry, (char           *name,
                                            fsif_field_t   *selist));
@@ -103,12 +103,12 @@ int fsif_get_field_by_name(const char     *name,
     return get_field_by_name(name, type, field, vptr);
 }
 
-void fsif_get_field_by_entry(fsif_entry_t   *entry,
-                             fsif_fldtype_t  type,
-                             char           *name,
-                             void           *vptr)
+int fsif_get_field_by_entry(fsif_entry_t   *entry,
+                            fsif_fldtype_t  type,
+                            char           *name,
+                            void           *vptr)
 {
-    get_field_by_entry(entry, type, name, vptr);
+    return get_field_by_entry(entry, type, name, vptr);
 }
 
 fsif_entry_t *fsif_get_entry(char           *name,

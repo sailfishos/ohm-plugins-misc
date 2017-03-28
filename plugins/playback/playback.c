@@ -62,10 +62,10 @@ OHM_IMPORTABLE(int, add_field_watch, (char                  *factname,
                                       fsif_field_watch_cb_t  callback,
                                       void                  *usrdata));
 
-OHM_IMPORTABLE(void, get_field_by_entry, (fsif_entry_t   *entry,
-                                          fsif_fldtype_t  type,
-                                          char           *name,
-                                          void           *vptr));
+OHM_IMPORTABLE(int, get_field_by_entry, (fsif_entry_t   *entry,
+                                         fsif_fldtype_t  type,
+                                         char           *name,
+                                         void           *vptr));
 
 OHM_IMPORTABLE(int, add_factstore_entry, (char *name,
                                           fsif_field_t *fldlist));
@@ -86,12 +86,12 @@ int fsif_add_field_watch(char                  *factname,
     return add_field_watch(factname, selist, fldname, callback, usrdata);
 }
 
-void fsif_get_field_by_entry(fsif_entry_t   *entry,
-                             fsif_fldtype_t  type,
-                             char           *name,
-                             void           *vptr)
+int fsif_get_field_by_entry(fsif_entry_t   *entry,
+                            fsif_fldtype_t  type,
+                            char           *name,
+                            void           *vptr)
 {
-    get_field_by_entry(entry, type, name, vptr);
+    return get_field_by_entry(entry, type, name, vptr);
 }
 
 int fsif_add_factstore_entry(char *name,
