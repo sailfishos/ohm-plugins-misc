@@ -32,6 +32,7 @@ USA.
 
 #define BT_TYPE_A2DP            "bta2dp"
 #define BT_TYPE_HSP             "bthsp"
+#define BT_TYPE_HFP             "bthfp"
 #define BT_TYPE_AUDIO           "audio"
 
 
