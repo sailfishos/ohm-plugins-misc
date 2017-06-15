@@ -52,7 +52,8 @@ struct bt_device {
     char *path;
     int uuid;
     int state;
-    gboolean connected;
+    gboolean a2dp_connected;
+    gboolean hsp_connected;
 };
 
 struct bt_transport {
@@ -73,7 +74,7 @@ struct bt_hf_card {
     char *remote;
     char *local;
     struct bt_device *device;
-    gboolean connected;
+    gboolean hfp_connected;
 };
 
 enum bt_state {
@@ -108,6 +109,10 @@ static struct bt_device* bt_devices_find(const char *mac_address);
 
 static void bt_state_changed(struct bt_device *d, int state);
 static void bt_hf_state_changed(struct bt_hf_card *c, int next_state);
+
+static int bt_a2dp_devices_connected();
+static int bt_hsp_devices_connected();
+static int bt_hf_cards_connected();
 
 /* DBus */
 static void get_bluez_objects();
@@ -273,7 +278,8 @@ static struct bt_device* bt_device_new(const char *path, int uuid, int state)
     d->path = g_strdup(path);
     d->uuid = uuid;
     d->state = state;
-    d->connected = FALSE;
+    d->a2dp_connected = FALSE;
+    d->hsp_connected = FALSE;
 
     return d;
 }
@@ -359,7 +365,7 @@ static struct bt_hf_card* bt_hf_card_new(const char *card_path)
     c = g_new0(struct bt_hf_card, 1);
     c->path = g_strdup(card_path);
     c->type = BT_HF_CARD_TYPE_NONE;
-    c->connected = FALSE;
+    c->hfp_connected = FALSE;
 
     return c;
 }
@@ -395,7 +401,7 @@ static struct bt_device* bt_devices_find(const char *mac_address)
     return NULL;
 }
 
-static int bt_devices_connected()
+static int bt_a2dp_devices_connected()
 {
     int connected = 0;
     struct bt_device *device = NULL;
@@ -406,11 +412,31 @@ static int bt_devices_connected()
 
     while (g_hash_table_iter_next(&i, &key, &value)) {
         device = (struct bt_device *) value;
-        if (device->connected)
+        if (device->a2dp_connected)
             connected++;
     }
 
-    BT_TRACE("Connected devices count: %d", connected);
+    BT_TRACE("Connected A2DP devices count: %d", connected);
+
+    return connected;
+}
+
+static int bt_hsp_devices_connected()
+{
+    int connected = 0;
+    struct bt_device *device = NULL;
+    GHashTableIter i;
+    gpointer key, value;
+
+    g_hash_table_iter_init(&i, bt_devices);
+
+    while (g_hash_table_iter_next(&i, &key, &value)) {
+        device = (struct bt_device *) value;
+        if (device->hsp_connected)
+            connected++;
+    }
+
+    BT_TRACE("Connected HSP devices count: %d", connected);
 
     return connected;
 }
@@ -430,19 +456,40 @@ static void bt_state_changed(struct bt_device *d, int next_state)
     if (d->uuid & (BT_UUID_A2DP_SINK | BT_UUID_A2DP_SOURCE)) {
 
         if (next_state > BT_STATE_CONNECTED) {
-                if (!d->connected && bt_devices_connected() == 0) {
+                if (!d->a2dp_connected && bt_a2dp_devices_connected() == 0) {
                     BT_DEBUG("Connect device %s A2DP.", d->path);
                     dres_accessory_request(BT_TYPE_A2DP, -1, 1);
                     run_dres = TRUE;
                 }
-                d->connected = TRUE;
+                d->a2dp_connected = TRUE;
         } else if (next_state == BT_STATE_DISCONNECTED) {
-            if (d->connected && bt_devices_connected() == 1) {
+            if (d->a2dp_connected && bt_a2dp_devices_connected() == 1) {
                 BT_DEBUG("Disconnect device %s A2DP.", d->path);
                 dres_accessory_request(BT_TYPE_A2DP, -1, 0);
                 run_dres = TRUE;
             }
-            d->connected = FALSE;
+            d->a2dp_connected = FALSE;
+        }
+    }
+
+    if (d->uuid & (BT_UUID_HSP_HS | BT_UUID_HSP_AG)) {
+
+        if (!d->hsp_connected && next_state >= BT_STATE_CONNECTED) {
+            if (bt_hsp_devices_connected() == 0) {
+                BT_DEBUG("Connect device %s HSP.", d->path);
+                dres_accessory_request(BT_TYPE_HSP, -1, 1);
+                run_policy_hook("bthsp_connect", 0, NULL);
+                run_dres = TRUE;
+            }
+            d->hsp_connected = TRUE;
+        } else if (d->hsp_connected && next_state == BT_STATE_DISCONNECTED) {
+            if (bt_hsp_devices_connected() == 1) {
+                BT_DEBUG("Disconnect device %s HSP.", d->path);
+                dres_accessory_request(BT_TYPE_HSP, -1, 0);
+                run_policy_hook("bthsp_disconnect", 0, NULL);
+                run_dres = TRUE;
+            }
+            d->hsp_connected = FALSE;
         }
     }
 
@@ -463,11 +510,11 @@ static int bt_hf_cards_connected()
 
     while (g_hash_table_iter_next(&i, &key, &value)) {
         card = (struct bt_hf_card *) value;
-        if (card->connected)
+        if (card->hfp_connected)
             connected++;
     }
 
-    BT_TRACE("Connected cards count: %d", connected);
+    BT_TRACE("Connected HFP cards count: %d", connected);
 
     return connected;
 }
@@ -481,27 +528,26 @@ static void bt_hf_state_changed(struct bt_hf_card *c, int next_state)
     BT_TRACE("Card %s state transition %s to %s",
              c->path, dbg_state_to_string(c->state), dbg_state_to_string(next_state));
 
-    if (c->device->uuid & (BT_UUID_HSP_HS | BT_UUID_HSP_AG |
-                           BT_UUID_HFP_HF | BT_UUID_HFP_AG)) {
+    if (c->device->uuid & (BT_UUID_HFP_HF | BT_UUID_HFP_AG)) {
 
         if (c->state == BT_STATE_DISCONNECTED && next_state == BT_STATE_CONNECTED) {
-            if (!c->connected && bt_hf_cards_connected() == 0) {
-                BT_DEBUG("Connect device %s card %s HSP/HFP.", c->device->path, c->path);
-                dres_accessory_request(BT_TYPE_HSP, -1, 1);
+            if (!c->hfp_connected && bt_hf_cards_connected() == 0) {
+                BT_DEBUG("Connect device %s card %s HFP.", c->device->path, c->path);
+                dres_accessory_request(BT_TYPE_HFP, -1, 1);
                 c->state = BT_STATE_CONNECTED;
-                run_policy_hook("bthsp_connect", 0, NULL);
+                run_policy_hook("bthfp_connect", 0, NULL);
                 run_dres = TRUE;
             }
-            c->connected = TRUE;
+            c->hfp_connected = TRUE;
         } else if (c->state == BT_STATE_CONNECTED && next_state == BT_STATE_DISCONNECTED) {
-            if (c->connected && bt_hf_cards_connected() == 1) {
-                BT_DEBUG("Disconnect device %s card %s HSP/HFP.", c->device->path, c->path);
-                dres_accessory_request(BT_TYPE_HSP, -1, 0);
+            if (c->hfp_connected && bt_hf_cards_connected() == 1) {
+                BT_DEBUG("Disconnect device %s card %s HFP.", c->device->path, c->path);
+                dres_accessory_request(BT_TYPE_HFP, -1, 0);
                 c->state = BT_STATE_DISCONNECTED;
-                run_policy_hook("bthsp_disconnect", 0, NULL);
+                run_policy_hook("bthfp_disconnect", 0, NULL);
                 run_dres = TRUE;
             }
-            c->connected = FALSE;
+            c->hfp_connected = FALSE;
         }
     }
 
