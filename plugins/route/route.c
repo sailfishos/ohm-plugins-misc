@@ -30,18 +30,8 @@ USA.
 #include "dbusif.h"
 #include "dresif.h"
 #include "route.h"
+#include "ohm-ext/route.h"
 #include "../fsif/fsif.h"
-
-
-enum audio_device_type {
-    AUDIO_DEVICE_TYPE_UNKNOWN   = 1 << 0,
-    AUDIO_DEVICE_TYPE_OUTPUT    = 1 << 1,   /* sink     */
-    AUDIO_DEVICE_TYPE_INPUT     = 1 << 2,   /* source   */
-    AUDIO_DEVICE_TYPE_BUILTIN   = 1 << 3,
-    AUDIO_DEVICE_TYPE_WIRED     = 1 << 4,
-    AUDIO_DEVICE_TYPE_WIRELESS  = 1 << 5,
-    AUDIO_DEVICE_TYPE_VOICE     = 1 << 6
-};
 
 struct audio_device_mapping {
     char *name;
@@ -94,11 +84,11 @@ static void audio_feature_changed_cb(fsif_entry_t *entry, char *name,
 
 static unsigned int type_from_string(const char *str) {
     if (strcmp(str, AUDIO_DEVICE_SINK) == 0)
-        return AUDIO_DEVICE_TYPE_OUTPUT;
+        return OHM_EXT_ROUTE_TYPE_OUTPUT;
     else if (strcmp(str, AUDIO_DEVICE_SOURCE) == 0)
-        return AUDIO_DEVICE_TYPE_INPUT;
+        return OHM_EXT_ROUTE_TYPE_INPUT;
     else
-        return AUDIO_DEVICE_TYPE_UNKNOWN;
+        return OHM_EXT_ROUTE_TYPE_UNKNOWN;
 }
 
 static struct audio_device_mapping *mapping_by_commonname_and_type(const char *commonname,
@@ -179,11 +169,11 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
         m = g_new0(struct audio_device_mapping, 1);
         m->type = device_type;
         if (strcmp(type, AUDIO_DEVICE_BUILTIN) == 0)
-            m->type |= AUDIO_DEVICE_TYPE_BUILTIN;
+            m->type |= OHM_EXT_ROUTE_TYPE_BUILTIN;
         else if (strcmp(type, AUDIO_DEVICE_WIRED) == 0)
-            m->type |= AUDIO_DEVICE_TYPE_WIRED;
+            m->type |= OHM_EXT_ROUTE_TYPE_WIRED;
         else if (strcmp(type, AUDIO_DEVICE_WIRELESS) == 0)
-            m->type |= AUDIO_DEVICE_TYPE_WIRELESS;
+            m->type |= OHM_EXT_ROUTE_TYPE_WIRELESS;
         m->name = g_strdup(common);
         mappings = g_slist_append(mappings, m);
         OHM_DEBUG(DBG_ROUTE, "init new device %s type %d", m->name, m->type);
@@ -194,7 +184,7 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
     r->name = g_strdup(device);
     if (g_str_has_suffix(r->name, AUDIO_DEVICE_VOICE_SUFFIX_1) ||
         g_str_has_suffix(r->name, AUDIO_DEVICE_VOICE_SUFFIX_2))
-        r->type |= AUDIO_DEVICE_TYPE_VOICE;
+        r->type |= OHM_EXT_ROUTE_TYPE_VOICE;
 
     m->routes = g_slist_append(m->routes, r);
     OHM_DEBUG(DBG_ROUTE, "init     device %s policy route %s", m->name, r->name);
@@ -243,9 +233,9 @@ void route_init(OhmPlugin *plugin)
     features = NULL;
 
     if ((entries = fsif_get_entries_by_name(FACTSTORE_AUDIO_OUTPUT)))
-        g_slist_foreach(entries, (GFunc) read_devices, GINT_TO_POINTER(AUDIO_DEVICE_TYPE_OUTPUT));
+        g_slist_foreach(entries, (GFunc) read_devices, GINT_TO_POINTER(OHM_EXT_ROUTE_TYPE_OUTPUT));
     if ((entries = fsif_get_entries_by_name(FACTSTORE_AUDIO_INPUT)))
-        g_slist_foreach(entries, (GFunc) read_devices, GINT_TO_POINTER(AUDIO_DEVICE_TYPE_INPUT));
+        g_slist_foreach(entries, (GFunc) read_devices, GINT_TO_POINTER(OHM_EXT_ROUTE_TYPE_INPUT));
 
     if ((entries = fsif_get_entries_by_name(FACTSTORE_FEATURE)))
         g_slist_foreach(entries, (GFunc) read_features, NULL);
@@ -318,7 +308,7 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
     type = type_from_string(type_str);
 
     if ((route = route_by_device_name_and_type(device, type))) {
-        if (route->common->type & AUDIO_DEVICE_TYPE_OUTPUT)
+        if (route->common->type & OHM_EXT_ROUTE_TYPE_OUTPUT)
             active = &audio_route_sink;
         else
             active = &audio_route_source;
@@ -395,8 +385,8 @@ int route_query_active(const char **sink, unsigned int *sink_type,
 
     *sink   = NULL;
     *source = NULL;
-    *sink_type   = AUDIO_DEVICE_TYPE_UNKNOWN;
-    *source_type = AUDIO_DEVICE_TYPE_UNKNOWN;
+    *sink_type   = OHM_EXT_ROUTE_TYPE_UNKNOWN;
+    *source_type = OHM_EXT_ROUTE_TYPE_UNKNOWN;
 
     /* If we have current routes already cached
      * no need to do queries to fact database. */
@@ -428,7 +418,7 @@ int route_query_active(const char **sink, unsigned int *sink_type,
             fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, sink);
 
         OHM_DEBUG(DBG_ROUTE, "query with device %s", *sink);
-        if ((route = route_by_device_name_and_type(*sink, AUDIO_DEVICE_TYPE_OUTPUT))) {
+        if ((route = route_by_device_name_and_type(*sink, OHM_EXT_ROUTE_TYPE_OUTPUT))) {
             *sink = route->common->name;
             *sink_type = route_type(route);
             audio_route_sink = route;
@@ -443,7 +433,7 @@ int route_query_active(const char **sink, unsigned int *sink_type,
         else
             fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, source);
 
-        if ((route = route_by_device_name_and_type(*source, AUDIO_DEVICE_TYPE_INPUT))) {
+        if ((route = route_by_device_name_and_type(*source, OHM_EXT_ROUTE_TYPE_INPUT))) {
             *source = route->common->name;
             *source_type = route_type(route);
             audio_route_source = route;
