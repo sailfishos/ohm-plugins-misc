@@ -1,0 +1,6 @@
+includedir=@includedir@
+
+Name: ohm-ext-route
+Description: OHM Extension Route
+Version: 2
+Cflags: -I${includedir}/ohm
