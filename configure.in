@@ -798,6 +798,6 @@ AC_CONFIG_FILES([build-aux/shave
 
 # plugins/telephony/mission-control/Makefile
 
-AC_OUTPUT
+AC_OUTPUT([plugins/route/ohm-ext-route.pc])
 
 echo "$PACKAGE_NAME: version $VERSION"
