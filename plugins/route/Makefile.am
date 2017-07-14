@@ -4,6 +4,10 @@ plugin_LTLIBRARIES = libohm_route.la
 configdir          = $(sysconfdir)/ohm/plugins.d
 confdir            = $(sysconfdir)/dbus-1/system.d/
 conf_DATA          = ohm-plugin-route.conf
+headerdir          = $(includedir)/ohm/ohm-ext
+header_DATA        = ohm-ext/route.h
+pkgconfigdir       = $(libdir)/pkgconfig
+pkgconfig_DATA     = ohm-ext-route.pc
 
 libohm_route_la_SOURCES = plugin.c dbusif.c route.c dresif.c
 

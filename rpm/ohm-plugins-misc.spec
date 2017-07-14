@@ -103,6 +103,14 @@ Requires:   ohm
 OHM plugin for querying and requesting audio routes.
 
 
+%package -n ohm-plugin-route-devel
+Summary:    Headers for Route plugin D-Bus API
+Group:      Development/Sources
+
+%description -n ohm-plugin-route-devel
+Headers for Route plugin D-Bus API.
+
+
 %package -n ohm-plugin-profile
 Summary:    OHM plugin for profile
 Group:      System/Resource Policy
@@ -201,6 +209,11 @@ fi
 %defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_route.so
 %{_sysconfdir}/dbus-1/system.d/ohm-plugin-route.conf
+
+%files -n ohm-plugin-route-devel
+%defattr(-,root,root,-)
+%{_libdir}/pkgconfig/ohm-ext-route.pc
+%{_includedir}/ohm/ohm-ext/route.h
 
 %files -n ohm-plugin-profile
 %defattr(-,root,root,-)

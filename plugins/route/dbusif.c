@@ -31,6 +31,15 @@ USA.
 #include "dbusif.h"
 #include "route.h"
 #include "org.nemomobile.Route.Manager.xml.h"
+#include "ohm-ext/route.h"
+
+#define DBUSIF_INTERFACE_VERSION            (2)
+
+/* D-Bus errors */
+#define DBUS_NEMOMOBILE_ERROR_PREFIX        "org.nemomobile.Error"
+#define DBUS_NEMOMOBILE_ERROR_FAILED        DBUS_NEMOMOBILE_ERROR_PREFIX ".Failed"
+#define DBUS_NEMOMOBILE_ERROR_DENIED        DBUS_NEMOMOBILE_ERROR_PREFIX ".RequestDenied"
+#define DBUS_NEMOMOBILE_ERROR_UNKNOWN       DBUS_NEMOMOBILE_ERROR_PREFIX ".Unknown"
 
 #define DIM(a) (sizeof(a) / sizeof(a[0]))
 
@@ -81,9 +90,9 @@ void dbusif_signal_route_changed(const char *device, unsigned int device_type)
     DBusMessage    *msg;
     int             success;
 
-    msg = dbus_message_new_signal(DBUS_ROUTE_MANAGER_PATH,
-                                  DBUS_ROUTE_MANAGER_INTERFACE,
-                                  DBUS_ROUTE_CHANGED_SIGNAL);
+    msg = dbus_message_new_signal(OHM_EXT_ROUTE_MANAGER_PATH,
+                                  OHM_EXT_ROUTE_MANAGER_INTERFACE,
+                                  OHM_EXT_ROUTE_CHANGED_SIGNAL);
 
     if (msg == NULL)
         OHM_ERROR("route [%s]: failed to create message", __FUNCTION__);
@@ -107,9 +116,9 @@ void dbusif_signal_feature_changed(const char *name,
     DBusMessage    *msg;
     int             success;
 
-    msg = dbus_message_new_signal(DBUS_ROUTE_MANAGER_PATH,
-                                  DBUS_ROUTE_MANAGER_INTERFACE,
-                                  DBUS_ROUTE_FEATURE_CHANGED_SIGNAL);
+    msg = dbus_message_new_signal(OHM_EXT_ROUTE_MANAGER_PATH,
+                                  OHM_EXT_ROUTE_MANAGER_INTERFACE,
+                                  OHM_EXT_ROUTE_FEATURE_CHANGED_SIGNAL);
 
     if (msg == NULL)
         OHM_ERROR("route [%s]: failed to create message", __FUNCTION__);
@@ -151,25 +160,25 @@ static void system_bus_init(void)
     dbus_connection_setup_with_g_main(dbus_connection, NULL);
 
     success = dbus_connection_register_object_path(dbus_connection,
-                                                   DBUS_ROUTE_MANAGER_PATH,
+                                                   OHM_EXT_ROUTE_MANAGER_PATH,
                                                    &media_method, NULL);
     if (!success) {
         OHM_ERROR("route [%s]: Can't register object path %s",
-                  __FUNCTION__, DBUS_ROUTE_MANAGER_PATH);
+                  __FUNCTION__, OHM_EXT_ROUTE_MANAGER_PATH);
         exit(1);
     }
 
-    ret = dbus_bus_request_name(dbus_connection, DBUS_ROUTE_MANAGER_INTERFACE,
+    ret = dbus_bus_request_name(dbus_connection, OHM_EXT_ROUTE_MANAGER_INTERFACE,
                                 DBUS_NAME_FLAG_REPLACE_EXISTING, &err);
     if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
         if (dbus_error_is_set(&err)) {
             OHM_ERROR("route [%s]: Can't be the primary owner for name %s: %s",
-                      __FUNCTION__, DBUS_ROUTE_MANAGER_INTERFACE, err.message);
+                      __FUNCTION__, OHM_EXT_ROUTE_MANAGER_INTERFACE, err.message);
             dbus_error_free(&err);
         }
         else {
             OHM_ERROR("route [%s]: Can't be the primary owner for name %s",
-                      __FUNCTION__, DBUS_ROUTE_MANAGER_INTERFACE);
+                      __FUNCTION__, OHM_EXT_ROUTE_MANAGER_INTERFACE);
         }
         exit(1);
     }
@@ -183,10 +192,10 @@ static void system_bus_cleanup(void)
     if (dbus_connection != NULL) {
         OHM_INFO("route: cleaning up system bus connection");
 
-        dbus_bus_release_name(dbus_connection, DBUS_ROUTE_MANAGER_INTERFACE, NULL);
+        dbus_bus_release_name(dbus_connection, OHM_EXT_ROUTE_MANAGER_INTERFACE, NULL);
 
         dbus_connection_unregister_object_path(dbus_connection,
-                                               DBUS_ROUTE_MANAGER_PATH);
+                                               OHM_EXT_ROUTE_MANAGER_PATH);
 
         dbus_connection_unref(dbus_connection);
         dbus_connection = NULL;
@@ -199,16 +208,16 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg, void *ud
     (void)ud;
 
     static method_t   methods[] = {
-        { DBUS_ROUTE_INTERFACE_VERSION_METHOD   ,   handle_interface_version   },
-        { DBUS_ROUTE_GET_ALL1_METHOD            ,   handle_get_all1            },
-        { DBUS_ROUTE_ENABLE_METHOD              ,   handle_enable              },
-        { DBUS_ROUTE_DISABLE_METHOD             ,   handle_disable             },
+        { OHM_EXT_ROUTE_INTERFACE_VERSION_METHOD    ,   handle_interface_version    },
+        { OHM_EXT_ROUTE_GET_ALL1_METHOD             ,   handle_get_all1             },
+        { OHM_EXT_ROUTE_ENABLE_METHOD               ,   handle_enable               },
+        { OHM_EXT_ROUTE_DISABLE_METHOD              ,   handle_disable              },
         /* Since InterfaceVersion 2 */
-        { DBUS_ROUTE_FEATURES_METHOD            ,   handle_features            },
-        { DBUS_ROUTE_FEATURES_ALLOWED_METHOD    ,   handle_features_allowed    },
-        { DBUS_ROUTE_FEATURES_ENABLED_METHOD    ,   handle_features_enabled    },
-        { DBUS_ROUTE_ROUTES_METHOD              ,   handle_routes              },
-        { DBUS_ROUTE_ACTIVE_ROUTES_METHOD       ,   handle_active_routes       }
+        { OHM_EXT_ROUTE_FEATURES_METHOD             ,   handle_features             },
+        { OHM_EXT_ROUTE_FEATURES_ALLOWED_METHOD     ,   handle_features_allowed     },
+        { OHM_EXT_ROUTE_FEATURES_ENABLED_METHOD     ,   handle_features_enabled     },
+        { OHM_EXT_ROUTE_ROUTES_METHOD               ,   handle_routes               },
+        { OHM_EXT_ROUTE_ACTIVE_ROUTES_METHOD        ,   handle_active_routes        }
     };
 
     int               type;
@@ -233,7 +242,7 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg, void *ud
     if (type != DBUS_MESSAGE_TYPE_METHOD_CALL)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    if (!strcmp(interface, DBUS_ROUTE_MANAGER_INTERFACE))
+    if (!strcmp(interface, OHM_EXT_ROUTE_MANAGER_INTERFACE))
     {
         for (i = 0; i < DIM(methods); i++) {
             method = methods + i;
