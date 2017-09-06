@@ -25,10 +25,14 @@ USA.
 #include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/poll.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
 #include <linux/input.h>
+#include <linux/types.h>
+#include <linux/netlink.h>
 
 #include <glib.h>
 
@@ -48,15 +52,6 @@ USA.
 #define test_bit(n, bits) (((bits)[(n) / BITS_PER_U32]) &       \
                            (0x1 << ((n) % BITS_PER_U32)))
 
-/*
- * Notes: With some legacy driver, the driver emits
- *   SW_JACK_PHYSICAL_INSERT (5:7) instead of 5:16 when it
- *   detects an incompatible heaset.
- *   By default we use SW_JACK_PHYSICAL_INSERT for what it is,
- *   but if incompatible-quirk is set we interpret PHYSICAL_INSERT
- *   as incompatible insert.
- */
-static int incompatible_insert_quirk;
 
 #ifndef SW_UNSUPPORT_INSERT
 #define SW_UNSUPPORT_INSERT     (0x10)
@@ -68,32 +63,21 @@ static int incompatible_insert_quirk;
  * input device descriptors
  */
 
-struct input_dev_s;
-typedef struct input_dev_s input_dev_t;
+typedef int  (*dev_init_t)(OhmPlugin *plugin, void **data);
+typedef void (*dev_exit_t)(void **data);
 
-typedef int (*dev_init_t)(input_dev_t *);
-typedef int (*dev_exit_t)(input_dev_t *);
-typedef int (*dev_event_cb_t)(struct input_event *, void *);
-
-typedef struct {
-    dev_init_t     init;                 /* discover, open and init device */
-    dev_exit_t     exit;                 /* clean up and close device */
-    dev_event_cb_t event;                /* handle event from device */
-} input_dev_ops_t;
-
-
-struct input_dev_s {
-    OhmPlugin       *plugin;
-    const char      *name;               /* device name */
-    int              fd;                 /* event file descriptor */
-    input_dev_ops_t  ops;                /* device operations */
-    void            *user_data;          /* callback user data */
-    GIOChannel      *gioc;               /* GMainLoop I/O channel */
-    gulong           gsrc;               /*       and I/O source */
-    int              retry;              /* Retry count if initial init fails */
-    guint            retry_source;
+enum dev_init_reply {
+    DEV_INIT_OK,
+    DEV_INIT_FAIL,
+    DEV_INIT_RETRY
 };
 
+typedef struct {
+    const char *name;                   /* implementation name */
+    dev_init_t  init;                   /* discover, open and init device */
+    dev_exit_t  exit;                   /* clean up and close device */
+    void       *data;                   /* implementation specific data */
+} dev_impl_t;
 
 /*
  * device states
@@ -117,32 +101,96 @@ typedef struct {
 } device_state_t;
 
 
+/*
+ * Implementation types
+ */
+enum {
+    EVENT_IMPL_INPUT,
+    EVENT_IMPL_UEVENT,
+    EVENT_IMPL_COUNT
+};
+
+/* Default to /dev/input model */
+static const int default_impl = EVENT_IMPL_INPUT;
+static dev_impl_t *event_impl;
 
 /*
- * private prototypes
+ * Common implementation
+ */
+static OhmPlugin *accessories_plugin;
+
+static void wired_init_retry(dev_impl_t *impl);
+static gboolean wired_init_retry_cb(gpointer userdata);
+static void device_connect(device_state_t *device);
+static void device_disconnect(device_state_t *device);
+static void update_facts(void);
+
+/*
+ * Jack implementation
  */
 
-static int  jack_init (input_dev_t *dev);
-static int  jack_exit (input_dev_t *dev);
-static int  jack_event(struct input_event *event, void *user_data);
-static void jack_update_facts(void);
+struct input_dev_s;
+typedef struct input_dev_s input_dev_t;
 
-static gboolean initial_jack_query_cb(input_dev_t *dev);
-static void initial_jack_query_schedule(input_dev_t *device);
-static void initial_jack_query_cancel(void);
+struct input_dev_s {
+    int              inverted;           /* inverted jack events */
+    int              insert_quirk;
+    int              fd;                 /* event file descriptor */
+    GIOChannel      *gioc;               /* GMainLoop I/O channel */
+    gulong           gsrc;               /*       and I/O source */
+    guint            initial_query_src;  /* timer for initial jack query */
+    int              init_retry;         /* Retry count if initial init fails */
+};
 
-static int  find_device(const char *, input_dev_t *);
+#define JACK_INIT_RETRY_COUNT (3)
 
-static void device_init(input_dev_t *dev);
-static int add_event_handler(input_dev_t *dev);
+static int  jack_init(OhmPlugin *plugin, void **data);
+static void jack_exit(void **data);
+static int  jack_event_handler_add(input_dev_t *dev);
+static void jack_event_handler_del(input_dev_t *dev);
+static gboolean jack_event_handler(GIOChannel *gioc, GIOCondition mask, gpointer data);
+static int  jack_event(input_dev_t *dev, struct input_event *event);
+static int  jack_query(input_dev_t *dev);
+
+static gboolean jack_initial_query_cb(input_dev_t *dev);
+static void jack_initial_query_schedule(input_dev_t *dev);
+static void jack_initial_query_cancel(input_dev_t *dev);
+
+static int  jack_find_device(const char *, input_dev_t *);
+
+
+/*
+ * Uevent implementation
+ */
+
+struct uevent_dev_s;
+typedef struct uevent_dev_s uevent_dev_t;
+
+struct uevent_dev_s {
+    char               *switch_name;
+    struct sockaddr_nl  nls;
+    struct pollfd       pollfd;
+    GIOChannel         *iochannel;
+    guint               netlink_watch_src;
+};
+
+#define UEVENT_SWITCH_DEFAULT       "h2w"
+#define UEVENT_MAX_PAYLOAD          (2048)
+#define UEVENT_SWITCH_DISCONNECTED  "0"
+#define UEVENT_SWITCH_HEADSET       "1"
+#define UEVENT_SWITCH_HEADPHONE     "2"
+
+static int uevent_init(OhmPlugin *plugin, void **data);
+static void uevent_exit(void **data);
+static gboolean uevent_handle_cb(GIOChannel *io, GIOCondition cond, gpointer userdata);
 
 /*
  * devices of interest
  */
 
-static input_dev_t devices[] = {
-    { NULL, "jack", -1, { jack_init, jack_exit, jack_event }, NULL, NULL, 0, 3, 0 },
-    { NULL, NULL, -1, { NULL, NULL, NULL }, NULL, NULL, 0, 0, 0 }
+static dev_impl_t implementations[EVENT_IMPL_COUNT] = {
+    { "jack",   jack_init, jack_exit,       NULL },
+    { "uevent", uevent_init, uevent_exit,   NULL }
 };
 
 
@@ -179,13 +227,13 @@ static int videoout;
 static int incompatible;
 static int physical;
 
-static int inverted;                              /* inverted jack events */
 
 /*
  * timers
  */
 
-static guint  initial_jack_query_source;          /* timer for initial jack query */
+static guint init_retry_source;      /* timer for retrying implementation init */
+
 
 /*****************************************************************************
  *                             *** jack insertion ***                        *
@@ -195,13 +243,13 @@ static guint  initial_jack_query_source;          /* timer for initial jack quer
  * jack_query
  ********************/
 static int
-jack_query(int fd)
+jack_query(input_dev_t *dev)
 {
     uint32_t bitmask[NBITS(KEY_MAX)];
-    
+
     memset(bitmask, 0, sizeof(bitmask));
 
-    if (ioctl(fd, EVIOCGSW(sizeof(bitmask)), &bitmask) < 0) {
+    if (ioctl(dev->fd, EVIOCGSW(sizeof(bitmask)), &bitmask) < 0) {
         OHM_ERROR("accessories: failed to query current jack state (%d: %s)",
                   errno, strerror(errno));
         return FALSE;
@@ -212,7 +260,7 @@ jack_query(int fd)
     lineout      = test_bit(SW_LINEOUT_INSERT      , bitmask);
     videoout     = test_bit(SW_VIDEOOUT_INSERT     , bitmask);
     physical     = test_bit(SW_JACK_PHYSICAL_INSERT, bitmask);
-    if (incompatible_insert_quirk)
+    if (dev->insert_quirk)
         incompatible = test_bit(SW_JACK_PHYSICAL_INSERT, bitmask);
     else
         incompatible = test_bit(SW_UNSUPPORT_INSERT , bitmask);
@@ -226,104 +274,113 @@ jack_query(int fd)
     if (incompatible)
         OHM_INFO("accessories: incompatible accessory connected");
 
-    jack_update_facts();
+    update_facts();
 
     return TRUE;
 }
 
-static gboolean
-wired_init_retry_cb(input_dev_t *dev)
-{
-    OHM_INFO("accessories: retrying %s init..", dev->name);
-    dev->retry_source = 0;
-    device_init(dev);
-
-    return FALSE;
-}
 
 static void
-device_init(input_dev_t *dev)
+wired_init_retry(dev_impl_t *impl)
 {
-    if (!dev->ops.init(dev)) {
-        if (dev->retry > 0) {
-            OHM_INFO("accessories: could not initialize '%s', retrying in %d seconds", dev->name, RETRY_TIMEOUT_S);
-            dev->retry--;
-            dev->retry_source = g_timeout_add_seconds(RETRY_TIMEOUT_S, (GSourceFunc) wired_init_retry_cb, dev);
-        } else {
-            OHM_WARNING("accessories: could not initialize '%s'", dev->name);
-        }
-    }
+    if (init_retry_source)
+        g_source_remove(init_retry_source);
+    OHM_INFO("accessories: retrying %s init in %d seconds..", impl->name, RETRY_TIMEOUT_S);
+    init_retry_source = g_timeout_add_seconds(RETRY_TIMEOUT_S, wired_init_retry_cb, impl);
 }
 
 
-/********************
- * initial_jack_query_cb
- ********************/
 static gboolean
-initial_jack_query_cb(input_dev_t *dev)
+wired_init_retry_cb(gpointer userdata)
 {
-    jack_query(dev->fd);
-    add_event_handler(dev);
-    initial_jack_query_source = 0;
+    dev_impl_t *impl = (dev_impl_t *) userdata;
+
+    init_retry_source = 0;
+
+    if (impl->init(accessories_plugin, &impl->data) == DEV_INIT_RETRY)
+        wired_init_retry(impl);
 
     return FALSE;
 }
 
 
 /********************
- * initial_jack_query_cancel
+ * jack_initial_query_cb
  ********************/
-static void
-initial_jack_query_cancel(void)
+static gboolean
+jack_initial_query_cb(input_dev_t *dev)
 {
-    if (initial_jack_query_source > 0) {
-        g_source_remove(initial_jack_query_source);
-        initial_jack_query_source = 0;
-    }
+    jack_query(dev);
+    jack_event_handler_add(dev);
+    dev->initial_query_src = 0;
+
+    return FALSE;
 }
 
 
 /********************
- * initial_jack_query_schedule
+ * jack_initial_query_cancel
  ********************/
 static void
-initial_jack_query_schedule(input_dev_t *device)
+jack_initial_query_cancel(input_dev_t *dev)
 {
-    initial_jack_query_cancel();
-    initial_jack_query_source = g_timeout_add_seconds(RETRY_TIMEOUT_S,
-                                                      (GSourceFunc) initial_jack_query_cb,
-                                                      device);
+    if (dev->initial_query_src > 0)
+        g_source_remove(dev->initial_query_src), dev->initial_query_src = 0;
 }
 
 
 /********************
- * jack_init
+ * jack_initial_query_schedule
  ********************/
+static void
+jack_initial_query_schedule(input_dev_t *dev)
+{
+    jack_initial_query_cancel(dev);
+    dev->initial_query_src = g_timeout_add_seconds(RETRY_TIMEOUT_S,
+                                                   (GSourceFunc) jack_initial_query_cb,
+                                                   dev);
+}
+
+
 static int
-jack_init(input_dev_t *dev)
-{
+jack_init(OhmPlugin *plugin, void **data) {
+    input_dev_t *dev;
+
     const char *device;
     const char *patterns[] = { NULL, "Headset Jack", " Jack" };
     const char *invert;
     const char *quirk;
 
-    invert = ohm_plugin_get_param(dev->plugin, "inverted-jack-events");
-    device = ohm_plugin_get_param(dev->plugin, "jack-device");
-    /* Default to disabling incompatible quirk */
-    quirk = ohm_plugin_get_param(dev->plugin, "incompatible-quirk");
+    if (!*data) {
+        *data = g_new0(input_dev_t, 1);
+        dev = *data;
+        dev->fd = -1;
+        dev->init_retry = JACK_INIT_RETRY_COUNT;
+    }
 
+    dev = *data;
+
+    invert = ohm_plugin_get_param(plugin, "inverted-jack-events");
+    device = ohm_plugin_get_param(plugin, "jack-device");
+    /* Default to disabling incompatible quirk */
+    quirk = ohm_plugin_get_param(plugin, "incompatible-quirk");
+
+    /*
+     * Notes: With some legacy driver, the driver emits
+     *   SW_JACK_PHYSICAL_INSERT (5:7) instead of 5:16 when it
+     *   detects an incompatible heaset.
+     *   By default we use SW_JACK_PHYSICAL_INSERT for what it is,
+     *   but if incompatible-quirk is set we interpret PHYSICAL_INSERT
+     *   as incompatible insert.
+     */
     if (quirk && !strcasecmp(quirk, "true"))
-        incompatible_insert_quirk = 1;
-    else
-        incompatible_insert_quirk = 0;
+        dev->insert_quirk = 1;
 
     if (invert != NULL && !strcasecmp(invert, "true")) {
         OHM_INFO("accessories: jack events have inverted semantics");
-        inverted = 1;
+        dev->inverted = 1;
     }
-    else
-        inverted = 0;
-    
+
     if (device != NULL) {
         OHM_INFO("accessories: using device %s for jack detection", device);
 
@@ -335,7 +392,7 @@ jack_init(input_dev_t *dev)
     if (dev->fd < 0) {
         unsigned int i;
 
-        patterns[0] = ohm_plugin_get_param(dev->plugin, "jack-match");
+        patterns[0] = ohm_plugin_get_param(plugin, "jack-match");
         if (patterns[0])
             memset(patterns + 1, 0, sizeof(patterns) - sizeof(const char *));
 
@@ -344,34 +401,226 @@ jack_init(input_dev_t *dev)
                 continue;
 
             OHM_INFO("accessories: discover jack device by matching '%s'", patterns[i]);
-            if (find_device(patterns[i], dev))
+            if (jack_find_device(patterns[i], dev))
                 break;
         }
     }
-    
+
     if (dev->fd >= 0) {
-        initial_jack_query_schedule(dev);
-        return TRUE;
+        jack_initial_query_schedule(dev);
+        return DEV_INIT_OK;
     }
     else {
         OHM_INFO("accessories: failed to open jack detection device");
-        return FALSE;
+        if (dev->init_retry > 0) {
+            dev->init_retry--;
+            return DEV_INIT_RETRY;
+        }
     }
+
+    if (*data) {
+        g_free(*data);
+        *data = NULL;
+    }
+
+    return DEV_INIT_FAIL;
 }
 
 
-/********************
- * jack_exit
- ********************/
-static int
-jack_exit(input_dev_t *dev)
+static gboolean
+uevent_handle_cb(GIOChannel *io, GIOCondition cond, gpointer userdata)
 {
-    if (dev->fd >= 0) {
-        close(dev->fd);
-        dev->fd = -1;
+    uevent_dev_t *dev = (uevent_dev_t *) userdata;
+
+    char        buf[UEVENT_MAX_PAYLOAD];
+    const char *line;
+    int         fd;
+    int         len, i = 0;
+
+    const char *action       = NULL;
+    const char *subsystem    = NULL;
+    const char *switch_name  = NULL;
+    const char *switch_state = NULL;
+
+    if (cond & (G_IO_HUP | G_IO_ERR | G_IO_NVAL)) {
+        OHM_ERROR("accessories: got uevent cond %d", cond);
+
+        if (cond & G_IO_HUP)
+            OHM_ERROR("accessories: uevent socket closed unexpectedly");
+
+        if (cond & G_IO_ERR)
+            OHM_ERROR("accessories: uevent socket had an I/O error");
+
+        if (cond & G_IO_NVAL)
+            OHM_ERROR("accessories: uevent socket invalid request");
+
+        goto error;
     }
-    
+
+    fd = g_io_channel_unix_get_fd(io);
+    len = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
+    if (len == -1) {
+        OHM_ERROR("accessories: recv failed");
+        goto done;
+    }
+
+    while (i < len) {
+        line = buf + i;
+
+        if (!action && g_str_has_prefix(line, "ACTION="))
+            action = line + 7;
+        else if (!subsystem && g_str_has_prefix(line, "SUBSYSTEM="))
+            subsystem = line + 10;
+        else if (!switch_name && g_str_has_prefix(line, "SWITCH_NAME="))
+            switch_name = line + 12;
+        else if (!switch_state && g_str_has_prefix(line, "SWITCH_STATE="))
+            switch_state = line + 13;
+
+        if (action && subsystem && switch_name && switch_state)
+            break;
+
+        i += strnlen(line, len - i) + 1;
+    }
+
+    /* Not all data */
+    if (!action || !subsystem || !switch_name || !switch_state)
+        goto done;
+
+    /* Not our event */
+    if (g_strcmp0(subsystem, "switch"))
+        goto done;
+
+    /* Not our action */
+    if (g_strcmp0(action, "change"))
+        goto done;
+
+    /* Not our switch */
+    if (g_strcmp0(switch_name, dev->switch_name))
+        goto done;
+
+    if (!g_strcmp0(switch_state, UEVENT_SWITCH_DISCONNECTED)) {
+        headphone = 0;
+        microphone = 0;
+    } else if (!g_strcmp0(switch_state, UEVENT_SWITCH_HEADSET)) {
+        headphone = 1;
+        microphone = 1;
+    } else if (!g_strcmp0(switch_state, UEVENT_SWITCH_HEADPHONE)) {
+        headphone = 1;
+        microphone = 0;
+    } else {
+        OHM_DEBUG(DBG_WIRED, "uevent unhandled switch state %s", switch_state);
+        goto done;
+    }
+
+    OHM_DEBUG(DBG_WIRED, "uevent action: %s subsystem: %s switch_name: %s switch_state: %s",
+                         action, subsystem, switch_name, switch_state);
+
+    update_facts();
+
+done:
     return TRUE;
+
+error:
+    OHM_ERROR("accessories: uevent watch disabled");
+    return FALSE;
+}
+
+
+static int
+uevent_init(OhmPlugin *plugin, void **data)
+{
+    uevent_dev_t *dev;
+    const char *switch_name;
+
+    if (!*data)
+        *data = g_new0(uevent_dev_t, 1);
+
+    dev = *data;
+
+    switch_name = ohm_plugin_get_param(plugin, "switch");
+    dev->switch_name = g_strdup(switch_name ? switch_name : UEVENT_SWITCH_DEFAULT);
+
+    memset(&dev->nls, 0, sizeof(dev->nls));
+    dev->nls.nl_family = AF_NETLINK;
+    dev->nls.nl_pid = getpid();
+    dev->nls.nl_groups = 1;
+
+    dev->pollfd.events = POLLIN;
+    dev->pollfd.fd = socket(AF_NETLINK, SOCK_CLOEXEC | SOCK_RAW, NETLINK_KOBJECT_UEVENT);
+    if (dev->pollfd.fd == -1) {
+        OHM_ERROR("accessories: failed to open uevent socket.");
+        goto error;
+    }
+
+    if (bind(dev->pollfd.fd, (void *) &dev->nls, sizeof(struct sockaddr_nl))) {
+        OHM_ERROR("accessories: failed to bind uevent socket.");
+        goto error;
+    }
+
+    dev->iochannel = g_io_channel_unix_new(dev->pollfd.fd);
+    dev->netlink_watch_src = g_io_add_watch(dev->iochannel,
+                                        G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL,
+                                        uevent_handle_cb,
+                                        dev);
+
+    return DEV_INIT_OK;
+
+error:
+    if (dev && dev->pollfd.fd > -1) {
+        close(dev->pollfd.fd);
+        dev->pollfd.fd = -1;
+    }
+
+    if (*data) {
+        g_free(*data);
+        *data = NULL;
+    }
+
+    return DEV_INIT_FAIL;
+}
+
+
+static void
+jack_exit(void **data)
+{
+    input_dev_t *dev = *data;
+
+    if (dev) {
+        jack_initial_query_cancel(dev);
+        jack_event_handler_del(dev);
+
+        if (dev->fd > 0)
+            close(dev->fd);
+
+        g_free(dev);
+    }
+
+    *data = NULL;
+}
+
+
+static void
+uevent_exit(void **data)
+{
+    uevent_dev_t *dev = *data;
+
+    if (dev) {
+        if (dev->netlink_watch_src)
+            g_source_remove(dev->netlink_watch_src), dev->netlink_watch_src = 0;
+
+        if (dev->iochannel)
+            g_io_channel_unref(dev->iochannel), dev->iochannel = NULL;
+
+        if (dev->switch_name)
+            g_free(dev->switch_name), dev->switch_name = NULL;
+
+        if (dev->pollfd.fd > -1)
+            close(dev->pollfd.fd), dev->pollfd.fd = -1;
+
+        g_free(dev);
+    }
+
+    *data = NULL;
 }
 
 
@@ -379,18 +628,16 @@ jack_exit(input_dev_t *dev)
  * jack_event
  ********************/
 static int
-jack_event(struct input_event *event, void *user_data)
+jack_event(input_dev_t *dev, struct input_event *event)
 {
     int value;
-    
-    (void)user_data;
 
     if (event->type != EV_SW && event->type != EV_SYN) {
         OHM_DEBUG(DBG_WIRED, "ignoring jack event type %d", event->type);
         return TRUE;
     }
 
-    value = (event->value ? 1 : 0) ^ inverted;
+    value = (event->value ? 1 : 0) ^ dev->inverted;
     
     OHM_DEBUG(DBG_WIRED, "jack detection event (%d, %d (interpret as: %d))",
               event->code, event->value, value);
@@ -420,14 +667,14 @@ jack_event(struct input_event *event, void *user_data)
         break;
 
     case SW_JACK_PHYSICAL_INSERT:
-        if (incompatible_insert_quirk)
+        if (dev->insert_quirk)
             incompatible = value;
         else
             physical = value;
         break;
 
     SYN_EVENT:
-        jack_update_facts();
+        update_facts();
         break;
 
     default:
@@ -440,10 +687,10 @@ jack_event(struct input_event *event, void *user_data)
 
 
 /********************
- * jack_connect
+ * device_connect
  ********************/
 static void
-jack_connect(device_state_t *device)
+device_connect(device_state_t *device)
 {
     if (!device->connected) {
         device->connected = 1;
@@ -453,10 +700,10 @@ jack_connect(device_state_t *device)
 
 
 /********************
- * jack_disconnect
+ * device_disconnect
  ********************/
 static void
-jack_disconnect(device_state_t *device)
+device_disconnect(device_state_t *device)
 {
     if (device->connected) {
         device->connected = 0;
@@ -466,10 +713,10 @@ jack_disconnect(device_state_t *device)
 
 
 /********************
- * jack_update_facts
+ * update_facts
  ********************/
 static void
-jack_update_facts(void)
+update_facts(void)
 {
     device_state_t *device, *current;
 
@@ -485,11 +732,11 @@ jack_update_facts(void)
         current = NULL;
 
     if (current != NULL)
-        jack_connect(current);
+        device_connect(current);
 
     for (device = states; device->name != NULL; device++) {
         if (device != current && device->connected)
-            jack_disconnect(device);
+            device_disconnect(device);
     }
 }
 
@@ -585,10 +832,10 @@ check_device(const char *pattern, int fd, char *name, size_t name_size)
 
 
 /********************
- * find_device
+ * jack_find_device
  ********************/
 static int
-find_device(const char *pattern, input_dev_t *dev)
+jack_find_device(const char *pattern, input_dev_t *dev)
 {
     DIR           *dir;
     struct dirent *de;
@@ -615,7 +862,7 @@ find_device(const char *pattern, input_dev_t *dev)
         }
 
         if (check_device(pattern, fd, name, sizeof(name))) {
-            OHM_INFO("accessories: %s found at %s (%s)", dev->name, path, name);
+            OHM_INFO("accessories: jack found at %s (%s)", path, name);
             dev->fd = fd;
             break;
         }
@@ -630,10 +877,10 @@ find_device(const char *pattern, input_dev_t *dev)
 
 
 /********************
- * event_handler
+ * jack_event_handler
  ********************/
 static gboolean
-event_handler(GIOChannel *gioc, GIOCondition mask, gpointer data)
+jack_event_handler(GIOChannel *gioc, GIOCondition mask, gpointer data)
 {
     input_dev_t        *dev = (input_dev_t *)data;
     struct input_event  event;
@@ -642,20 +889,20 @@ event_handler(GIOChannel *gioc, GIOCondition mask, gpointer data)
 
     if (mask & G_IO_IN) {
         if (read(dev->fd, &event, sizeof(event)) != sizeof(event)) {
-            OHM_ERROR("accessories: failed to read %s event", dev->name);
+            OHM_ERROR("accessories: failed to read jack event");
             return FALSE;
         }
 
-        dev->ops.event(&event, dev->user_data);
+        jack_event(dev, &event);
     }
 
     if (mask & G_IO_HUP) {
-        OHM_ERROR("accessories: %s device closed unexpectedly", dev->name);
+        OHM_ERROR("accessories: jack device closed unexpectedly");
         return FALSE;
     }
 
     if (mask & G_IO_ERR) {
-        OHM_ERROR("accessories: %s device had an I/O error", dev->name);
+        OHM_ERROR("accessories: jack device had an I/O error");
         return FALSE;
     }
 
@@ -664,37 +911,33 @@ event_handler(GIOChannel *gioc, GIOCondition mask, gpointer data)
 
 
 /********************
- * add_event_handler
+ * jack_event_handler_add
  ********************/
 static int
-add_event_handler(input_dev_t *dev)
+jack_event_handler_add(input_dev_t *dev)
 {
     GIOCondition mask;
 
     mask = G_IO_IN | G_IO_HUP | G_IO_ERR;
 
     dev->gioc = g_io_channel_unix_new(dev->fd);
-    dev->gsrc = g_io_add_watch(dev->gioc, mask, event_handler, dev);
+    dev->gsrc = g_io_add_watch(dev->gioc, mask, jack_event_handler, dev);
 
     return dev->gsrc != 0;
 }
 
 
 /********************
- * del_event_handler
+ * jack_event_handler_del
  ********************/
 static void
-del_event_handler(input_dev_t *dev)
+jack_event_handler_del(input_dev_t *dev)
 {
-    if (dev->gsrc != 0) {
-        g_source_remove(dev->gsrc);
-        dev->gsrc = 0;
-    }
+    if (dev->gsrc != 0)
+        g_source_remove(dev->gsrc), dev->gsrc = 0;
 
-    if (dev->gioc != NULL) {
-        g_io_channel_unref(dev->gioc);
-        dev->gioc = NULL;
-    }
+    if (dev->gioc != NULL)
+        g_io_channel_unref(dev->gioc), dev->gioc = NULL;
 }
 
 
@@ -704,16 +947,38 @@ del_event_handler(input_dev_t *dev)
 void
 wired_init(OhmPlugin *plugin, int dbg_wired)
 {
-    input_dev_t *dev;
+    const char *model;
 
+    accessories_plugin = plugin;
     DBG_WIRED = dbg_wired;
+    event_impl = NULL;
+
+    model = ohm_plugin_get_param(plugin, "model");
+
+    if (model) {
+        unsigned int i;
+
+        for (i = 0; i < EVENT_IMPL_COUNT; i++) {
+            if (!strcasecmp(model, implementations[i].name)) {
+                event_impl = &implementations[i];
+                break;
+            }
+        }
+
+        if (!event_impl)
+            OHM_ERROR("accessories: unknown model %s, default to %s",
+                      model, implementations[default_impl].name);
+    }
+
+    if (!event_impl)
+        event_impl = &implementations[default_impl];
+
+    OHM_INFO("accessories: use %s model for wired", event_impl->name);
 
     lookup_facts();
 
-    for (dev = devices; dev->name != NULL; dev++) {
-        dev->plugin = plugin;
-        device_init(dev);
-    }
+    if (event_impl->init(plugin, &event_impl->data) == DEV_INIT_RETRY)
+        wired_init_retry(event_impl);
 }
 
 
@@ -723,16 +988,11 @@ wired_init(OhmPlugin *plugin, int dbg_wired)
 void
 wired_exit(void)
 {
-    input_dev_t *dev;
+    if (init_retry_source)
+        g_source_remove(init_retry_source), init_retry_source = 0;
 
-    initial_jack_query_cancel();
-
-    for (dev = devices; dev->name != NULL; dev++) {
-        if (dev->retry_source > 0)
-            g_source_remove(dev->retry_source);
-        del_event_handler(dev);
-        dev->ops.exit(dev);
-    }
+    if (event_impl)
+        event_impl->exit(&event_impl->data), event_impl = NULL;
 
     release_facts();
 }
