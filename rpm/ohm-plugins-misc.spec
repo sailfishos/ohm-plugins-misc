@@ -111,6 +111,24 @@ Group:      Development/Sources
 Headers for Route plugin D-Bus API.
 
 
+%package -n ohm-plugin-mdm
+Summary:    OHM plugin for MDM features
+Group:      System/Resource Policy
+Requires:   %{name} = %{version}-%{release}
+Requires:   ohm
+
+%description -n ohm-plugin-mdm
+OHM plugin for MDM features.
+
+
+%package -n ohm-plugin-mdm-devel
+Summary:    Headers for MDM plugin D-Bus API
+Group:      Development/Sources
+
+%description -n ohm-plugin-mdm-devel
+Headers for MDM plugin D-Bus API.
+
+
 %package -n ohm-plugin-profile
 Summary:    OHM plugin for profile
 Group:      System/Resource Policy
@@ -214,6 +232,17 @@ fi
 %defattr(-,root,root,-)
 %{_libdir}/pkgconfig/ohm-ext-route.pc
 %{_includedir}/ohm/ohm-ext/route.h
+
+%files -n ohm-plugin-mdm
+%defattr(-,root,root,-)
+%{_libdir}/ohm/libohm_mdm.so
+%{_sysconfdir}/dbus-1/system.d/ohm-plugin-mdm.conf
+%{_sysconfdir}/pulse/xpolicy.conf.d/mdm-audio.conf
+
+%files -n ohm-plugin-mdm-devel
+%defattr(-,root,root,-)
+%{_libdir}/pkgconfig/ohm-ext-mdm.pc
+%{_includedir}/ohm/ohm-ext/mdm.h
 
 %files -n ohm-plugin-profile
 %defattr(-,root,root,-)

@@ -6,7 +6,8 @@ SUBDIRS = 	     \
 	dbus         \
 	dbus-signal  \
 	fsif         \
-	route
+	route        \
+	mdm
 
 #	upstart
 #	cgroups

@@ -762,6 +762,7 @@ AC_CONFIG_FILES([build-aux/shave
                  plugins/console/Makefile
                  plugins/fsif/Makefile
                  plugins/route/Makefile
+                 plugins/mdm/Makefile
                  plugins/gconf/Makefile
                  plugins/hal/Makefile
                  plugins/hal/tests/Makefile
@@ -798,6 +799,7 @@ AC_CONFIG_FILES([build-aux/shave
 
 # plugins/telephony/mission-control/Makefile
 
-AC_OUTPUT([plugins/route/ohm-ext-route.pc])
+AC_OUTPUT([plugins/route/ohm-ext-route.pc
+           plugins/mdm/ohm-ext-mdm.pc])
 
 echo "$PACKAGE_NAME: version $VERSION"
