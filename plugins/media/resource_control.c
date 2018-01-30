@@ -1,6 +1,6 @@
 /*************************************************************************
 Copyright (C) 2010 Nokia Corporation.
-              2013 Jolla Ltd.
+              2013,2018 Jolla Ltd.
 
 These OHM Modules are free software; you can redistribute
 it and/or modify it under the terms of the GNU Lesser General Public
@@ -42,18 +42,31 @@ OHM_IMPORTABLE(void  , timer_del  , (void *timer));
  /*****************************************************************************
  *                           *** resource control ***                        *
  *****************************************************************************/
-#define RSET_ID 1
 
 typedef struct {
     resconn_t *conn;
-    resset_t  *rset;
-    uint32_t   granted;
-    uint32_t   is_releasing;
     uint32_t   reqno;
-    int        video;
 } resctl_t;
 
 static resctl_t rctl;
+
+typedef struct {
+    const char *group;
+    const int   rset_id;
+    resset_t   *rset;
+    uint32_t    granted;
+    uint32_t    is_acquiring;
+    uint32_t    is_releasing;
+    int         video;
+} media_res_t;
+
+#define MEDIA_RES_COUNT (2)
+
+/* media types we control. hard-coded for now */
+static media_res_t media_types[MEDIA_RES_COUNT] = {
+    { "ringtone",   1, NULL, 0, 0, 0, 0 },
+    { "alarm",      2, NULL, 0, 0, 0, 0 },
+};
 
 static void resctl_connect(void);
 static void resctl_manager_up(resconn_t *rc);
@@ -104,35 +117,44 @@ static void
 resctl_connect(void)
 {
     resmsg_t msg;
-    
+    unsigned int i;
+
     OHM_INFO("media resctl: connecting...");
 
-    msg.record.type       = RESMSG_REGISTER;
-    msg.record.id         = RSET_ID;
-    msg.record.reqno      = rctl.reqno++;
-    msg.record.rset.all   = RESMSG_AUDIO_PLAYBACK;
-    msg.record.rset.opt   = 0;
-    msg.record.rset.share = 0;
-    msg.record.rset.mask  = 0;
-    msg.record.klass      = "ringtone";
-    msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
+    for (i = 0; i < MEDIA_RES_COUNT; i++) {
+        OHM_INFO("media resctl: connecting '%s'...", media_types[i].group);
+        msg.record.type       = RESMSG_REGISTER;
+        msg.record.id         = media_types[i].rset_id;
+        msg.record.reqno      = rctl.reqno++;
+        msg.record.rset.all   = RESMSG_AUDIO_PLAYBACK;
+        msg.record.rset.opt   = 0;
+        msg.record.rset.share = 0;
+        msg.record.rset.mask  = 0;
+        msg.record.klass      = (char *) media_types[i].group;
+        msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
 
-    rctl.rset = resconn_connect(rctl.conn, &msg, resctl_status);
+        media_types[i].rset = resconn_connect(rctl.conn, &msg, resctl_status);
+    }
 }
 
 
 static void
 resctl_disconnect(void)
 {
+    unsigned int i;
+
     OHM_INFO("media resctl: disconnecting...");
 
-    rctl.conn         = 0;
-    rctl.rset         = NULL;
-    rctl.granted      = 0;
-    rctl.is_releasing = 0;
-    rctl.reqno        = 0;
-    rctl.video        = FALSE;
+    rctl.conn   = 0;
+    rctl.reqno  = 0;
 
+    for (i = 0; i < MEDIA_RES_COUNT; i++) {
+        media_types[i].rset         = NULL;
+        media_types[i].granted      = 0;
+        media_types[i].is_acquiring = 0;
+        media_types[i].is_releasing = 0;
+        media_types[i].video        = FALSE;
+    }
 }
 
 
@@ -150,49 +172,74 @@ resctl_manager_up(resconn_t *rc)
 static void
 resctl_unregister(resmsg_t *msg, resset_t *rset, void *data)
 {
+    unsigned int i;
+
     OHM_INFO("media resctl: unregister");
-    
-    resproto_reply_message(rset, msg, data, 0, "OK");
 
-    rctl.rset = NULL;                                /* I guess... */
+    for (i = 0; i < MEDIA_RES_COUNT; i++) {
+        if (media_types[i].rset == rset) {
+            resproto_reply_message(rset, msg, data, 0, "OK");
+            media_types[i].rset = NULL;                                /* I guess... */
+            break;
+        }
+    }
 }
 
 
 void
-resctl_acquire(void)
+resctl_acquire(const char *group)
 {
     resmsg_t msg;
+    unsigned int i;
 
-    OHM_INFO("media resctl: acquiring...");
+    for (i = 0; i < MEDIA_RES_COUNT; i++) {
+        if (strcmp(media_types[i].group, group) == 0) {
+            OHM_INFO("media resctl: acquiring '%s'...", media_types[i].group);
 
-    if (rctl.rset == NULL)
-        return;
+            if (media_types[i].rset == NULL ||
+                media_types[i].is_acquiring ||
+                media_types[i].granted)
+                break;
 
-    msg.possess.type  = RESMSG_ACQUIRE;
-    msg.possess.id    = RSET_ID;
-    msg.possess.reqno = rctl.reqno++;
-    
-    resproto_send_message(rctl.rset, &msg, resctl_status);
+            media_types[i].is_acquiring = 1;
+
+            msg.possess.type  = RESMSG_ACQUIRE;
+            msg.possess.id    = media_types[i].rset_id;
+            msg.possess.reqno = rctl.reqno++;
+
+            resproto_send_message(media_types[i].rset, &msg, resctl_status);
+            break;
+        }
+    }
 }
 
 
 void
-resctl_release(void)
+resctl_release(const char *group)
 {
     resmsg_t msg;
+    unsigned int i;
 
-    OHM_INFO("media resctl: releasing...");
+    for (i = 0; i < MEDIA_RES_COUNT; i++) {
+        if (strcmp(media_types[i].group, group) == 0) {
+            OHM_INFO("media resctl: releasing '%s'...", media_types[i].group);
 
-    if (rctl.rset == NULL || rctl.is_releasing)
-        return;
+            if (media_types[i].rset == NULL ||
+                media_types[i].is_releasing ||
+                media_types[i].granted == 0)
+                break;
 
-    rctl.is_releasing = 1;
+            media_types[i].is_acquiring = 0;
+            media_types[i].is_releasing = 1;
 
-    msg.possess.type  = RESMSG_RELEASE;
-    msg.possess.id    = RSET_ID;
-    msg.possess.reqno = rctl.reqno++;
+            msg.possess.type  = RESMSG_RELEASE;
+            msg.possess.id    = media_types[i].rset_id;
+            msg.possess.reqno = rctl.reqno++;
 
-    resproto_send_message(rctl.rset, &msg, resctl_status);
+            resproto_send_message(media_types[i].rset, &msg, resctl_status);
+            break;
+        }
+    }
 }
 
 
@@ -200,27 +247,41 @@ static void
 resctl_grant(resmsg_t *msg, resset_t *rset, void *data)
 {
     char buf[256];
+    unsigned int i;
 
-    (void)rset;
     (void)data;
 
-    rctl.granted      = msg->notify.resrc;
-    rctl.is_releasing = 0;
+    for (i = 0; i < MEDIA_RES_COUNT; i++) {
+        if (media_types[i].rset == rset) {
+            media_types[i].granted      = msg->notify.resrc;
+            media_types[i].is_releasing = 0;
+            media_types[i].is_acquiring = 0;
 
-    OHM_INFO("media resctl: granted resources: %s",
-             resmsg_res_str(msg->notify.resrc, buf, sizeof(buf)));
+            OHM_INFO("media resctl: '%s' granted resources: %s",
+                     media_types[i].group,
+                     resmsg_res_str(msg->notify.resrc, buf, sizeof(buf)));
+            break;
+        }
+    }
 }
 
 static void
 resctl_status(resset_t *rset, resmsg_t *msg)
 {
-    (void)rset;
-    
-    if (msg->type == RESMSG_STATUS)
-        OHM_INFO("media resctl: status %d (%s)",
-                 msg->status.errcod, msg->status.errmsg);
-    else
-        OHM_ERROR("media resctl: status message of type 0x%x", msg->type);
+    unsigned int i;
+
+    for (i = 0; i < MEDIA_RES_COUNT; i++) {
+        if (media_types[i].rset == rset) {
+            if (msg->type == RESMSG_STATUS)
+                OHM_INFO("media resctl: '%s' status %d (%s)",
+                         media_types[i].group,
+                         msg->status.errcod, msg->status.errmsg);
+            else
+                OHM_ERROR("media resctl: '%s' status message of type 0x%x",
+                         media_types[i].group, msg->type);
+            break;
+        }
+    }
 }
 
 /* 
