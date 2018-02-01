@@ -23,8 +23,8 @@ USA.
 
 void resctl_init(void);
 void resctl_exit(void);
-void resctl_acquire(void);
-void resctl_release(void);
+void resctl_acquire(const char *group);
+void resctl_release(const char *group);
 
 #endif /*  __OHM_MEDIA_RESOURCE_CONTROL_H__ */
 

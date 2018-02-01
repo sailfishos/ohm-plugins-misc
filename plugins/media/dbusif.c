@@ -505,12 +505,10 @@ DBusHandlerResult dbusif_info(DBusConnection *conn, DBusMessage *msg, void *ud)
 #if 0
                 media_state_request(epid, media, group, reqstate);
 #endif
-               if (!strcmp(group, "ringtone")) {
-                   if (!strcmp(reqstate, "on"))
-                       resctl_acquire();  
-                   else
-                       resctl_release();
-               }
+               if (!strcmp(reqstate, "on"))
+                   resctl_acquire(group);
+               else
+                   resctl_release(group);
             }
         }
     }
