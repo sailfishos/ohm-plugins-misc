@@ -848,6 +848,9 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
                     else if (strcmp(uuid, BLUEZ_UUID_HSP_HS) == 0) {
                         is_hsp = TRUE;
                     }
+                    else if (strcmp(uuid, BLUEZ_UUID_HSP_HS_ALT) == 0) {
+                        is_hsp = TRUE;
+                    }
                     dbus_message_iter_next(&uuid_iter);
                 }
             }
