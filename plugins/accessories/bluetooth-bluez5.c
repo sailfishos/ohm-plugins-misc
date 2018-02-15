@@ -43,9 +43,10 @@ enum bt_uuid_type {
     BT_UUID_A2DP_SOURCE = 1 << 0,
     BT_UUID_A2DP_SINK   = 1 << 1,
     BT_UUID_HSP_HS      = 1 << 2,
-    BT_UUID_HSP_AG      = 1 << 3,
-    BT_UUID_HFP_HF      = 1 << 4,
-    BT_UUID_HFP_AG      = 1 << 5
+    BT_UUID_HSP_HS_ALT  = 1 << 3,
+    BT_UUID_HSP_AG      = 1 << 4,
+    BT_UUID_HFP_HF      = 1 << 5,
+    BT_UUID_HFP_AG      = 1 << 6
 };
 
 struct bt_device {
@@ -472,7 +473,7 @@ static void bt_state_changed(struct bt_device *d, int next_state)
         }
     }
 
-    if (d->uuid & (BT_UUID_HSP_HS | BT_UUID_HSP_AG)) {
+    if (d->uuid & (BT_UUID_HSP_HS | BT_UUID_HSP_HS_ALT)) {
 
         if (!d->hsp_connected && next_state >= BT_STATE_CONNECTED) {
             if (bt_hsp_devices_connected() == 0) {
@@ -528,7 +529,7 @@ static void bt_hf_state_changed(struct bt_hf_card *c, int next_state)
     BT_TRACE("Card %s state transition %s to %s",
              c->path, dbg_state_to_string(c->state), dbg_state_to_string(next_state));
 
-    if (c->device->uuid & (BT_UUID_HFP_HF | BT_UUID_HFP_AG)) {
+    if (c->device->uuid & BT_UUID_HFP_HF) {
 
         if (c->state == BT_STATE_DISCONNECTED && next_state == BT_STATE_CONNECTED) {
             if (!c->hfp_connected && bt_hf_cards_connected() == 0) {
@@ -1143,6 +1144,8 @@ static int uuid_from_string(const char *value, int *uuid)
         *uuid |= BT_UUID_A2DP_SINK;
     else if (strcmp(value, BLUEZ_UUID_HSP_HS) == 0)
         *uuid |= BT_UUID_HSP_HS;
+    else if (strcmp(value, BLUEZ_UUID_HSP_HS_ALT) == 0)
+        *uuid |= BT_UUID_HSP_HS_ALT;
     else if (strcmp(value, BLUEZ_UUID_HSP_AG) == 0)
         *uuid |= BT_UUID_HSP_AG;
     else if (strcmp(value, BLUEZ_UUID_HFP_HF) == 0)
