@@ -467,6 +467,10 @@ uevent_handle_cb(GIOChannel *io, GIOCondition cond, gpointer userdata)
     while (i < len) {
         line = buf + i;
 
+#ifdef DEBUG_UEVENT_MESSAGES
+        OHM_DEBUG(DBG_WIRED, "[uevent]: %s", line);
+#endif
+
         if (!action && g_str_has_prefix(line, "ACTION="))
             action = line + 7;
         else if (!subsystem && g_str_has_prefix(line, "SUBSYSTEM="))
