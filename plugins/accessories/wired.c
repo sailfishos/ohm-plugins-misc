@@ -35,6 +35,7 @@ USA.
 #include <linux/netlink.h>
 
 #include <glib.h>
+#include <glib/gstdio.h>
 
 #include <ohm/ohm-plugin.h>
 #include <ohm/ohm-plugin-log.h>
@@ -172,8 +173,10 @@ struct uevent_dev_s {
     struct pollfd       pollfd;
     GIOChannel         *iochannel;
     guint               netlink_watch_src;
+    guint               initial_query_src;
 };
 
+#define UEVENT_SWITCH_SYSFS         "/sys/devices/virtual/switch/%s/state"
 #define UEVENT_SWITCH_DEFAULT       "h2w"
 #define UEVENT_MAX_PAYLOAD          (2048)
 #define UEVENT_SWITCH_DISCONNECTED  "0"
@@ -182,7 +185,11 @@ struct uevent_dev_s {
 
 static int uevent_init(OhmPlugin *plugin, void **data);
 static void uevent_exit(void **data);
+static void uevent_update_connected(const char *switch_state);
 static gboolean uevent_handle_cb(GIOChannel *io, GIOCondition cond, gpointer userdata);
+static gboolean uevent_initial_query_cb(gpointer userdata);
+static void uevent_initial_query_schedule(uevent_dev_t *dev);
+static void uevent_initial_query_cancel(uevent_dev_t *dev);
 
 /*
  * devices of interest
@@ -427,6 +434,26 @@ jack_init(OhmPlugin *plugin, void **data) {
 }
 
 
+static void
+uevent_update_connected(const char *switch_state)
+{
+    if (!g_strcmp0(switch_state, UEVENT_SWITCH_DISCONNECTED)) {
+        headphone = 0;
+        microphone = 0;
+    } else if (!g_strcmp0(switch_state, UEVENT_SWITCH_HEADSET)) {
+        headphone = 1;
+        microphone = 1;
+    } else if (!g_strcmp0(switch_state, UEVENT_SWITCH_HEADPHONE)) {
+        headphone = 1;
+        microphone = 0;
+    } else {
+        OHM_DEBUG(DBG_WIRED, "uevent unhandled switch state \"%s\", set to DISCONNECTED", switch_state);
+        headphone = 0;
+        microphone = 0;
+    }
+}
+
+
 static gboolean
 uevent_handle_cb(GIOChannel *io, GIOCondition cond, gpointer userdata)
 {
@@ -502,19 +529,7 @@ uevent_handle_cb(GIOChannel *io, GIOCondition cond, gpointer userdata)
     if (g_strcmp0(switch_name, dev->switch_name))
         goto done;
 
-    if (!g_strcmp0(switch_state, UEVENT_SWITCH_DISCONNECTED)) {
-        headphone = 0;
-        microphone = 0;
-    } else if (!g_strcmp0(switch_state, UEVENT_SWITCH_HEADSET)) {
-        headphone = 1;
-        microphone = 1;
-    } else if (!g_strcmp0(switch_state, UEVENT_SWITCH_HEADPHONE)) {
-        headphone = 1;
-        microphone = 0;
-    } else {
-        OHM_DEBUG(DBG_WIRED, "uevent unhandled switch state %s", switch_state);
-        goto done;
-    }
+    uevent_update_connected(switch_state);
 
     OHM_DEBUG(DBG_WIRED, "uevent action: %s subsystem: %s switch_name: %s switch_state: %s",
                          action, subsystem, switch_name, switch_state);
@@ -527,6 +542,53 @@ done:
 error:
     OHM_ERROR("accessories: uevent watch disabled");
     return FALSE;
+}
+
+
+static gboolean
+uevent_initial_query_cb(gpointer userdata)
+{
+    uevent_dev_t   *dev     = userdata;
+    char           *path    = NULL;
+    int             fd      = -1;
+    char            buf[2];
+
+    path = g_strdup_printf(UEVENT_SWITCH_SYSFS, dev->switch_name);
+
+    if ((fd = g_open(path, O_RDONLY, 0)) > 0) {
+        if (read(fd, buf, sizeof(*buf)) > 0) {
+            buf[1] = '\0';
+            OHM_DEBUG(DBG_WIRED, "uevent initial state: %s", buf);
+            uevent_update_connected(buf);
+            update_facts();
+        }
+        g_close(fd, NULL);
+    } else {
+        OHM_DEBUG(DBG_WIRED, "uevent initial state err: %d", fd);
+    }
+
+    g_free(path);
+    dev->initial_query_src = 0;
+
+    return FALSE;
+}
+
+
+static void
+uevent_initial_query_cancel(uevent_dev_t *dev)
+{
+    if (dev->initial_query_src > 0)
+        g_source_remove(dev->initial_query_src), dev->initial_query_src = 0;
+}
+
+
+static void
+uevent_initial_query_schedule(uevent_dev_t *dev)
+{
+    uevent_initial_query_cancel(dev);
+    dev->initial_query_src = g_timeout_add_seconds(RETRY_TIMEOUT_S,
+                                                   uevent_initial_query_cb,
+                                                   dev);
 }
 
 
@@ -566,6 +628,8 @@ uevent_init(OhmPlugin *plugin, void **data)
                                             G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL,
                                             uevent_handle_cb,
                                             dev);
+
+    uevent_initial_query_schedule(dev);
 
     return DEV_INIT_OK;
 
@@ -609,6 +673,8 @@ uevent_exit(void **data)
     uevent_dev_t *dev = *data;
 
     if (dev) {
+        uevent_initial_query_cancel(dev);
+
         if (dev->netlink_watch_src)
             g_source_remove(dev->netlink_watch_src), dev->netlink_watch_src = 0;
 
