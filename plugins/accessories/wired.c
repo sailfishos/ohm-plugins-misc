@@ -506,6 +506,8 @@ uevent_handle_cb(GIOChannel *io, GIOCondition cond, gpointer userdata)
             switch_name = line + 12;
         else if (!switch_state && g_str_has_prefix(line, "SWITCH_STATE="))
             switch_state = line + 13;
+        else if (g_str_has_prefix(line, "SEQNUM=")) /* end of uevent message */
+            break;
 
         if (action && subsystem && switch_name && switch_state)
             break;
