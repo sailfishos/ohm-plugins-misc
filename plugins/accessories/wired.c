@@ -563,9 +563,9 @@ uevent_init(OhmPlugin *plugin, void **data)
 
     dev->iochannel = g_io_channel_unix_new(dev->pollfd.fd);
     dev->netlink_watch_src = g_io_add_watch(dev->iochannel,
-                                        G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL,
-                                        uevent_handle_cb,
-                                        dev);
+                                            G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL,
+                                            uevent_handle_cb,
+                                            dev);
 
     return DEV_INIT_OK;
 
