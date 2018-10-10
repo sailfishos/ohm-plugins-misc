@@ -2187,11 +2187,6 @@ DBusHandlerResult dbus_ack(DBusConnection * c, DBusMessage * msg,
     EnforcementPoint *ep = NULL;
     Transaction *transaction = NULL;
 
-#if 1
-    OHM_DEBUG(DBG_SIGNALING, "got signal %s.%s, sender %s", interface ?: "NULL", member,
-            sender ?: "NULL");
-#endif
-
     if (member == NULL || strcmp(member, "status"))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -2206,11 +2201,14 @@ DBusHandlerResult dbus_ack(DBusConnection * c, DBusMessage * msg,
                 DBUS_TYPE_UINT32, &txid,
                 DBUS_TYPE_UINT32, &status,
                 DBUS_TYPE_INVALID)) {
-        g_warning("Failed to parse policy status signal (%s)", error.message);
+        g_warning("Failed to parse policy status signal from %s (%s)", sender, error.message);
         dbus_error_free(&error);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     dbus_error_free(&error);
+
+    OHM_DEBUG(DBG_SIGNALING, "got signal %s.%s, sender %s, txid %u, status %u",
+                             interface, member, sender, txid, status);
 
     transaction = transaction_lookup(txid);
 
