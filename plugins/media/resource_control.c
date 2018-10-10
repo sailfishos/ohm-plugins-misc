@@ -131,7 +131,7 @@ resctl_connect(void)
         msg.record.rset.share = 0;
         msg.record.rset.mask  = 0;
         msg.record.klass      = (char *) media_types[i].group;
-        msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
+        msg.record.mode       = RESMSG_MODE_ALWAYS_REPLY;
 
         media_types[i].rset = resconn_connect(rctl.conn, &msg, resctl_status);
     }
@@ -225,8 +225,7 @@ resctl_release(const char *group)
             OHM_INFO("media resctl: releasing '%s'...", media_types[i].group);
 
             if (media_types[i].rset == NULL ||
-                media_types[i].is_releasing ||
-                media_types[i].granted == 0)
+                media_types[i].is_releasing)
                 break;
 
             media_types[i].is_acquiring = 0;
