@@ -420,6 +420,14 @@ gboolean enforcement_point_is_interested(EnforcementPoint * self,
     return EP_STRATEGY_GET_INTERFACE(self)->is_interested(self, transaction);
 }
 
+static gint compare_strings(gconstpointer a, gconstpointer b)
+{
+    const gchar *aa = a;
+    const gchar *bb = b;
+
+    return g_strcmp0(aa, bb);
+}
+
 gboolean internal_ep_is_interested(EnforcementPoint *self,
         Transaction *t)
 {
@@ -429,7 +437,7 @@ gboolean internal_ep_is_interested(EnforcementPoint *self,
 
     g_object_get(t, "signal", &signal, NULL);
 
-    if (g_slist_find_custom(s->interested, signal, strcmp)) {
+    if (g_slist_find_custom(s->interested, signal, compare_strings)) {
         retval = TRUE;
     }
 
@@ -450,7 +458,7 @@ gboolean external_ep_is_interested(EnforcementPoint *self,
 
     g_object_get(t, "signal", &signal, NULL);
 
-    if (g_slist_find_custom(s->interested, signal, strcmp)) {
+    if (g_slist_find_custom(s->interested, signal, compare_strings)) {
         retval = TRUE;
     }
 
