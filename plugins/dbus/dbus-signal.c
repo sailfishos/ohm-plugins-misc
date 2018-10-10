@@ -343,6 +343,37 @@ signal_del(DBusBusType type, const char *path, const char *interface,
 /********************
  * signal_dispatch
  ********************/
+static void
+signal_dispatch_handle(bus_t *bus,
+                       DBusConnection *c,
+                       DBusMessage *msg,
+                       const char *key,
+                       const char *path,
+                       const char *interface,
+                       const char *member,
+                       const char *signature,
+                       const char *sender)
+{
+    siglist_t    *siglist;
+    signal_t     *sig;
+    list_hook_t  *p, *n;
+
+    if ((siglist = siglist_lookup(bus, key)) != NULL) {
+        list_foreach(&siglist->signals, p, n) {
+            sig = list_entry(p, signal_t, hook);
+
+            if (signal_matches(sig, signature, path, sender)) {
+                OHM_DEBUG(DBG_SIGNAL, "routing signal %s.%s(%s) from %s/%s to handler %s (%p)",
+                          interface, member, signature, sender, path ? path : "-",
+                          key, sig->handler);
+
+                if (sig->handler(c, msg, sig->data))
+                    OHM_DEBUG(DBG_SIGNAL, "signal handled by %s", key);
+            }
+        }
+    }
+}
+
 static DBusHandlerResult
 signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
 {
@@ -352,60 +383,21 @@ signal_dispatch(DBusConnection *c, DBusMessage *msg, void *data)
     const char   *signature = dbus_message_get_signature(msg);
     const char   *sender    = dbus_message_get_sender(msg);
     bus_t        *bus       = bus_by_connection(c);
-    siglist_t    *siglist;
-    signal_t     *sig;
-    
+
     char          key[1024];
-    list_hook_t  *p, *n;
-    int           handled;
-    
+
     (void)data;
 
     if (bus == NULL)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    OHM_DEBUG(DBG_SIGNAL, "got signal %s.%s(%s) from %s/%s",
-              interface, member, signature, sender, path ? path : "-");
-
-    handled = FALSE;
-    
     signal_key(key, sizeof(key), interface, member);
+    signal_dispatch_handle(bus, c, msg, key, path, interface, member, signature, sender);
 
-    if ((siglist = siglist_lookup(bus, key)) != NULL) {
-        list_foreach(&siglist->signals, p, n) {
-            sig = list_entry(p, signal_t, hook);
-            
-            if (signal_matches(sig, signature, path, sender)) {
-                OHM_DEBUG(DBG_SIGNAL, "routing to handler %s %p",
-                          key, sig->handler);
-                
-                handled |= sig->handler(c, msg, sig->data);
-            }
-        }
-    }
-    
     signal_key(key, sizeof(key), NULL, member);
+    signal_dispatch_handle(bus, c, msg, key, path, interface, member, signature, sender);
 
-    if ((siglist = siglist_lookup(bus, key)) != NULL) {
-        list_foreach(&siglist->signals, p, n) {
-            sig = list_entry(p, signal_t, hook);
-            
-            if (signal_matches(sig, signature, path, sender)) {
-                OHM_DEBUG(DBG_SIGNAL, "routing to handler %s %p",
-                          key, sig->handler);
-                
-                handled |= sig->handler(c, msg, sig->data);
-            }
-        }
-    }
-    
-    if (handled)
-        OHM_DEBUG(DBG_SIGNAL, "signal was handled by some handlers");
-    
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;     /* let through to others */
-    
-#undef INVOKE_HANDLER
-#undef INVOKE_MATCHING
 }
 
 
