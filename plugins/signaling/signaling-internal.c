@@ -420,6 +420,14 @@ gboolean enforcement_point_is_interested(EnforcementPoint * self,
     return EP_STRATEGY_GET_INTERFACE(self)->is_interested(self, transaction);
 }
 
+static gint compare_strings(gconstpointer a, gconstpointer b)
+{
+    const gchar *aa = a;
+    const gchar *bb = b;
+
+    return g_strcmp0(aa, bb);
+}
+
 gboolean internal_ep_is_interested(EnforcementPoint *self,
         Transaction *t)
 {
@@ -429,7 +437,7 @@ gboolean internal_ep_is_interested(EnforcementPoint *self,
 
     g_object_get(t, "signal", &signal, NULL);
 
-    if (g_slist_find_custom(s->interested, signal, strcmp)) {
+    if (g_slist_find_custom(s->interested, signal, compare_strings)) {
         retval = TRUE;
     }
 
@@ -450,7 +458,7 @@ gboolean external_ep_is_interested(EnforcementPoint *self,
 
     g_object_get(t, "signal", &signal, NULL);
 
-    if (g_slist_find_custom(s->interested, signal, strcmp)) {
+    if (g_slist_find_custom(s->interested, signal, compare_strings)) {
         retval = TRUE;
     }
 
@@ -2187,11 +2195,6 @@ DBusHandlerResult dbus_ack(DBusConnection * c, DBusMessage * msg,
     EnforcementPoint *ep = NULL;
     Transaction *transaction = NULL;
 
-#if 1
-    OHM_DEBUG(DBG_SIGNALING, "got signal %s.%s, sender %s", interface ?: "NULL", member,
-            sender ?: "NULL");
-#endif
-
     if (member == NULL || strcmp(member, "status"))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -2206,11 +2209,14 @@ DBusHandlerResult dbus_ack(DBusConnection * c, DBusMessage * msg,
                 DBUS_TYPE_UINT32, &txid,
                 DBUS_TYPE_UINT32, &status,
                 DBUS_TYPE_INVALID)) {
-        g_warning("Failed to parse policy status signal (%s)", error.message);
+        g_warning("Failed to parse policy status signal from %s (%s)", sender, error.message);
         dbus_error_free(&error);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     dbus_error_free(&error);
+
+    OHM_DEBUG(DBG_SIGNALING, "got signal %s.%s, sender %s, txid %u, status %u",
+                             interface, member, sender, txid, status);
 
     transaction = transaction_lookup(txid);
 
