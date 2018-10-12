@@ -127,7 +127,7 @@ static DBusHandlerResult card_removed_cb(DBusConnection *c, DBusMessage *msg, vo
 static DBusHandlerResult ofono_changed_cb(DBusConnection *c, DBusMessage *msg, void *data);
 
 static ohm_dbus_signal_t bluez5_signals[] = {
-    { NULL, "org.freedesktop.DBus.Properties", "PropertiesChanged", NULL, properties_changed_cb, NULL },
+    { NULL, "org.freedesktop.DBus.Properties", "PropertiesChanged", "startswith:/org/bluez", properties_changed_cb, NULL },
     { NULL, "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", NULL, interfaces_added_cb, NULL },
     { NULL, "org.freedesktop.DBus.ObjectManager", "InterfacesRemoved", NULL, interfaces_removed_cb, NULL },
     { NULL, "org.ofono.HandsfreeAudioManager", "CardAdded", NULL, card_added_cb, NULL },
