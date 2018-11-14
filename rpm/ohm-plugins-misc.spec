@@ -13,7 +13,8 @@ BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:  pkgconfig(dbus-glib-1)
 BuildRequires:  pkgconfig(check)
 BuildRequires:  pkgconfig(libresource)
-BuildRequires:  pkgconfig(ohm)
+BuildRequires:  pkgconfig(libohmplugin) >= 1.2.0
+BuildRequires:  pkgconfig(libohmfact)
 BuildRequires:  pkgconfig(libdres)
 BuildRequires:  pkgconfig(profile)
 BuildRequires:  bison
