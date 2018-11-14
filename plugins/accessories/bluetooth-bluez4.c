@@ -21,6 +21,7 @@ USA.
 
 /* This file contains the logic for following Bluez audio device state. */
 
+#include <ohm/ohm-plugin-dbus.h>
 #include "accessories.h"
 #include "bluetooth.h"
 #include "bluetooth-common.h"
@@ -715,12 +716,12 @@ void bluetooth_bluez4_init(DBusConnection *connection, int flag_bt)
     OHM_INFO("accessories: Initializing bluez4 bluetooth accessory.");
 
     for (k = 0; k < sizeof(bluez4_signals) / sizeof(ohm_dbus_signal_t); k++)
-        ohm_dbus_add_signal(bluez4_signals[k].sender,
-                            bluez4_signals[k].interface,
-                            bluez4_signals[k].signal,
-                            bluez4_signals[k].path,
-                            bluez4_signals[k].handler,
-                            bluez4_signals[k].data);
+        ohm_plugin_dbus_add_signal(bluez4_signals[k].sender,
+                                   bluez4_signals[k].interface,
+                                   bluez4_signals[k].signal,
+                                   bluez4_signals[k].path,
+                                   bluez4_signals[k].handler,
+                                   bluez4_signals[k].data);
 
     /* initialize the state transtitions */
 
@@ -754,12 +755,12 @@ void bluetooth_bluez4_deinit()
     unsigned int k;
 
     for (k = 0; k < sizeof(bluez4_signals) / sizeof(ohm_dbus_signal_t); k++)
-        ohm_dbus_del_signal(bluez4_signals[k].sender,
-                            bluez4_signals[k].interface,
-                            bluez4_signals[k].signal,
-                            bluez4_signals[k].path,
-                            bluez4_signals[k].handler,
-                            bluez4_signals[k].data);
+        ohm_plugin_dbus_del_signal(bluez4_signals[k].sender,
+                                   bluez4_signals[k].interface,
+                                   bluez4_signals[k].signal,
+                                   bluez4_signals[k].path,
+                                   bluez4_signals[k].handler,
+                                   bluez4_signals[k].data);
 
     if (sys_conn) {
         dbus_connection_unref(sys_conn);

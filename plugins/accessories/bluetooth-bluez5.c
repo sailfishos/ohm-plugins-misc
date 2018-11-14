@@ -20,6 +20,7 @@ USA.
 
 /* This file contains the logic for following Bluez audio device state. */
 
+#include <ohm/ohm-plugin-dbus.h>
 #include "accessories.h"
 #include "bluetooth.h"
 #include "bluetooth-common.h"
@@ -198,12 +199,12 @@ void bluetooth_bluez5_deinit()
 
     if (signals_set) {
         for (i = 0; i < sizeof(bluez5_signals) / sizeof(ohm_dbus_signal_t); i++)
-            ohm_dbus_del_signal(bluez5_signals[i].sender,
-                                bluez5_signals[i].interface,
-                                bluez5_signals[i].signal,
-                                bluez5_signals[i].path,
-                                bluez5_signals[i].handler,
-                                bluez5_signals[i].data);
+            ohm_plugin_dbus_del_signal(bluez5_signals[i].sender,
+                                       bluez5_signals[i].interface,
+                                       bluez5_signals[i].signal,
+                                       bluez5_signals[i].path,
+                                       bluez5_signals[i].handler,
+                                       bluez5_signals[i].data);
         signals_set = FALSE;
     }
 
@@ -252,12 +253,12 @@ static void bluez5_init_finalize()
                                         bt_hf_card_free);
 
     for (i = 0; i < sizeof(bluez5_signals) / sizeof(ohm_dbus_signal_t); i++)
-        ohm_dbus_add_signal(bluez5_signals[i].sender,
-                            bluez5_signals[i].interface,
-                            bluez5_signals[i].signal,
-                            bluez5_signals[i].path,
-                            bluez5_signals[i].handler,
-                            bluez5_signals[i].data);
+        ohm_plugin_dbus_add_signal(bluez5_signals[i].sender,
+                                   bluez5_signals[i].interface,
+                                   bluez5_signals[i].signal,
+                                   bluez5_signals[i].path,
+                                   bluez5_signals[i].handler,
+                                   bluez5_signals[i].data);
     signals_set = TRUE;
 }
 

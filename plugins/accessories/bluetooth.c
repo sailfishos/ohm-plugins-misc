@@ -20,6 +20,7 @@ USA.
 
 
 #include <errno.h>
+#include <ohm/ohm-plugin-dbus.h>
 #include "accessories.h"
 #include "bluetooth.h"
 #include "bluetooth-common.h"
@@ -67,12 +68,12 @@ void bluetooth_init(OhmPlugin *plugin, int flag_bt)
         return;
     }
 
-    ohm_dbus_add_signal(nameowner_signal.sender,
-                        nameowner_signal.interface,
-                        nameowner_signal.signal,
-                        nameowner_signal.path,
-                        nameowner_signal.handler,
-                        nameowner_signal.data);
+    ohm_plugin_dbus_add_signal(nameowner_signal.sender,
+                               nameowner_signal.interface,
+                               nameowner_signal.signal,
+                               nameowner_signal.path,
+                               nameowner_signal.handler,
+                               nameowner_signal.data);
 
     get_bluez_state();
 }
@@ -83,12 +84,12 @@ void bluetooth_deinit()
         implementations[bluez_impl_index].deinit();
 
     if (connection) {
-        ohm_dbus_del_signal(nameowner_signal.sender,
-                            nameowner_signal.interface,
-                            nameowner_signal.signal,
-                            nameowner_signal.path,
-                            nameowner_signal.handler,
-                            nameowner_signal.data);
+        ohm_plugin_dbus_del_signal(nameowner_signal.sender,
+                                   nameowner_signal.interface,
+                                   nameowner_signal.signal,
+                                   nameowner_signal.path,
+                                   nameowner_signal.handler,
+                                   nameowner_signal.data);
 
         dbus_connection_unref(connection);
         connection = NULL;
