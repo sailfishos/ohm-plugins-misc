@@ -21,6 +21,7 @@ USA.
 #ifndef __OHM_RESOURCE_DBUSIF_H__
 #define __OHM_RESOURCE_DBUSIF_H__
 
+#include <dbus/dbus.h>
 #include <sys/types.h>
 
 /* D-Bus names */

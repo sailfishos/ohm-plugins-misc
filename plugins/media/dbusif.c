@@ -27,6 +27,7 @@ USA.
 #include <errno.h>
 
 #include <dbus/dbus.h>
+#include <dbus/dbus-glib-lowlevel.h>
 
 #include "plugin.h"
 #include "dbusif.h"
