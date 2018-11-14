@@ -26,6 +26,7 @@ USA.
  * Copyright (C) 2008, Nokia. All rights reserved.
  */
 
+#include <ohm/ohm-plugin-dbus.h>
 #include "hal.h"
 
 static int DBG_HAL, DBG_FACTS;

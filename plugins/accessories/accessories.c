@@ -18,6 +18,7 @@ USA.
 *************************************************************************/
 
 
+#include <ohm/ohm-plugin-dbus.h>
 #include "accessories.h"
 #include "wired.h"
 #include "gconf-triggers.h"

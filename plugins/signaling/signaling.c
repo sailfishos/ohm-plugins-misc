@@ -26,6 +26,7 @@ USA.
  * Copyright (C) 2008, Nokia. All rights reserved.
  */
 
+#include <ohm/ohm-plugin-dbus.h>
 #include "signaling.h"
 
 static int DBG_SIGNALING, DBG_FACTS;
