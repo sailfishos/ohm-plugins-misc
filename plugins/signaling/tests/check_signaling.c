@@ -69,7 +69,6 @@ static void teardown(void);
 
 static void setup(void) {
     printf("> setup\n");
-    g_type_init();
     loop = g_main_loop_new(NULL, FALSE);
     printf("< setup\n");
 }

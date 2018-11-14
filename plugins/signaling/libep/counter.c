@@ -216,7 +216,6 @@ int main(int argc, char ** argv) {
         NULL
     };
 
-    g_type_init();
     mainloop = g_main_loop_new(NULL, FALSE);
     bus = dbus_g_bus_get(DBUS_BUS_SYSTEM, NULL);
     connection = dbus_g_connection_get_connection(bus);
