@@ -357,7 +357,7 @@ jack_init(OhmPlugin *plugin, void **data) {
     input_dev_t *dev;
 
     const char *device;
-    const char *patterns[] = { NULL, "Headset Jack", " Jack" };
+    const char *patterns[] = { NULL, "Headset Jack", " Jack", "ACCDET" };
     const char *invert;
     const char *quirk;
     const char *physical_quirk;
