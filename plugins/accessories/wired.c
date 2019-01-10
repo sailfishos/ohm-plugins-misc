@@ -233,6 +233,9 @@ static int lineout;
 static int videoout;
 static int incompatible;
 static int physical;
+/* Interpret physical insert as headphone insert when both
+ * physical and microphone events are active. */
+static gboolean physical_is_headphone;
 
 
 /*
@@ -357,6 +360,7 @@ jack_init(OhmPlugin *plugin, void **data) {
     const char *patterns[] = { NULL, "Headset Jack", " Jack" };
     const char *invert;
     const char *quirk;
+    const char *physical_quirk;
 
     if (!*data) {
         *data = g_new0(input_dev_t, 1);
@@ -371,6 +375,7 @@ jack_init(OhmPlugin *plugin, void **data) {
     device = ohm_plugin_get_param(plugin, "jack-device");
     /* Default to disabling incompatible quirk */
     quirk = ohm_plugin_get_param(plugin, "incompatible-quirk");
+    physical_quirk = ohm_plugin_get_param(plugin, "physical-is-headphone");
 
     /*
      * Notes: With some legacy driver, the driver emits
@@ -382,6 +387,9 @@ jack_init(OhmPlugin *plugin, void **data) {
      */
     if (quirk && !strcasecmp(quirk, "true"))
         dev->insert_quirk = 1;
+
+    if (physical_quirk && !strcasecmp(physical_quirk, "true"))
+        physical_is_headphone = TRUE;
 
     if (invert != NULL && !strcasecmp(invert, "true")) {
         OHM_INFO("accessories: jack events have inverted semantics");
@@ -793,6 +801,8 @@ update_facts(void)
     device_state_t *device, *current;
 
     if      (incompatible)            current = states + DEV_INCOMPATIBLE;
+    else if (physical_is_headphone && physical && microphone)
+                                      current = states + DEV_HEADSET;
     else if (headphone && microphone) current = states + DEV_HEADSET;
     else if (headphone)               current = states + DEV_HEADPHONE;
     else if (microphone)              current = states + DEV_HEADMIKE;
