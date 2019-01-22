@@ -4,7 +4,7 @@ Version:    1.1.67
 Release:    1
 Group:      System/Resource Policy
 License:    LGPLv2.1
-URL:        https://github.com/nemomobile/ohm-plugins-misc
+URL:        https://git.merproject.org/mer-core/ohm-plugins-misc
 Source0:    %{name}-%{version}.tar.gz
 Requires:   ohm
 Requires:   systemd
@@ -138,6 +138,21 @@ Requires:   ohm
 %description -n ohm-plugin-profile
 OHM profile plugin provides functionality to detect profile changes.
 
+%package doc
+Summary:   Documentation for %{name}
+Group:     Documentation
+Requires:  %{name} = %{version}-%{release}
+
+%description doc
+%{summary}.
+
+%package -n ohm-plugin-console-doc
+Summary:   Documentation for ohm-plugin-console
+Group:     Documentation
+Requires:  ohm-plugin-console = %{version}-%{release}
+
+%description -n ohm-plugin-console-doc
+%{summary}.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -164,6 +179,13 @@ rm -f -- $RPM_BUILD_ROOT%{_libdir}/ohm/libohm_call_test.so
 mkdir -p %{buildroot}%{_libdir}/systemd/user/pre-user-session.target.wants
 ln -s ../ohm-session-agent.service %{buildroot}%{_libdir}/systemd/user/pre-user-session.target.wants/
 
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
+install -m0644 -t %{buildroot}%{_docdir}/%{name}-%{version} \
+        AUTHORS ChangeLog README NEWS
+
+mkdir -p %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
+install -m0644 AUTHORS %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
+
 %post
 if [ "$1" -ge 1 ]; then
 systemctl-user daemon-reload || :
@@ -178,6 +200,7 @@ fi
 
 %files
 %defattr(-,root,root,-)
+%license COPYING
 %{_libdir}/ohm/libohm_auth.so
 %{_libdir}/ohm/libohm_auth_test.so
 %{_libdir}/ohm/libohm_delay.so
@@ -190,12 +213,11 @@ fi
 %{_datadir}/dbus-1/services/org.freedesktop.ohm-session-agent.service
 %{_libdir}/systemd/user/*.service
 %{_libdir}/systemd/user/pre-user-session.target.wants/ohm-session-agent.service
-%doc README COPYING AUTHORS
 
 %files -n ohm-plugin-console
 %defattr(-,root,root,-)
+%license COPYING
 %{_libdir}/ohm/libohm_console.so
-%doc COPYING AUTHORS
 
 %files -n ohm-plugin-dspep
 %defattr(-,root,root,-)
@@ -248,3 +270,10 @@ fi
 %defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_profile.so
 
+%files doc
+%defattr(-,root,root,-)
+%{_docdir}/%{name}-%{version}
+
+%files -n ohm-plugin-console-doc
+%defattr(-,root,root,-)
+%{_docdir}/ohm-plugin-console-%{version}
