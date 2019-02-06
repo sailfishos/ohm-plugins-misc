@@ -158,7 +158,7 @@ Requires:  ohm-plugin-console = %{version}-%{release}
 %setup -q -n %{name}-%{version}
 
 %build
-echo "%{version}" > .tarball-version
+echo "%{version}" | sed 's/+.*//' > .tarball-version
 %autogen --disable-static
 %configure --disable-static \
     --enable-telephony \
@@ -166,7 +166,7 @@ echo "%{version}" > .tarball-version
     --disable-videoep \
     --disable-fmradio
 
-make
+make %{?_smp_mflags}
 
 %install
 rm -rf %{buildroot}
