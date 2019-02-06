@@ -2,5 +2,5 @@ includedir=@includedir@
 
 Name: ohm-ext-mdm
 Description: OHM Extension MDM
-Version: @VERSION@
+Version: 1
 Cflags: -I${includedir}/ohm
