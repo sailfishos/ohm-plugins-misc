@@ -166,7 +166,7 @@ echo "%{version}" > .tarball-version
     --disable-videoep \
     --disable-fmradio
 
-make
+make %{?_smp_mflags}
 
 %install
 rm -rf %{buildroot}
