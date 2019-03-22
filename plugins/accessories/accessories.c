@@ -39,6 +39,8 @@ OHM_PLUGIN_REQUIRES_METHODS(accessories, 1,
    OHM_IMPORT("dres.resolve", resolve)
 );
 
+static int dres_card_request(const char *type, const char *profile);
+
 static gboolean bluetooth_init_later(gpointer data)
 {
 
@@ -225,6 +227,77 @@ static DBusHandlerResult info(DBusConnection *c, DBusMessage * msg, void *data)
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
+static DBusHandlerResult card_info(DBusConnection *c, DBusMessage * msg, void *data)
+{
+    DBusMessageIter  msgit;
+    DBusMessageIter  typeit;
+    const char      *event;
+    const char      *profile;
+    const char      *type;
+
+    (void) c;
+    (void) data;
+
+    /* This is an example of what we should get:
+
+       string "profile_changed"
+       string "headset_head_unit"
+       array [
+          string "bthspforcall"
+       ]
+
+    */
+
+    if (!dbus_message_is_signal(msg, "com.nokia.policy", "card_info"))
+        goto not_our_signal;
+
+    OHM_DEBUG(DBG_INFO, "received a card info message");
+
+    dbus_message_iter_init(msg, &msgit);
+
+    if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING)
+        goto done;
+
+    dbus_message_iter_get_basic(&msgit, &event);
+
+    if (strcmp(event, "profile_changed"))
+        goto not_our_signal;
+
+    if (!dbus_message_iter_next(&msgit))
+        goto done;
+
+    if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_STRING)
+        goto done;
+
+    dbus_message_iter_get_basic(&msgit, &profile);
+
+    OHM_DEBUG(DBG_INFO, "event %s profile %s", event, profile);
+
+    if (!dbus_message_iter_next(&msgit))
+        goto done;
+
+    if (dbus_message_iter_get_arg_type(&msgit) != DBUS_TYPE_ARRAY)
+        goto done;
+
+    dbus_message_iter_recurse(&msgit, &typeit);
+
+    do {
+        if (dbus_message_iter_get_arg_type(&typeit) != DBUS_TYPE_STRING)
+            continue;
+
+        dbus_message_iter_get_basic(&typeit, &type);
+
+        OHM_DEBUG(DBG_INFO, "profile_changed type: '%s', profile: '%s'", type, profile);
+
+        dres_card_request(type, profile);
+
+    } while (dbus_message_iter_next(&typeit));
+
+ done:
+ not_our_signal:
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
 #define DRES_VARTYPE(t)  (char *)(t)
 #define DRES_VARVALUE(s) (char *)(s)
 
@@ -304,6 +377,34 @@ int dres_accessory_request(const char *name, int driver, int connected)
     return status <= 0 ? FALSE : TRUE;
 }
 
+int dres_card_request(const char *type, const char *profile)
+{
+    static char *goal = "card_profile_changed_request";
+
+#define NUM_DRES_VARS 2               /* &card_type, &card_profile */
+    char        *vars[NUM_DRES_VARS * 3 + 1];
+    int          i, status;
+
+    vars[i=0] = "card_type";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(type);
+    vars[++i] = "card_profile";
+    vars[++i] = DRES_VARTYPE('s');
+    vars[++i] = DRES_VARVALUE(profile);
+    vars[++i] = NULL;
+
+    status = resolve(goal, vars);
+
+    if (status < 0) {
+        OHM_WARNING("accessory: resolve('%s', '%s', '%s') failed",
+                    goal, type, profile);
+    }
+    else if (!status)
+        OHM_ERROR("accessory: resolving '%s' failed", goal);
+
+    return status;
+#undef NUM_DRES_VARS
+}
 
 int dres_update_accessory_mode(const char *device, const char *mode)
 {
@@ -384,6 +485,7 @@ OHM_PLUGIN_DESCRIPTION("accessories",
 
 OHM_PLUGIN_DBUS_SIGNALS(
      {NULL, "com.nokia.policy", "info", NULL, info, NULL},
+     {NULL, "com.nokia.policy", "card_info", NULL, card_info, NULL},
      OHM_DBUS_SIGNALS_END
 );
 
