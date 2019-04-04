@@ -95,10 +95,10 @@ if test -n "$v"
 then
     : # use $v
 elif test -d .git \
-    && v=`git describe --abbrev=4 --match='v*' HEAD 2>/dev/null \
-	  || git describe --abbrev=4 HEAD 2>/dev/null` \
+    && v=`git describe --abbrev=4 --tags --match='[0-9]*' HEAD 2>/dev/null \
+	  || git describe --abbrev=4 --tags HEAD 2>/dev/null` \
     && case $v in
-	 v[0-9]*) ;;
+	 [0-9]*) ;;
 	 *) (exit 1) ;;
        esac
 then
