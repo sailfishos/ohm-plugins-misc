@@ -609,7 +609,7 @@ static gboolean
 console_accept(GIOChannel *source, GIOCondition condition, gpointer data)
 {
     console_t          *lc = (console_t *)data;
-    console_t          *c;
+    console_t          *c = NULL;
     struct sockaddr_in  addr;
     socklen_t           addrlen = sizeof(addr);
     int                 sock, flags;
@@ -628,7 +628,8 @@ console_accept(GIOChannel *source, GIOCondition condition, gpointer data)
     }
     
     if (lc->nchild > 1 && !(lc->flags & CONSOLE_MULTIPLE)) {
-        write(sock, BUSY_MESSAGE, sizeof(BUSY_MESSAGE) - 1);
+        if (write(sock, BUSY_MESSAGE, sizeof(BUSY_MESSAGE) - 1) < 0)
+            goto fail;
         close(sock);
         return TRUE;
     }

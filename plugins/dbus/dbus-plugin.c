@@ -19,6 +19,7 @@ USA.
 
 
 #include <stdlib.h>
+#include <glib-object.h>
 
 #include "dbus-plugin.h"
 

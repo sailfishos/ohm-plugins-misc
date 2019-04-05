@@ -14,7 +14,7 @@
 - Split binary package
 - Disable upstart
 
-* Wed Aug 16 2012 Juho Hämäläinen <juho.hamalainen@tieto.com> - 1.1.59
+* Thu Aug 16 2012 Juho Hämäläinen <juho.hamalainen@tieto.com> - 1.1.59
 - Fixes NEMO#331: Update resource-set queue implementation.
 
 * Tue Jul 24 2012 Dmitry Rozhkov <dmitry.rozhkov@jollamobile.com> - 1.1.59

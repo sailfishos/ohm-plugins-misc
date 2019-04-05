@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
 USA.
 *************************************************************************/
 
+#include <ohm/ohm-plugin-dbus.h>
 
 static void condition_cb(LibHalContext *, const char *, const char *,
                          const char *);

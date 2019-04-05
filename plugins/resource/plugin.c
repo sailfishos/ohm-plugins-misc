@@ -25,6 +25,8 @@ USA.
 #include <ctype.h>
 #include <errno.h>
 
+#include <ohm/ohm-plugin-dbus.h>
+
 #include "plugin.h"
 #include "timestamp.h"
 #include "dbusif.h"

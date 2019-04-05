@@ -148,7 +148,7 @@ int dsp_set_users(uint32_t *users, uint32_t nuser)
 {
     char      list[512];
     char     *p, *e;
-    size_t    l;
+    ssize_t   l;
     uint32_t  i;
 
     if (!users || !nuser)

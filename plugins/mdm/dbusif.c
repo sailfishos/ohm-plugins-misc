@@ -25,6 +25,7 @@ USA.
 #include <errno.h>
 
 #include <dbus/dbus.h>
+#include <dbus/dbus-glib-lowlevel.h>
 
 #include "ohm-ext/mdm.h"
 #include "plugin.h"

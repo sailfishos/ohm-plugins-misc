@@ -27,6 +27,7 @@ USA.
 #include <dbus/dbus.h>
 
 #include <ohm/ohm-plugin.h>
+#include <ohm/ohm-plugin-dbus.h>
 #include <ohm/ohm-plugin-debug.h>
 #include <ohm/ohm-plugin-log.h>
 #include <ohm/ohm-fact.h>
