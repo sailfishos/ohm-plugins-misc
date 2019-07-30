@@ -87,10 +87,10 @@ typedef struct {
 enum {
     DEV_HEADSET = 0,
     DEV_HEADPHONE,
+    DEV_LINEOUT,
     DEV_HEADMIKE,
     DEV_VIDEOOUT,
     DEV_INCOMPATIBLE,                    /* plug with incorrect pin layout */
-    DEV_LINEOUT,
     NUM_DEVS,
     DEV_NONE
 };
@@ -208,10 +208,10 @@ static dev_impl_t implementations[EVENT_IMPL_COUNT] = {
 static device_state_t states[] = {
     [DEV_HEADSET]      = { "headset"     , NULL, 0 },
     [DEV_HEADPHONE]    = { "headphone"   , NULL, 0 },
+    [DEV_LINEOUT]      = { "lineout"     , NULL, 0 },
     [DEV_HEADMIKE]     = { "headmike"    , NULL, 0 },
     [DEV_VIDEOOUT]     = { "tvout"       , NULL, 0 },
     [DEV_INCOMPATIBLE] = { "incompatible", NULL, 0 },
-    [DEV_LINEOUT]      = { /* "line-out" */ NULL, NULL, 0 },
     [DEV_NONE]         = { NULL, NULL, 0 }
 };
 
@@ -805,13 +805,10 @@ update_facts(void)
                                       current = states + DEV_HEADSET;
     else if (headphone && microphone) current = states + DEV_HEADSET;
     else if (headphone)               current = states + DEV_HEADPHONE;
+    else if (lineout)                 current = states + DEV_LINEOUT;
     else if (microphone)              current = states + DEV_HEADMIKE;
     else if (videoout)                current = states + DEV_VIDEOOUT;
-    else if (lineout)                 current = states + DEV_LINEOUT;
     else                              current = NULL;
-
-    if (current != NULL && current->name == NULL)   /* filter out line-out */
-        current = NULL;
 
     if (current != NULL)
         device_connect(current);
