@@ -187,18 +187,6 @@ install -m0644 -t %{buildroot}%{_docdir}/%{name}-%{version} \
 mkdir -p %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
 install -m0644 AUTHORS %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
 
-%post
-if [ "$1" -ge 1 ]; then
-systemctl-user daemon-reload || :
-systemctl-user restart ohm-session-agent.service || :
-fi
-
-%postun
-if [ "$1" -eq 0 ]; then
-systemctl-user stop ohm-session-agent.service || :
-systemctl-user daemon-reload || :
-fi
-
 %files
 %defattr(-,root,root,-)
 %license COPYING
