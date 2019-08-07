@@ -3,8 +3,8 @@ Summary:    A miscallaneous set of Nokia OHM plugins
 Version:    1.5.4
 Release:    1
 Group:      System/Resource Policy
-License:    LGPLv2.1
-URL:        https://git.merproject.org/mer-core/ohm-plugins-misc
+License:    LGPLv2
+URL:        https://git.sailfishos.org/mer-core/ohm-plugins-misc
 Source0:    %{name}-%{version}.tar.gz
 Requires:   ohm
 Requires:   systemd
