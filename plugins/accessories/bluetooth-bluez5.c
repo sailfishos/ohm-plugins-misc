@@ -1096,18 +1096,39 @@ static void read_boolean_from_variant(DBusMessageIter *iter, int *value)
     BT_TRACE("Read boolean from variant: %d", *value);
 }
 
+/* Return position for nth char from string or if less than nth chars
+ * are found return position of end of string. */
+static const gchar *find_nth_char(const gchar *str, char c, guint nth)
+{
+    guint count = 0;
+
+    while (*str) {
+        if (*str == c) {
+            count++;
+            if (count == nth)
+                return str;
+        }
+        str++;
+    }
+
+    return str;
+}
+
+/* Strip extra path elements from transport path, leaving only
+ * device path part. So for example
+ * /org/bluez/hci0/dev_00_11_22_33_44_55/foo/bar
+ *   -> /org/bluez/hci0/dev_00_11_22_33_44_55
+ */
 static gchar *device_path_from_transport_path(const char *path)
 {
     gchar *dev;
-    gchar *search;
+    gsize len;
 
     BT_ASSERT(path);
 
-    dev = g_strdup(path);
-    search = g_strrstr(dev, "/");
-
-    if (search)
-        search[0] = '\0';
+    len = find_nth_char(path, '/', 5) - path;
+    dev = g_memdup(path, len + 1);
+    dev[len] = '\0';
 
     return dev;
 }
