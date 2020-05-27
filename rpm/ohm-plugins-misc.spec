@@ -1,6 +1,6 @@
 Name:       ohm-plugins-misc
 Summary:    A miscallaneous set of Nokia OHM plugins
-Version:    1.5.6
+Version:    1.5.7
 Release:    1
 Group:      System/Resource Policy
 License:    LGPLv2
