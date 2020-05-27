@@ -178,7 +178,7 @@ rm -f -- $RPM_BUILD_ROOT%{_libdir}/ohm/*.la
 rm -f -- $RPM_BUILD_ROOT%{_libdir}/ohm/libohm_call_test.so
 
 mkdir -p %{buildroot}%{_libdir}/systemd/user/pre-user-session.target.wants
-ln -s ../ohm-session-agent.service %{buildroot}%{_libdir}/systemd/user/pre-user-session.target.wants/
+ln -s ../ohm-session-agent.service %{buildroot}%{_userunitdir}/pre-user-session.target.wants/
 
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
 install -m0644 -t %{buildroot}%{_docdir}/%{name}-%{version} \
@@ -200,8 +200,8 @@ install -m0644 AUTHORS %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
 %config %{_sysconfdir}/ohm/plugins.d/resource.ini
 %{_sysconfdir}/dbus-1/session.d/*.conf
 %{_datadir}/dbus-1/services/org.freedesktop.ohm_session_agent.service
-%{_libdir}/systemd/user/*.service
-%{_libdir}/systemd/user/pre-user-session.target.wants/ohm-session-agent.service
+%{_userunitdir}/*.service
+%{_userunitdir}/pre-user-session.target.wants/ohm-session-agent.service
 
 %files -n ohm-plugin-console
 %defattr(-,root,root,-)
