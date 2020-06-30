@@ -1,6 +1,6 @@
 bin_PROGRAMS  = ohm-session-agent
 EXTRA_DIST    = $(session_DATA) $(conf_DATA) $(dbus_DATA)
-sessiondir    = $(libdir)/systemd/user/
+sessiondir    = $(prefix)/lib/systemd/user/
 session_DATA  = ohm-session-agent.service
 confdir       = $(sysconfdir)/dbus-1/session.d/
 conf_DATA     = ohm-session-agent.conf

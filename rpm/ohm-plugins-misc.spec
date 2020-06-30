@@ -2,7 +2,6 @@ Name:       ohm-plugins-misc
 Summary:    A miscallaneous set of Nokia OHM plugins
 Version:    1.5.7
 Release:    1
-Group:      System/Resource Policy
 License:    LGPLv2
 URL:        https://git.sailfishos.org/mer-core/ohm-plugins-misc
 Source0:    %{name}-%{version}.tar.gz
@@ -25,7 +24,6 @@ A miscallaneous set of OHM plugins by Nokia.
 
 %package -n ohm-plugin-console
 Summary:    Console OHM plugin
-Group:      Development/Tools
 
 %description -n ohm-plugin-console
 OHM console plugin for debug interface.
@@ -33,7 +31,6 @@ OHM console plugin for debug interface.
 
 %package -n ohm-plugin-dspep
 Summary:    DSP enforcement point for OHM
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 Requires:   ohm
 Requires:   ohm-plugin-signaling
@@ -45,7 +42,6 @@ DSP.
 
 %package -n ohm-plugins-dbus
 Summary:    DBus plugins for OHM
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 Requires:   ohm
 
@@ -54,7 +50,6 @@ DBus related plugins for OHM.
 
 %package -n ohm-plugin-telephony
 Summary:    Telephony plugin for OHM
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 Requires:   ohm
 
@@ -64,7 +59,6 @@ OHM telephony plugin provides policy control points for telephony.
 
 %package -n ohm-plugin-signaling
 Summary:    Signaling plugin for OHM
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 
 %description -n ohm-plugin-signaling
@@ -74,7 +68,6 @@ and dspep.
 
 %package -n ohm-plugin-media
 Summary:    Media playback enforcement point for OHM
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 Requires:   ohm
 
@@ -85,7 +78,6 @@ media playback.
 
 %package -n ohm-plugin-accessories
 Summary:    Sensor OHM plugin for device accessories
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 Requires:   ohm
 
@@ -96,7 +88,6 @@ in device accessories.
 
 %package -n ohm-plugin-route
 Summary:    OHM plugin for querying and requesting audio routes
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 Requires:   ohm
 
@@ -106,7 +97,6 @@ OHM plugin for querying and requesting audio routes.
 
 %package -n ohm-plugin-route-devel
 Summary:    Headers for Route plugin D-Bus API
-Group:      Development/Sources
 
 %description -n ohm-plugin-route-devel
 Headers for Route plugin D-Bus API.
@@ -114,7 +104,6 @@ Headers for Route plugin D-Bus API.
 
 %package -n ohm-plugin-mdm
 Summary:    OHM plugin for MDM features
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 Requires:   ohm
 
@@ -124,7 +113,6 @@ OHM plugin for MDM features.
 
 %package -n ohm-plugin-mdm-devel
 Summary:    Headers for MDM plugin D-Bus API
-Group:      Development/Sources
 
 %description -n ohm-plugin-mdm-devel
 Headers for MDM plugin D-Bus API.
@@ -132,7 +120,6 @@ Headers for MDM plugin D-Bus API.
 
 %package -n ohm-plugin-profile
 Summary:    OHM plugin for profile
-Group:      System/Resource Policy
 Requires:   %{name} = %{version}-%{release}
 Requires:   ohm
 
@@ -141,7 +128,6 @@ OHM profile plugin provides functionality to detect profile changes.
 
 %package doc
 Summary:   Documentation for %{name}
-Group:     Documentation
 Requires:  %{name} = %{version}-%{release}
 
 %description doc
@@ -149,7 +135,6 @@ Requires:  %{name} = %{version}-%{release}
 
 %package -n ohm-plugin-console-doc
 Summary:   Documentation for ohm-plugin-console
-Group:     Documentation
 Requires:  ohm-plugin-console = %{version}-%{release}
 
 %description -n ohm-plugin-console-doc
@@ -177,7 +162,7 @@ rm -rf %{buildroot}
 rm -f -- $RPM_BUILD_ROOT%{_libdir}/ohm/*.la
 rm -f -- $RPM_BUILD_ROOT%{_libdir}/ohm/libohm_call_test.so
 
-mkdir -p %{buildroot}%{_libdir}/systemd/user/pre-user-session.target.wants
+mkdir -p %{buildroot}%{_userunitdir}/pre-user-session.target.wants
 ln -s ../ohm-session-agent.service %{buildroot}%{_userunitdir}/pre-user-session.target.wants/
 
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
