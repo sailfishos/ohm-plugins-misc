@@ -52,7 +52,7 @@ static void teardown(void) {
 }
 
 START_TEST (test_hal_init_deinit)
-    
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -62,7 +62,7 @@ START_TEST (test_hal_init_deinit)
     fail_if(plugin == NULL, "Plugin not initialized correctly");
 
     deinit_hal(plugin);
-
+}
 END_TEST
 
 #if 0
@@ -75,6 +75,7 @@ gboolean hal_test_1_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gb
 }
 
 START_TEST (test_hal_decorate)
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -104,6 +105,7 @@ START_TEST (test_hal_decorate)
     fail_if(ret == TRUE, "Undecoration succeeded (should have failed)");
 
     deinit_hal(plugin);
+}
 END_TEST
 
 device_added = FALSE;
@@ -140,7 +142,7 @@ gboolean hal_test_2_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gb
 }
 
 START_TEST (test_hal_device_added_removed)
-
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -184,7 +186,7 @@ START_TEST (test_hal_device_added_removed)
     fail_if(callback_called_once, "callback was called");
     
     deinit_hal(plugin);
-
+}
 END_TEST
 
 gboolean capability_added = FALSE;
@@ -223,7 +225,7 @@ gboolean hal_test_3_cb (OhmFact *hal_fact, gchar *capability, gboolean added, gb
 }
 
 START_TEST (test_hal_capability_added_removed)
-
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -267,7 +269,7 @@ START_TEST (test_hal_capability_added_removed)
     fail_if(callback_called_once, "callback was called");
 #endif 
     deinit_hal(plugin);
-
+}
 END_TEST
 
 Suite *ohm_hal_suite(void)

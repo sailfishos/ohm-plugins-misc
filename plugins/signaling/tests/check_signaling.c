@@ -86,6 +86,7 @@ static void teardown(void) {
  * */
 
 START_TEST (test_signaling_init_deinit)
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -97,6 +98,7 @@ START_TEST (test_signaling_init_deinit)
     fail_unless(ret == TRUE, "Init failed");
     ret = deinit_signaling();
     fail_unless(ret == TRUE, "Deinit failed");
+}
 END_TEST
 
 /*
@@ -194,7 +196,7 @@ static void test_internal_key_change(EnforcementPoint *e, Transaction *t, gpoint
  * */
 
 START_TEST (test_signaling_internal_ep_1)
-
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -236,11 +238,11 @@ START_TEST (test_signaling_internal_ep_1)
 
     fail_unless(key_changed_count == 1, "Key changed %i times", key_changed_count);
     fail_unless(decision_count == 1, "Decision sent %i times", decision_count);
-
+}
 END_TEST
 
 START_TEST (test_signaling_internal_ep_gobject)
-
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -290,7 +292,7 @@ START_TEST (test_signaling_internal_ep_gobject)
 
     fail_unless(key_changed_count == 1, "Key changed %i times", key_changed_count);
     fail_unless(decision_count == 1, "Decision sent %i times", decision_count);
-
+}
 END_TEST
 
 /*
@@ -350,6 +352,7 @@ static gboolean test_internal_2_decision(EnforcementPoint *e, Transaction *t, in
 }
 
 START_TEST (test_signaling_internal_ep_2)
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -387,6 +390,7 @@ START_TEST (test_signaling_internal_ep_2)
     g_object_unref(test_transaction_object);
 
     unregister_enforcement_point("internal");
+}
 END_TEST
 
 /*
@@ -519,7 +523,7 @@ test_transaction(gpointer data) {
 }
 
 START_TEST (test_signaling_register_unregister)
-
+{
     DBusError error;
     DBusConnection *c;
     gboolean ret;
@@ -569,7 +573,7 @@ START_TEST (test_signaling_register_unregister)
     g_object_unref(test_transaction_object);
 
     deinit_signaling();
-
+}
 END_TEST
 
 /*
@@ -647,7 +651,7 @@ static void test_timeout_complete(Transaction *t, gpointer data) {
 }
 
 START_TEST (test_signaling_timeout)
-
+{
     DBusError error;
     DBusConnection *c;
     dbus_error_init(&error);
@@ -681,7 +685,7 @@ START_TEST (test_signaling_timeout)
     g_main_loop_run(loop);
 
     g_object_unref(test_transaction_object);
-
+}
 END_TEST
 
 
