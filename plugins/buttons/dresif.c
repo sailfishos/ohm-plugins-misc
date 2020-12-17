@@ -20,9 +20,6 @@ USA.
 
 static int dresif_power_key_pressed(void)
 {
-#define DRESIF_VARTYPE(t)  (char *)(t)
-#define DRESIF_VARVALUE(v) (char *)(v)
-
     static char *target = "power_key_pressed";
 
     char *vars[10];
@@ -37,9 +34,6 @@ static int dresif_power_key_pressed(void)
     status = resolve(target, vars);
 
     return status;
-
-#undef DRESIF_VARVALUE
-#undef DRESIF_VARTYPE
 }
 
 /* 

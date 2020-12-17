@@ -19,7 +19,7 @@ USA.
 
 
 static int build_fldlist(fsif_field_t *, char *, char *, unsigned int,
-                         unsigned int, char *, void *, char *, void **);
+                         unsigned int, char *, delay_cb_t, char *, void **);
 static void calculate_expiration_time(unsigned int, char *,int);
 
 static unsigned int schedule_timer_event(char *, unsigned int);
@@ -52,7 +52,7 @@ static int timer_add(char *id, unsigned int delay, char *cb_name,
         success = srcid;
         state   = srcid ? "active" : "failed";
 
-        if (!build_fldlist(fldlist,id,state,delay,srcid,cb_name,cb,argt,argv)||
+        if (!build_fldlist(fldlist, id, state, delay, srcid, cb_name, cb, argt, argv) ||
             !fsif_add_factstore_entry(FACTSTORE_TIMER, fldlist)               )
         {
             cancel_timer_event_by_srcid(srcid);
@@ -143,10 +143,10 @@ static int timer_active(fsif_entry_t *entry)
 
 static int build_fldlist(fsif_field_t *fldlist, char *id, char *state,
                          unsigned int delay, unsigned int srcid, 
-                         char *cbname, void *addr, char *argt, void **argv)
+                         char *cbname, delay_cb_t cb, char *argt, void **argv)
 {
     char  t;
-    int   i, j;
+    unsigned long i, j;
     char *argname;
     char  buf[2048];
     char *bufend;
@@ -188,7 +188,7 @@ static int build_fldlist(fsif_field_t *fldlist, char *id, char *state,
 
     fldlist[j].type = fldtype_unsignd;
     fldlist[j].name = TIMER_ADDRESS;
-    fldlist[j].value.unsignd = addr;
+    fldlist[j].value.unsignd = GPOINTER_TO_UINT(addr);
     j++;
 
     fldlist[j].type = fldtype_unsignd;
@@ -327,20 +327,23 @@ static int timer_event_cb(void *data)
     char         *id    = (char *)data;
     fsif_entry_t *entry = NULL;
     delay_cb_t    cb;
+    uintptr_t     addr;
     int           argc;
     char          argt[MAX_ARG + 1];
     void         *argv[MAX_ARG];
     char          name[64];
     char         *str;
     int           ibuf[MAX_ARG];
-    int           i, j;
+    unsigned long i;
 
     if ((entry = timer_lookup(id)) != NULL) {
         OHM_DEBUG(DBG_EVENT, "Timer '%s' rundown", id);
 
         fsif_set_field_by_entry(entry, fldtype_string,  TIMER_STATE, &rundown);
-        fsif_get_field_by_entry(entry, fldtype_unsignd, TIMER_ADDRESS, &cb);
+        fsif_get_field_by_entry(entry, fldtype_unsignd, TIMER_ADDRESS, &addr);
         fsif_get_field_by_entry(entry, fldtype_unsignd, TIMER_ARGC, &argc);
+
+        cb = GUINT_TO_POINTER(addr);
 
         if (cb != NULL) {
             memset(argt, 0, sizeof(argt));

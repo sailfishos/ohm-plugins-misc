@@ -74,11 +74,11 @@ int dresif_resource_request(uint32_t  manager_id,
 
     vars[i=0] = "manager_id";
     vars[++i] = DRESIF_VARTYPE('i');
-    vars[++i] = DRESIF_VARVALUE(manager_id);
+    vars[++i] = GINT_TO_POINTER(manager_id);
 
     vars[++i] = "request";
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = DRESIF_VARVALUE(request);
+    vars[++i] = request;
 
 #if 0
     if (transid > 0) {

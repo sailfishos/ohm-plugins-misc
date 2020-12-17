@@ -84,7 +84,6 @@ static void console_command(char *cmd)
     char   buf[512];
     char  *str;
     char  *e;
-    int    valid_id;
     int    sts;
 
     if (!strcmp(cmd, "help")) {
@@ -104,7 +103,7 @@ static void console_command(char *cmd)
         do {
             if (!strcmp(id_type, "pid")) {
                 pid = strtoul(id_str, &e, 10);
-                id  = (void *)pid;
+                id  = GUINT_TO_POINTER(pid);
 
                 if (e == id_str || *e || pid < 1)
                     break;

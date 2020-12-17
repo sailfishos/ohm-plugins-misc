@@ -30,7 +30,6 @@ USA.
 #include "dresif.h"
 
 #define DRESIF_VARTYPE(t)  (char *)(t)
-#define DRESIF_VARVALUE(v) (char *)(v)
 
 #define DRES_FEATURE_REQUEST            "feature_request"
 #define DRES_FEATURE_REQUEST_ARG_NAME   "feature_name"
@@ -62,10 +61,10 @@ int dresif_set_feature(const char *feature, int enabled)
 
     vars[i=0] = DRES_FEATURE_REQUEST_ARG_NAME;
     vars[++i] = DRESIF_VARTYPE('s');
-    vars[++i] = DRESIF_VARVALUE(feature);
+    vars[++i] = (char *) feature;
     vars[++i] = DRES_FEATURE_REQUEST_ARG_VALUE;
     vars[++i] = DRESIF_VARTYPE('i');
-    vars[++i] = DRESIF_VARVALUE(enabled);
+    vars[++i] = GINT_TO_POINTER(enabled);
 
     vars[++i] = NULL;
 

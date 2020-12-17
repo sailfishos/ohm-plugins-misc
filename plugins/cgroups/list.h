@@ -105,7 +105,7 @@ list_delete(list_hook_t *elem)
 /********************
  * list_entry
  ********************/
-#define MEMBER_OFFSET(type, member) ((int)(&(((type *)NULL)->member)))
+#define MEMBER_OFFSET(type, member) ((uintptr_t)(&(((type *)NULL)->member)))
 #define list_entry(ptr, type, member) \
     (type *)(((void *)ptr) - MEMBER_OFFSET(type, member))
 

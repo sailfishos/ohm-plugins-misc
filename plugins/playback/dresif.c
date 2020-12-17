@@ -17,6 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
 USA.
 *************************************************************************/
 
+#define DRESIF_VARTYPE(t)  (char *)(t)
+#define DRESIF_VARVALUE(v) (char *)(v)
 
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
@@ -29,8 +31,6 @@ static void dresif_init(OhmPlugin *plugin)
 
 static int dresif_group_request(char *group, int media)
 {
-#define DRESIF_VARTYPE(t)  (char *)(t)
-#define DRESIF_VARVALUE(v) (char *)(v)
     char *vars[10];
     int   i;
     int   status;
@@ -54,15 +54,10 @@ static int dresif_group_request(char *group, int media)
         OHM_DEBUG(DBG_DRES, "resolve(group_request) failed");
     
     return status <= 0 ? FALSE : TRUE;
-
-#undef DRESIF_VARVALUE
-#undef DRESIF_VARTYPE
 }
 
 static int dresif_playback_state_request(client_t *cl, char *state,int transid)
 {
-#define DRESIF_VARTYPE(t)  (char *)(t)
-#define DRESIF_VARVALUE(v) (char *)(v)
     char *vars[48];
     int   i;
     int   status;
@@ -113,13 +108,10 @@ static int dresif_playback_state_request(client_t *cl, char *state,int transid)
     
     return status <= 0 ? FALSE : TRUE;
 
-#undef DRESIF_VARVALUE
-#undef DRESIF_VARTYPE
 }
 
 static int dresif_privacy_override_request(int privacy_override, int transid)
 {
-#define DRESIF_VARTYPE(t) (char *)(t)
     char *vars[48];
     int   i;
     int   status;
@@ -141,14 +133,11 @@ static int dresif_privacy_override_request(int privacy_override, int transid)
         OHM_DEBUG(DBG_DRES, "resolve() failed");
     
     return status <= 0 ? FALSE : TRUE;
-
-#undef DRESIF_VARTYPE
 }
 
 static int dresif_bluetooth_override_request(int bluetooth_override,
                                              int transid)
 {
-#define DRESIF_VARTYPE(t) (char *)(t)
     char *vars[48];
     int   i;
     int   status;
@@ -176,13 +165,10 @@ static int dresif_bluetooth_override_request(int bluetooth_override,
         OHM_DEBUG(DBG_DRES, "resolve() failed");
     
     return status <= 0 ? FALSE : TRUE;
-
-#undef DRESIF_VARTYPE
 }
 
 static int dresif_mute_request(int mute, int transid)
 {
-#define DRESIF_VARTYPE(t) (char *)(t)
     char *vars[48];
     int   i;
     int   status;
@@ -204,8 +190,6 @@ static int dresif_mute_request(int mute, int transid)
         OHM_DEBUG(DBG_DRES, "resolve() failed");
     
     return status <= 0 ? FALSE : TRUE;
-
-#undef DRESIF_VARTYPE
 }
 
 OHM_EXPORTABLE(void, completion_cb, (char *id, char *argt, void **argv))
@@ -248,6 +232,8 @@ OHM_EXPORTABLE(void, completion_cb, (char *id, char *argt, void **argv))
     }
 }
 
+#undef DRESIF_VARVALUE
+#undef DRESIF_VARTYPE
 
 /* 
  * Local Variables:

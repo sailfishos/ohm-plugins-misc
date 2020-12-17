@@ -33,7 +33,7 @@ USA.
 #define TIMER_ADDRESS   "address"
 #define TIMER_SRCID     "g_source_id"
 #define TIMER_ARGC      "argc"
-#define TIMER_ARGV      "argv%d"
+#define TIMER_ARGV      "argv%lu"
 
 static void          timer_init(OhmPlugin *);
 static int           timer_add(char *, unsigned int, char *,

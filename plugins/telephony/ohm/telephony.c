@@ -150,13 +150,16 @@ static int         holdorder;                   /* autohold order */
 static int         tonegen_muting = FALSE;      /* muting driver by tonegen */
 static pid_t       video_pid;                   /* stream engine pid */
 
+static
 call_t *call_register(call_type_t type, const char *path, const char *name,
                       const char *peer, unsigned int peer_handle,
                       int conference, int emergency,
-                      char *audio, char *video,
                       char **interfaces);
+static
 call_t *call_lookup(const char *path);
+static
 void    call_destroy(call_t *call);
+static
 void    call_foreach(GHFunc callback, gpointer data);
 
 static inline const char *state_name(int state);
@@ -1494,7 +1497,7 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
     }
 
     if (type == TP_STREAM_TYPE_VIDEO) {
-        call->video = (char *)id;
+        call->video_id = id;
         policy_call_update(call, UPDATE_VIDEO);
 
         nvideo++;
@@ -1502,7 +1505,7 @@ stream_added(DBusConnection *c, DBusMessage *msg, void *data)
             RESCTL_UPDATE(TRUE);
     }
     else
-        call->audio = (char *)id;
+        call->audio_id = id;
 
     return DBUS_HANDLER_RESULT_HANDLED;
 }
@@ -1537,10 +1540,10 @@ stream_removed(DBusConnection *c, DBusMessage *msg, void *data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
-    if ((char *)id == call->audio)
-        call->audio = NULL;
-    else if ((char *)id == call->video) {
-        call->video = NULL;
+    if (id == call->audio_id)
+        call->audio_id = 0;
+    else if (id == call->video_id) {
+        call->video_id = 0;
         policy_call_update(call, UPDATE_VIDEO);
 
         nvideo--;
@@ -1583,11 +1586,11 @@ content_added(DBusConnection *c, DBusMessage *msg, void *data)
             }
             
             if (type == TP_STREAM_TYPE_VIDEO) {
-                call->video = g_strdup(content);
+                call->video_content = g_strdup(content);
                 policy_call_update(call, UPDATE_VIDEO);
             }
             else
-                call->audio = g_strdup(content);
+                call->audio_content = g_strdup(content);
         }
         else
             event_enqueue(path, c, msg, data);
@@ -1619,17 +1622,17 @@ content_removed(DBusConnection *c, DBusMessage *msg, void *data)
                               DBUS_TYPE_INVALID)) {
         if ((call = call_lookup(path)) != NULL) {
             
-            if (call->audio != NULL && !strcmp(content, call->audio)) {
+            if (call->audio_content != NULL && !strcmp(content, call->audio_content)) {
                 OHM_INFO("Audio content %s removed from Call.DRAFT %s", content,
                          short_path(path));
-                g_free(call->audio);
-                call->audio = NULL;
+                g_free(call->audio_content);
+                call->audio_content = NULL;
             }
-            else if (call->video != NULL && !strcmp(content, call->video)) {
+            else if (call->video_content != NULL && !strcmp(content, call->video_content)) {
                 OHM_INFO("Video content %s removed from Call.DRAFT %s", content,
                          short_path(path));
-                g_free(call->video);
-                call->video = NULL;
+                g_free(call->video_content);
+                call->video_content = NULL;
                 policy_call_update(call, UPDATE_VIDEO);
 
                 nvideo--;
@@ -2382,25 +2385,6 @@ emergency_active(int active)
 
 
 /********************
- * accept_call_reply
- ********************/
-static void
-accept_call_reply(DBusMessage *msg, char *error)
-{
-    DBusMessage *reply;
-
-    if (error == NULL)
-        reply = dbus_message_new_method_return(msg);
-    else
-        reply = dbus_message_new_error(msg, DBUS_ERROR_FAILED, error);
-
-    dbus_connection_send(bus, reply, NULL);
-    dbus_message_unref(reply);
-    dbus_message_unref(msg);
-}
-
-
-/********************
  * accept_call_request
  ********************/
 static DBusHandlerResult
@@ -2647,7 +2631,6 @@ event_handler(event_t *event)
                                  event->channel.peer_handle,
                                  event->channel.members != NULL,
                                  event->channel.emergency,
-                                 NULL, NULL,
                                  event->channel.interfaces);
             call->dir = event->channel.dir;
 
@@ -3057,11 +3040,10 @@ has_interface(char **interfaces, char *interface)
 /********************
  * call_register
  ********************/
-call_t *
+static call_t *
 call_register(call_type_t type, const char *path, const char *name,
               const char *peer, unsigned int peer_handle,
               int conference, int emergency,
-              char *audio, char *video,
               char **interfaces)
 {
     call_t *call;
@@ -3117,11 +3099,10 @@ call_register(call_type_t type, const char *path, const char *name,
     else
         nipcall++;
 
-    call->audio = audio;
-    call->video = video;
-
-    if (call->video)
-        nvideo++;
+    call->audio_id = 0;
+    call->audio_content = NULL;
+    call->video_id = 0;
+    call->video_content = NULL;
 
     OHM_INFO("Call %s (#%d) registered.", path, ncscall + nipcall);
 
@@ -3134,7 +3115,7 @@ call_register(call_type_t type, const char *path, const char *name,
         call->holdable = FALSE;
 #endif
 
-    if (!conference && !audio && !video)
+    if (!conference)
         call->timeout = g_timeout_add_full(G_PRIORITY_DEFAULT,
                                            CALL_TIMEOUT,
                                            call_timeout, g_strdup(call->path),
@@ -3178,7 +3159,7 @@ call_unregister(const char *path)
 /********************
  * call_lookup
  ********************/
-call_t *
+static call_t *
 call_lookup(const char *path)
 {
     return path ? (call_t *)g_hash_table_lookup(calls, path) : NULL;
@@ -3193,7 +3174,7 @@ static gboolean
 has_id(gpointer key, gpointer value, gpointer data)
 {
     call_t *call = (call_t *)value;
-    int     id   = (int)data;
+    int     id   = GPOINTER_TO_INT(data);
 
     (void)key;
 
@@ -3207,14 +3188,14 @@ has_id(gpointer key, gpointer value, gpointer data)
 call_t *
 call_find(int id)
 {
-    return g_hash_table_find(calls, has_id, (gpointer)id);
+    return g_hash_table_find(calls, has_id, GINT_TO_POINTER(id));
 }
 
 
 /********************
  * call_foreach
  ********************/
-void
+static void
 call_foreach(GHFunc callback, gpointer data)
 {
     g_hash_table_foreach(calls, callback, data);
@@ -3224,7 +3205,7 @@ call_foreach(GHFunc callback, gpointer data)
 /********************
  * call_destroy
  ********************/
-void
+static void
 call_destroy(call_t *call)
 {
     if (call != NULL) {
@@ -3238,10 +3219,10 @@ call_destroy(call_t *call)
             call->fact = NULL;
         }
         if (call->type == CALL_TYPE_DRAFT) {
-            if (call->audio != NULL)
-                g_free(call->audio);
-            if (call->video != NULL)
-                g_free(call->video);
+            if (call->audio_content != NULL)
+                g_free(call->audio_content);
+            if (call->video_content != NULL)
+                g_free(call->video_content);
         }
 
         if (call->timeout != 0) {
@@ -3400,7 +3381,7 @@ tp_disconnect(call_t *call, const char *action)
 /********************
  * remove_parent
  ********************/
-static gboolean
+static void
 remove_parent(gpointer key, gpointer value, gpointer data)
 {
     call_t *parent = (call_t *)data;
@@ -3427,8 +3408,6 @@ remove_parent(gpointer key, gpointer value, gpointer data)
 
     if (update)
         policy_call_update(call, update);
-    
-    return TRUE;
 }
 
 
@@ -3467,7 +3446,7 @@ call_disconnect(call_t *call, const char *action, event_t *event)
     if (call == event->any.call) {
         
         if (IS_CONF_PARENT(call))
-            call_foreach((GHFunc)remove_parent, call);
+            call_foreach(remove_parent, call);
 
         switch (event->any.state) {
         case STATE_CREATED:
@@ -3504,87 +3483,6 @@ call_disconnect(call_t *call, const char *action, event_t *event)
     return 0;
 }
 
-
-
-/********************
- * tp_sm_accept
- ********************/
-static int
-tp_sm_accept(call_t *call)
-{
-    DBusMessage         *msg;
-    dbus_uint32_t        handles[1];
-    const dbus_uint32_t *members;
-    const char          *name, *path, *iface, *method, *message;
-    int                  status;
-    
-    name   = call->name;
-    path   = call->path;
-    iface  = TP_CHANNEL_GROUP;
-    method = ADD_MEMBERS;
-    
-    if ((msg = dbus_message_new_method_call(name,path,iface, method)) != NULL) {
-        handles[0] = call->local_handle;
-        members    = handles;
-        message    = "";
-        if (dbus_message_append_args(msg,
-                                     DBUS_TYPE_ARRAY,
-                                     DBUS_TYPE_UINT32, &members, 1,
-                                     DBUS_TYPE_STRING, &message,
-                                     DBUS_TYPE_INVALID))
-            status = bus_send(msg, NULL);
-        else {
-            OHM_ERROR("Failed to create D-BUS AddMembers message.");
-            status = EINVAL;
-        }
-
-        dbus_message_unref(msg);
-    }
-    else
-        status = ENOMEM;
-    
-    return status;
-}
-
-
-/********************
- * tp_call_accept
- ********************/
-static int
-tp_call_accept(call_t *call)
-{
-    DBusMessage *msg;
-    const char  *name, *path;
-    int          status;
-    
-    name = call->name;
-    path = call->path;
-
-    msg = dbus_message_new_method_call(name, path,
-                                       TP_CHANNEL_CALL, ACCEPT);
-    
-    if (msg != NULL) {
-        TIMESTAMP_ADD("telephony: request telepathy to disconnect");
-        status = bus_send(msg, NULL);
-    }
-    else
-        status = ENOMEM;
-
-    return status;
-}
-
-
-/********************
- * tp_accept
- ********************/
-static int
-tp_accept(call_t *call)
-{
-    if (call->type == CALL_TYPE_DRAFT)
-        return tp_call_accept(call);
-    else
-        return tp_sm_accept(call);
-}
 
 
 /********************
@@ -4212,7 +4110,8 @@ int
 policy_call_export(call_t *call)
 {
     OhmFact    *fact;
-    const char *state, *dir, *path, *video, *hold;
+    const char *state, *dir, *path, *vstr, *hold;
+    gboolean    video;
     char        id[16], parent[16];
     
     
@@ -4230,7 +4129,8 @@ policy_call_export(call_t *call)
     path  = call->path;
     state = state_name(call->state);
     dir   = dir_name(call->dir);
-    video = call->video ? "yes" : "no";
+    vstr  = (call->video_id || call->video_content) ? "yes" : "no";
+    video = (call->video_id || call->video_content) ? TRUE : FALSE;
     hold  = call->holdable ? "yes" : "no";
     snprintf(id, sizeof(id), "%d", call->id);
     if (call->parent == call)
@@ -4242,11 +4142,11 @@ policy_call_export(call_t *call)
         !set_string_field(fact, FACT_FIELD_STATE, state) ||
         !set_string_field(fact, FACT_FIELD_DIR  , dir)   ||
         !set_string_field(fact, FACT_FIELD_ID   , id)    ||
-        !set_string_field(fact, FACT_FIELD_VIDEO, video) ||
+        !set_string_field(fact, FACT_FIELD_VIDEO, vstr)  ||
         !set_string_field(fact, FACT_FIELD_HOLD , hold)  ||
         (parent[0] && !set_string_field(fact, FACT_FIELD_PARENT, parent)) ||
         (call->emergency && !set_string_field(fact, FACT_FIELD_EMERG, "yes")) ||
-        (call->video && !set_string_field(fact, FACT_FIELD_VIDEO, "yes"))) {
+        (video && !set_string_field(fact, FACT_FIELD_VIDEO, "yes"))) {
         OHM_ERROR("Failed to export call %s to factstore.", path);
         g_object_unref(fact);
         return FALSE;
@@ -4288,7 +4188,7 @@ policy_call_update(call_t *call, int fields)
     order  = (fields & UPDATE_ORDER)   ? call->order : 0;
     emerg  = (fields & UPDATE_EMERG)   ? call->emergency : 0;
     conn   = (fields & UPDATE_CONNECT) ? call->connected : 0;
-    video  = (fields & UPDATE_VIDEO)   ? (call->video ? "yes" : "no") : NULL;
+    video  = (fields & UPDATE_VIDEO)   ? ((call->video_id || call->video_content) ? "yes" : "no") : NULL;
 
     if (fields & UPDATE_PARENT) {
         if (call->parent == NULL) {

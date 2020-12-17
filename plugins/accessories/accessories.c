@@ -300,7 +300,6 @@ static DBusHandlerResult card_info(DBusConnection *c, DBusMessage * msg, void *d
 }
 
 #define DRES_VARTYPE(t)  (char *)(t)
-#define DRES_VARVALUE(s) (char *)(s)
 
 gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[])
 {
@@ -312,16 +311,16 @@ gboolean run_policy_hook(const char *hook, unsigned int nargs, dres_arg_t args[]
         int sig = arg.sig;
         
         vars[j++] = arg.key;
-        vars[j++] = DRES_VARTYPE(sig);
+        vars[j++] = DRES_VARTYPE(GINT_TO_POINTER(sig));
         switch (sig) {
             case 's':
-                vars[j++] = DRES_VARVALUE(arg.value.s_value);
+                vars[j++] = arg.value.s_value;
                 break;
             case 'i':
-                vars[j++] = DRES_VARVALUE(arg.value.i_value);
+                vars[j++] = GINT_TO_POINTER(arg.value.i_value);
                 break;
             case 'd':
-                vars[j++] = DRES_VARVALUE(arg.value.f_value);
+                vars[j++] = (char *) arg.value.f_value;
                 break;
             default:
                 OHM_ERROR("Unknown value signature '%c'!", sig);
@@ -354,15 +353,15 @@ int dres_accessory_request(const char *name, int driver, int connected)
 
     vars[i=0] = "accessory_name";
     vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(name);
+    vars[++i] = name;
 
     vars[++i] = "accessory_driver";
     vars[++i] = DRES_VARTYPE('i');
-    vars[++i] = DRES_VARVALUE(driver);
+    vars[++i] = GINT_TO_POINTER(driver);
 
     vars[++i] = "accessory_connected";
     vars[++i] = DRES_VARTYPE('i');
-    vars[++i] = DRES_VARVALUE(connected);
+    vars[++i] = GINT_TO_POINTER(connected);
 
     vars[++i] = NULL;
 
@@ -388,10 +387,10 @@ int dres_card_request(const char *type, const char *profile)
 
     vars[i=0] = "card_type";
     vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(type);
+    vars[++i] = type;
     vars[++i] = "card_profile";
     vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(profile);
+    vars[++i] = profile;
     vars[++i] = NULL;
 
     status = resolve(goal, vars);
@@ -417,10 +416,10 @@ int dres_update_accessory_mode(const char *device, const char *mode)
 
     vars[i=0] = "accessory_name";
     vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(device);
+    vars[++i] = device;
     vars[++i] = "accessory_mode";
     vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(mode);
+    vars[++i] = mode;
     vars[++i] = NULL;
             
     status = resolve(goal, vars);
@@ -452,11 +451,11 @@ int dres_all(void)
 
     vars[i=0] = "completion_callback";
     vars[++i] = DRES_VARTYPE('s');
-    vars[++i] = DRES_VARVALUE(callback);
+    vars[++i] = callback;
 
     vars[++i] = "transaction_id";
     vars[++i] = DRES_VARTYPE('i');
-    vars[++i] = DRES_VARVALUE(txid);
+    vars[++i] = GINT_TO_POINTER(txid);
 
     vars[++i] = NULL;
 
@@ -472,7 +471,6 @@ int dres_all(void)
     return status <= 0 ? FALSE : TRUE;
 
 }
-#undef DRES_VARVALUE
 #undef DRES_VARTYPE
 
 

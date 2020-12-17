@@ -246,7 +246,7 @@ void dbusif_signal_mute(int value, int send_now)
     }
 }
 
-void dbusif_send_audio_stream_info(char          *oper,
+void dbusif_send_audio_stream_info(const char    *oper,
                                    char          *group,
                                    dbus_uint32_t  pid,
                                    char          *prop,
@@ -451,7 +451,6 @@ DBusHandlerResult dbusif_info(DBusConnection *conn, DBusMessage *msg, void *ud)
     (void)conn;
     (void)ud;
 
-    char              *epid;
     char              *type;
     char              *media;
     char              *group;
@@ -466,8 +465,6 @@ DBusHandlerResult dbusif_info(DBusConnection *conn, DBusMessage *msg, void *ud)
                                      DBUS_INFO_SIGNAL);
 
     if (is_info) {
-        epid = (char *)dbus_message_get_sender(msg);
-
         success = dbus_message_get_args(msg, NULL,
                                         DBUS_TYPE_STRING, &type,
                                         DBUS_TYPE_STRING, &media,
@@ -503,9 +500,6 @@ DBusHandlerResult dbusif_info(DBusConnection *conn, DBusMessage *msg, void *ud)
                 OHM_DEBUG(DBG_DBUS, "info: media '%s' of group '%s' become %s",
                           media, group, state);
 
-#if 0
-                media_state_request(epid, media, group, reqstate);
-#endif
                if (!strcmp(reqstate, "on"))
                    resctl_acquire(group);
                else

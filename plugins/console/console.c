@@ -24,6 +24,7 @@ USA.
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -276,13 +277,14 @@ OHM_EXPORTABLE(int, console_open, (char *address,
     console_t          *c = NULL;
     struct sockaddr_in  sin;
     char                addr[64], *portp, *end;
-    int                 len, reuse, flags;
+    uintptr_t           len;
+    int                 reuse, flags;
     GIOCondition        events;
 
     if ((portp = strchr(address, ':')) == NULL)
         return -1;
     
-    len = (int)portp - (int)address;
+    len = (uintptr_t)portp - (uintptr_t)address;
     strncpy(addr, address, len);
     addr[len] = '\0';
     portp++;
