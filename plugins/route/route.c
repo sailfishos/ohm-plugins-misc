@@ -156,7 +156,7 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_COMMONNAME, &common);
 
     if (!device) {
-        OHM_ERROR("route [%s]: malformed device entry");
+        OHM_ERROR("route [%s]: malformed device entry", __FUNCTION__);
         return;
     }
 
@@ -204,7 +204,7 @@ static void read_features(fsif_entry_t *entry, gpointer userdata)
     fsif_get_field_by_entry(entry, fldtype_integer, FACTSTORE_FEATURE_ARG_ENABLED, &enabled);
 
     if (!name) {
-        OHM_ERROR("route [%s]: malformed feature entry");
+        OHM_ERROR("route [%s]: malformed feature entry", __FUNCTION__);
         return;
     }
 
