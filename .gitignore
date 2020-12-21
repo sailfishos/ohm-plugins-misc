@@ -37,4 +37,5 @@ ylwrap
 .version
 RPMS/
 aclocal.m4
-
+*.pc
+.tarball-version
