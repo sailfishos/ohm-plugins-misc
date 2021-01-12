@@ -313,17 +313,18 @@ int resource_set_add_idle_task(resource_set_t *rs, resource_set_task_t task)
 
 resource_set_t *resource_set_find(fsif_entry_t *entry)
 {
-    uint32_t manager_id = INVALID_MANAGER_ID;
+    fsif_value_t manager_id;
     resource_set_t *rs = NULL;
     
+    manager_id.integer = INVALID_MANAGER_ID;
     fsif_get_field_by_entry(entry, fldtype_integer, "manager_id", &manager_id);
 
-    if (manager_id == INVALID_MANAGER_ID)
+    if (manager_id.integer == INVALID_MANAGER_ID)
         OHM_DEBUG(DBG_FS, "failed to get manager_id"); 
     else  {
-        if ((rs = find_in_hash_table(manager_id)) == NULL) {
+        if ((rs = find_in_hash_table(manager_id.integer)) == NULL) {
             OHM_DEBUG(DBG_SET, "can't find resource set with manager_id %u",
-                      manager_id);
+                      manager_id.integer);
         }
     }
 

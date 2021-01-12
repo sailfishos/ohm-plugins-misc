@@ -60,12 +60,12 @@ static void  audio_stream_changed_cb(fsif_entry_t      *entry,
 				     fsif_fact_watch_e  event,
 				     void              *usrdata)
 {
-    char     *oper    = "<unknown>";
-    uint32_t  pid     = 0;
-    char     *group   = NULL;
-    char     *propnam = "media.name";
-    char     *method  = "<unknown>";
-    char     *pattern = "<unknown>";
+    const char     *oper                        = "<unknown>";
+    fsif_value_t    pid;        pid.integer     = 0;
+    fsif_value_t    group;      group.string    = NULL;
+    fsif_value_t    propnam;    propnam.string  = "media.name";
+    fsif_value_t    method;     method.string   = "<unknown>";
+    fsif_value_t    pattern;    pattern.string  = "<unknown>";
 
     (void)name;
     (void)usrdata;
@@ -83,11 +83,11 @@ static void  audio_stream_changed_cb(fsif_entry_t      *entry,
     fsif_get_field_by_entry(entry, fldtype_string , "pattern" , &pattern);
 
     OHM_DEBUG(DBG_AUDIO, "audio stream %s: pid=%u group='%s' property='%s' "
-              "method=%s pattern='%s'", oper, pid, group?group:"<null>",
-              propnam, method, pattern);
+              "method=%s pattern='%s'", oper, pid.integer, group.string ? group.string : "<null>",
+              propnam.string, method.string, pattern.string);
 
-    if (pid != 0  &&  group != NULL) {
-        dbusif_send_audio_stream_info(oper, group, pid,propnam,method,pattern);
+    if (pid.integer != 0 && group.string != NULL) {
+        dbusif_send_audio_stream_info(oper, group.string, pid.integer, propnam.string, method.string, pattern.string);
     }
 }
 

@@ -70,20 +70,20 @@ static int timer_add(char *id, unsigned int delay, char *cb_name,
 static int timer_restart(fsif_entry_t *entry, unsigned int delay,
                          char *cb_name, delay_cb_t cb, char *argt, void **argv)
 {
-    char *id = 0;
-    
+    fsif_value_t id;
+
     if (!entry || !cb_name || !cb || !argt)
         goto fail;
 
     fsif_get_field_by_entry(entry, fldtype_string, TIMER_ID, &id);
 
-    if (id == NULL)
+    if (id.string == NULL)
         goto fail;
 
     cancel_timer_event_by_entry(entry);
 
     if (!fsif_destroy_factstore_entry(entry) ||
-        !timer_add(id, delay, cb_name, cb, argt, argv))
+        !timer_add(id.string, delay, cb_name, cb, argt, argv))
         goto fail;
         
     return TRUE;
@@ -127,7 +127,7 @@ static fsif_entry_t *timer_lookup(char *id)
 
 static int timer_active(fsif_entry_t *entry)
 {
-    char *state = NULL;
+    fsif_value_t state;
     int   active;
 
     if (entry == NULL)
@@ -135,7 +135,7 @@ static int timer_active(fsif_entry_t *entry)
     else {
         fsif_get_field_by_entry(entry, fldtype_string, TIMER_STATE, &state);
 
-        active = (state && !strcmp(state, "active")) ? TRUE : FALSE;
+        active = (state.string && !strcmp(state.string, "active")) ? TRUE : FALSE;
     }
 
     return active;
@@ -186,9 +186,9 @@ static int build_fldlist(fsif_field_t *fldlist, char *id, char *state,
     fldlist[j].value.string = cbname;
     j++;
 
-    fldlist[j].type = fldtype_unsignd;
+    fldlist[j].type = fldtype_pointer;
     fldlist[j].name = TIMER_ADDRESS;
-    fldlist[j].value.unsignd = GPOINTER_TO_UINT(addr);
+    fldlist[j].value.pointer = cb;
     j++;
 
     fldlist[j].type = fldtype_unsignd;
@@ -306,13 +306,13 @@ static void cancel_timer_event_by_srcid(unsigned int srcid)
 
 static void cancel_timer_event_by_entry(fsif_entry_t *entry)
 {
-    static char  *stopped = "stopped";
-
-    unsigned int  srcid;
+    fsif_value_t stopped;
+    fsif_value_t srcid;
 
     if (timer_active(entry)) {
         fsif_get_field_by_entry(entry, fldtype_unsignd, TIMER_SRCID, &srcid);
-        cancel_timer_event_by_srcid(srcid);
+        cancel_timer_event_by_srcid(srcid.unsignd);
+        stopped.string = "stopped";
         fsif_set_field_by_entry(entry, fldtype_string, TIMER_STATE, &stopped);
     }
 }
@@ -322,33 +322,34 @@ static int timer_event_cb(void *data)
 {
 #define MAX_ARG 64
 
-    static char  *rundown = "rundown";
+    static fsif_value_t rundown;
+    rundown.string = "rundown";
 
     char         *id    = (char *)data;
     fsif_entry_t *entry = NULL;
     delay_cb_t    cb;
-    uintptr_t     addr;
-    int           argc;
+
+    fsif_value_t  addr;
+    fsif_value_t  argc;
+    fsif_value_t  arg;
     char          argt[MAX_ARG + 1];
     void         *argv[MAX_ARG];
     char          name[64];
-    char         *str;
-    int           ibuf[MAX_ARG];
     unsigned long i;
 
     if ((entry = timer_lookup(id)) != NULL) {
         OHM_DEBUG(DBG_EVENT, "Timer '%s' rundown", id);
 
         fsif_set_field_by_entry(entry, fldtype_string,  TIMER_STATE, &rundown);
-        fsif_get_field_by_entry(entry, fldtype_unsignd, TIMER_ADDRESS, &addr);
+        fsif_get_field_by_entry(entry, fldtype_pointer, TIMER_ADDRESS, &addr);
         fsif_get_field_by_entry(entry, fldtype_unsignd, TIMER_ARGC, &argc);
 
-        cb = GUINT_TO_POINTER(addr);
+        cb = addr.pointer;
 
         if (cb != NULL) {
             memset(argt, 0, sizeof(argt));
 
-            for (i = 0, j = 0;  i < MAX_ARG && i < argc;  i++) {
+            for (i = 0;  i < MAX_ARG && i < argc.unsignd;  i++) {
                 snprintf(name, sizeof(name), TIMER_ARGV, i);
 
                 /* FIXME:
@@ -356,19 +357,18 @@ static int timer_event_cb(void *data)
                  * some time (ie. supporting function in fsif etc)
                  */
                                 /* first we try as string */
-                fsif_get_field_by_entry(entry, fldtype_string, name, &str);
+                fsif_get_field_by_entry(entry, fldtype_string, name, &arg);
 
-                if (str != NULL) {
+                if (arg.string != NULL) {
                     argt[i] = 's';
-                    argv[i] = (void *)str;
+                    argv[i] = arg.string;
                     continue;
                 }
                                 /* next we assume it is an integer */
-                fsif_get_field_by_entry(entry, fldtype_integer, name, ibuf+j);
+                fsif_get_field_by_entry(entry, fldtype_integer, name, &arg);
 
                 argt[i] = 'i';
-                argv[i] = ibuf+j;
-                j++;
+                argv[i] = GINT_TO_POINTER(arg.integer);
             } /* for */
 
             OHM_DEBUG(DBG_EVENT, "signature '%s'", argt);

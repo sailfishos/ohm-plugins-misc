@@ -57,12 +57,12 @@ int fsif_add_fact_watch(char                 *factname,
 int fsif_get_field_by_name(const char     *name,
                            fsif_fldtype_t  type,
                            char           *field,
-                           void           *vptr);
+                           fsif_value_t   *vptr);
 
 int fsif_get_field_by_entry(fsif_entry_t   *entry,
                             fsif_fldtype_t  type,
                             char           *name,
-                            void           *vptr);
+                            fsif_value_t   *vptr);
 
 fsif_entry_t *fsif_get_entry(char           *name,
                              fsif_field_t   *selist);

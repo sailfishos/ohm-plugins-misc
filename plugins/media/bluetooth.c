@@ -63,9 +63,9 @@ int bluetooth_request(int value)
 
 int bluetooth_query(void)
 {
-    char *bluetooth;
-    int   value;
-    int   success;
+    fsif_value_t bluetooth;
+    int          value;
+    int          success;
 
     success = fsif_get_field_by_name(FACTSTORE_BLUETOOTH,
                                      fldtype_string,
@@ -73,7 +73,7 @@ int bluetooth_query(void)
     if (!success)
         OHM_ERROR("media: bluetooth query failed: factstore error");
     else {
-        value = override_value(bluetooth);
+        value = override_value(bluetooth.string);
 
         dbusif_signal_bluetooth_override(value, DBUSIF_QUEUE);
 

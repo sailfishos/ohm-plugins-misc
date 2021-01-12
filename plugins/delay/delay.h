@@ -41,12 +41,12 @@ int fsif_add_factstore_entry(char *name,
 int fsif_get_field_by_entry(fsif_entry_t   *entry,
                             fsif_fldtype_t  type,
                             char           *name,
-                            void           *vptr);
+                            fsif_value_t   *vptr);
 
 void fsif_set_field_by_entry(fsif_entry_t *entry,
                              fsif_fldtype_t type,
                              char *name,
-                             void *vptr);
+                             fsif_value_t *vptr);
 
 fsif_entry_t * fsif_get_entry(char           *name,
                               fsif_field_t   *selist);

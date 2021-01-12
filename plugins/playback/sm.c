@@ -1470,30 +1470,30 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
     (void)fld;
     (void)usrdata;
 
-    char *mute;
-    int   state, forced;
+    fsif_value_t mute;
+    fsif_value_t forced;
+    int state = 0;
 
 
-    forced = FALSE;
+    forced.integer = FALSE;
     fsif_get_field_by_entry(entry, fldtype_integer, "forced", &forced);
     
-    if (forced)           /* suppress notification for forced mutes */
+    if (forced.integer)           /* suppress notification for forced mutes */
         return;
     
-    mute = NULL;
     fsif_get_field_by_entry(entry, fldtype_string, "mute", &mute);
 
-    if (mute == NULL) {
+    if (mute.string == NULL) {
         OHM_ERROR("[%s] invalid field value '<null>'", __FUNCTION__);
         return;
     }
 
-    if (!strcmp(mute, "muted"))
+    if (!strcmp(mute.string, "muted"))
         state = 1;
-    else if (!strcmp(mute, "unmuted"))
+    else if (!strcmp(mute.string, "unmuted"))
         state = 0;
     else {
-        OHM_ERROR("[%s] invalid field value '%s'", __FUNCTION__, mute);
+        OHM_ERROR("[%s] invalid field value '%s'", __FUNCTION__, mute.string);
         return;
     }
 
@@ -1503,26 +1503,26 @@ static void mute_cb(fsif_entry_t *entry, char *name, fsif_field_t *fld,
 
 static client_t *find_client_by_fact(fsif_entry_t *entry)
 {
-    client_t *cl;
-    char     *dbusid;
-    char     *object;
+    client_t     *cl;
+    fsif_value_t  dbusid;
+    fsif_value_t  object;
 
     fsif_get_field_by_entry(entry, fldtype_string, "dbusid", &dbusid);
     fsif_get_field_by_entry(entry, fldtype_string, "object", &object);
 
-    if (dbusid == NULL || *dbusid == '\0') {
+    if (dbusid.string == NULL || *dbusid.string == '\0') {
         OHM_ERROR("[%s] Can't find client: no dbusid", __FUNCTION__);
         return NULL;
     }
 
-    if (object == NULL || *object == '\0') {
+    if (object.string == NULL || *object.string == '\0') {
         OHM_ERROR("[%s] Can't find client: no object", __FUNCTION__);
         return NULL;
     }
 
-    if ((cl = client_find_by_dbus(dbusid, object)) == NULL) {
+    if ((cl = client_find_by_dbus(dbusid.string, object.string)) == NULL) {
         OHM_ERROR("[%s] Can't find client for %s:%s",
-                  __FUNCTION__, dbusid, object);
+                  __FUNCTION__, dbusid.string, object.string);
         return NULL;
     }
 

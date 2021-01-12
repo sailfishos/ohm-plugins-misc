@@ -166,24 +166,24 @@ static int request(const char *name, const char *value, gboolean save)
 static void read_entry(fsif_entry_t *entry, gpointer userdata)
 {
     struct mdm_entry       *e;
-    char                   *name = NULL;
-    char                   *value = NULL;
+    fsif_value_t            name;
+    fsif_value_t            value;
 
     (void) userdata;
 
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_MDM_ARG_NAME, &name);
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_MDM_ARG_VALUE, &value);
 
-    if (!name || !value) {
+    if (!name.string || !value.string) {
         OHM_ERROR("mdm [%s]: malformed mdm entry", __FUNCTION__);
         return;
     }
 
-    if (!(e = entry_by_name(name))) {
+    if (!(e = entry_by_name(name.string))) {
         e = g_new0(struct mdm_entry, 1);
-        e->name = g_strdup(name);
-        e->value = g_strdup(value);
-        e->requested_value = g_strdup(value);
+        e->name = g_strdup(name.string);
+        e->value = g_strdup(value.string);
+        e->requested_value = g_strdup(value.string);
         entries = g_slist_append(entries, e);
         OHM_DEBUG(DBG_MDM, "init new mdm entry %s=%s", e->name, e->value);
     } else
@@ -215,8 +215,8 @@ static void mdm_value_changed_cb(fsif_entry_t   *entry,
                                  void           *userdata)
 {
     struct mdm_entry   *e;
-    char               *mdm_name;
     char               *mdm_value;
+    fsif_value_t        mdm_name;
 
     (void) name;
     (void) userdata;
@@ -229,8 +229,8 @@ static void mdm_value_changed_cb(fsif_entry_t   *entry,
     mdm_value = fld->value.string;
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_MDM_ARG_NAME, &mdm_name);
 
-    if (!(e = entry_by_name(mdm_name))) {
-        OHM_ERROR("mdm [%s]: unknown mdm entry %s", __FUNCTION__, mdm_name);
+    if (!(e = entry_by_name(mdm_name.string))) {
+        OHM_ERROR("mdm [%s]: unknown mdm entry %s", __FUNCTION__, mdm_name.string);
         return;
     }
 

@@ -145,9 +145,9 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
     struct audio_device_mapping        *m;
     struct audio_device_mapping_route  *r;
     int                                 device_type;
-    char                               *device;
-    char                               *type;
-    char                               *common;
+    fsif_value_t                        device;
+    fsif_value_t                        type;
+    fsif_value_t                        common;
 
     device_type = GPOINTER_TO_INT(userdata);
 
@@ -155,70 +155,70 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_TYPE, &type);
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_COMMONNAME, &common);
 
-    if (!device) {
+    if (!device.string) {
         OHM_ERROR("route [%s]: malformed device entry", __FUNCTION__);
         return;
     }
 
-    if (!type || !common) {
-        OHM_DEBUG(DBG_ROUTE, "old device entry %s", device);
+    if (!type.string || !common.string) {
+        OHM_INFO("route: old device entry %s", device.string);
         return;
     }
 
-    if ((m = mapping_by_commonname_and_type(common, device_type)) == NULL) {
+    if ((m = mapping_by_commonname_and_type(common.string, device_type)) == NULL) {
         m = g_new0(struct audio_device_mapping, 1);
         m->type = device_type;
-        if (strcmp(type, AUDIO_DEVICE_BUILTIN) == 0)
+        if (strcmp(type.string, AUDIO_DEVICE_BUILTIN) == 0)
             m->type |= OHM_EXT_ROUTE_TYPE_BUILTIN;
-        else if (strcmp(type, AUDIO_DEVICE_WIRED) == 0)
+        else if (strcmp(type.string, AUDIO_DEVICE_WIRED) == 0)
             m->type |= OHM_EXT_ROUTE_TYPE_WIRED;
-        else if (strcmp(type, AUDIO_DEVICE_WIRELESS) == 0)
+        else if (strcmp(type.string, AUDIO_DEVICE_WIRELESS) == 0)
             m->type |= OHM_EXT_ROUTE_TYPE_WIRELESS;
-        m->name = g_strdup(common);
+        m->name = g_strdup(common.string);
         mappings = g_slist_append(mappings, m);
-        OHM_DEBUG(DBG_ROUTE, "init new device %s type %d", m->name, m->type);
+        OHM_INFO("route: init new device %s type %d", m->name, m->type);
     }
 
     r = g_new0(struct audio_device_mapping_route, 1);
     r->common = m;
-    r->name = g_strdup(device);
+    r->name = g_strdup(device.string);
     if (g_str_has_suffix(r->name, AUDIO_DEVICE_VOICE_SUFFIX_1) ||
         g_str_has_suffix(r->name, AUDIO_DEVICE_VOICE_SUFFIX_2))
         r->type |= OHM_EXT_ROUTE_TYPE_VOICE;
 
     m->routes = g_slist_append(m->routes, r);
-    OHM_DEBUG(DBG_ROUTE, "init     device %s policy route %s", m->name, r->name);
+    OHM_INFO("route: device %s policy route %s", m->name, r->name);
 }
 
 static void read_features(fsif_entry_t *entry, gpointer userdata)
 {
     struct audio_feature   *f;
-    char                   *name;
-    int                     allowed;
-    int                     enabled;
+    fsif_value_t            name;
+    fsif_value_t            allowed;
+    fsif_value_t            enabled;
 
     (void) userdata;
 
-    fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_FEATURE_ARG_NAME, &name);
+    fsif_get_field_by_entry(entry, fldtype_string,  FACTSTORE_FEATURE_ARG_NAME,    &name);
     fsif_get_field_by_entry(entry, fldtype_integer, FACTSTORE_FEATURE_ARG_ALLOWED, &allowed);
     fsif_get_field_by_entry(entry, fldtype_integer, FACTSTORE_FEATURE_ARG_ENABLED, &enabled);
 
-    if (!name) {
-        OHM_ERROR("route [%s]: malformed feature entry", __FUNCTION__);
+    if (!name.string) {
+        OHM_ERROR("route [%s]: malformed feature entry %d %d", __FUNCTION__, allowed.integer, enabled.integer);
         return;
     }
 
-    if ((f = feature_by_name(name)) == NULL) {
+    if ((f = feature_by_name(name.string)) == NULL) {
         f = g_new0(struct audio_feature, 1);
-        f->name = g_strdup(name);
-        f->allowed = allowed;
-        f->enabled = enabled;
+        f->name = g_strdup(name.string);
+        f->allowed = allowed.integer;
+        f->enabled = enabled.integer;
         features = g_slist_append(features, f);
-        OHM_DEBUG(DBG_ROUTE, "init new feature %s (initial state allowed %d enabled %d",
-                  f->name, f->allowed, f->enabled);
+        OHM_INFO("route: init new feature %s (initial state allowed %d enabled %d",
+                 f->name, f->allowed, f->enabled);
     } else
         OHM_ERROR("route [%s]: duplicate feature entry %s dropped",
-                  __FUNCTION__, name);
+                  __FUNCTION__, name.string);
 }
 
 void route_init(OhmPlugin *plugin)
@@ -289,8 +289,8 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
                                    fsif_field_t   *fld,
                                    void           *userdata)
 {
-    char                               *type_str    = "<unknown>";
-    char                               *device      = "<unknown>";
+    fsif_value_t                        type_str;
+    const char                         *device;
     int                                 type;
     struct audio_device_mapping_route  *route       = NULL;
     struct audio_device_mapping_route **active      = NULL;
@@ -305,7 +305,7 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
 
     device = fld->value.string;
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_TYPE, &type_str);
-    type = type_from_string(type_str);
+    type = type_from_string(type_str.string);
 
     if ((route = route_by_device_name_and_type(device, type))) {
         if (route->common->type & OHM_EXT_ROUTE_TYPE_OUTPUT)
@@ -320,7 +320,7 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
         *active = route;
 
         OHM_DEBUG(DBG_ROUTE, "audio route: type=%s device=%s common_name=%s",
-                             type_str, route->name, route->common->name);
+                             type_str.string, route->name, route->common->name);
     }
 
     if (route)
@@ -338,7 +338,7 @@ static void audio_feature_changed_cb(fsif_entry_t   *entry,
                                      fsif_field_t   *fld,
                                      void           *userdata)
 {
-    char                   *name;
+    fsif_value_t            name;
     unsigned int            value;
     unsigned int           *v;
     int                     changed = 0;
@@ -355,7 +355,7 @@ static void audio_feature_changed_cb(fsif_entry_t   *entry,
     value = (unsigned int) fld->value.integer;
     fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_FEATURE_ARG_NAME, &name);
 
-    if ((feature = feature_by_name(name))) {
+    if ((feature = feature_by_name(name.string))) {
 
         if (strcmp(fld->name, FACTSTORE_FEATURE_ARG_ALLOWED) == 0)
             v = &feature->allowed;
@@ -370,7 +370,7 @@ static void audio_feature_changed_cb(fsif_entry_t   *entry,
         OHM_DEBUG(DBG_ROUTE, "audio feature: name=%s allowed=%d enabled=%d",
                              feature->name, feature->allowed, feature->enabled);
     } else
-        OHM_ERROR("route [%s]: unknown feature %s", __FUNCTION__, name);
+        OHM_ERROR("route [%s]: unknown feature %s", __FUNCTION__, name.string);
 
     if (changed)
         dbusif_signal_feature_changed(feature->name, feature->allowed, feature->enabled);
@@ -414,8 +414,11 @@ int route_query_active(const char **sink, unsigned int *sink_type,
 
         if (!(entry = fsif_get_entry(FACTSTORE_AUDIO_ROUTE, selist)))
             OHM_ERROR("route [%s]: couldn't get sink route value.", __FUNCTION__);
-        else
-            fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, sink);
+        else {
+            fsif_value_t val;
+            fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, &val);
+            *sink = val.string;
+        }
 
         OHM_DEBUG(DBG_ROUTE, "query with device %s", *sink);
         if ((route = route_by_device_name_and_type(*sink, OHM_EXT_ROUTE_TYPE_OUTPUT))) {
@@ -430,8 +433,11 @@ int route_query_active(const char **sink, unsigned int *sink_type,
 
         if (!(entry = fsif_get_entry(FACTSTORE_AUDIO_ROUTE, selist)))
             OHM_ERROR("route [%s]: couldn't get source route value.", __FUNCTION__);
-        else
-            fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, source);
+        else {
+            fsif_value_t val;
+            fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, &val);
+            *source = val.string;
+        }
 
         if ((route = route_by_device_name_and_type(*source, OHM_EXT_ROUTE_TYPE_INPUT))) {
             *source = route->common->name;
@@ -461,8 +467,11 @@ int context_variable_query(char *name, char **value)
 
     if (!(entry = fsif_get_entry(FACTSTORE_CONTEXT, selist)))
         OHM_ERROR("route [%s]: couldn't get context variable.", __FUNCTION__);
-    else
-        fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_CONTEXT_ARG_VALUE, value);
+    else {
+        fsif_value_t val;
+        fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_CONTEXT_ARG_VALUE, &val);
+        *value = val.string;
+    }
 
     if (!*value)
         return FALSE;

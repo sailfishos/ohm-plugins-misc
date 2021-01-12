@@ -52,7 +52,7 @@ int fsif_add_field_watch(char                  *factname,
 int fsif_get_field_by_entry(fsif_entry_t   *entry,
                             fsif_fldtype_t  type,
                             char           *name,
-                            void           *vptr);
+                            fsif_value_t   *vptr);
 
 GSList *fsif_get_entries_by_name(char       *name);
 

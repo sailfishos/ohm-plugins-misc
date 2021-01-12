@@ -79,8 +79,8 @@ static watch_fact_t  *wfact_updates;
 
 static OhmFact      *find_entry(char *, fsif_field_t *);
 static int           matching_entry(OhmFact *, fsif_field_t *);
-static int           get_field(OhmFact *, fsif_fldtype_t, char *, void *);
-static void          set_field(OhmFact *, fsif_fldtype_t, char *, void *);
+static int           get_field(OhmFact *, fsif_fldtype_t, char *, fsif_value_t *);
+static void          set_field(OhmFact *, fsif_fldtype_t, char *, fsif_value_t *);
 static watch_fact_t *find_watch(char *, watch_type_e);
 static fsif_field_t *copy_selector(fsif_field_t *);
 #if 0
@@ -173,7 +173,7 @@ static int fsif_add_factstore_entry(char           *name,
     }
 
     for (fld = fldlist;   fld->type != fldtype_invalid;   fld++) {
-        set_field(fact, fld->type, fld->name, (void *)&fld->value);
+        set_field(fact, fld->type, fld->name, &fld->value);
     }
 
     if (ohm_fact_store_insert(fs, fact))
@@ -235,7 +235,7 @@ static int fsif_update_factstore_entry(char         *name,
     }
 
     for (fld = fldlist;   fld->type != fldtype_invalid;   fld++) {
-        set_field(fact, fld->type, fld->name, (void *)&fld->value);
+        set_field(fact, fld->type, fld->name, &fld->value);
 
 
         valstr = print_value(fld->type,(void *)&fld->value, valb,sizeof(valb));
@@ -289,7 +289,7 @@ static fsif_entry_t *fsif_get_entry(char           *name,
 static int fsif_get_field_by_entry(fsif_entry_t   *entry,
                                     fsif_fldtype_t  type,
                                     char           *name,
-                                    void           *vptr)
+                                    fsif_value_t   *vptr)
 {
     if (entry == NULL || name == NULL || vptr == NULL)
         return FALSE;
@@ -301,7 +301,7 @@ static int fsif_get_field_by_entry(fsif_entry_t   *entry,
 static void fsif_set_field_by_entry(fsif_entry_t *entry,
                                     fsif_fldtype_t type,
                                     char *name,
-                                    void *vptr)
+                                    fsif_value_t *vptr)
 {
     if (entry != NULL && name != NULL && vptr != NULL) {
         set_field(entry, type, name, vptr);
@@ -312,7 +312,7 @@ static void fsif_set_field_by_entry(fsif_entry_t *entry,
 static int fsif_get_field_by_name(const char     *name,
                                  fsif_fldtype_t  type,
                                  char           *field,
-                                 void           *vptr)
+                                 fsif_value_t   *vptr)
 {
     OhmFact *fact;
     GSList  *list;
@@ -465,11 +465,7 @@ static int matching_entry(OhmFact      *fact,
                           fsif_field_t *selist)
 {
     fsif_field_t       *se;
-    char               *strval;
-    long                intval;
-    unsigned long       unsval;
-    double              fltval;
-    unsigned long long  timeval;
+    fsif_value_t        value;
 
     if (selist == NULL)
         return TRUE;
@@ -478,32 +474,38 @@ static int matching_entry(OhmFact      *fact,
         switch (se->type) {
 
         case fldtype_string:
-            get_field(fact, fldtype_string, se->name, &strval);
-            if (strval == NULL || strcmp(strval, se->value.string))
+            get_field(fact, fldtype_string, se->name, &value);
+            if (value.string == NULL || strcmp(value.string, se->value.string))
                 return FALSE;
             break;
 
         case fldtype_integer:
-            get_field(fact, fldtype_integer, se->name, &intval);
-            if (intval != se->value.integer)
+            get_field(fact, fldtype_integer, se->name, &value);
+            if (value.integer != se->value.integer)
                 return FALSE;
             break;
 
         case fldtype_unsignd:
-            get_field(fact, fldtype_unsignd, se->name, &unsval);
-            if (unsval != se->value.unsignd)
+            get_field(fact, fldtype_unsignd, se->name, &value);
+            if (value.unsignd != se->value.unsignd)
                 return FALSE;
             break;
 
         case fldtype_floating:
-            get_field(fact, fldtype_floating, se->name, &fltval);
-            if (fltval != se->value.floating)
+            get_field(fact, fldtype_floating, se->name, &value);
+            if (value.floating != se->value.floating)
                 return FALSE;
             break;
 
         case fldtype_time:
-            get_field(fact, fldtype_time, se->name, &timeval);
-            if (timeval != se->value.time)
+            get_field(fact, fldtype_time, se->name, &value);
+            if (value.time != se->value.time)
+                return FALSE;
+            break;
+
+        case fldtype_pointer:
+            get_field(fact, fldtype_pointer, se->name, &value);
+            if (value.pointer != se->value.pointer)
                 return FALSE;
             break;
 
@@ -518,7 +520,7 @@ static int matching_entry(OhmFact      *fact,
 static int get_field(OhmFact           *fact,
                      fsif_fldtype_t     type,
                      char              *name,
-                     void              *vptr)
+                     fsif_value_t      *vptr)
 {
     GValue  *gv;
 
@@ -534,13 +536,13 @@ static int get_field(OhmFact           *fact,
         if (G_VALUE_TYPE(gv) != G_TYPE_STRING)
             goto type_mismatch;
         else
-            *(const char **)vptr = g_value_get_string(gv);
+            vptr->string = (char*) g_value_get_string(gv);
         break;
 
     case fldtype_integer:
         switch (G_VALUE_TYPE(gv)) {
-        case G_TYPE_LONG: *(long *)vptr = g_value_get_long(gv); break;
-        case G_TYPE_INT:  *(long *)vptr = g_value_get_int(gv);  break;
+        case G_TYPE_LONG: vptr->integer = g_value_get_long(gv); break;
+        case G_TYPE_INT:  vptr->integer = g_value_get_int(gv);  break;
         default:          goto type_mismatch;
         }
         break;
@@ -549,21 +551,28 @@ static int get_field(OhmFact           *fact,
         if (G_VALUE_TYPE(gv) != G_TYPE_ULONG)
             goto type_mismatch;
         else
-            *(unsigned long *)vptr = g_value_get_ulong(gv);
+            vptr->unsignd = g_value_get_ulong(gv);
         break;
 
     case fldtype_floating:
         if (G_VALUE_TYPE(gv) != G_TYPE_DOUBLE)
             goto type_mismatch;
         else
-            *(double *)vptr = g_value_get_double(gv);
+            vptr->floating = g_value_get_double(gv);
         break;
 
     case fldtype_time:
         if (G_VALUE_TYPE(gv) != G_TYPE_UINT64)
             goto type_mismatch;
         else
-            *(time_t *)vptr = g_value_get_uint64(gv);
+            vptr->time = g_value_get_uint64(gv);
+        break;
+
+    case fldtype_pointer:
+        if (G_VALUE_TYPE(gv) != G_TYPE_POINTER)
+            goto type_mismatch;
+        else
+            vptr->pointer = g_value_get_pointer(gv);
         break;
 
     default:
@@ -578,11 +587,12 @@ static int get_field(OhmFact           *fact,
 
  return_empty_value:
     switch (type) {
-    case fldtype_string:      *(char              **)vptr = NULL;       break;
-    case fldtype_integer:     *(long               *)vptr = 0;          break;
-    case fldtype_unsignd:     *(unsigned long      *)vptr = 0;          break;
-    case fldtype_floating:    *(double             *)vptr = 0.0;        break;
-    case fldtype_time:        *(unsigned long long *)vptr = 0ULL;       break;
+    case fldtype_string:      vptr->string                = NULL;       break;
+    case fldtype_integer:     vptr->integer               = 0;          break;
+    case fldtype_unsignd:     vptr->unsignd               = 0;          break;
+    case fldtype_floating:    vptr->floating              = 0.0;        break;
+    case fldtype_time:        vptr->time                  = 0ULL;       break;
+    case fldtype_pointer:     vptr->pointer               = NULL;       break;
     default:                                                            break;
     }
 
@@ -593,17 +603,17 @@ static int get_field(OhmFact           *fact,
 static void set_field(OhmFact          *fact,
                       fsif_fldtype_t    type,
                       char             *name,
-                      void             *vptr)
+                      fsif_value_t     *vptr)
 {
-    fsif_value_t *v = (fsif_value_t *)vptr;
     GValue       *gv;
 
     switch (type) {
-    case fldtype_string:    gv = ohm_value_from_string(v->string);      break;
-    case fldtype_integer:   gv = ohm_value_from_int(v->integer);        break;
-    case fldtype_unsignd:   gv = ohm_value_from_unsigned(v->unsignd);   break;
-    case fldtype_floating:  gv = ohm_value_from_double(v->floating);    break;
-    case fldtype_time:      gv = ohm_value_from_time(v->time);          break;
+    case fldtype_string:    gv = ohm_value_from_string(vptr->string);      break;
+    case fldtype_integer:   gv = ohm_value_from_int(vptr->integer);        break;
+    case fldtype_unsignd:   gv = ohm_value_from_unsigned(vptr->unsignd);   break;
+    case fldtype_floating:  gv = ohm_value_from_double(vptr->floating);    break;
+    case fldtype_time:      gv = ohm_value_from_time(vptr->time);          break;
+    case fldtype_pointer:   gv = ohm_value_from_pointer(vptr->pointer);    break;
     default:          OHM_ERROR("fsif: invalid type for %s", name); return;
     }
 
@@ -682,6 +692,10 @@ static fsif_field_t *copy_selector(fsif_field_t *selist)
 
                 case fldtype_time:
                     cp->value.time = se->value.time;
+                    break;
+
+                case fldtype_pointer:
+                    cp->value.pointer = se->value.pointer;
                     break;
 
                 default:
@@ -778,12 +792,13 @@ static char *print_selector(fsif_field_t   *selist,
         v = &se->value;
 
         switch (se->type) {
-        case fldtype_string:   val = v->string;                         break;
-        case fldtype_integer:  val = vb; sprintf(vb,"%ld",v->integer);  break;
-        case fldtype_unsignd:  val = vb; sprintf(vb,"%lu",v->unsignd);  break;
-        case fldtype_floating: val = vb; sprintf(vb,"%lf",v->floating); break;
-        case fldtype_time:     val = time_str(v->time,vb,sizeof(vb));   break;
-        default:               val = "???";                             break;
+        case fldtype_string:   val = v->string;                             break;
+        case fldtype_integer:  val = vb; sprintf(vb, "%ld", v->integer);    break;
+        case fldtype_unsignd:  val = vb; sprintf(vb, "%lu", v->unsignd);    break;
+        case fldtype_floating: val = vb; sprintf(vb, "%lf", v->floating);   break;
+        case fldtype_time:     val = time_str(v->time, vb, sizeof(vb));     break;
+        case fldtype_pointer:  val = vb; sprintf(vb, "%p", v->pointer);     break;
+        default:               val = "???";                                 break;
         }
 
         p += snprintf(p, e-p, "%s%s:%s", c, se->name, val);
@@ -807,12 +822,13 @@ static char *print_value(fsif_fldtype_t     type,
         return "";
 
     switch (type) {
-    case fldtype_string:   s = v->string;                                break;
-    case fldtype_integer:  s = buf; snprintf(buf,len,"%ld",v->integer);  break;
-    case fldtype_unsignd:  s = buf; snprintf(buf,len,"%lu",v->unsignd);  break;
-    case fldtype_floating: s = buf; snprintf(buf,len,"%lf",v->floating); break;
-    case fldtype_time:     s = time_str(v->time,buf,len);                break;
-    default:               s = "???";                                    break;
+    case fldtype_string:   s = v->string;                                   break;
+    case fldtype_integer:  s = buf; snprintf(buf ,len, "%ld", v->integer);  break;
+    case fldtype_unsignd:  s = buf; snprintf(buf ,len, "%lu", v->unsignd);  break;
+    case fldtype_floating: s = buf; snprintf(buf ,len, "%lf", v->floating); break;
+    case fldtype_time:     s = time_str(v->time, buf, len);                 break;
+    case fldtype_pointer:  s = buf; snprintf(buf, len, "%p",  v->pointer);  break;
+    default:               s = "???";                                       break;
     }
 
     return s;
@@ -940,6 +956,11 @@ static void updated_cb(void    *data,
                     fld.value.time = g_value_get_uint64(gval);
                     break;
 
+                case G_TYPE_POINTER:
+                    fld.type = fldtype_pointer;
+                    fld.value.pointer = g_value_get_pointer(gval);
+                    break;
+
                 default:
                     OHM_ERROR("fsif: [%s] Unsupported data type (%d) "
                               "for field '%s'",
@@ -1039,7 +1060,7 @@ OHM_EXPORTABLE(fsif_entry_t *, get_entry, (char           *name,
 OHM_EXPORTABLE(int, get_field_by_entry, (fsif_entry_t *entry,
                                          fsif_fldtype_t type,
                                          char *name,
-                                         void *vptr))
+                                         fsif_value_t *vptr))
 {
     return fsif_get_field_by_entry(entry, type, name, vptr);
 }
@@ -1051,7 +1072,7 @@ OHM_EXPORTABLE(int, get_field_by_entry, (fsif_entry_t *entry,
 OHM_EXPORTABLE(int, get_field_by_name, (const char *name,
                                         fsif_fldtype_t type,
                                         char *field,
-                                        void *vptr))
+                                        fsif_value_t *vptr))
 {
     return fsif_get_field_by_name(name, type, field, vptr);
 }
@@ -1069,7 +1090,7 @@ OHM_EXPORTABLE(GSList*, get_entries_by_name, (const char *name))
 OHM_EXPORTABLE(void, set_field_by_entry, (fsif_entry_t *entry,
                                           fsif_fldtype_t type,
                                           char *name,
-                                          void *vptr))
+                                          fsif_value_t *vptr))
 {
     fsif_set_field_by_entry(entry, type, name, vptr);
 }
