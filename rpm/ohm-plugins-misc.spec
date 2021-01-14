@@ -145,7 +145,7 @@ Requires:  ohm-plugin-console = %{version}-%{release}
 
 %build
 echo "%{version}" > .tarball-version
-%autogen --disable-static
+./autogen.sh
 %configure --disable-static \
     --enable-telephony \
     --disable-notification \

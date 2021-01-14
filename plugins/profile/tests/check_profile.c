@@ -78,14 +78,14 @@ static void teardown(void) {
 }
 
 START_TEST (test_profile_init_deinit)
-    
+{
     profile_plugin *plugin = init_profile();
     fail_if(plugin == NULL, "Plugin not initialized correctly");
 
     /* TODO: see the initial value, check it */
 
     deinit_profile(plugin);
-
+}
 END_TEST
 
 static void test_fact_inserted(OhmFactStore *fs, OhmFact *fact, gpointer data)
@@ -123,7 +123,7 @@ gboolean set_profile(gpointer data)
 }
 
 START_TEST (test_profile_name_change)
-    
+{
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
     OhmFact *fact = NULL;
 
@@ -236,11 +236,11 @@ START_TEST (test_profile_name_change)
     fail_unless(strcmp(strval, "silent") == 0, "profile not 'silent': '%s'", strval);
 #endif
     deinit_profile(plugin);
-
+}
 END_TEST
 
 START_TEST (find_segfault)
-
+{
     profileval_t *values = NULL;
     profile_plugin *plugin = NULL;
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
@@ -269,11 +269,11 @@ START_TEST (find_segfault)
     profile_free_values(values);
     
     deinit_profile(plugin);
-
+}
 END_TEST
 
 START_TEST (find_segfault_2)
-    
+{
     profileval_t *values = NULL;
     profile_plugin *plugin = NULL;
     
@@ -293,7 +293,7 @@ START_TEST (find_segfault_2)
     g_main_loop_run(loop);
 
     deinit_profile(plugin);
-
+}
 END_TEST
 
 static void test_view_updated(OhmFactStoreView *view, OhmFactStoreChangeSet *cs)
@@ -303,7 +303,7 @@ static void test_view_updated(OhmFactStoreView *view, OhmFactStoreChangeSet *cs)
 }
 
 START_TEST (test_profile_value_change)
-    
+{
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
     OhmFact *fact = NULL;
 
@@ -389,7 +389,7 @@ START_TEST (test_profile_value_change)
 #undef TEST_RINGTONE_1
 
     deinit_profile(plugin);
-
+}
 END_TEST
 
 Suite *ohm_profile_suite(void)
