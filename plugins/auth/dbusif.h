@@ -23,7 +23,7 @@ USA.
 
 #include <sys/types.h>
 
-typedef void (*dbusif_pid_query_cb_t)(pid_t, char *, void *);
+typedef void (*dbusif_pid_query_cb_t)(pid_t, const char *, void *);
 
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;

@@ -57,12 +57,12 @@ OHM_IMPORTABLE(int, add_factstore_entry, (char *name,
 OHM_IMPORTABLE(int, get_field_by_entry, (fsif_entry_t   *entry,
                                          fsif_fldtype_t  type,
                                          char           *name,
-                                         void           *vptr));
+                                         fsif_value_t   *vptr));
 
 OHM_IMPORTABLE(void, set_field_by_entry, (fsif_entry_t *entry,
                                           fsif_fldtype_t type,
                                           char *name,
-                                          void *vptr));
+                                          fsif_value_t *vptr));
 
 OHM_IMPORTABLE(fsif_entry_t *, get_entry, (char           *name,
                                            fsif_field_t   *selist));
@@ -78,7 +78,7 @@ int fsif_add_factstore_entry(char *name,
 int fsif_get_field_by_entry(fsif_entry_t   *entry,
                             fsif_fldtype_t  type,
                             char           *name,
-                            void           *vptr)
+                            fsif_value_t   *vptr)
 {
     return get_field_by_entry(entry, type, name, vptr);
 }
@@ -86,7 +86,7 @@ int fsif_get_field_by_entry(fsif_entry_t   *entry,
 void fsif_set_field_by_entry(fsif_entry_t *entry,
                              fsif_fldtype_t type,
                              char *name,
-                             void *vptr)
+                             fsif_value_t *vptr)
 {
     set_field_by_entry(entry, type, name, vptr);
 }

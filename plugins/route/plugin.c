@@ -51,12 +51,12 @@ OHM_IMPORTABLE(int, add_fact_watch, (char                 *factname,
 OHM_IMPORTABLE(int, get_field_by_name, (const char     *name,
                                         fsif_fldtype_t  type,
                                         char           *field,
-                                        void           *vptr));
+                                        fsif_value_t   *vptr));
 
 OHM_IMPORTABLE(int, get_field_by_entry, (fsif_entry_t   *entry,
                                          fsif_fldtype_t  type,
                                          char           *name,
-                                         void           *vptr));
+                                         fsif_value_t   *vptr));
 
 OHM_IMPORTABLE(fsif_entry_t *, get_entry, (char           *name,
                                            fsif_field_t   *selist));
@@ -98,7 +98,7 @@ int fsif_add_fact_watch(char                 *factname,
 int fsif_get_field_by_name(const char     *name,
                            fsif_fldtype_t  type,
                            char           *field,
-                           void           *vptr)
+                           fsif_value_t   *vptr)
 {
     return get_field_by_name(name, type, field, vptr);
 }
@@ -106,7 +106,7 @@ int fsif_get_field_by_name(const char     *name,
 int fsif_get_field_by_entry(fsif_entry_t   *entry,
                             fsif_fldtype_t  type,
                             char           *name,
-                            void           *vptr)
+                            fsif_value_t   *vptr)
 {
     return get_field_by_entry(entry, type, name, vptr);
 }

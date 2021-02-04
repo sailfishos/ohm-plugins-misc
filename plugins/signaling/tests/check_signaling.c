@@ -113,6 +113,7 @@ int decision_count = 0;
 
 static gboolean test_internal_decision(EnforcementPoint *e, Transaction *t, internal_ep_cb_t cb, gpointer data) {
     guint txid;
+    (void) data;
     
     printf("on-decision!\n");
 
@@ -131,6 +132,7 @@ static gboolean test_internal_decision_gobject(EnforcementPoint *e, GObject *o, 
 
     GSList *facts, *list;
     guint txid;
+    (void) data;
 
     printf("on-decision (GObject)!\n");
 
@@ -145,7 +147,7 @@ static gboolean test_internal_decision_gobject(EnforcementPoint *e, GObject *o, 
             NULL);
 
     for (list = facts; list != NULL; list = g_slist_next(list)) {
-        printf("fact: '%s'\n", list->data);
+        printf("fact: '%s'\n", (char *) list->data);
     }
     
     cb(G_OBJECT(e), o, TRUE);
@@ -160,6 +162,8 @@ static void test_internal_key_change(EnforcementPoint *e, Transaction *t, gpoint
     guint txid;
     GSList *facts, *list;
     gchar *signal_name;
+    (void) e;
+    (void) data;
     
     printf("on-key-change!\n");
 
@@ -181,7 +185,7 @@ static void test_internal_key_change(EnforcementPoint *e, Transaction *t, gpoint
     fail_unless(strcmp(signal_name, "actions") == 0, "Wrong signal name");
     
     for (list = facts; list != NULL; list = g_slist_next(list)) {
-        printf("fact: '%s'\n", list->data);
+        printf("fact: '%s'\n", (char *) list->data);
     }
 
     g_free(signal_name);
@@ -307,6 +311,7 @@ int counter = 0;
 static void test_internal_2_complete(Transaction *t, gpointer data) {
 
     GSList *acked, *nacked;
+    (void) data;
 
     g_object_get(t,
             "acked",
@@ -336,6 +341,7 @@ static gboolean test_internal_2_decision(EnforcementPoint *e, Transaction *t, in
 
     gboolean ret = TRUE;
     guint txid;
+    (void) data;
 
     printf("test_internal_2_decision, going to %s!\n", counter ? "ack" : "nack");
     g_object_get(t, "txid", &txid, NULL);
@@ -400,12 +406,13 @@ END_TEST
  * Also test transaction signaling.
  */
 
-int acked_count = 0;
-int nacked_count = 0;
+guint acked_count = 0;
+guint nacked_count = 0;
 
 static void test_register_ack(Transaction *t, gchar *uri, guint ack, gpointer data) {
 
     guint txid;
+    (void) data;
     g_object_get(t, "txid", &txid, NULL);
 
     /* you can also ask the transaction for complete details of the
@@ -430,6 +437,7 @@ static void test_register_complete(Transaction *t, gpointer data) {
 
     guint txid;
     GSList *i, *acked, *nacked, *not_answered;
+    (void) data;
 
     /* get the data from the transaction */
 
@@ -450,10 +458,10 @@ static void test_register_complete(Transaction *t, gpointer data) {
     fail_unless(txid == 1, "Wrong txid");
 
     fail_unless(acked_count == 2,
-            "Acked EPs: %i", acked_count);
+            "Acked EPs: %u", acked_count);
     
     fail_unless(nacked_count == 1,
-            "Nacked EPs: %i", nacked_count);
+            "Nacked EPs: %u", nacked_count);
 
     fail_unless(acked_count == g_slist_length(acked),
             "Wrong number of enforcement points acked");
@@ -499,7 +507,8 @@ static void test_register_complete(Transaction *t, gpointer data) {
 
     static gboolean
 test_transaction(gpointer data) {
-    
+    (void) data;
+
     g_print("> test transaction\n");
 
     if (test_transaction_object == NULL) {
@@ -583,6 +592,11 @@ END_TEST
  */
 
 static void test_timeout_ack(Transaction *t, gchar *uri, guint ack, gpointer data) {
+    (void) t;
+    (void) uri;
+    (void) ack;
+    (void) data;
+
     fail("No acks expected");
     return;
 }
@@ -591,6 +605,7 @@ static void test_timeout_complete(Transaction *t, gpointer data) {
 
     guint txid;
     GSList *i, *acked, *nacked, *not_answered;
+    (void) data;
 
     g_object_get(t,
             "txid",

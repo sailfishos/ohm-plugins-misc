@@ -58,7 +58,6 @@ void dresif_init(OhmPlugin *plugin)
 
 int dresif_bluetooth_override_request(char *bluetooth_override)
 {
-#define DRESIF_VARTYPE(t) (char *)(t)
     char *vars[48];
     int   i;
     int   status;
@@ -116,7 +115,7 @@ int dresif_mute_request(int mute)
 
     vars[i=0] = "mute_state";
     vars[++i] = DRESIF_VARTYPE('i');
-    vars[++i] = (char *)mute;
+    vars[++i] = GINT_TO_POINTER(mute);
 
     vars[++i] = NULL;
 

@@ -48,7 +48,7 @@ OHM_IMPORTABLE(int, add_field_watch, (char                  *factname,
 OHM_IMPORTABLE(int, get_field_by_entry, (fsif_entry_t   *entry,
                                          fsif_fldtype_t  type,
                                          char           *name,
-                                         void           *vptr));
+                                         fsif_value_t   *vptr));
 
 OHM_IMPORTABLE(GSList *, get_entries_by_name, (char       *name));
 
@@ -76,7 +76,7 @@ int fsif_add_field_watch(char                  *factname,
 int fsif_get_field_by_entry(fsif_entry_t   *entry,
                             fsif_fldtype_t  type,
                             char           *name,
-                            void           *vptr)
+                            fsif_value_t   *vptr)
 {
     return get_field_by_entry(entry, type, name, vptr);
 }

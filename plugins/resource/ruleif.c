@@ -147,10 +147,10 @@ int ruleif_valid_resource_request(const char *class, int mandatory, int optional
         argv[++i] = (char *)class;
 
         argv[++i] = (char *)'i';
-        argv[++i] = (char *)mandatory;
+        argv[++i] = GINT_TO_POINTER(mandatory);
 
         argv[++i] = (char *)'i';
-        argv[++i] = (char *)optional;
+        argv[++i] = GINT_TO_POINTER(optional);
 
         status = rule_eval(resource_class_req, &retval, (void **)argv, (i+1)/2);
 
@@ -210,14 +210,14 @@ static int copy_value(char *name, int type, void *value, char **entry)
     if (entry[0] && !strcmp(entry[0], "name") && entry[1] != NULL) {
         for (i = 3;   entry[i];   i += 3) {
             fldnam = entry[i];
-            fldtyp = (int)entry[i+1];
+            fldtyp = GPOINTER_TO_INT(entry[i+1]);
             fldval = (void *)entry[i+2];
 
             if (!strcmp(name, fldnam) && type == fldtyp) {
 
                 switch (fldtyp) {
                 case 's':  *(char  **)value = strdup((char *)fldval); break;
-                case 'i':  *(int    *)value = (int)fldval;            break;
+                case 'i':  *(int    *)value = GPOINTER_TO_INT(fldval);break;
                 case 'd':  *(double *)value = *(double *)fldval;      break;
                 default:                                              break;
                 }

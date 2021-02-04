@@ -24,6 +24,7 @@ USA.
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include "plugin.h"
 #include "internalif.h"
@@ -71,21 +72,21 @@ void *internalif_timer_add(uint32_t           delay,
                            resconn_timercb_t  callback,
                            void              *data)
 {
-  guint id;
+  uintptr_t id;
 
   if (delay)
     id = g_timeout_add(delay, callback, data);
   else
     id = g_idle_add(callback, data);
     
-  return (void *)id;
+  return GUINT_TO_POINTER(id);
 }
 
 void internalif_timer_del(void *timer)
 {
-  guint id = (guint)timer;
+  uintptr_t id = GPOINTER_TO_UINT(timer);
 
-  g_source_remove(id);
+  g_source_remove((guint) id);
 }
 
 

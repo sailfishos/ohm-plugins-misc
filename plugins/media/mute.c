@@ -59,8 +59,8 @@ int mute_request(int value)
 
 int mute_query(void)
 {
-    int  mute;
-    int  success;
+    fsif_value_t mute;
+    int          success;
 
     success = fsif_get_field_by_name(FACTSTORE_MUTE, fldtype_integer,
                                      "value", &mute);
@@ -68,7 +68,7 @@ int mute_query(void)
     if (!success)
         OHM_ERROR("media: mute query failed: factstore error");
     else {
-        dbusif_signal_mute(mute, DBUSIF_QUEUE);
+        dbusif_signal_mute(mute.integer, DBUSIF_QUEUE);
 
         OHM_DEBUG(DBG_MUTE, "mute query: %d", mute);
     }
@@ -90,10 +90,10 @@ static void mute_changed_cb(fsif_entry_t *entry,
     (void)name;
     (void)usrdata;
 
-    int  mute = 0;
+    fsif_value_t mute;
 
     if (fld->type == fldtype_integer)
-        mute = fld->value.integer;
+        mute.integer = fld->value.integer;
     else {
         OHM_ERROR("media [%s]: invalid field type", __FUNCTION__);
         return;
@@ -104,9 +104,9 @@ static void mute_changed_cb(fsif_entry_t *entry,
         return;
     }
 
-    OHM_DEBUG(DBG_MUTE, "mute changed to '%s'", mute_str(mute));
+    OHM_DEBUG(DBG_MUTE, "mute changed to '%s'", mute_str(mute.integer));
 
-    dbusif_signal_mute(mute, DBUSIF_SEND_NOW);
+    dbusif_signal_mute(mute.integer, DBUSIF_SEND_NOW);
 }
 
 static char *mute_str(int value)

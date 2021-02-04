@@ -195,8 +195,10 @@ struct call_s {
     call_t       *parent;                      /* hosting conference if any */
     int           connected;                   /* whether has been connected */
     OhmFact      *fact;                        /* this call in fact store */
-    char         *audio;                       /* audio stream/content or 0 */
-    char         *video;                       /* video stream/content or 0 */
+    unsigned int  audio_id;                    /* audio stream id */
+    char         *audio_content;               /* audio content */
+    unsigned int  video_id;                    /* video stream id */
+    char         *video_content;               /* video content */
     guint         timeout;                     /* stream add timeout */
     int           holdable;                    /* whether call supports hold */
 };

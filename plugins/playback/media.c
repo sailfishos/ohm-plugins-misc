@@ -134,26 +134,26 @@ static void enforcement_point_cb(fsif_entry_t *entry, char *name,
 {
     (void)usrdata;
 
-    char *epid;
-    char *epnam;
+    fsif_value_t epid;
+    fsif_value_t epnam;
 
     if (!strcmp(name, FACTSTORE_ENFORCEMENT_POINT)) {
         fsif_get_field_by_entry(entry, fldtype_string, "name", &epnam);
 
-        if (!strcmp(epnam, PULSEAUDIO_ENFORCEMENT_POINT)) {
+        if (!strcmp(epnam.string, PULSEAUDIO_ENFORCEMENT_POINT)) {
             fsif_get_field_by_entry(entry, fldtype_string, "id", &epid);
 
             OHM_DEBUG(DBG_MEDIA, "enforcement point (id='%s' name='%s') is %s",
-                      epid, epnam, event == fact_watch_insert ? "up" : "gone");
+                      epid.string, epnam.string, event == fact_watch_insert ? "up" : "gone");
 
             switch (event) {
 
             case fact_watch_insert:
-                insert_enforcement_point(epid, epnam);
+                insert_enforcement_point(epid.string, epnam.string);
                 break;
 
             case fact_watch_remove:
-                remove_enforcement_point(epid);
+                remove_enforcement_point(epid.string);
                 break;
 
             default:

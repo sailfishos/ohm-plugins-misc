@@ -24,6 +24,7 @@ USA.
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include <glib.h>
 
@@ -64,7 +65,7 @@ static void   destroy_request(req_t *);
 static void   authorize_request(req_t *);
 
 static gboolean idle_callback(gpointer);
-static void dbus_callback(pid_t *, char *, void *);
+static void dbus_callback(pid_t, const char *, void *);
 
 
 /*! \addtogroup pubif
@@ -90,19 +91,24 @@ int auth_request(char *id_type , void *id,
 {
     req_t *request;
     char  *dbusad;
+    uintptr_t id_p;
 
     if (!id_type || !id || !req_type || !req || !cb) {
         OHM_DEBUG(DBG_REQ, "%s() invalid argument", __FUNCTION__);
         return EINVAL;
     }
 
+    if ((id_p = GPOINTER_TO_UINT(id)) >= UINT32_MAX) {
+        OHM_ERROR("%s() id >= UINT32_MAX (%" PRIuPTR ")", __FUNCTION__, id_p);
+        return EINVAL;
+    }
 
     if ((request = create_request(req_type, req, cb, data)) == NULL)
         return EINVAL;
 
     if (!strcmp(id_type, "pid")) {
-        request->pid = (pid_t)id;
-        OHM_DEBUG(DBG_REQ, "%s('%s',%u, '%s',<%s>, %p,%p)", __FUNCTION__,
+        request->pid = (pid_t) id_p;
+        OHM_DEBUG(DBG_REQ, "%s('%s',%u, %u, '%s',<%s>, %p,%p)", __FUNCTION__,
                   id_type,request->pid, req_type,request->adump, cb,data);
         if (g_idle_add(idle_callback, request) == 0) {
             OHM_ERROR("auth: failed to add idle callback");
@@ -259,7 +265,7 @@ static gboolean idle_callback(gpointer data)
     return FALSE;
 }
 
-static void dbus_callback(pid_t *pid, char *err, void *data)
+static void dbus_callback(pid_t pid, const char *err, void *data)
 {
     req_t *request = (req_t *)data;
 

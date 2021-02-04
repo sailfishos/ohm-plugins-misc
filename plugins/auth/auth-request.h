@@ -21,7 +21,7 @@ USA.
 #ifndef __OHM_AUTH_REQUEST_H__
 #define __OHM_AUTH_REQUEST_H__
 
-typedef int  (*auth_request_cb_t)(int, char *, void *);
+typedef int  (*auth_request_cb_t)(int, const char *, void *);
 
 /* hack to avoid multiple includes */
 typedef struct _OhmPlugin OhmPlugin;

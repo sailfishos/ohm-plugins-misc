@@ -44,6 +44,7 @@ typedef enum {
     fldtype_unsignd,
     fldtype_floating,
     fldtype_time,
+    fldtype_pointer,
 } fsif_fldtype_t;
 
 typedef union {
@@ -53,6 +54,7 @@ typedef union {
     unsigned long       unsignd;
     double              floating;
     unsigned long long  time;
+    gpointer            pointer;
 
     /* output field types */
     void               *retval;

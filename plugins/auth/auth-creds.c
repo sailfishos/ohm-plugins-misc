@@ -93,6 +93,7 @@ int auth_creds_check(pid_t pid, void *request, char *err, int len)
     return success;
     
 #else
+    (void) pid;
     (void)request;
 
     snprintf(err, len, "OK (default acceptance: creds are not available)");

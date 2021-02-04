@@ -875,7 +875,6 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
         GValue *gval_state = ohm_fact_get(bt_connected, BT_TYPE_HSP);
         GValue *gval_prev_state = ohm_fact_get(bt_connected, "bthsp_prev_state");
         const gchar *state = NULL, *prev_state = NULL;
-        gboolean run_dres;
 
         define_hfp_status(bt_connected, is_hfp);
         define_hsp_status(bt_connected, is_hsp);
@@ -893,8 +892,7 @@ static void get_properties_update_fact_cb (DBusPendingCall *pending, void *user_
         OHM_DEBUG(DBG_BT, "running state transition from %s to %s from HFP/HSP status cb",
                 prev_state ? prev_state : "NULL", state ? state : "NULL");
 
-        run_dres = bt_state_transition(BT_TYPE_HSP, path, 
-                map_to_state(prev_state), map_to_state(state));
+        bt_state_transition(BT_TYPE_HSP, path,  map_to_state(prev_state), map_to_state(state));
 
         dres_all();
     }

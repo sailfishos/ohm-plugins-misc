@@ -511,7 +511,7 @@ static void pid_cb(pid_t pid, void *data)
             
             keyword_list(buf, creds, MAX_CREDS);
             
-            auth_request("pid", (void *)regreq->pid, regreq->method, creds,
+            auth_request("pid", GUINT_TO_POINTER(regreq->pid), regreq->method, creds,
                          authorize_cb, regreq);
         }
     }

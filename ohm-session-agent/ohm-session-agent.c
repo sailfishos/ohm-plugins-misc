@@ -263,7 +263,7 @@ void parse_command_line(osa_state_t *osa, int argc, char **argv)
         case 'm': osa->msgspec     = check_message(optarg);          break;
         case 'v':
         case 'l': parse_log_level(argv[0], optarg);                  break;
-        case 'h': print_usage(argv[0], 0, "");
+        case 'h': print_usage(argv[0], 0, "");                       break;
         default:  print_usage(argv[0], EINVAL, "invalid option '%c'", opt);
         }
     }

@@ -62,9 +62,9 @@ int privacy_request(int value)
 
 int privacy_query(void)
 {
-    char *privacy;
-    int   value;
-    int   success;
+    fsif_value_t privacy;
+    int          value;
+    int          success;
 
     success = fsif_get_field_by_name(FACTSTORE_PRIVACY,
                                      fldtype_string,
@@ -72,7 +72,7 @@ int privacy_query(void)
     if (!success)
         OHM_ERROR("media: privacy query failed: factstore error");
     else {
-        value = override_value(privacy);
+        value = override_value(privacy.string);
 
         dbusif_signal_privacy_override(value, DBUSIF_QUEUE);
 

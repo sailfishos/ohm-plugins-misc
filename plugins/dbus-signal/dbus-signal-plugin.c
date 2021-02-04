@@ -83,7 +83,6 @@ static void free_dbus_signal_parameters(struct dbus_signal_parameters_s *params)
 }
 
 #define DRES_VARTYPE(t)  (char *)(t)
-#define DRES_VARVALUE(s) (char *)(s)
 
 static DBusHandlerResult handler(DBusConnection *c, DBusMessage *msg, void *data)
 {
@@ -135,7 +134,7 @@ static DBusHandlerResult handler(DBusConnection *c, DBusMessage *msg, void *data
                         dbus_message_iter_get_basic(&msg_it, &strvalue);
                         dres_args[i++] = params->arguments[j++];
                         dres_args[i++] = DRES_VARTYPE('s');
-                        dres_args[i++] = DRES_VARVALUE(strvalue);
+                        dres_args[i++] = strvalue;
                         break;
                     }
                 case DBUS_TYPE_INT32:
@@ -144,7 +143,7 @@ static DBusHandlerResult handler(DBusConnection *c, DBusMessage *msg, void *data
                         dbus_message_iter_get_basic(&msg_it, &intvalue);
                         dres_args[i++] = params->arguments[j++];
                         dres_args[i++] = DRES_VARTYPE('i');
-                        dres_args[i++] = DRES_VARVALUE(intvalue);
+                        dres_args[i++] = GINT_TO_POINTER(intvalue);
                         break;
                     }
                 case DBUS_TYPE_DOUBLE:
@@ -157,7 +156,7 @@ static DBusHandlerResult handler(DBusConnection *c, DBusMessage *msg, void *data
                         dbus_message_iter_get_basic(&msg_it, &double_storage[k]);
                         dres_args[i++] = params->arguments[j++];
                         dres_args[i++] = DRES_VARTYPE('d');
-                        dres_args[i++] = (char *) DRES_VARVALUE(&double_storage[k]);
+                        dres_args[i++] = (char *) &double_storage[k];
                         k++;
                         break;
                     }
