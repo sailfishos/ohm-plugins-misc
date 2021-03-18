@@ -29,6 +29,7 @@ USA.
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <inttypes.h>
 
 #include <linux/input.h>
 #include <linux/types.h>
@@ -143,7 +144,7 @@ struct input_dev_s {
     int              init_retry;         /* Retry count if initial init fails */
 };
 
-#define JACK_INIT_RETRY_COUNT (3)
+#define JACK_INIT_RETRY_COUNT (10)
 
 static int  jack_init(OhmPlugin *plugin, void **data);
 static void jack_exit(void **data);
@@ -1027,12 +1028,15 @@ void
 wired_init(OhmPlugin *plugin, int dbg_wired)
 {
     const char *model;
+    const char *delay_init;
+    gint64 delay_init_s = 0;
 
     accessories_plugin = plugin;
     DBG_WIRED = dbg_wired;
     event_impl = NULL;
 
     model = ohm_plugin_get_param(plugin, "model");
+    delay_init = ohm_plugin_get_param(plugin, "delay_init");
 
     if (model) {
         unsigned int i;
@@ -1052,12 +1056,20 @@ wired_init(OhmPlugin *plugin, int dbg_wired)
     if (!event_impl)
         event_impl = &implementations[default_impl];
 
+    if (delay_init)
+        delay_init_s = g_ascii_strtoll(delay_init, NULL, 10);
+
     OHM_INFO("accessories: use %s model for wired", event_impl->name);
 
     lookup_facts();
 
-    if (event_impl->init(plugin, &event_impl->data) == DEV_INIT_RETRY)
-        wired_init_retry(event_impl);
+    if (delay_init_s) {
+        OHM_INFO("accessories: delay init by %" PRId64 " second(s).", delay_init_s);
+        init_retry_source = g_timeout_add_seconds(delay_init_s, wired_init_retry_cb, event_impl);
+    } else {
+        if (event_impl->init(plugin, &event_impl->data) == DEV_INIT_RETRY)
+            wired_init_retry(event_impl);
+    }
 }
 
 
