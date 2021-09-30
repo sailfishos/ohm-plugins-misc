@@ -143,7 +143,7 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
 {
     resset_t                 *resset   = rs->resset;
     char                     *group    = va_arg(args, char *);
-    uint32_t                  pid      = va_arg(args, uint32_t);
+    char                     *app_id   = va_arg(args, char *);
     char                     *propnam  = va_arg(args, char *);
     resmsg_match_method_t     method   = va_arg(args, resmsg_match_method_t);
     char                     *pattern  = va_arg(args, char *);
@@ -152,7 +152,7 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
     int                       success  = FALSE;
 
     fsif_field_t fldlist[] = {
-        INTEGER_FIELD ("pid"     , pid                             ),
+        STRING_FIELD  ("app_id"  , app_id                          ),
         STRING_FIELD  ("group"   , group                           ),
         STRING_FIELD  ("property", propnam                         ),
         STRING_FIELD  ("method"  , resmsg_match_method_str(method) ),
@@ -166,7 +166,7 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
     if (group) {
         audio->type    = resource_audio;
         audio->group   = strdup(group);
-        audio->pid     = pid;
+        audio->app_id  = strdup(app_id);
         property->name = strdup(propnam ? propnam : "");
         match->method  = method;
         match->pattern = strdup(pattern ? pattern : "");
@@ -179,13 +179,15 @@ static int create_audio_stream_spec(resource_audio_stream_t *audio,
 
 static void destroy_audio_stream_spec(resource_audio_stream_t *audio)
 {
-    uint32_t  pid      = audio->pid;
+    char     *app_id   = audio->app_id;
+    char     *group    = audio->group;
     char     *property = audio->property.name;
     char     *method   = resmsg_match_method_str(audio->property.match.method);
     char     *pattern  = audio->property.match.pattern;
 
     fsif_field_t selist[] = {
-        INTEGER_FIELD ("pid"     , pid     ),
+        STRING_FIELD  ("app_id"  , app_id  ),
+        STRING_FIELD  ("group"   , group   ),
         STRING_FIELD  ("property", property),
         STRING_FIELD  ("method"  , method  ),
         STRING_FIELD  ("pattern" , pattern ),
@@ -194,10 +196,12 @@ static void destroy_audio_stream_spec(resource_audio_stream_t *audio)
 
     fsif_delete_factstore_entry(FACTSTORE_AUDIO_STREAM, selist);
 
+    free(audio->app_id);
     free(audio->group);
     free(audio->property.name);
     free(audio->property.match.pattern);
 
+    audio->app_id = NULL;
     audio->group = NULL;
     audio->property.name = NULL;
     audio->property.match.pattern = NULL;

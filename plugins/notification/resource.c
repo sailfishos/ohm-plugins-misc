@@ -208,7 +208,7 @@ int resource_set_acquire(resource_set_id_t    id,
                 msg.record.reqno = ++reqno;
                 msg.record.rset.all = all;
                 msg.record.rset.opt = opt;
-                msg.record.app_id= PLUGIN_APP_ID;
+                msg.record.app_id   = PLUGIN_APP_ID;
                 msg.record.klass = resset->klass;
                 msg.record.mode  = resset->mode;
 

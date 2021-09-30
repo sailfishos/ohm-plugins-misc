@@ -560,6 +560,7 @@ static int add_factstore_entry(resource_set_t *rs)
         INTEGER_FIELD ("client_pid" , rs->client_pid       ),
         STRING_FIELD  ("client_name", resset->peer         ),
         INTEGER_FIELD ("client_id"  , resset->id           ),
+        STRING_FIELD  ("app_id"     , resset->app_id       ),
         STRING_FIELD  ("class"      , resset->klass        ),
         INTEGER_FIELD ("mode"       , resset->mode         ),
         INTEGER_FIELD ("mandatory"  , mandatory            ),
