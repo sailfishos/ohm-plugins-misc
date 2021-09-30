@@ -248,7 +248,7 @@ void dbusif_signal_mute(int value, int send_now)
 
 void dbusif_send_audio_stream_info(const char    *oper,
                                    char          *group,
-                                   dbus_uint32_t  pid,
+                                   char          *app_id,
                                    char          *prop,
                                    char          *method,
                                    char          *arg)
@@ -258,7 +258,7 @@ void dbusif_send_audio_stream_info(const char    *oper,
     DBusMessage          *msg;
     int                   success;
 
-    if (!oper || !group || !pid)
+    if (!oper || !group || !app_id)
         return;
 
     if (!prop || !prop[0])
@@ -283,7 +283,7 @@ void dbusif_send_audio_stream_info(const char    *oper,
                                        DBUS_TYPE_UINT32, &txid,
                                        DBUS_TYPE_STRING, &oper,
                                        DBUS_TYPE_STRING, &group,
-                                       DBUS_TYPE_UINT32, &pid,
+                                       DBUS_TYPE_STRING, &app_id,
                                        DBUS_TYPE_STRING, &arg,
                                        DBUS_TYPE_STRING, &method,
                                        DBUS_TYPE_STRING, &prop,
@@ -298,8 +298,8 @@ void dbusif_send_audio_stream_info(const char    *oper,
     if (!success)
         OHM_ERROR("media: failed to send stream info message");
     else {
-        OHM_DEBUG(DBG_DBUS, "operation='%s' group='%s' pid=%u property='%s' "
-                  "method='%s' arg='%s'", oper, group, pid, prop, method, arg);
+        OHM_DEBUG(DBG_DBUS, "operation='%s' group='%s' app_id='%s' property='%s' "
+                  "method='%s' arg='%s'", oper, group, app_id, prop, method, arg);
         txid++;
     }
 
