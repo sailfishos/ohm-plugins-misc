@@ -33,6 +33,8 @@ USA.
 #include "resource.h"
 #include "ruleif.h"
 
+#define PLUGIN_APP_ID  "plugin/notification"
+
 typedef struct {
     resource_set_id_t  id;     /* ID of the resource set */
     char              *klass;  /* resource class      */
@@ -206,6 +208,7 @@ int resource_set_acquire(resource_set_id_t    id,
                 msg.record.reqno = ++reqno;
                 msg.record.rset.all = all;
                 msg.record.rset.opt = opt;
+                msg.record.app_id= PLUGIN_APP_ID;
                 msg.record.klass = resset->klass;
                 msg.record.mode  = resset->mode;
 
@@ -362,6 +365,7 @@ static void connect_to_manager(resconn_t *rc)
         rec->reqno    = ++reqno;
         rec->rset.all = def->mand | def->opt;
         rec->rset.opt = def->opt;
+        rec->app_id   = PLUGIN_APP_ID;
         rec->klass    = def->klass;
         rec->mode     = RESMSG_MODE_ALWAYS_REPLY | RESMSG_MODE_AUTO_RELEASE;
 
