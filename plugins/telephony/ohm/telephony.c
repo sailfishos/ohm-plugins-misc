@@ -45,6 +45,7 @@ USA.
     } while (0)
 
 #define PLUGIN_NAME   "telephony"
+#define PLUGIN_APP_ID "plugin/" PLUGIN_NAME
 #define IS_CELLULAR(p) (!strncmp(p, TP_RING, sizeof(TP_RING) - 1))
 #define IS_CONF_PARENT(call) ((call) != NULL && (call)->parent == (call))
 #define IS_CONF_MEMBER(call) ((call) != NULL && \
@@ -4308,6 +4309,7 @@ resctl_connect(void)
     msg.record.rset.opt   = 0;
     msg.record.rset.share = 0;
     msg.record.rset.mask  = 0;
+    msg.record.app_id     = PLUGIN_APP_ID;
     msg.record.klass      = "call";
     msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
 
