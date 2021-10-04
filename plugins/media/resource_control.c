@@ -30,6 +30,8 @@ USA.
 #include "plugin.h"
 #include "resource_control.h"
 
+#define PLUGIN_APP_ID "plugin/media"
+
 /*
  * audio resource control
  */
@@ -130,6 +132,7 @@ resctl_connect(void)
         msg.record.rset.opt   = 0;
         msg.record.rset.share = 0;
         msg.record.rset.mask  = 0;
+        msg.record.app_id     = PLUGIN_APP_ID;
         msg.record.klass      = (char *) media_types[i].group;
         msg.record.mode       = RESMSG_MODE_ALWAYS_REPLY;
 

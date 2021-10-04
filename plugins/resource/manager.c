@@ -370,7 +370,7 @@ void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
  /* uint32_t               reqno   = msg->any.reqno; */
     resmsg_audio_t        *audio   = &msg->audio;
     char                  *group   = audio->group;
-    uint32_t               pid     = audio->pid;
+    char                  *app_id  = audio->app_id;
     char                  *propnam = audio->property.name;
     resmsg_match_method_t  method  = audio->property.match.method;
     char                  *pattern = audio->property.match.pattern;
@@ -389,7 +389,7 @@ void manager_audio(resmsg_t *msg, resset_t *resset, void *proto_data)
         errmsg = strerror(errcod);
     }
     else {
-        success = resource_set_add_spec(resset, resource_audio, group, pid,
+        success = resource_set_add_spec(resset, resource_audio, group, app_id,
                                         propnam, method,pattern);
 
         if (success) {

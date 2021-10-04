@@ -51,7 +51,7 @@ typedef struct {
 typedef struct {                         /* audio stream specification */
     RESOURCE_COMMON;
     char                     *group;     /* audio group for the stream*/
-    uint32_t                  pid;       /* pid of the streaming app */
+    char                     *app_id;    /* application id of the streaming app */
     resource_spec_property_t  property;  /* selector PA property */
 } resource_audio_stream_t;
 

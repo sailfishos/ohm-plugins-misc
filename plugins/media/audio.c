@@ -61,7 +61,7 @@ static void  audio_stream_changed_cb(fsif_entry_t      *entry,
 				     void              *usrdata)
 {
     const char     *oper                        = "<unknown>";
-    fsif_value_t    pid;        pid.integer     = 0;
+    fsif_value_t    app_id;     app_id.string   = NULL;
     fsif_value_t    group;      group.string    = NULL;
     fsif_value_t    propnam;    propnam.string  = "media.name";
     fsif_value_t    method;     method.string   = "<unknown>";
@@ -76,18 +76,19 @@ static void  audio_stream_changed_cb(fsif_entry_t      *entry,
     default: OHM_ERROR("media: invalid factstore event %d", event);     return;
     }
 
-    fsif_get_field_by_entry(entry, fldtype_integer, "pid"     , &pid    );
+    fsif_get_field_by_entry(entry, fldtype_string , "app_id"  , &app_id );
     fsif_get_field_by_entry(entry, fldtype_string , "group"   , &group  );
     fsif_get_field_by_entry(entry, fldtype_string , "property", &propnam);
     fsif_get_field_by_entry(entry, fldtype_string , "method"  , &method );
     fsif_get_field_by_entry(entry, fldtype_string , "pattern" , &pattern);
 
-    OHM_DEBUG(DBG_AUDIO, "audio stream %s: pid=%u group='%s' property='%s' "
-              "method=%s pattern='%s'", oper, pid.integer, group.string ? group.string : "<null>",
+    OHM_DEBUG(DBG_AUDIO, "audio stream %s: app_id='%s' group='%s' property='%s' "
+              "method=%s pattern='%s'", oper, app_id.string ? app_id.string : "<null>",
+              group.string ? group.string : "<null>",
               propnam.string, method.string, pattern.string);
 
-    if (pid.integer != 0 && group.string != NULL) {
-        dbusif_send_audio_stream_info(oper, group.string, pid.integer, propnam.string, method.string, pattern.string);
+    if (app_id.string && group.string != NULL) {
+        dbusif_send_audio_stream_info(oper, group.string, app_id.string, propnam.string, method.string, pattern.string);
     }
 }
 

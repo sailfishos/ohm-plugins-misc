@@ -35,6 +35,7 @@ USA.
 #include <res-conn.h>
 
 #define RSET_ID  1
+#define PLUGIN_APP_ID "plugin/resource"
 
 typedef enum {
     call_type_unknown = 0,
@@ -149,6 +150,7 @@ static resset_t *client_connect(resconn_t *rc)
     msg.record.rset.opt   = 0;
     msg.record.rset.share = 0;
     msg.record.rset.mask  = 0;
+    msg.record.app_id     = PLUGIN_APP_ID;
     msg.record.klass      = "call";
     msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
 
@@ -177,6 +179,7 @@ static void client_update(resset_t *rs, call_type_t new_type)
             msg.record.rset.opt   = video;
             msg.record.rset.share = 0;
             msg.record.rset.mask  = 0;
+            msg.record.app_id     = PLUGIN_APP_ID;
             msg.record.klass      = "call";
             msg.record.mode       = RESMSG_MODE_AUTO_RELEASE;
             
