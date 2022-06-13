@@ -35,6 +35,10 @@ USA.
 #define DRES_FEATURE_REQUEST_ARG_NAME   "feature_name"
 #define DRES_FEATURE_REQUEST_ARG_VALUE  "value"
 
+#define DRES_PREFER_REQUEST             "prefer_request"
+#define DRES_PREFER_REQUEST_ARG_NAME    "accessory_name"
+#define DRES_PREFER_REQUEST_ARG_VALUE   "accessory_preferred"
+
 OHM_IMPORTABLE(int, resolve, (char *goal, char **locals));
 
 void dresif_init(OhmPlugin *plugin)
@@ -69,6 +73,32 @@ int dresif_set_feature(const char *feature, int enabled)
     vars[++i] = NULL;
 
     status = resolve(DRES_FEATURE_REQUEST, vars);
+
+    if (status < 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", status,
+                  strerror(-status));
+    else if (status == 0)
+        OHM_DEBUG(DBG_DRES, "resolve() failed");
+
+    return status <= 0 ? DRESIF_RESULT_ERROR : DRESIF_RESULT_SUCCESS;
+}
+
+int dresif_set_prefer(const char *route, int set)
+{
+    char *vars[48];
+    int   i;
+    int   status;
+
+    vars[i=0] = DRES_PREFER_REQUEST_ARG_NAME;
+    vars[++i] = DRESIF_VARTYPE('s');
+    vars[++i] = (char *) route;
+    vars[++i] = DRES_PREFER_REQUEST_ARG_VALUE;
+    vars[++i] = DRESIF_VARTYPE('i');
+    vars[++i] = GINT_TO_POINTER(set);
+
+    vars[++i] = NULL;
+
+    status = resolve(DRES_PREFER_REQUEST, vars);
 
     if (status < 0)
         OHM_DEBUG(DBG_DRES, "resolve() failed: (%d) %s", status,

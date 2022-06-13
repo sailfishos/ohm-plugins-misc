@@ -35,42 +35,53 @@ USA.
 
 struct audio_device_mapping {
     char *name;
-    int type;
+    uint32_t type;
     GSList *routes;
 };
 
 struct audio_device_mapping_route {
-    const struct audio_device_mapping *common;
+    struct audio_device_mapping *common;
     char *name;
-    int type;
+    uint32_t type;
 };
 
+#undef OHM_DEBUG
+#define OHM_DEBUG(x, ...) OHM_INFO(__VA_ARGS__)
+
 /* FactStore fact names */
-#define FACTSTORE_PREFIX                "com.nokia.policy"
-#define FACTSTORE_AUDIO_ROUTE           FACTSTORE_PREFIX ".audio_route"
-#define FACTSTORE_CONTEXT               FACTSTORE_PREFIX ".context"
-#define FACTSTORE_FEATURE               FACTSTORE_PREFIX ".feature"
-#define FACTSTORE_AUDIO_OUTPUT          FACTSTORE_PREFIX ".audio_output_configuration"
-#define FACTSTORE_AUDIO_INPUT           FACTSTORE_PREFIX ".audio_input_configuration"
+#define FACTSTORE_PREFIX                    "com.nokia.policy"
+#define FACTSTORE_AUDIO_ROUTE               FACTSTORE_PREFIX ".audio_route"
+#define FACTSTORE_CONTEXT                   FACTSTORE_PREFIX ".context"
+#define FACTSTORE_FEATURE                   FACTSTORE_PREFIX ".feature"
+#define FACTSTORE_AUDIO_OUTPUT              FACTSTORE_PREFIX ".audio_output_configuration"
+#define FACTSTORE_AUDIO_INPUT               FACTSTORE_PREFIX ".audio_input_configuration"
+#define FACTSTORE_AUDIO_SELECTABLE          FACTSTORE_PREFIX ".audio_device_selectable"
+#define FACTSTORE_AUDIO_PREFERRED           FACTSTORE_PREFIX ".audio_device_preferred"
 
-#define FACTSTORE_CONTEXT_ARG_VALUE     "value"
+#define FACTSTORE_CONTEXT_ARG_VALUE         "value"
 
-#define FACTSTORE_AUDIO_ARG_DEVICE      "device"
-#define FACTSTORE_AUDIO_ARG_TYPE        "type"
-#define FACTSTORE_AUDIO_ARG_COMMONNAME  "commonname"
+#define FACTSTORE_AUDIO_ARG_DEVICE          "device"
+#define FACTSTORE_AUDIO_ARG_TYPE            "type"
+#define FACTSTORE_AUDIO_ARG_COMMONNAME      "commonname"
 
-#define FACTSTORE_FEATURE_ARG_NAME      "name"
-#define FACTSTORE_FEATURE_ARG_ALLOWED   "allowed"
-#define FACTSTORE_FEATURE_ARG_ENABLED   "enabled"
+#define FACTSTORE_ARG_NAME                  "name"
+#define FACTSTORE_ARG_SELECTABLE            "selectable"
+#define FACTSTORE_ARG_PREFERRED             "preferred"
 
-#define AUDIO_DEVICE_SINK               "sink"
-#define AUDIO_DEVICE_SOURCE             "source"
-#define AUDIO_DEVICE_BUILTIN            "builtin"
-#define AUDIO_DEVICE_WIRED              "wired"
-#define AUDIO_DEVICE_WIRELESS           "wireless"
+#define FACTSTORE_FEATURE_ARG_NAME          "name"
+#define FACTSTORE_FEATURE_ARG_ALLOWED       "allowed"
+#define FACTSTORE_FEATURE_ARG_ENABLED       "enabled"
 
-#define AUDIO_DEVICE_VOICE_SUFFIX_1     "forcall"
-#define AUDIO_DEVICE_VOICE_SUFFIX_2     "foralien"
+#define AUDIO_DEVICE_SINK                   "sink"
+#define AUDIO_DEVICE_SOURCE                 "source"
+#define AUDIO_DEVICE_BUILTIN                "builtin"
+#define AUDIO_DEVICE_WIRED                  "wired"
+#define AUDIO_DEVICE_WIRELESS               "wireless"
+#define AUDIO_DEVICE_BUILTIN_AND_WIRELESS   "builtinandwireless"
+#define AUDIO_DEVICE_BUILTIN_AND_WIRED      "builtinandwired"
+
+#define AUDIO_DEVICE_VOICE_SUFFIX_1         "forcall"
+#define AUDIO_DEVICE_VOICE_SUFFIX_2         "foralien"
 
 static struct audio_device_mapping_route   *audio_route_sink;
 static struct audio_device_mapping_route   *audio_route_source;
@@ -79,8 +90,14 @@ static GSList *features;
 
 static void audio_route_changed_cb(fsif_entry_t *entry, char *name,
                                    fsif_field_t *fld, void *userdata);
+static void audio_property_changed_cb(fsif_entry_t *entry, char *name,
+                                      fsif_field_t *fld, void *userdata);
 static void audio_feature_changed_cb(fsif_entry_t *entry, char *name,
                                      fsif_field_t *fld, void *userdata);
+
+static int route_type(const struct audio_device_mapping_route *route);
+static struct audio_device_mapping_route *route_by_device_name_and_type(const char *device,
+                                                                        int         type);
 
 static unsigned int type_from_string(const char *str) {
     if (strcmp(str, AUDIO_DEVICE_SINK) == 0)
@@ -89,6 +106,46 @@ static unsigned int type_from_string(const char *str) {
         return OHM_EXT_ROUTE_TYPE_INPUT;
     else
         return OHM_EXT_ROUTE_TYPE_UNKNOWN;
+}
+
+static const char *type_bit_to_string(int type)
+{
+    switch (type) {
+        case OHM_EXT_ROUTE_TYPE_AVAILABLE:      return "AVAILABLE";
+        case OHM_EXT_ROUTE_TYPE_PREFERRED:      return "PREFERRED";
+        case OHM_EXT_ROUTE_TYPE_ACTIVE:         return "ACTIVE";
+    };
+
+    return "UNKNOWN";
+}
+
+static gboolean set_mapping_bit(struct audio_device_mapping *mapping, uint32_t bit, gboolean enable)
+{
+    gboolean changed = FALSE;
+
+    if (!(mapping->type & bit) && enable) {
+        changed = TRUE;
+        mapping->type |= bit;
+        OHM_DEBUG(DBG_ROUTE, "device %s add bit %s",
+                             mapping->name, type_bit_to_string(bit));
+    } else if ((mapping->type & bit) && !enable) {
+        changed = TRUE;
+        mapping->type &= ~bit;
+        OHM_DEBUG(DBG_ROUTE, "device %s del bit %s",
+                             mapping->name, type_bit_to_string(bit));
+    }
+
+    return changed;
+}
+
+static void set_mapping_bit_by_type(const char *device_name, uint32_t device_type, uint32_t bit, gboolean enable)
+{
+    struct audio_device_mapping_route *route = NULL;
+
+    if ((route = route_by_device_name_and_type(device_name, device_type))) {
+        if (set_mapping_bit(route->common, bit, enable))
+            dbusif_signal_route_changed(route->common->name, route_type(route));
+    }
 }
 
 static struct audio_device_mapping *mapping_by_commonname_and_type(const char *commonname,
@@ -161,22 +218,30 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
     }
 
     if (!type.string || !common.string) {
-        OHM_INFO("route: old device entry %s", device.string);
+        OHM_DEBUG(DBG_ROUTE, "old device entry %s", device.string);
         return;
     }
 
     if ((m = mapping_by_commonname_and_type(common.string, device_type)) == NULL) {
         m = g_new0(struct audio_device_mapping, 1);
         m->type = device_type;
+
         if (strcmp(type.string, AUDIO_DEVICE_BUILTIN) == 0)
             m->type |= OHM_EXT_ROUTE_TYPE_BUILTIN;
         else if (strcmp(type.string, AUDIO_DEVICE_WIRED) == 0)
             m->type |= OHM_EXT_ROUTE_TYPE_WIRED;
         else if (strcmp(type.string, AUDIO_DEVICE_WIRELESS) == 0)
             m->type |= OHM_EXT_ROUTE_TYPE_WIRELESS;
+        else if (strcmp(type.string, AUDIO_DEVICE_BUILTIN_AND_WIRED) == 0)
+            m->type |= (OHM_EXT_ROUTE_TYPE_BUILTIN | OHM_EXT_ROUTE_TYPE_WIRED);
+        else if (strcmp(type.string, AUDIO_DEVICE_BUILTIN_AND_WIRELESS) == 0)
+            m->type |= (OHM_EXT_ROUTE_TYPE_BUILTIN | OHM_EXT_ROUTE_TYPE_WIRELESS);
+
         m->name = g_strdup(common.string);
         mappings = g_slist_append(mappings, m);
-        OHM_INFO("route: init new device %s type %d", m->name, m->type);
+        OHM_DEBUG(DBG_ROUTE, "init new %s device %s type %s (%d)",
+                  m->type & OHM_EXT_ROUTE_TYPE_OUTPUT ? "output" : "input",
+                  m->name, type.string, m->type);
     }
 
     r = g_new0(struct audio_device_mapping_route, 1);
@@ -187,7 +252,61 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
         r->type |= OHM_EXT_ROUTE_TYPE_VOICE;
 
     m->routes = g_slist_append(m->routes, r);
-    OHM_INFO("route: device %s policy route %s", m->name, r->name);
+    OHM_DEBUG(DBG_ROUTE, "init     device %s policy route %s", m->name, r->name);
+}
+
+static void update_devices(fsif_entry_t *entry, const char *fact_name,
+                           const char *value_name, int value_apply)
+{
+    struct audio_device_mapping        *m;
+    struct audio_device_mapping_route  *r;
+    fsif_value_t                        device;
+    fsif_value_t                        value;
+    GSList                             *i, *n;
+
+    fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_ARG_NAME, &device);
+    fsif_get_field_by_entry(entry, fldtype_integer, (char *) value_name, &value);
+
+    if (!device.string) {
+        OHM_ERROR("route [%s]: malformed %s entry", __FUNCTION__, fact_name);
+        return;
+    }
+
+    /* No need to update anything if the value is 0. */
+    if (!value.integer)
+        return;
+
+    for (i = mappings; i; i = g_slist_next(i)) {
+        m = i->data;
+
+        for (n = m->routes; n; n = g_slist_next(n)) {
+            r = n->data;
+            if (strcmp(r->name, device.string) == 0)
+                set_mapping_bit(m, value_apply, TRUE);
+        }
+    }
+}
+
+static void update_devices_selectable(gpointer data, gpointer userdata)
+{
+    (void) userdata;
+
+    fsif_entry_t *entry = data;
+    update_devices(entry,
+                   FACTSTORE_AUDIO_SELECTABLE,
+                   FACTSTORE_ARG_SELECTABLE,
+                   OHM_EXT_ROUTE_TYPE_AVAILABLE);
+}
+
+static void update_devices_preferred(gpointer data, gpointer userdata)
+{
+    (void) userdata;
+
+    fsif_entry_t *entry = data;
+    update_devices(entry,
+                   FACTSTORE_AUDIO_PREFERRED,
+                   FACTSTORE_ARG_PREFERRED,
+                   OHM_EXT_ROUTE_TYPE_PREFERRED);
 }
 
 static void read_features(fsif_entry_t *entry, gpointer userdata)
@@ -204,7 +323,7 @@ static void read_features(fsif_entry_t *entry, gpointer userdata)
     fsif_get_field_by_entry(entry, fldtype_integer, FACTSTORE_FEATURE_ARG_ENABLED, &enabled);
 
     if (!name.string) {
-        OHM_ERROR("route [%s]: malformed feature entry %d %d", __FUNCTION__, allowed.integer, enabled.integer);
+        OHM_ERROR("route [%s]: malformed feature entry", __FUNCTION__);
         return;
     }
 
@@ -214,8 +333,8 @@ static void read_features(fsif_entry_t *entry, gpointer userdata)
         f->allowed = allowed.integer;
         f->enabled = enabled.integer;
         features = g_slist_append(features, f);
-        OHM_INFO("route: init new feature %s (initial state allowed %d enabled %d",
-                 f->name, f->allowed, f->enabled);
+        OHM_DEBUG(DBG_ROUTE, "init new feature %s (initial state allowed %d enabled %d",
+                  f->name, f->allowed, f->enabled);
     } else
         OHM_ERROR("route [%s]: duplicate feature entry %s dropped",
                   __FUNCTION__, name.string);
@@ -237,11 +356,25 @@ void route_init(OhmPlugin *plugin)
     if ((entries = fsif_get_entries_by_name(FACTSTORE_AUDIO_INPUT)))
         g_slist_foreach(entries, (GFunc) read_devices, GINT_TO_POINTER(OHM_EXT_ROUTE_TYPE_INPUT));
 
+    OHM_DEBUG(DBG_ROUTE, ":: init devices selectable");
+    if ((entries = fsif_get_entries_by_name(FACTSTORE_AUDIO_SELECTABLE)))
+        g_slist_foreach(entries, update_devices_selectable, NULL);
+
+    OHM_DEBUG(DBG_ROUTE, ":: init devices preferred");
+    if ((entries = fsif_get_entries_by_name(FACTSTORE_AUDIO_PREFERRED)))
+        g_slist_foreach(entries, update_devices_preferred, NULL);
+
     if ((entries = fsif_get_entries_by_name(FACTSTORE_FEATURE)))
         g_slist_foreach(entries, (GFunc) read_features, NULL);
 
     fsif_add_field_watch(FACTSTORE_AUDIO_ROUTE, NULL, FACTSTORE_AUDIO_ARG_DEVICE,
                          audio_route_changed_cb, NULL);
+
+    fsif_add_field_watch(FACTSTORE_AUDIO_SELECTABLE, NULL, FACTSTORE_ARG_SELECTABLE,
+                         audio_property_changed_cb, GUINT_TO_POINTER(OHM_EXT_ROUTE_TYPE_AVAILABLE));
+
+    fsif_add_field_watch(FACTSTORE_AUDIO_PREFERRED, NULL, FACTSTORE_ARG_PREFERRED,
+                         audio_property_changed_cb, GUINT_TO_POINTER(OHM_EXT_ROUTE_TYPE_PREFERRED));
 
     fsif_add_field_watch(FACTSTORE_FEATURE, NULL, FACTSTORE_FEATURE_ARG_ALLOWED,
                          audio_feature_changed_cb, NULL);
@@ -317,7 +450,13 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
         if (*active == route)
             return;
 
+        if (*active && set_mapping_bit((*active)->common, OHM_EXT_ROUTE_TYPE_ACTIVE, FALSE)) {
+            dbusif_signal_route_changed((*active)->common->name, route_type(*active));
+        }
+
         *active = route;
+
+        set_mapping_bit((*active)->common, OHM_EXT_ROUTE_TYPE_ACTIVE, TRUE);
 
         OHM_DEBUG(DBG_ROUTE, "audio route: type=%s device=%s common_name=%s",
                              type_str.string, route->name, route->common->name);
@@ -331,6 +470,29 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
         OHM_ERROR("route [%s]: unknown device %s", __FUNCTION__, device);
         dbusif_signal_route_changed(device, type);
     }
+}
+
+static void audio_property_changed_cb(fsif_entry_t   *entry,
+                                      char           *name,
+                                      fsif_field_t   *fld,
+                                      void           *userdata)
+{
+    uint32_t                            bit         = GPOINTER_TO_UINT(userdata);
+    fsif_value_t                        device;
+    int                                 enabled;
+
+    (void) name;
+
+    if (fld->type != fldtype_integer) {
+        OHM_ERROR("route [%s]: invalid field type", __FUNCTION__);
+        return;
+    }
+
+    enabled = fld->value.integer;
+    fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_ARG_NAME, &device);
+
+    set_mapping_bit_by_type(device.string, OHM_EXT_ROUTE_TYPE_OUTPUT, bit, enabled);
+    set_mapping_bit_by_type(device.string, OHM_EXT_ROUTE_TYPE_INPUT, bit, enabled);
 }
 
 static void audio_feature_changed_cb(fsif_entry_t   *entry,
@@ -493,6 +655,18 @@ int route_feature_request(const char *name, int enable)
     ret = dresif_set_feature(feature->name, enable);
 
     return ret == DRESIF_RESULT_SUCCESS ? FEATURE_RESULT_SUCCESS : FEATURE_RESULT_ERROR;
+}
+
+int route_prefer_request(const char *name, uint32_t type, uint32_t set)
+{
+    int ret;
+
+    if (!mapping_by_commonname_and_type(name, type))
+        return FEATURE_RESULT_UNKNOWN;
+
+    ret = dresif_set_prefer(name, (int) set);
+
+    return ret == DRESIF_RESULT_SUCCESS ? PREFER_RESULT_SUCCESS : PREFER_RESULT_ERROR;
 }
 
 const GSList *route_get_features()
