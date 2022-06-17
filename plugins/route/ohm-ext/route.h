@@ -42,13 +42,50 @@ USA.
 #define OHM_EXT_ROUTE_ROUTES_METHOD             "Routes"
 #define OHM_EXT_ROUTE_ACTIVE_ROUTES_METHOD      "ActiveRoutes"
 
-/* Bits defining audio route type. */
-#define OHM_EXT_ROUTE_TYPE_UNKNOWN              (0)
+/* Since InterfaceVersion 3 */
+#define OHM_EXT_ROUTE_ROUTES_FILTERED_METHOD    "RoutesFiltered"
+#define OHM_EXT_ROUTE_PREFER_METHOD             "Prefer"
+
+/* Bits defining audio route type. uint32 bitfield */
 #define OHM_EXT_ROUTE_TYPE_OUTPUT               (1 << 0)    /* sink     */
 #define OHM_EXT_ROUTE_TYPE_INPUT                (1 << 1)    /* source   */
 #define OHM_EXT_ROUTE_TYPE_BUILTIN              (1 << 2)
 #define OHM_EXT_ROUTE_TYPE_WIRED                (1 << 3)
 #define OHM_EXT_ROUTE_TYPE_WIRELESS             (1 << 4)
 #define OHM_EXT_ROUTE_TYPE_VOICE                (1 << 5)
+/* Since InterfaceVersion 3 */
+#define OHM_EXT_ROUTE_TYPE_BLUETOOTH_SCO        (1 << 6)
+#define OHM_EXT_ROUTE_TYPE_BLUETOOTH_A2DP       (1 << 7)
+#define OHM_EXT_ROUTE_TYPE_HEADSET              (1 << 8)
+#define OHM_EXT_ROUTE_TYPE_HEADPHONE            (1 << 9)
+#define OHM_EXT_ROUTE_TYPE_USB                  (1 << 10)
+#define OHM_EXT_ROUTE_TYPE_UNKNOWN              (1 << 11)
+
+#define OHM_EXT_ROUTE_TYPE_AVAILABLE            (1 << 25)
+#define OHM_EXT_ROUTE_TYPE_PREFERRED            (1 << 26)
+#define OHM_EXT_ROUTE_TYPE_ACTIVE               (1 << 27)
+
+inline int ohm_ext_route_is_wired_accessory(int route_type) {
+    return (route_type & OHM_EXT_ROUTE_TYPE_WIRED) && !(route_type & OHM_EXT_ROUTE_TYPE_BUILTIN) ? 1 : 0;
+}
+
+inline int ohm_ext_route_is_wireless_accessory(int route_type) {
+    return (route_type & OHM_EXT_ROUTE_TYPE_WIRELESS) && !(route_type & OHM_EXT_ROUTE_TYPE_BUILTIN) ? 1 : 0;
+}
+
+inline int ohm_ext_route_is_accessory(int route_type) {
+    return ohm_ext_route_is_wired_accessory(route_type) || ohm_ext_route_is_wireless_accessory(route_type);
+}
+
+inline int ohm_ext_route_is_microphone(int route_type) {
+    return (route_type & OHM_EXT_ROUTE_TYPE_INPUT) &&
+           !ohm_ext_route_is_accessory(route_type);
+}
+
+inline int ohm_ext_route_is_combined(int route_type) {
+    return (route_type & OHM_EXT_ROUTE_TYPE_BUILTIN) &&
+           ((route_type & OHM_EXT_ROUTE_TYPE_WIRED) ||
+            (route_type & OHM_EXT_ROUTE_TYPE_WIRELESS)) ? 1 : 0;
+}
 
 #endif

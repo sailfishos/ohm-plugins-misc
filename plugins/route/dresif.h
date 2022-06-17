@@ -30,5 +30,6 @@ enum dresif_result {
 
 void dresif_init(OhmPlugin *plugin);
 int dresif_set_feature(const char *feature, int enabled);
+int dresif_set_prefer(const char *route, int set);
 
 #endif

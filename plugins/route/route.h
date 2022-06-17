@@ -21,11 +21,20 @@ USA.
 #ifndef __OHM_ROUTE_ROUTE_H__
 #define __OHM_ROUTE_ROUTE_H__
 
+#include <stdint.h>
+
 enum feature_result {
     FEATURE_RESULT_SUCCESS,
     FEATURE_RESULT_DENIED,
     FEATURE_RESULT_UNKNOWN,
     FEATURE_RESULT_ERROR
+};
+
+enum prefer_result {
+    PREFER_RESULT_SUCCESS,
+    PREFER_RESULT_DENIED,
+    PREFER_RESULT_UNKNOWN,
+    PREFER_RESULT_ERROR
 };
 
 struct audio_feature {
@@ -43,6 +52,7 @@ int route_query_active(const char **sink, unsigned int *sink_type,
 int context_variable_query(char *name, char **value);
 
 int route_feature_request(const char *name, int enable);
+int route_prefer_request(const char *name, uint32_t type, uint32_t set);
 
 const GSList *route_get_features();
 const GSList *route_get_mappings();

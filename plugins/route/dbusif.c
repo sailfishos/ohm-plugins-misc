@@ -20,6 +20,7 @@ USA.
 
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -34,7 +35,7 @@ USA.
 #include "org.nemomobile.Route.Manager.xml.h"
 #include "ohm-ext/route.h"
 
-#define DBUSIF_INTERFACE_VERSION            (2)
+#define DBUSIF_INTERFACE_VERSION            (3)
 
 /* D-Bus errors */
 #define DBUS_NEMOMOBILE_ERROR_PREFIX        "org.nemomobile.Error"
@@ -68,6 +69,9 @@ static DBusMessage *handle_features_allowed(DBusMessage *msg);
 static DBusMessage *handle_features_enabled(DBusMessage *msg);
 static DBusMessage *handle_routes(DBusMessage *msg);
 static DBusMessage *handle_active_routes(DBusMessage *msg);
+/* Since InterfaceVersion 3 */
+static DBusMessage *handle_routes_filtered(DBusMessage *msg);
+static DBusMessage *handle_prefer(DBusMessage *msg);
 
 static void send_signal(DBusMessage *msg);
 
@@ -218,7 +222,10 @@ static DBusHandlerResult method(DBusConnection *conn, DBusMessage *msg, void *ud
         { OHM_EXT_ROUTE_FEATURES_ALLOWED_METHOD     ,   handle_features_allowed     },
         { OHM_EXT_ROUTE_FEATURES_ENABLED_METHOD     ,   handle_features_enabled     },
         { OHM_EXT_ROUTE_ROUTES_METHOD               ,   handle_routes               },
-        { OHM_EXT_ROUTE_ACTIVE_ROUTES_METHOD        ,   handle_active_routes        }
+        { OHM_EXT_ROUTE_ACTIVE_ROUTES_METHOD        ,   handle_active_routes        },
+        /* Since InterfaceVersion 3 */
+        { OHM_EXT_ROUTE_ROUTES_FILTERED_METHOD      ,   handle_routes_filtered      },
+        { OHM_EXT_ROUTE_PREFER_METHOD               ,   handle_prefer               },
     };
 
     int               type;
@@ -363,6 +370,68 @@ static DBusMessage *handle_get_all1(DBusMessage *msg)
     return reply;
 }
 
+static DBusMessage *handle_prefer(DBusMessage *msg)
+{
+    DBusMessage *reply;
+    const char  *route;
+    uint32_t     type;
+    uint32_t     set;
+    int          ret;
+    int          success = FALSE;
+
+    success = dbus_message_get_args(msg, NULL,
+                                    DBUS_TYPE_STRING, &route,
+                                    DBUS_TYPE_UINT32, &type,
+                                    DBUS_TYPE_UINT32, &set,
+                                    DBUS_TYPE_INVALID);
+
+    if (!success) {
+        OHM_DEBUG(DBG_DBUS, "malformed prefer request");
+        return dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_FAILED,
+                                      "Invalid message format");
+    }
+
+    if (!(type & OHM_EXT_ROUTE_TYPE_OUTPUT)) {
+        reply = dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_FAILED,
+                                       "Bad type");
+        goto done;
+    }
+
+    OHM_DEBUG(DBG_DBUS, "prefer request: route=%s set=%u", route, set);
+
+    ret = route_prefer_request(route, type, set);
+
+    switch (ret)
+    {
+        case PREFER_RESULT_SUCCESS:
+            reply = dbus_message_new_method_return(msg);
+            break;
+
+        case PREFER_RESULT_UNKNOWN:
+            reply = dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_UNKNOWN,
+                                           "Unknown route");
+            break;
+
+        case PREFER_RESULT_DENIED:
+            reply = dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_DENIED,
+                                           "Operation not allowed at this time");
+            break;
+
+        case PREFER_RESULT_ERROR:
+            reply = dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_FAILED,
+                                           "Policy error");
+            break;
+
+        default:
+            reply = dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_FAILED,
+                                           "Unknown error");
+            break;
+    }
+
+done:
+    return reply;
+}
+
 static DBusMessage *set_feature(DBusMessage *msg, int enable)
 {
     DBusMessage *reply;
@@ -470,11 +539,11 @@ static DBusMessage *handle_features_enabled(DBusMessage *msg)
     return feature_lists(msg, 0, 1);
 }
 
-static DBusMessage *handle_routes(DBusMessage *msg)
+static DBusMessage *routes_filter(DBusMessage *msg, uint32_t filter)
 {
     DBusMessage *reply;
     DBusMessageIter append;
-    DBusMessageIter dict_entry;
+    DBusMessageIter struct_entry;
     DBusMessageIter entry;
     const struct audio_device_mapping *mapping;
     const char *m_name;
@@ -486,31 +555,39 @@ static DBusMessage *handle_routes(DBusMessage *msg)
 
     dbus_message_iter_open_container(&append,
                                      DBUS_TYPE_ARRAY,
-                                     DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
+                                     DBUS_STRUCT_BEGIN_CHAR_AS_STRING
                                        DBUS_TYPE_STRING_AS_STRING
                                        DBUS_TYPE_UINT32_AS_STRING
-                                     DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
-                                     &dict_entry);
+                                     DBUS_STRUCT_END_CHAR_AS_STRING,
+                                     &struct_entry);
 
     for (i = route_get_mappings(); i; i = g_slist_next(i)) {
         mapping = i->data;
+        m_name = route_mapping_name(mapping);
+        m_type = route_mapping_type(mapping);
 
-        dbus_message_iter_open_container(&dict_entry,
-                                         DBUS_TYPE_DICT_ENTRY,
+        if (filter && !(m_type & filter))
+            continue;
+
+        dbus_message_iter_open_container(&struct_entry,
+                                         DBUS_TYPE_STRUCT,
                                          NULL,
                                          &entry);
 
-        m_name = route_mapping_name(mapping);
-        m_type = route_mapping_type(mapping);
         dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &m_name);
         dbus_message_iter_append_basic(&entry, DBUS_TYPE_UINT32, &m_type);
 
-        dbus_message_iter_close_container(&dict_entry, &entry);
+        dbus_message_iter_close_container(&struct_entry, &entry);
     }
 
-    dbus_message_iter_close_container(&append, &dict_entry);
+    dbus_message_iter_close_container(&append, &struct_entry);
 
     return reply;
+}
+
+static DBusMessage *handle_routes(DBusMessage *msg)
+{
+    return routes_filter(msg, 0);
 }
 
 static DBusMessage *handle_active_routes(DBusMessage *msg)
@@ -518,6 +595,21 @@ static DBusMessage *handle_active_routes(DBusMessage *msg)
     DBusMessageIter append;
 
     return msg_append_active_routes(msg, &append);
+}
+
+static DBusMessage *handle_routes_filtered(DBusMessage *msg)
+{
+    uint32_t filter;
+
+    if (!dbus_message_get_args(msg, NULL,
+                                    DBUS_TYPE_UINT32, &filter,
+                                    DBUS_TYPE_INVALID)) {
+        OHM_DEBUG(DBG_DBUS, "malformed " OHM_EXT_ROUTE_ROUTES_FILTERED_METHOD " request");
+        return dbus_message_new_error(msg, DBUS_NEMOMOBILE_ERROR_FAILED,
+                                      "Invalid message format");
+    }
+
+    return routes_filter(msg, filter);
 }
 
 static void send_signal(DBusMessage *msg)
