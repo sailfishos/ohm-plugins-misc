@@ -1,6 +1,6 @@
 Name:       ohm-plugins-misc
 Summary:    A miscallaneous set of Nokia OHM plugins
-Version:    1.8.0
+Version:    1.9.0
 Release:    1
 License:    LGPLv2
 URL:        https://git.sailfishos.org/mer-core/ohm-plugins-misc
