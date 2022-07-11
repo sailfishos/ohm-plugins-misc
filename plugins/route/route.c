@@ -309,6 +309,22 @@ static void update_devices_preferred(gpointer data, gpointer userdata)
                    OHM_EXT_ROUTE_TYPE_PREFERRED);
 }
 
+static void update_devices_active(gpointer data, gpointer userdata)
+{
+    (void) userdata;
+
+    fsif_entry_t           *entry = data;
+    fsif_value_t            device;
+    fsif_field_t            field;
+
+    fsif_get_field_by_entry(entry, fldtype_string, FACTSTORE_AUDIO_ARG_DEVICE, &device);
+
+    field.type = fldtype_string;
+    field.value.string = device.string;
+
+    audio_route_changed_cb(entry, FACTSTORE_AUDIO_ROUTE, &field, NULL);
+}
+
 static void read_features(fsif_entry_t *entry, gpointer userdata)
 {
     struct audio_feature   *f;
@@ -366,6 +382,9 @@ void route_init(OhmPlugin *plugin)
 
     if ((entries = fsif_get_entries_by_name(FACTSTORE_FEATURE)))
         g_slist_foreach(entries, (GFunc) read_features, NULL);
+
+    if ((entries = fsif_get_entries_by_name(FACTSTORE_AUDIO_ROUTE)))
+        g_slist_foreach(entries, update_devices_active, NULL);
 
     fsif_add_field_watch(FACTSTORE_AUDIO_ROUTE, NULL, FACTSTORE_AUDIO_ARG_DEVICE,
                          audio_route_changed_cb, NULL);
