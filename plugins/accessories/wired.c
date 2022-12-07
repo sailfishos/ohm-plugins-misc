@@ -237,6 +237,9 @@ static int physical;
 /* Interpret physical insert as headphone insert when both
  * physical and microphone events are active. */
 static gboolean physical_is_headphone;
+/* Interpret disconnected headphone as connected headphone
+ * and connected headphone as speaker. */
+static gboolean headphone_is_speaker;
 
 
 /*
@@ -353,15 +356,22 @@ jack_initial_query_schedule(input_dev_t *dev)
 }
 
 
+static gboolean
+param_is_set(OhmPlugin *plugin, const char *quirk) {
+    const char *param = ohm_plugin_get_param(plugin, quirk);
+
+    if (param && !strcasecmp(param, "true"))
+        return TRUE;
+
+    return FALSE;
+}
+
 static int
 jack_init(OhmPlugin *plugin, void **data) {
     input_dev_t *dev;
 
     const char *device;
     const char *patterns[] = { NULL, "Headset Jack", " Jack", "ACCDET" };
-    const char *invert;
-    const char *quirk;
-    const char *physical_quirk;
 
     if (!*data) {
         *data = g_new0(input_dev_t, 1);
@@ -372,11 +382,7 @@ jack_init(OhmPlugin *plugin, void **data) {
 
     dev = *data;
 
-    invert = ohm_plugin_get_param(plugin, "inverted-jack-events");
     device = ohm_plugin_get_param(plugin, "jack-device");
-    /* Default to disabling incompatible quirk */
-    quirk = ohm_plugin_get_param(plugin, "incompatible-quirk");
-    physical_quirk = ohm_plugin_get_param(plugin, "physical-is-headphone");
 
     /*
      * Notes: With some legacy driver, the driver emits
@@ -386,13 +392,16 @@ jack_init(OhmPlugin *plugin, void **data) {
      *   but if incompatible-quirk is set we interpret PHYSICAL_INSERT
      *   as incompatible insert.
      */
-    if (quirk && !strcasecmp(quirk, "true"))
+    if (param_is_set(plugin, "incompatible-quirk"))
         dev->insert_quirk = 1;
 
-    if (physical_quirk && !strcasecmp(physical_quirk, "true"))
+    if (param_is_set(plugin, "physical-is-headphone"))
         physical_is_headphone = TRUE;
 
-    if (invert != NULL && !strcasecmp(invert, "true")) {
+    if (param_is_set(plugin, "headphone-is-speaker"))
+        headphone_is_speaker = TRUE;
+
+    if (param_is_set(plugin, "inverted-jack-events")) {
         OHM_INFO("accessories: jack events have inverted semantics");
         dev->inverted = 1;
     }
@@ -805,11 +814,21 @@ update_facts(void)
     else if (physical_is_headphone && physical && microphone)
                                       current = states + DEV_HEADSET;
     else if (headphone && microphone) current = states + DEV_HEADSET;
-    else if (headphone)               current = states + DEV_HEADPHONE;
+    else if (headphone) {
+        if (headphone_is_speaker)
+                                      current = NULL;
+        else
+                                      current = states + DEV_HEADPHONE;
+    }
     else if (lineout)                 current = states + DEV_LINEOUT;
     else if (microphone)              current = states + DEV_HEADMIKE;
     else if (videoout)                current = states + DEV_VIDEOOUT;
-    else                              current = NULL;
+    else {
+        if (headphone_is_speaker)
+                                      current = states + DEV_HEADPHONE;
+        else
+                                      current = NULL;
+    }
 
     if (current != NULL)
         device_connect(current);
