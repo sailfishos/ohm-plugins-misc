@@ -823,10 +823,12 @@ update_facts(void)
     else if (lineout)                 current = states + DEV_LINEOUT;
     else if (microphone)              current = states + DEV_HEADMIKE;
     else if (videoout)                current = states + DEV_VIDEOOUT;
-    else                              current = NULL;
-
-    if (headphone_is_speaker && !current)
-        current = states + DEV_HEADPHONE;
+    else {
+        if (headphone_is_speaker)
+                                      current = states + DEV_HEADPHONE;
+        else
+                                      current = NULL;
+    }
 
     if (current != NULL)
         device_connect(current);
