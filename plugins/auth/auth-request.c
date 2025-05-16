@@ -280,8 +280,8 @@ static void dbus_callback(pid_t pid, const char *err, void *data)
         else
             OHM_DEBUG(DBG_REQ, "D-Bus PID query failed. reason: %s", err);
 
-            request->cb.func(FALSE, err, request->cb.data);
-            destroy_request(request);
+        request->cb.func(FALSE, err, request->cb.data);
+        destroy_request(request);
     }
 }
 

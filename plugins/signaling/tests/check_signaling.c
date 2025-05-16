@@ -95,9 +95,9 @@ START_TEST (test_signaling_init_deinit)
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
     ret = init_signaling(c, 0, 0);
 
-    fail_unless(ret == TRUE, "Init failed");
+    ck_assert_msg(ret == TRUE, "Init failed");
     ret = deinit_signaling();
-    fail_unless(ret == TRUE, "Deinit failed");
+    ck_assert_msg(ret == TRUE, "Deinit failed");
 }
 END_TEST
 
@@ -118,7 +118,7 @@ static gboolean test_internal_decision(EnforcementPoint *e, Transaction *t, inte
     printf("on-decision!\n");
 
     g_object_get(t, "txid", &txid, NULL);
-    fail_unless(txid != 0, "Wrong txid");
+    ck_assert_msg(txid != 0, "Wrong txid");
     decision_count++;
     
     cb(G_OBJECT(e), G_OBJECT(t), TRUE);
@@ -138,7 +138,7 @@ static gboolean test_internal_decision_gobject(EnforcementPoint *e, GObject *o, 
 
     g_object_get(o, "txid", &txid, NULL);
     printf("txid: %d\n", txid);
-    fail_unless(txid != 0, "Wrong txid");
+    ck_assert_msg(txid != 0, "Wrong txid");
     decision_count++;
 
     g_object_get(o,
@@ -179,10 +179,10 @@ static void test_internal_key_change(EnforcementPoint *e, Transaction *t, gpoint
     key_changed_count++;
 
     printf("txid: %d\n", txid);
-    fail_unless(txid == 0, "Wrong txid");
+    ck_assert_msg(txid == 0, "Wrong txid");
     
     printf("signal name: %s\n", signal_name);
-    fail_unless(strcmp(signal_name, "actions") == 0, "Wrong signal name");
+    ck_assert_str_eq(signal_name, "actions");
     
     for (list = facts; list != NULL; list = g_slist_next(list)) {
         printf("fact: '%s'\n", (char *) list->data);
@@ -210,7 +210,7 @@ START_TEST (test_signaling_internal_ep_1)
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
     ret = init_signaling(c, 0, 0);
-    fail_unless(ret == TRUE, "Init failed");
+    ck_assert_msg(ret == TRUE, "Init failed");
     
     GSList *capabilities = NULL;
 
@@ -240,8 +240,8 @@ START_TEST (test_signaling_internal_ep_1)
 
     g_main_loop_run(loop);
 
-    fail_unless(key_changed_count == 1, "Key changed %i times", key_changed_count);
-    fail_unless(decision_count == 1, "Decision sent %i times", decision_count);
+    ck_assert_msg(key_changed_count == 1, "Key changed %i times", key_changed_count);
+    ck_assert_msg(decision_count == 1, "Decision sent %i times", decision_count);
 }
 END_TEST
 
@@ -258,7 +258,7 @@ START_TEST (test_signaling_internal_ep_gobject)
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
     ret = init_signaling(c, 0, 0);
-    fail_unless(ret == TRUE, "Init failed");
+    ck_assert_msg(ret == TRUE, "Init failed");
     
     GSList *capabilities = NULL;
     gchar *arr[] = {"actions", "interactions", NULL};
@@ -294,8 +294,8 @@ START_TEST (test_signaling_internal_ep_gobject)
 
     g_main_loop_run(loop);
 
-    fail_unless(key_changed_count == 1, "Key changed %i times", key_changed_count);
-    fail_unless(decision_count == 1, "Decision sent %i times", decision_count);
+    ck_assert_msg(key_changed_count == 1, "Key changed %i times", key_changed_count);
+    ck_assert_msg(decision_count == 1, "Decision sent %i times", decision_count);
 }
 END_TEST
 
@@ -320,17 +320,17 @@ static void test_internal_2_complete(Transaction *t, gpointer data) {
             &nacked,
             NULL);
 
-    fail_unless(counter == 1 || counter == 2, "Wrong counter value: '%i'", counter);
+    ck_assert_msg(counter == 1 || counter == 2, "Wrong counter value: '%i'", counter);
 
     if (counter == 1) {
-        fail_unless(g_slist_length(nacked) == 1, "Not nacked correctly: %i",
+        ck_assert_msg(g_slist_length(nacked) == 1, "Not nacked correctly: %i",
                 g_slist_length(nacked));
-        fail_unless(g_slist_length(acked) == 0, "Acked incorrectly: %i",
+        ck_assert_msg(g_slist_length(acked) == 0, "Acked incorrectly: %i",
                 g_slist_length(acked));
     }
     else if (counter == 2) {
-        fail_unless(g_slist_length(nacked) == 0, "Not nacked correctly");
-        fail_unless(g_slist_length(acked) == 1, "Acked incorrectly");
+        ck_assert_msg(g_slist_length(nacked) == 0, "Not nacked correctly");
+        ck_assert_msg(g_slist_length(acked) == 1, "Acked incorrectly");
     }
     g_main_loop_quit(loop);
 }
@@ -345,7 +345,7 @@ static gboolean test_internal_2_decision(EnforcementPoint *e, Transaction *t, in
 
     printf("test_internal_2_decision, going to %s!\n", counter ? "ack" : "nack");
     g_object_get(t, "txid", &txid, NULL);
-    fail_unless(txid != 0, "Wrong txid");
+    ck_assert_msg(txid != 0, "Wrong txid");
 
     if (counter == 0) 
         ret = FALSE;
@@ -368,7 +368,7 @@ START_TEST (test_signaling_internal_ep_2)
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
     ret = init_signaling(c, 0, 0);
-    fail_unless(ret == TRUE, "Init failed");
+    ck_assert_msg(ret == TRUE, "Init failed");
     
     GSList *capabilities = NULL;
     gchar *arr[] = {"actions", "interactions", NULL};
@@ -421,9 +421,9 @@ static void test_register_ack(Transaction *t, gchar *uri, guint ack, gpointer da
     g_print("ON_ACK_RECEIVED callback, txid: '%u', uri: '%s', ack: '%u'!\n",
             txid, uri, ack);
 
-    fail_unless(txid == 1, "ACK: wrong txid");
-    fail_unless(uri != NULL, "NULL URI");
-    fail_unless(strcmp(uri, "external"), "Unregistered EP acked");
+    ck_assert_msg(txid == 1, "ACK: wrong txid");
+    ck_assert_msg(uri != NULL, "NULL URI");
+    ck_assert_str_ne(uri, "external");
 
     if (ack)
         acked_count++;
@@ -455,27 +455,27 @@ static void test_register_complete(Transaction *t, gpointer data) {
     /* txid is the transaction id. acked, nacked and not_answered are
      * string lists containing enforcement_point URIs. */
 
-    fail_unless(txid == 1, "Wrong txid");
+    ck_assert_msg(txid == 1, "Wrong txid");
 
-    fail_unless(acked_count == 2,
+    ck_assert_msg(acked_count == 2,
             "Acked EPs: %u", acked_count);
     
-    fail_unless(nacked_count == 1,
+    ck_assert_msg(nacked_count == 1,
             "Nacked EPs: %u", nacked_count);
 
-    fail_unless(acked_count == g_slist_length(acked),
+    ck_assert_msg(acked_count == g_slist_length(acked),
             "Wrong number of enforcement points acked");
 
-    fail_unless(nacked_count == g_slist_length(nacked),
+    ck_assert_msg(nacked_count == g_slist_length(nacked),
             "Wrong number of enforcement points nacked");
     
-    fail_unless(g_slist_length(not_answered) == 0,
+    ck_assert_msg(g_slist_length(not_answered) == 0,
             "Not answered EPs: %i", g_slist_length(not_answered));
     
     for (i = acked; i != NULL; i = g_slist_next(i)) {
         gchar *ep_name = i->data;
         g_print("acked ep: '%s'\n", ep_name);
-        fail_unless(strcmp(ep_name, "external"), "Unregistered EP in acked list");
+        ck_assert_str_ne(ep_name, "external");
         unregister_enforcement_point(ep_name);
         g_free(ep_name);
     }
@@ -483,7 +483,7 @@ static void test_register_complete(Transaction *t, gpointer data) {
     for (i = nacked; i != NULL; i = g_slist_next(i)) {
         gchar *ep_name = i->data;
         g_print("nacked ep: '%s'\n", ep_name);
-        fail_unless(strcmp(ep_name, "external"), "Unregistered EP in nacked list");
+        ck_assert_str_ne(ep_name, "external");
         unregister_enforcement_point(ep_name);
         g_free(ep_name);
     }
@@ -491,7 +491,7 @@ static void test_register_complete(Transaction *t, gpointer data) {
     for (i = not_answered; i != NULL; i = g_slist_next(i)) {
         gchar *ep_name = i->data;
         g_print("not_answered ep: '%s'\n", ep_name);
-        fail_unless(strcmp(ep_name, "external"), "Unregistered EP in not_answered list");
+        ck_assert_str_ne(ep_name, "external");
         unregister_enforcement_point(ep_name);
         g_free(ep_name);
     }
@@ -573,7 +573,7 @@ START_TEST (test_signaling_register_unregister)
 
     /* unregister one EP */
     ret = unregister_enforcement_point("external");
-    fail_unless(ret, "Failed to unregister EP");
+    ck_assert_msg(ret, "Failed to unregister EP");
 
     g_idle_add(test_transaction, NULL);
 
@@ -597,7 +597,7 @@ static void test_timeout_ack(Transaction *t, gchar *uri, guint ack, gpointer dat
     (void) ack;
     (void) data;
 
-    fail("No acks expected");
+    ck_abort_msg("No acks expected");
     return;
 }
 
@@ -621,18 +621,18 @@ static void test_timeout_complete(Transaction *t, gpointer data) {
     /* txid is the transaction id. acked, nacked and not_answered are
      * string lists containing enforcement_point URIs. */
 
-    fail_unless(txid == 1, "Wrong txid");
+    ck_assert_msg(txid == 1, "Wrong txid");
 
-    fail_unless(g_slist_length(acked) == 0,
+    ck_assert_msg(g_slist_length(acked) == 0,
             "Acked EPs: %i", g_slist_length(acked));
     
-    fail_unless(g_slist_length(nacked) == 0,
+    ck_assert_msg(g_slist_length(nacked) == 0,
             "Nacked EPs: %i", g_slist_length(acked));
     
-    fail_unless(g_slist_length(not_answered) == 2,
+    ck_assert_msg(g_slist_length(not_answered) == 2,
             "Not answered EPs: %i", g_slist_length(not_answered));
 
-    fail_unless(nacked_count == g_slist_length(nacked),
+    ck_assert_msg(nacked_count == g_slist_length(nacked),
             "Wrong number of enforcement points nacked");
     
     for (i = acked; i != NULL; i = g_slist_next(i)) {
@@ -673,7 +673,7 @@ START_TEST (test_signaling_timeout)
 
     c = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
 
-    fail_unless(c != NULL, "Could not get a D-Bus system bus.");
+    ck_assert_msg(c != NULL, "Could not get a D-Bus system bus.");
     
     init_signaling(c, 0, 0);
 

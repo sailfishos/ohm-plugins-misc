@@ -438,7 +438,7 @@ static void session_bus_cleanup(void)
         dbus_connection_unregister_object_path(sess_conn,
                                                DBUS_MEDIA_MANAGER_PATH);
         
-        queue_purge(DBUS_BUS_SESSION);
+        queue_purge(session_bus);
         
         dbus_connection_unref(sess_conn);
         sess_conn = NULL;

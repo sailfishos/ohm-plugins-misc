@@ -1127,7 +1127,7 @@ static gchar *device_path_from_transport_path(const char *path)
     BT_ASSERT(path);
 
     len = find_nth_char(path, '/', 5) - path;
-    dev = g_memdup(path, len + 1);
+    dev = g_memdup2(path, len + 1);
     dev[len] = '\0';
 
     return dev;
