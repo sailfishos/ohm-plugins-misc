@@ -207,7 +207,7 @@ gboolean unregister_enforcement_point(const gchar *uri);
 
 Transaction * queue_decision(gchar *signal, GSList *facts, int txid, gboolean need_transaction, guint timeout, gboolean deferred_execution);
 
-gboolean init_signaling();
+gboolean init_signaling(DBusConnection *c, int flag_signaling, int flag_facts);
 
 gboolean deinit_signaling();
 

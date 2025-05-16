@@ -152,10 +152,9 @@ echo "%{version}" > .tarball-version
     --disable-videoep \
     --disable-fmradio
 
-make %{?_smp_mflags}
+%make_build
 
 %install
-rm -rf %{buildroot}
 %make_install
 
 # FIXME: install maemo-specific files distro-conditionally
@@ -167,13 +166,12 @@ ln -s ../ohm-session-agent.service %{buildroot}%{_userunitdir}/pre-user-session.
 
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
 install -m0644 -t %{buildroot}%{_docdir}/%{name}-%{version} \
-        AUTHORS ChangeLog README NEWS
+        AUTHORS
 
 mkdir -p %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
 install -m0644 AUTHORS %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
 
 %files
-%defattr(-,root,root,-)
 %license COPYING
 %{_libdir}/ohm/libohm_auth.so
 %{_libdir}/ohm/libohm_auth_test.so
@@ -189,65 +187,51 @@ install -m0644 AUTHORS %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
 %{_userunitdir}/pre-user-session.target.wants/ohm-session-agent.service
 
 %files -n ohm-plugin-console
-%defattr(-,root,root,-)
 %license COPYING
 %{_libdir}/ohm/libohm_console.so
 
 %files -n ohm-plugin-dspep
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_dspep.so
 
 %files -n ohm-plugins-dbus
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_dbus.so
 %{_libdir}/ohm/libohm_dbus_signal.so
 
 %files -n ohm-plugin-telephony
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_telephony.so
 
 %files -n ohm-plugin-signaling
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_signaling.so
 
 %files -n ohm-plugin-media
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_media.so
 %config %{_sysconfdir}/ohm/plugins.d/media.ini
 
 %files -n ohm-plugin-accessories
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_accessories.so
 
 %files -n ohm-plugin-route
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_route.so
 %{_sysconfdir}/dbus-1/system.d/ohm-plugin-route.conf
 
 %files -n ohm-plugin-route-devel
-%defattr(-,root,root,-)
 %{_libdir}/pkgconfig/ohm-ext-route.pc
 %{_includedir}/ohm/ohm-ext/route.h
 
 %files -n ohm-plugin-mdm
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_mdm.so
 %{_sysconfdir}/dbus-1/system.d/ohm-plugin-mdm.conf
 %{_sysconfdir}/pulse/xpolicy.conf.d/mdm-audio.conf
 
 %files -n ohm-plugin-mdm-devel
-%defattr(-,root,root,-)
 %{_libdir}/pkgconfig/ohm-ext-mdm.pc
 %{_includedir}/ohm/ohm-ext/mdm.h
 
 %files -n ohm-plugin-profile
-%defattr(-,root,root,-)
 %{_libdir}/ohm/libohm_profile.so
 
 %files doc
-%defattr(-,root,root,-)
 %{_docdir}/%{name}-%{version}
 
 %files -n ohm-plugin-console-doc
-%defattr(-,root,root,-)
 %{_docdir}/ohm-plugin-console-%{version}
