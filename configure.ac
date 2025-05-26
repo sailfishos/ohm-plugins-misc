@@ -632,6 +632,7 @@ AC_SUBST(HAVE_PROC_EVENT_COMM)
 AC_MSG_CHECKING([kernel input layer events for accessories plugin])
 AC_COMPILE_IFELSE([
 #include <linux/input.h>
+#include <stdio.h>
 int main(int argc, char **argv)
 {
     printf("%d, %d, %d, %d, %d\n",

@@ -80,7 +80,7 @@ static void teardown(void) {
 START_TEST (test_profile_init_deinit)
 {
     profile_plugin *plugin = init_profile();
-    fail_if(plugin == NULL, "Plugin not initialized correctly");
+    ck_assert_ptr_nonnull(plugin);
 
     /* TODO: see the initial value, check it */
 
@@ -90,6 +90,9 @@ END_TEST
 
 static void test_fact_inserted(OhmFactStore *fs, OhmFact *fact, gpointer data)
 {
+    (void) fs;
+    (void) fact;
+    (void) data;
 #if 1
     printf("> test_fact_inserted\n");
 #endif
@@ -98,10 +101,11 @@ static void test_fact_inserted(OhmFactStore *fs, OhmFact *fact, gpointer data)
 
 static void test_fact_updated(OhmFactStore *fs, OhmFact *fact, GQuark field, GValue *value, gpointer data)
 {
+    (void)data;
     printf("> test_fact_updated: %p, %p, %i, %p\n", fs, fact, field, value);
 #if 1
     if (value)
-        fail_unless (G_VALUE_TYPE(value) == G_TYPE_STRING, "value for key '%u' is wrong type", field);
+        ck_assert_msg(G_VALUE_TYPE(value) == G_TYPE_STRING, "value for key '%u' is wrong type", field);
 #endif
     g_main_loop_quit(loop);
 }
@@ -135,7 +139,7 @@ START_TEST (test_profile_name_change)
     profile_plugin *plugin = NULL;
     
     plugin = init_profile();
-    fail_if(plugin == NULL, "Plugin not initialized correctly");
+    ck_assert_ptr_nonnull(plugin);
     
     printf("fs test: '%p'\n", fs);
 
@@ -157,16 +161,16 @@ START_TEST (test_profile_name_change)
 #if 1
 
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
-    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+    ck_assert_msg(g_slist_length(list) == 1, "Wrong number of facts initialized: '%i'",
             g_slist_length(list));
 
     fact = list->data;
-    fail_if (fact == NULL, "fact not in fact store");
+    ck_assert_ptr_nonnull(fact);
     /* a field is removed if the value is set to NULL */
     
     fields = ohm_fact_get_fields(fact);
     
-    fail_if(g_slist_length(fields) == 0, "No values initialized in the fact: '%i'",
+    ck_assert_msg(g_slist_length(fields) != 0, "No values initialized in the fact: '%i'",
             g_slist_length(fields));
 
     for (e = fields; e != NULL; e = g_slist_next(e)) {
@@ -176,8 +180,8 @@ START_TEST (test_profile_name_change)
 
         printf("field '%s'\n", field_name);
         gv = ohm_fact_get(fact, field_name);
-        fail_if (gv == NULL, "value error");
-        fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
+        ck_assert_ptr_nonnull(gv);
+        ck_assert_msg(G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
 
         strval = g_value_get_string(gv);
 
@@ -191,14 +195,14 @@ START_TEST (test_profile_name_change)
 #if 1
     
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
-    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+    ck_assert_msg(g_slist_length(list) == 1, "Wrong number of facts initialized: '%i'",
             g_slist_length(list));
 
     fact = list->data;
-    fail_if (fact == NULL, "fact not in fact store");
+    ck_assert_ptr_nonnull(fact);
     fields = ohm_fact_get_fields(fact);
 
-    fail_if(g_slist_length(fields) == 0, "No values initialized in the fact: '%i'",
+    ck_assert_msg(g_slist_length(fields) != 0, "No values initialized in the fact: '%i'",
             g_slist_length(fields));
 
     for (e = fields; e != NULL; e = g_slist_next(e)) {
@@ -207,8 +211,8 @@ START_TEST (test_profile_name_change)
         const gchar *field_name = g_quark_to_string(qk);
 
         gv = ohm_fact_get(fact, field_name);
-        fail_if (gv == NULL, "value error");
-        fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
+        ck_assert_ptr_nonnull(gv);
+        ck_assert_msg(G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
 
         strval = g_value_get_string(gv);
 
@@ -218,22 +222,22 @@ START_TEST (test_profile_name_change)
     gv = ohm_fact_get(fact, PROFILE_NAME_KEY);
     strval = g_value_get_string(gv);
 
-    fail_unless(strcmp(strval, "general") == 0, "profile not 'general': '%s'", strval);
+    ck_assert_msg(strcmp(strval, "general") == 0, "profile not 'general': '%s'", strval);
 
     g_idle_add(set_profile, "silent");
     g_main_loop_run(loop);
 
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
-    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+    ck_assert_msg(g_slist_length(list) == 1, "Wrong number of facts initialized: '%i'",
             g_slist_length(list));
 
     fact = list->data;
-    fail_if (fact == NULL, "fact not in fact store");
+    ck_assert_ptr_nonnull(fact);
     
     gv = ohm_fact_get(fact, PROFILE_NAME_KEY);
     strval = g_value_get_string(gv);
 
-    fail_unless(strcmp(strval, "silent") == 0, "profile not 'silent': '%s'", strval);
+    ck_assert_msg(strcmp(strval, "silent") == 0, "profile not 'silent': '%s'", strval);
 #endif
     deinit_profile(plugin);
 }
@@ -243,10 +247,9 @@ START_TEST (find_segfault)
 {
     profileval_t *values = NULL;
     profile_plugin *plugin = NULL;
-    OhmFactStore *fs = ohm_fact_store_get_fact_store();
     
     plugin = init_profile();
-    fail_if(plugin == NULL, "Plugin not initialized correctly");
+    ck_assert_ptr_nonnull(plugin);
     
     values = profile_get_values("silent");
     profile_create_fact("silent", values);
@@ -274,13 +277,12 @@ END_TEST
 
 START_TEST (find_segfault_2)
 {
-    profileval_t *values = NULL;
     profile_plugin *plugin = NULL;
     
     OhmFactStore *fs = ohm_fact_store_get_fact_store();
 
     plugin = init_profile();
-    fail_if(plugin == NULL, "Plugin not initialized correctly");
+    ck_assert_ptr_nonnull(plugin);
     
     /* register the signal handlers */
     g_signal_connect(fs, "inserted", G_CALLBACK(test_fact_inserted), NULL);
@@ -321,27 +323,27 @@ START_TEST (test_profile_value_change)
 
     printf("fs test: '%p'\n", fs);
     profile_plugin *plugin = init_profile();
-    fail_if(plugin == NULL, "Plugin not initialized correctly");
+    ck_assert_ptr_nonnull(plugin);
     
     /* 1. read the initial value, check it */
 
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
-    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+    ck_assert_msg(g_slist_length(list) == 1, "Wrong number of facts initialized: '%i'",
             g_slist_length(list));
 
     fact = list->data;
-    fail_if (fact == NULL, "fact not in fact store");
+    ck_assert_ptr_nonnull(fact);
     /* a field is removed if the value is set to NULL */
     
     /* there is a field called RINGTONE */
     gv = ohm_fact_get(fact, "ringing.alert.tone");
 
-    fail_if (gv == NULL, "value error");
-    fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
+    ck_assert_ptr_nonnull(gv);
+    ck_assert_msg(G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
 
     strval = g_value_get_string(gv);
     
-    fail_unless (strval != NULL, "incorrect string");
+    ck_assert_ptr_nonnull(strval);
     
     /* 2. call libprofile to change the value and check it */
 
@@ -352,39 +354,39 @@ START_TEST (test_profile_value_change)
     g_main_loop_run(loop);
     
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
-    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+    ck_assert_msg(g_slist_length(list) == 1, "Wrong number of facts initialized: '%i'",
             g_slist_length(list));
 
     fact = list->data;
-    fail_if (fact == NULL, "fact not in fact store");
+    ck_assert_ptr_nonnull(fact);
 
     gv = ohm_fact_get(fact, "ringing.alert.tone");
 
-    fail_if (gv == NULL, "value error");
-    fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
+    ck_assert_ptr_nonnull(gv);
+    ck_assert_msg(G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
 
     strval = g_value_get_string(gv);
     
-    fail_unless (strval != NULL && strcmp(strval, TEST_RINGTONE_1) == 0,  "incorrect string '%s', should be '%s'", strval, TEST_RINGTONE_1);
+    ck_assert_msg(strval != NULL && strcmp(strval, TEST_RINGTONE_1) == 0,  "incorrect string '%s', should be '%s'", strval, TEST_RINGTONE_1);
 
     g_idle_add(set_value, TEST_RINGTONE_2);
     g_main_loop_run(loop);
 
     list = ohm_fact_store_get_facts_by_name(fs, FACTSTORE_PROFILE);
-    fail_if(g_slist_length(list) != 1, "Wrong number of facts initialized: '%i'",
+    ck_assert_msg(g_slist_length(list) == 1, "Wrong number of facts initialized: '%i'",
             g_slist_length(list));
 
     fact = list->data;
-    fail_if (fact == NULL, "fact not in fact store");
+    ck_assert_ptr_nonnull(fact);
 
     gv = ohm_fact_get(fact, "ringing.alert.tone");
 
-    fail_if (gv == NULL, "value error");
-    fail_unless (G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
+    ck_assert_ptr_nonnull(gv);
+    ck_assert_msg(G_VALUE_TYPE(gv) == G_TYPE_STRING, "value is wrong type");
 
     strval = g_value_get_string(gv);
     
-    fail_unless (strval != NULL && strcmp(strval, TEST_RINGTONE_2) == 0,  "incorrect string '%s', should be '%s'", strval, TEST_RINGTONE_2);
+    ck_assert_msg(strval != NULL && strcmp(strval, TEST_RINGTONE_2) == 0,  "incorrect string '%s', should be '%s'", strval, TEST_RINGTONE_2);
 #undef TEST_RINGTONE_2
 #undef TEST_RINGTONE_1
 

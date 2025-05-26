@@ -363,7 +363,7 @@ static int fsif_add_fact_watch(char                 *factname,
     }
 
 
-    if ((wfact = find_watch(factname, type)) == NULL) {
+    if ((wfact = find_watch(factname, (watch_type_e)type)) == NULL) {
         if ((wfact = malloc(sizeof(*wfact))) == NULL)
             return -1;
         else {
