@@ -4,6 +4,7 @@ SUBDIRS = 	     \
 	delay        \
 	auth         \
 	dbus         \
+	dbus-method  \
 	dbus-signal  \
 	fsif         \
 	route        \
