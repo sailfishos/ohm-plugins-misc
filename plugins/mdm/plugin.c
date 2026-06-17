@@ -21,7 +21,7 @@ USA.
 #define PLUGIN_NAME    "mdm"
 #define PLUGIN_DESCR   "MDM policy interface"
 #define PLUGIN_VERSION "0.0.1"
-#define PLUGIN_AUTHOR  "juho.hamalainen@jolla.com"
+#define PLUGIN_AUTHOR  "enni.hamalainen@jolla.com"
 
 
 #include <stdio.h>
