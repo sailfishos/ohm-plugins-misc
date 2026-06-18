@@ -142,7 +142,7 @@ static void plugin_destroy(OhmPlugin *plugin)
 OHM_PLUGIN_DESCRIPTION(
     "OHM route manager",            /* description */
     "0.0.1",                        /* version */
-    "juho.hamalainen@jolla.com",    /* author */
+    "enni.hamalainen@jolla.com",    /* author */
     OHM_LICENSE_LGPL,               /* license */
     plugin_init,                    /* initalize */
     plugin_destroy,                 /* destroy */

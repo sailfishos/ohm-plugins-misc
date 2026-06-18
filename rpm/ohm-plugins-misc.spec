@@ -195,6 +195,7 @@ install -m0644 AUTHORS %{buildroot}%{_docdir}/ohm-plugin-console-%{version}
 
 %files -n ohm-plugins-dbus
 %{_libdir}/ohm/libohm_dbus.so
+%{_libdir}/ohm/libohm_dbus_method.so
 %{_libdir}/ohm/libohm_dbus_signal.so
 
 %files -n ohm-plugin-telephony

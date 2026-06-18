@@ -1127,7 +1127,7 @@ OHM_EXPORTABLE(int, add_field_watch, (char                  *factname,
 
 OHM_PLUGIN_DESCRIPTION(PLUGIN_NAME,
                        PLUGIN_VERSION,
-                       "juho.hamalainen@jolla.com",
+                       "enni.hamalainen@jolla.com",
                        OHM_LICENSE_LGPL, /* OHM_LICENSE_LGPL */
                        plugin_init, plugin_exit, NULL);
 
