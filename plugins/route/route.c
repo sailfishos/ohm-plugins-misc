@@ -59,6 +59,7 @@ struct audio_device_mapping_route {
 #define FACTSTORE_AUDIO_PREFERRED           FACTSTORE_PREFIX ".audio_device_preferred"
 
 #define FACTSTORE_CONTEXT_ARG_VALUE         "value"
+#define FACTSTORE_CONTEXT_ARG_VARIABLE      "variable"
 
 #define FACTSTORE_AUDIO_ARG_DEVICE          "device"
 #define FACTSTORE_AUDIO_ARG_TYPE            "type"
@@ -83,10 +84,13 @@ struct audio_device_mapping_route {
 #define AUDIO_DEVICE_VOICE_SUFFIX_1         "forcall"
 #define AUDIO_DEVICE_VOICE_SUFFIX_2         "foralien"
 
-static struct audio_device_mapping_route   *audio_route_sink;
-static struct audio_device_mapping_route   *audio_route_source;
-static GSList *mappings;
-static GSList *features;
+#define FEATURE_FMRADIO_NO_ANTENNA          "fmradio_no_antenna"
+
+static struct audio_device_mapping_route   *s_audio_route_sink;
+static struct audio_device_mapping_route   *s_audio_route_source;
+static GSList *s_mappings;
+static GSList *s_features;
+static guint s_fmradio_no_antenna_source;
 
 static void audio_route_changed_cb(fsif_entry_t *entry, char *name,
                                    fsif_field_t *fld, void *userdata);
@@ -153,7 +157,7 @@ static struct audio_device_mapping *mapping_by_commonname_and_type(const char *c
 {
     GSList *i;
 
-    for (i = mappings; i; i = g_slist_next(i)) {
+    for (i = s_mappings; i; i = g_slist_next(i)) {
         struct audio_device_mapping *m = g_slist_nth_data(i, 0);
         if (strcmp(commonname, m->name) == 0 &&
             m->type & type)
@@ -169,7 +173,7 @@ static struct audio_device_mapping_route *route_by_device_name_and_type(const ch
     GSList *i, *n;
     struct audio_device_mapping_route *r;
 
-    for (i = mappings; i; i = g_slist_next(i)) {
+    for (i = s_mappings; i; i = g_slist_next(i)) {
         struct audio_device_mapping *m = g_slist_nth_data(i, 0);
 
         if (m->type & type) {
@@ -188,7 +192,7 @@ static struct audio_feature *feature_by_name(const char *name)
 {
     GSList *i;
 
-    for (i = features; i; i = g_slist_next(i)) {
+    for (i = s_features; i; i = g_slist_next(i)) {
         struct audio_feature *f = g_slist_nth_data(i, 0);
         if (strcmp(f->name, name) == 0)
             return f;
@@ -238,7 +242,7 @@ static void read_devices(fsif_entry_t *entry, gpointer userdata)
             m->type |= (OHM_EXT_ROUTE_TYPE_BUILTIN | OHM_EXT_ROUTE_TYPE_WIRELESS);
 
         m->name = g_strdup(common.string);
-        mappings = g_slist_append(mappings, m);
+        s_mappings = g_slist_append(s_mappings, m);
         OHM_DEBUG(DBG_ROUTE, "init new %s device %s type %s (%d)",
                   m->type & OHM_EXT_ROUTE_TYPE_OUTPUT ? "output" : "input",
                   m->name, type.string, m->type);
@@ -276,7 +280,7 @@ static void update_devices(fsif_entry_t *entry, const char *fact_name,
     if (!value.integer)
         return;
 
-    for (i = mappings; i; i = g_slist_next(i)) {
+    for (i = s_mappings; i; i = g_slist_next(i)) {
         m = i->data;
 
         for (n = m->routes; n; n = g_slist_next(n)) {
@@ -348,7 +352,7 @@ static void read_features(fsif_entry_t *entry, gpointer userdata)
         f->name = g_strdup(name.string);
         f->allowed = allowed.integer;
         f->enabled = enabled.integer;
-        features = g_slist_append(features, f);
+        s_features = g_slist_append(s_features, f);
         OHM_DEBUG(DBG_ROUTE, "init new feature %s (initial state allowed %d enabled %d",
                   f->name, f->allowed, f->enabled);
     } else
@@ -356,16 +360,25 @@ static void read_features(fsif_entry_t *entry, gpointer userdata)
                   __FUNCTION__, name.string);
 }
 
+static gboolean fmradio_no_antenna_feature_cb(gpointer userdata)
+{
+    route_feature_request(FEATURE_FMRADIO_NO_ANTENNA, 1);
+    s_fmradio_no_antenna_source = 0;
+    return G_SOURCE_REMOVE;
+}
+
 void route_init(OhmPlugin *plugin)
 {
     GSList *entries;
+    const char *fmradio_no_antenna_str = NULL;
 
     (void)plugin;
 
-    audio_route_sink = NULL;
-    audio_route_source = NULL;
-    mappings = NULL;
-    features = NULL;
+    s_audio_route_sink = NULL;
+    s_audio_route_source = NULL;
+    s_mappings = NULL;
+    s_features = NULL;
+    s_fmradio_no_antenna_source = 0;
 
     if ((entries = fsif_get_entries_by_name(FACTSTORE_AUDIO_OUTPUT)))
         g_slist_foreach(entries, (GFunc) read_devices, GINT_TO_POINTER(OHM_EXT_ROUTE_TYPE_OUTPUT));
@@ -399,6 +412,16 @@ void route_init(OhmPlugin *plugin)
                          audio_feature_changed_cb, NULL);
     fsif_add_field_watch(FACTSTORE_FEATURE, NULL, FACTSTORE_FEATURE_ARG_ENABLED,
                          audio_feature_changed_cb, NULL);
+
+    if ((fmradio_no_antenna_str = ohm_plugin_get_param(plugin, FEATURE_FMRADIO_NO_ANTENNA))) {
+        if (!strcasecmp(fmradio_no_antenna_str, "enabled") ||
+            !strcasecmp(fmradio_no_antenna_str, "true") ||
+            !strcmp(fmradio_no_antenna_str, "1")) {
+            /* We need to wait for the initial startup to finish before calling feature_request,
+             * otherwise the feature facts are not initialized yet. */
+            s_fmradio_no_antenna_source = g_timeout_add_seconds(2, fmradio_no_antenna_feature_cb, NULL);
+        }
+    }
 }
 
 static void route_free(struct audio_device_mapping_route *r)
@@ -418,7 +441,10 @@ void route_exit(OhmPlugin *plugin)
 {
     (void) plugin;
 
-    g_slist_free_full(mappings, (GDestroyNotify) mapping_free);
+    g_slist_free_full(s_mappings, (GDestroyNotify) mapping_free);
+
+    if (s_fmradio_no_antenna_source)
+        g_source_remove(s_fmradio_no_antenna_source);
 }
 
 static int route_type(const struct audio_device_mapping_route *route)
@@ -461,9 +487,9 @@ static void audio_route_changed_cb(fsif_entry_t   *entry,
 
     if ((route = route_by_device_name_and_type(device, type))) {
         if (route->common->type & OHM_EXT_ROUTE_TYPE_OUTPUT)
-            active = &audio_route_sink;
+            active = &s_audio_route_sink;
         else
-            active = &audio_route_source;
+            active = &s_audio_route_source;
 
         /* no change in routing */
         if (*active == route)
@@ -571,16 +597,16 @@ int route_query_active(const char **sink, unsigned int *sink_type,
 
     /* If we have current routes already cached
      * no need to do queries to fact database. */
-    if (audio_route_sink) {
-        OHM_DEBUG(DBG_ROUTE, "get sink %p from cache", (void*)audio_route_sink);
-        *sink = audio_route_sink->common->name;
-        *sink_type = route_type(audio_route_sink);
+    if (s_audio_route_sink) {
+        OHM_DEBUG(DBG_ROUTE, "get sink %p from cache", (void*)s_audio_route_sink);
+        *sink = s_audio_route_sink->common->name;
+        *sink_type = route_type(s_audio_route_sink);
     }
 
-    if (audio_route_source) {
-        OHM_DEBUG(DBG_ROUTE, "get source %p from cache", (void*)audio_route_source);
-        *source = audio_route_source->common->name;
-        *source_type = route_type(audio_route_source);
+    if (s_audio_route_source) {
+        OHM_DEBUG(DBG_ROUTE, "get source %p from cache", (void*)s_audio_route_source);
+        *source = s_audio_route_source->common->name;
+        *source_type = route_type(s_audio_route_source);
     }
 
     if (*sink && *source)
@@ -605,7 +631,7 @@ int route_query_active(const char **sink, unsigned int *sink_type,
         if ((route = route_by_device_name_and_type(*sink, OHM_EXT_ROUTE_TYPE_OUTPUT))) {
             *sink = route->common->name;
             *sink_type = route_type(route);
-            audio_route_sink = route;
+            s_audio_route_sink = route;
         }
     }
 
@@ -623,7 +649,7 @@ int route_query_active(const char **sink, unsigned int *sink_type,
         if ((route = route_by_device_name_and_type(*source, OHM_EXT_ROUTE_TYPE_INPUT))) {
             *source = route->common->name;
             *source_type = route_type(route);
-            audio_route_source = route;
+            s_audio_route_source = route;
         }
     }
 
@@ -642,7 +668,7 @@ int context_variable_query(char *name, char **value)
 
     memset(selist, 0, sizeof(selist));
     selist[0].type = fldtype_string;
-    selist[0].name = "variable";
+    selist[0].name = FACTSTORE_CONTEXT_ARG_VARIABLE;
 
     selist[0].value.string = name;
 
@@ -690,10 +716,10 @@ int route_prefer_request(const char *name, uint32_t type, uint32_t set)
 
 const GSList *route_get_features()
 {
-    return features;
+    return s_features;
 }
 
 const GSList *route_get_mappings()
 {
-    return mappings;
+    return s_mappings;
 }
