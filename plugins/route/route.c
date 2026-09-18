@@ -84,10 +84,13 @@ struct audio_device_mapping_route {
 #define AUDIO_DEVICE_VOICE_SUFFIX_1         "forcall"
 #define AUDIO_DEVICE_VOICE_SUFFIX_2         "foralien"
 
+#define FEATURE_FMRADIO_NO_ANTENNA          "fmradio_no_antenna"
+
 static struct audio_device_mapping_route   *s_audio_route_sink;
 static struct audio_device_mapping_route   *s_audio_route_source;
 static GSList *s_mappings;
 static GSList *s_features;
+static guint s_fmradio_no_antenna_source;
 
 static void audio_route_changed_cb(fsif_entry_t *entry, char *name,
                                    fsif_field_t *fld, void *userdata);
@@ -357,9 +360,17 @@ static void read_features(fsif_entry_t *entry, gpointer userdata)
                   __FUNCTION__, name.string);
 }
 
+static gboolean fmradio_no_antenna_feature_cb(gpointer userdata)
+{
+    route_feature_request(FEATURE_FMRADIO_NO_ANTENNA, 1);
+    s_fmradio_no_antenna_source = 0;
+    return G_SOURCE_REMOVE;
+}
+
 void route_init(OhmPlugin *plugin)
 {
     GSList *entries;
+    const char *fmradio_no_antenna_str = NULL;
 
     (void)plugin;
 
@@ -367,6 +378,7 @@ void route_init(OhmPlugin *plugin)
     s_audio_route_source = NULL;
     s_mappings = NULL;
     s_features = NULL;
+    s_fmradio_no_antenna_source = 0;
 
     if ((entries = fsif_get_entries_by_name(FACTSTORE_AUDIO_OUTPUT)))
         g_slist_foreach(entries, (GFunc) read_devices, GINT_TO_POINTER(OHM_EXT_ROUTE_TYPE_OUTPUT));
@@ -400,6 +412,16 @@ void route_init(OhmPlugin *plugin)
                          audio_feature_changed_cb, NULL);
     fsif_add_field_watch(FACTSTORE_FEATURE, NULL, FACTSTORE_FEATURE_ARG_ENABLED,
                          audio_feature_changed_cb, NULL);
+
+    if ((fmradio_no_antenna_str = ohm_plugin_get_param(plugin, FEATURE_FMRADIO_NO_ANTENNA))) {
+        if (!strcasecmp(fmradio_no_antenna_str, "enabled") ||
+            !strcasecmp(fmradio_no_antenna_str, "true") ||
+            !strcmp(fmradio_no_antenna_str, "1")) {
+            /* We need to wait for the initial startup to finish before calling feature_request,
+             * otherwise the feature facts are not initialized yet. */
+            s_fmradio_no_antenna_source = g_timeout_add_seconds(2, fmradio_no_antenna_feature_cb, NULL);
+        }
+    }
 }
 
 static void route_free(struct audio_device_mapping_route *r)
@@ -420,6 +442,9 @@ void route_exit(OhmPlugin *plugin)
     (void) plugin;
 
     g_slist_free_full(s_mappings, (GDestroyNotify) mapping_free);
+
+    if (s_fmradio_no_antenna_source)
+        g_source_remove(s_fmradio_no_antenna_source);
 }
 
 static int route_type(const struct audio_device_mapping_route *route)
