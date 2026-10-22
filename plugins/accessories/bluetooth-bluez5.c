@@ -56,7 +56,18 @@ struct bt_device {
     int state;
     gboolean a2dp_connected;
     gboolean hsp_connected;
+    /* Unique device identity protects against stale asynchronous replies. */
+    guint64 bt_generation;
+    gboolean bt_uuid_pending;
+    guint bt_uuid_attempts;
 };
+
+struct bt_uuid_request {
+    char *path;
+    guint64 generation;
+};
+
+static guint64 bt_next_generation;
 
 struct bt_transport {
     char *path;
@@ -111,6 +122,10 @@ static struct bt_device* bt_devices_find(const char *mac_address);
 
 static void bt_state_changed(struct bt_device *d, int state);
 static void bt_hf_state_changed(struct bt_hf_card *c, int next_state);
+/* Async BlueZ Device1 UUID recovery and late A2DP reconciliation. */
+static void bt_fetch_device_uuids(struct bt_device *d);
+static void bt_uuid_reply(DBusPendingCall *pending, void *data);
+static void bt_reconcile_a2dp(struct bt_device *d);
 
 static int bt_a2dp_devices_connected();
 static int bt_hsp_devices_connected();
@@ -137,7 +152,7 @@ static ohm_dbus_signal_t bluez5_signals[] = {
 };
 
 /* DBus parsing */
-static void parse_device_properties(struct bt_device *d, DBusMessageIter *dict_i);
+static void parse_device_properties(struct bt_device *d, DBusMessageIter *dict_i, gboolean apply_connected);
 static void parse_interfaces_and_properties(DBusMessageIter *dict_i);
 static void parse_transport_properties(struct bt_device *d, DBusMessageIter *i);
 static void parse_transport_property(struct bt_device *d, DBusMessageIter *i);
@@ -282,6 +297,7 @@ static struct bt_device* bt_device_new(const char *path, int uuid, int state)
     d->state = state;
     d->a2dp_connected = FALSE;
     d->hsp_connected = FALSE;
+    d->bt_generation = ++bt_next_generation;
 
     return d;
 }
@@ -501,6 +517,25 @@ static void bt_state_changed(struct bt_device *d, int next_state)
         dres_all();
 }
 
+/* The A2DP transport may already be IDLE/ACTIVE when GetAll returns.
+ * bt_state_changed(d, d->state) would return early and never signal A2DP.
+ * Reconcile only the missing A2DP accessory notification. */
+static void bt_reconcile_a2dp(struct bt_device *d)
+{
+    gboolean first_a2dp;
+
+    if (!d || !(d->uuid & (BT_UUID_A2DP_SINK | BT_UUID_A2DP_SOURCE)) ||
+        d->state <= BT_STATE_CONNECTED || d->a2dp_connected)
+        return;
+
+    first_a2dp = bt_a2dp_devices_connected() == 0;
+    d->a2dp_connected = TRUE;
+    if (first_a2dp) {
+        dres_accessory_request(BT_TYPE_A2DP, -1, 1);
+        dres_all();
+    }
+}
+
 static int bt_hf_cards_connected()
 {
     int connected = 0;
@@ -693,7 +728,9 @@ static DBusHandlerResult properties_changed_cb(DBusConnection *c, DBusMessage *m
     } else if (strcmp(iface, BLUEZ_DEVICE_INTERFACE) == 0) {
         d = bt_device_get(dbus_message_get_path(msg));
         BT_DEBUG("Properties changed in device %s", d->path);
-        parse_device_properties(d, &iter);
+        parse_device_properties(d, &iter, TRUE);
+        if (d->state >= BT_STATE_CONNECTED && d->uuid == BT_UUID_NONE)
+            bt_fetch_device_uuids(d);
     } else
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -910,7 +947,7 @@ static DBusHandlerResult ofono_changed_cb(DBusConnection *c, DBusMessage *msg, v
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-static void parse_device_properties(struct bt_device *d, DBusMessageIter *dict_i)
+static void parse_device_properties(struct bt_device *d, DBusMessageIter *dict_i, gboolean apply_connected)
 {
     DBusMessageIter element_i;
     int connected = -1;
@@ -964,8 +1001,104 @@ static void parse_device_properties(struct bt_device *d, DBusMessageIter *dict_i
         dbus_message_iter_next(&element_i);
     }
 
-    if (connected != -1)
+    if (apply_connected && connected != -1)
         bt_state_changed(d, connected ? BT_STATE_CONNECTED : BT_STATE_DISCONNECTED);
+
+    /* Handles a late UUIDs property, including from GetAll, after IDLE. */
+    bt_reconcile_a2dp(d);
+}
+
+/* Request a full Device1 property snapshot when PropertiesChanged
+ * supplies only Connected and the corresponding new OHM object has no UUIDs.
+ * Crucially, this must be ASYNCHRONOUS: do not block the OHM main loop. */
+static void bt_uuid_request_free(void *data)
+{
+    struct bt_uuid_request *req = data;
+    if (!req)
+        return;
+    g_free(req->path);
+    g_free(req);
+}
+
+static void bt_fetch_device_uuids(struct bt_device *d)
+{
+    DBusMessage *msg = NULL;
+    DBusPendingCall *pending = NULL;
+    struct bt_uuid_request *req;
+    const char *interface = BLUEZ_DEVICE_INTERFACE;
+
+    if (!d || !connection || !bt_devices || d->uuid != BT_UUID_NONE ||
+        d->bt_uuid_pending || d->bt_uuid_attempts >= 2)
+        return;
+
+    msg = dbus_message_new_method_call(BLUEZ_SERVICE, d->path,
+                                       "org.freedesktop.DBus.Properties", "GetAll");
+    if (!msg)
+        goto fail;
+
+    if (!dbus_message_append_args(msg, DBUS_TYPE_STRING, &interface, DBUS_TYPE_INVALID))
+        goto fail;
+
+    if (!dbus_connection_send_with_reply(connection, msg, &pending, 3000) || !pending)
+        goto fail;
+
+    req = g_new0(struct bt_uuid_request, 1);
+    req->path = g_strdup(d->path);
+    req->generation = d->bt_generation;
+
+    d->bt_uuid_pending = TRUE;
+    d->bt_uuid_attempts++;
+    if (!dbus_pending_call_set_notify(pending, bt_uuid_reply, req,
+                                      bt_uuid_request_free)) {
+        d->bt_uuid_pending = FALSE;
+        dbus_pending_call_cancel(pending);
+        dbus_pending_call_unref(pending);
+        bt_uuid_request_free(req);
+        pending = NULL;
+        goto fail;
+    }
+
+    dbus_message_unref(msg);
+    /* Keep the pending-call reference; reply callback releases it. */
+    return;
+
+fail:
+    if (pending)
+        dbus_pending_call_unref(pending);
+    if (msg)
+        dbus_message_unref(msg);
+}
+
+static void bt_uuid_reply(DBusPendingCall *pending, void *data)
+{
+    struct bt_uuid_request *req = data;
+    DBusMessage *reply = dbus_pending_call_steal_reply(pending);
+    DBusMessageIter iter;
+    struct bt_device *d = NULL;
+
+    if (bt_devices)
+        d = g_hash_table_lookup(bt_devices, req->path);
+    /* The device may have been removed and recreated while query was pending. */
+    if (!d || d->bt_generation != req->generation) {
+        goto out;
+    }
+
+    d->bt_uuid_pending = FALSE;
+    if (!reply || dbus_message_get_type(reply) != DBUS_MESSAGE_TYPE_METHOD_RETURN ||
+        strcmp(dbus_message_get_signature(reply), "a{sv}") != 0 ||
+        !dbus_message_iter_init(reply, &iter)) {
+        goto out;
+    }
+
+    /* The snapshot may contain Connected=1 even after transport became IDLE;
+     * NEVER rewind device state from IDLE to CONNECTED using an old reply. */
+    parse_device_properties(d, &iter, FALSE);
+
+out:
+    if (reply)
+        dbus_message_unref(reply);
+    /* Release only AFTER using req: its free hook belongs to pending. */
+    dbus_pending_call_unref(pending);
 }
 
 static void parse_interfaces_and_properties(DBusMessageIter *dict_i)
@@ -1001,7 +1134,9 @@ static void parse_interfaces_and_properties(DBusMessageIter *dict_i)
 
             BT_DEBUG("Device %s found", path);
             d = bt_device_get(path);
-            parse_device_properties(d, &iface_i);
+            parse_device_properties(d, &iface_i, TRUE);
+            if (d->state >= BT_STATE_CONNECTED && d->uuid == BT_UUID_NONE)
+                bt_fetch_device_uuids(d);
 
         } else if (strcmp(interface, BLUEZ_MEDIA_TRANSPORT_INTERFACE) == 0) {
 
@@ -1072,8 +1207,12 @@ static void parse_transport_property(struct bt_device *d, DBusMessageIter *i) {
         }
     }
 
-    if (state > -1)
+    if (state > -1) {
         bt_state_changed(d, state);
+        /* Retry at transport creation if a prior UUID query already failed. */
+        if (d->uuid == BT_UUID_NONE && d->state > BT_STATE_CONNECTED)
+            bt_fetch_device_uuids(d);
+    }
 }
 
 static void read_boolean_from_variant(DBusMessageIter *iter, int *value)
