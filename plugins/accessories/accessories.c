@@ -25,7 +25,7 @@ USA.
 
 static int DBG_BT, DBG_GCONF, DBG_INFO, DBG_WIRED;
 
-static gboolean plugin_is_real;
+static guint bluetooth_init_id;
 
 OHM_DEBUG_PLUGIN(accessories,
     OHM_DEBUG_FLAG("info", "Info signal events" , &DBG_INFO),
@@ -47,15 +47,13 @@ static gboolean bluetooth_init_later(gpointer data)
 
     OhmPlugin *plugin = data;
 
-    if (plugin_is_real)
-        bluetooth_init(plugin, DBG_BT);
+    bluetooth_init_id = 0;
+    bluetooth_init(plugin, DBG_BT);
     return FALSE;
 }
 
 static void plugin_init(OhmPlugin *plugin)
 {
-    plugin_is_real = TRUE;
-
     if (!OHM_DEBUG_INIT(accessories))
         g_warning("Failed to initialize accessories plugin debugging.");
 
@@ -63,17 +61,18 @@ static void plugin_init(OhmPlugin *plugin)
     gconf_triggers_init(plugin, DBG_GCONF);
 
     /* bluetooth*/
-    g_idle_add(bluetooth_init_later, plugin);
+    bluetooth_init_id = g_idle_add(bluetooth_init_later, plugin);
 }
 
 
 static void plugin_exit(OhmPlugin *plugin)
 {
-    /* bluetooth*/
+    if (bluetooth_init_id) {
+        g_source_remove(bluetooth_init_id);
+        bluetooth_init_id = 0;
+    }
     bluetooth_deinit();
     gconf_triggers_exit(plugin);
-
-    plugin_is_real = FALSE;
 }
 
 

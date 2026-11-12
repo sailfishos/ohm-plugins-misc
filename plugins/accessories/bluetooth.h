@@ -24,25 +24,12 @@ USA.
 #include <ohm/ohm-plugin.h>
 
 #define BLUEZ_SERVICE                   "org.bluez"
-
-#define BLUEZ_VER_NONE                  (0)
-#define BLUEZ_VER_4                     (4)
-#define BLUEZ_VER_5                     (5)
-
-#define BLUEZ_IMPLEMENTATION_NONE       (0)
-#define BLUEZ_IMPLEMENTATION_OK         (1)
-#define BLUEZ_IMPLEMENTATION_FAIL       (2)
-#define BLUEZ_IMPLEMENTATION_UNKNOWN    (3)
+#define BLUEZ_RETRY_SECONDS             1
 
 /* #define ENABLE_BT_TRACE */
 
-void bluetooth_bluez4_init(DBusConnection *connection, int flag_bt);
-void bluetooth_bluez4_daemon_state(int running);
-void bluetooth_bluez4_deinit();
 void bluetooth_bluez5_init(DBusConnection *connection, int flag_bt);
-void bluetooth_bluez5_daemon_state(int running);
-void bluetooth_bluez5_deinit();
-
-void bluetooth_bluez_init_result(int state);
+void bluetooth_bluez5_daemon_changed(const char *owner);
+void bluetooth_bluez5_deinit(void);
 
 #endif
