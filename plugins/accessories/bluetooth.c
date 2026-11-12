@@ -19,7 +19,6 @@ USA.
 *************************************************************************/
 
 
-#include <errno.h>
 #include <ohm/ohm-plugin-dbus.h>
 #include "accessories.h"
 #include "bluetooth.h"
@@ -28,30 +27,16 @@ USA.
 static int DBG_BT;
 
 static DBusConnection *connection;
+static DBusPendingCall *owner_query;
+static guint owner_retry_id;
 
-static void get_bluez_state();
+static void get_bluez_state(void);
+static void cancel_owner_query(void);
 static void get_bluez_state_reply(DBusPendingCall *pending, void *user_data);
 static DBusHandlerResult bluez_changed(DBusConnection *c, DBusMessage *msg, void *data);
-static gboolean impl_state(gpointer user_data);
 
 static ohm_dbus_signal_t nameowner_signal =
     { "org.freedesktop.DBus", "org.freedesktop.DBus", "NameOwnerChanged", NULL, bluez_changed, NULL };
-
-struct bluez_implementation {
-    int version;
-    void (*init)(DBusConnection *connection, int flag_bt);
-    void (*state_changed)(int running);
-    void (*deinit)();
-    int status;
-};
-
-struct bluez_implementation implementations[] = {
-    { BLUEZ_VER_5, bluetooth_bluez5_init, bluetooth_bluez5_daemon_state, bluetooth_bluez5_deinit, BLUEZ_IMPLEMENTATION_NONE },
-    { BLUEZ_VER_4, bluetooth_bluez4_init, bluetooth_bluez4_daemon_state, bluetooth_bluez4_deinit, BLUEZ_IMPLEMENTATION_NONE },
-    { BLUEZ_VER_NONE, NULL, NULL, NULL, BLUEZ_IMPLEMENTATION_NONE }
-};
-
-static int bluez_impl_index;
 
 void bluetooth_init(OhmPlugin *plugin, int flag_bt)
 {
@@ -59,14 +44,14 @@ void bluetooth_init(OhmPlugin *plugin, int flag_bt)
 
     DBG_BT = flag_bt;
 
-    bluez_impl_index = 0;
-
     BT_INFO("Initializing bluetooth accessory.");
 
     if ((connection = dbus_bus_get(DBUS_BUS_SYSTEM, NULL)) == NULL) {
         BT_ERROR("Failed to get connection to system D-BUS.");
         return;
     }
+
+    bluetooth_bluez5_init(connection, DBG_BT);
 
     ohm_plugin_dbus_add_signal(nameowner_signal.sender,
                                nameowner_signal.interface,
@@ -80,10 +65,10 @@ void bluetooth_init(OhmPlugin *plugin, int flag_bt)
 
 void bluetooth_deinit()
 {
-    if (implementations[bluez_impl_index].status == BLUEZ_IMPLEMENTATION_OK)
-        implementations[bluez_impl_index].deinit();
-
     if (connection) {
+        cancel_owner_query();
+        bluetooth_bluez5_deinit();
+
         ohm_plugin_dbus_del_signal(nameowner_signal.sender,
                                    nameowner_signal.interface,
                                    nameowner_signal.signal,
@@ -96,10 +81,32 @@ void bluetooth_deinit()
     }
 }
 
-static void get_bluez_state()
+static void cancel_owner_query(void)
+{
+    if (owner_retry_id) {
+        g_source_remove(owner_retry_id);
+        owner_retry_id = 0;
+    }
+
+    if (owner_query) {
+        dbus_pending_call_cancel(owner_query);
+        dbus_pending_call_unref(owner_query);
+        owner_query = NULL;
+    }
+}
+
+static gboolean retry_bluez_state(gpointer data)
+{
+    (void) data;
+
+    owner_retry_id = 0;
+    get_bluez_state();
+    return G_SOURCE_REMOVE;
+}
+
+static void get_bluez_state(void)
 {
     DBusMessage *request = NULL;
-    DBusPendingCall *pending_call = NULL;
     const char *name = BLUEZ_SERVICE;
 
     BT_ASSERT(connection);
@@ -116,22 +123,10 @@ static void get_bluez_state()
                                   DBUS_TYPE_INVALID))
         goto error;
 
-    if (!dbus_connection_send_with_reply(connection,
-                                         request,
-                                         &pending_call,
-                                         -1))
+    if (!dbus_connection_send_with_reply(connection, request, &owner_query, -1) ||
+        !owner_query ||
+        !dbus_pending_call_set_notify(owner_query, get_bluez_state_reply, NULL, NULL))
         goto error;
-
-    if (!pending_call)
-        goto error;
-
-    if (!dbus_pending_call_set_notify(pending_call,
-                                      get_bluez_state_reply,
-                                      NULL,
-                                      NULL)) {
-        dbus_pending_call_cancel(pending_call);
-        goto error;
-    }
 
     dbus_message_unref(request);
 
@@ -140,30 +135,33 @@ static void get_bluez_state()
     return;
 
 error:
+    cancel_owner_query();
 
     if (request)
         dbus_message_unref(request);
 
     BT_ERROR("Failed to query GetNameOwner.");
+    owner_retry_id = g_timeout_add_seconds(BLUEZ_RETRY_SECONDS, retry_bluez_state, NULL);
 }
 
 static void get_bluez_state_reply(DBusPendingCall *pending, void *user_data)
 {
-    DBusMessage *reply = NULL;
+    DBusMessage *reply;
+    const char *owner;
 
     (void) user_data;
 
     BT_TRACE("GetNameOwner reply");
 
-    if (!pending)
-        goto done;
+    if (pending != owner_query)
+        return;
 
+    owner_query = NULL;
     reply = dbus_pending_call_steal_reply(pending);
     dbus_pending_call_unref(pending);
-    pending = NULL;
 
     if (!reply)
-        goto done;
+        goto retry;
 
     if (dbus_message_is_error(reply, DBUS_ERROR_NAME_HAS_NO_OWNER)) {
         BT_INFO("BlueZ not running.");
@@ -172,19 +170,26 @@ static void get_bluez_state_reply(DBusPendingCall *pending, void *user_data)
 
     if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
         BT_ERROR("GetNameOwner error: %s", dbus_message_get_error_name(reply));
-        goto done;
+        goto retry;
     }
 
-    implementations[bluez_impl_index].init(connection, DBG_BT);
+    if (!dbus_message_get_args(reply, NULL, DBUS_TYPE_STRING, &owner, DBUS_TYPE_INVALID) ||
+        !dbus_validate_bus_name(owner, NULL) || *owner != ':') {
+        BT_ERROR("Invalid owner in GetNameOwner reply.");
+        goto retry;
+    }
+
+    bluetooth_bluez5_daemon_changed(owner);
 
 done:
-    if (pending)
-        dbus_pending_call_unref(pending);
+    dbus_message_unref(reply);
+    return;
 
+retry:
     if (reply)
         dbus_message_unref(reply);
 
-    return;
+    owner_retry_id = g_timeout_add_seconds(BLUEZ_RETRY_SECONDS, retry_bluez_state, NULL);
 }
 
 static DBusHandlerResult bluez_changed(DBusConnection *c, DBusMessage *msg, void *data)
@@ -210,70 +215,18 @@ static DBusHandlerResult bluez_changed(DBusConnection *c, DBusMessage *msg, void
     }
 
     if (strcmp(name, BLUEZ_SERVICE) == 0) {
-        int running = 0;
+        cancel_owner_query();
 
-        if (old_owner && *old_owner)
+        if (*old_owner)
             BT_INFO("Bluetooth daemon disappeared.");
 
-        if (new_owner && *new_owner) {
+        if (*new_owner)
             BT_INFO("Bluetooth daemon appeared.");
-            running = 1;
-        }
 
-        if (implementations[bluez_impl_index].status != BLUEZ_IMPLEMENTATION_OK &&
-            implementations[bluez_impl_index].init)
-            implementations[bluez_impl_index].init(connection, DBG_BT);
-        else if (implementations[bluez_impl_index].state_changed)
-            implementations[bluez_impl_index].state_changed(running);
+        bluetooth_bluez5_daemon_changed(*new_owner ? new_owner : NULL);
     }
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-}
-
-static gboolean impl_state(gpointer user_data)
-{
-    int status = GPOINTER_TO_INT(user_data);
-
-    implementations[bluez_impl_index].status = status;
-
-    switch (status) {
-        case BLUEZ_IMPLEMENTATION_OK: {
-            BT_INFO("Bluez %d init done.", implementations[bluez_impl_index].version);
-            break;
-        }
-
-        case BLUEZ_IMPLEMENTATION_FAIL:
-        case BLUEZ_IMPLEMENTATION_UNKNOWN: {
-            int current, next;
-
-            implementations[bluez_impl_index].deinit();
-
-            current = implementations[bluez_impl_index].version;
-            next = implementations[++bluez_impl_index].version;
-
-            if (next) {
-                BT_DEBUG("Bluez %d %s, try Bluez %d",
-                         current,
-                         status == BLUEZ_IMPLEMENTATION_FAIL ? "init failed" : "doesn't exist",
-                         next);
-                implementations[bluez_impl_index].init(connection, DBG_BT);
-            } else {
-                BT_INFO("No working Bluez implementations found. Disabling bluetooth.");
-                bluetooth_deinit();
-            }
-            break;
-        }
-
-        default:
-            break;
-    }
-
-    return FALSE;
-}
-
-void bluetooth_bluez_init_result(int state)
-{
-    g_idle_add(impl_state, GINT_TO_POINTER(state));
 }
 
 /* 

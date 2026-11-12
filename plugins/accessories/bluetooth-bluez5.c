@@ -91,6 +91,10 @@ enum bt_state {
 static int DBG_BT;
 
 static DBusConnection *connection;
+static char *bluez_owner;
+static DBusPendingCall *objects_query;
+static guint objects_retry_id;
+static GHashTable *deferred_cards;
 static gboolean signals_set;
 
 static GHashTable *bt_devices;
@@ -98,7 +102,7 @@ static GHashTable *bt_transports;
 static GHashTable *bt_hf_cards;
 
 
-static void bluez5_init_finalize();
+static void bluez5_init_finalize(void);
 static void bt_device_free(gpointer data);
 static struct bt_device* bt_device_new(const char *path, int uuid, int state);
 static struct bt_device* bt_device_get(const char *path);
@@ -117,7 +121,9 @@ static int bt_hsp_devices_connected();
 static int bt_hf_cards_connected();
 
 /* DBus */
-static void get_bluez_objects();
+static void get_bluez_objects(void);
+static void cancel_objects_query(void);
+static void reset_bluez_objects(void);
 static void get_bluez_objects_reply(DBusPendingCall *pending, void *user_data);
 
 static DBusHandlerResult properties_changed_cb(DBusConnection *c, DBusMessage *msg, void *data);
@@ -171,34 +177,52 @@ void bluetooth_bluez5_init(DBusConnection *conn, int flag_bt)
     connection = dbus_connection_ref(conn);
     DBG_BT = flag_bt;
 
-    get_bluez_objects();
+    deferred_cards = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
+                                            (GDestroyNotify) dbus_message_unref);
 }
 
-void bluetooth_bluez5_daemon_state(int running)
+void bluetooth_bluez5_daemon_changed(const char *owner)
 {
-    struct bt_device *d;
     GHashTableIter i;
-    gpointer key, value;
+    gpointer value;
 
-    if (!running) {
-        g_hash_table_iter_init(&i, bt_devices);
+    if (g_strcmp0(bluez_owner, owner) == 0)
+        return;
 
-        while (g_hash_table_iter_next(&i, &key, &value)) {
-            d = (struct bt_device *) value;
-            bt_state_changed(d, BT_STATE_DISCONNECTED);
+    cancel_objects_query();
+    g_hash_table_remove_all(deferred_cards);
+
+    if (bt_devices) {
+        /* A card may outlive its associated BlueZ device. */
+        if (bt_hf_cards_connected()) {
+            dres_accessory_request(BT_TYPE_HFP, -1, 0);
+            run_policy_hook("bthfp_disconnect", 0, NULL);
+            dres_all();
         }
 
-        g_hash_table_remove_all(bt_transports);
-        g_hash_table_remove_all(bt_devices);
+        g_hash_table_iter_init(&i, bt_devices);
+        while (g_hash_table_iter_next(&i, NULL, &value))
+            bt_state_changed(value, BT_STATE_DISCONNECTED);
+
+        reset_bluez_objects();
     }
+
+    g_free(bluez_owner);
+    bluez_owner = g_strdup(owner);
+    if (bluez_owner)
+        get_bluez_objects();
 }
 
-void bluetooth_bluez5_deinit()
+void bluetooth_bluez5_deinit(void)
 {
     unsigned int i;
 
+    cancel_objects_query();
+    g_clear_pointer(&bluez_owner, g_free);
+    g_clear_pointer(&deferred_cards, g_hash_table_destroy);
+
     if (signals_set) {
-        for (i = 0; i < sizeof(bluez5_signals) / sizeof(ohm_dbus_signal_t); i++)
+        for (i = 0; i < G_N_ELEMENTS(bluez5_signals); i++)
             ohm_plugin_dbus_del_signal(bluez5_signals[i].sender,
                                        bluez5_signals[i].interface,
                                        bluez5_signals[i].signal,
@@ -208,36 +232,25 @@ void bluetooth_bluez5_deinit()
         signals_set = FALSE;
     }
 
-    if (bt_devices) {
-        g_hash_table_destroy(bt_devices);
-        bt_devices = NULL;
-    }
+    reset_bluez_objects();
+    g_clear_pointer(&connection, dbus_connection_unref);
+}
 
-    if (bt_transports) {
-        g_hash_table_destroy(bt_transports);
-        bt_transports = NULL;
-    }
-
-    if (bt_hf_cards) {
-        g_hash_table_destroy(bt_hf_cards);
-        bt_hf_cards = NULL;
-    }
-
-    if (connection) {
-        dbus_connection_unref(connection);
-        connection = NULL;
-    }
+static void reset_bluez_objects(void)
+{
+    g_clear_pointer(&bt_hf_cards, g_hash_table_destroy);
+    g_clear_pointer(&bt_transports, g_hash_table_destroy);
+    g_clear_pointer(&bt_devices, g_hash_table_destroy);
 }
 
 /* Called when we get proper reply from GetManagedObjects. */
-static void bluez5_init_finalize()
+static void bluez5_init_finalize(void)
 {
     unsigned int i;
 
     BT_ASSERT(!bt_devices);
     BT_ASSERT(!bt_transports);
     BT_ASSERT(!bt_hf_cards);
-    BT_ASSERT(!signals_set);
 
     bt_devices = g_hash_table_new_full(g_str_hash,
                                        g_str_equal,
@@ -252,7 +265,10 @@ static void bluez5_init_finalize()
                                         NULL,
                                         bt_hf_card_free);
 
-    for (i = 0; i < sizeof(bluez5_signals) / sizeof(ohm_dbus_signal_t); i++)
+    if (signals_set)
+        return;
+
+    for (i = 0; i < G_N_ELEMENTS(bluez5_signals); i++)
         ohm_plugin_dbus_add_signal(bluez5_signals[i].sender,
                                    bluez5_signals[i].interface,
                                    bluez5_signals[i].signal,
@@ -355,6 +371,8 @@ static void bt_hf_card_free(gpointer data)
     BT_ASSERT(c);
 
     g_free(c->path);
+    g_free(c->local);
+    g_free(c->remote);
     g_free(c);
 }
 
@@ -557,88 +575,94 @@ static void bt_hf_state_changed(struct bt_hf_card *c, int next_state)
         dres_all();
 }
 
-static void get_bluez_objects()
+static void cancel_objects_query(void)
 {
-    DBusMessage *request = NULL;
-    DBusPendingCall *pending_call = NULL;
-
-    BT_ASSERT(connection);
-
-    if ((request = dbus_message_new_method_call(BLUEZ_SERVICE,
-                                                "/",
-                                                "org.freedesktop.DBus.ObjectManager",
-                                                "GetManagedObjects")) == NULL)
-        goto error;
-
-    if (!dbus_connection_send_with_reply(connection,
-                                         request,
-                                         &pending_call,
-                                         -1))
-        goto error;
-
-    if (!pending_call)
-        goto error;
-
-    if (!dbus_pending_call_set_notify(pending_call,
-                                      get_bluez_objects_reply,
-                                      NULL,
-                                      NULL)) {
-        dbus_pending_call_cancel(pending_call);
-        goto error;
+    if (objects_retry_id) {
+        g_source_remove(objects_retry_id);
+        objects_retry_id = 0;
     }
 
-    dbus_message_unref(request);
+    if (objects_query) {
+        dbus_pending_call_cancel(objects_query);
+        dbus_pending_call_unref(objects_query);
+        objects_query = NULL;
+    }
+}
 
-    BT_TRACE("GetManagedObjects");
+static gboolean retry_bluez_objects(gpointer data)
+{
+    (void) data;
 
-    return;
+    objects_retry_id = 0;
+    get_bluez_objects();
+    return G_SOURCE_REMOVE;
+}
 
-error:
+static void get_bluez_objects(void)
+{
+    DBusMessage *request;
+
+    BT_ASSERT(connection && bluez_owner && !objects_query && !objects_retry_id);
+
+    request = dbus_message_new_method_call(bluez_owner,
+                                           "/",
+                                           "org.freedesktop.DBus.ObjectManager",
+                                           "GetManagedObjects");
+    if (request &&
+        dbus_connection_send_with_reply(connection, request, &objects_query, -1) &&
+        objects_query &&
+        dbus_pending_call_set_notify(objects_query, get_bluez_objects_reply, NULL, NULL)) {
+        dbus_message_unref(request);
+        BT_TRACE("GetManagedObjects");
+        return;
+    }
 
     if (request)
         dbus_message_unref(request);
 
+    cancel_objects_query();
     BT_ERROR("Failed to query GetManagedObjects.");
+    objects_retry_id = g_timeout_add_seconds(BLUEZ_RETRY_SECONDS, retry_bluez_objects, NULL);
 }
 
 static void get_bluez_objects_reply(DBusPendingCall *pending, void *user_data)
 {
     DBusMessageIter arg_i;
     DBusMessageIter element_i;
-    DBusMessage *reply = NULL;
-    int state_reply = BLUEZ_IMPLEMENTATION_FAIL;
+    DBusMessage *reply;
+    GHashTableIter cards;
+    gpointer card;
 
     (void) user_data;
 
     BT_TRACE("GetManagedObjects reply");
 
-    if (!pending)
-        goto done;
+    if (pending != objects_query)
+        return;
 
+    objects_query = NULL;
     reply = dbus_pending_call_steal_reply(pending);
     dbus_pending_call_unref(pending);
-    pending = NULL;
 
     if (!reply)
-        goto done;
+        goto retry;
 
     if (dbus_message_is_error(reply, DBUS_ERROR_UNKNOWN_METHOD)) {
         BT_INFO("BlueZ5 DBus ObjectManager unavailable.");
-        state_reply = BLUEZ_IMPLEMENTATION_UNKNOWN;
-        goto done;
+        goto retry;
     }
 
     if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
         BT_ERROR("GetManagedObjects error: %s", dbus_message_get_error_name(reply));
-        goto done;
+        goto retry;
     }
 
-    if (!dbus_message_iter_init(reply, &arg_i) ||
-        strcmp(dbus_message_get_signature(reply), "a{oa{sa{sv}}}")) {
+    if (!dbus_message_has_signature(reply, "a{oa{sa{sv}}}")) {
         BT_ERROR("Invalid signature for GetManagedObjects");
-        goto done;
+        goto retry;
     }
 
+    dbus_message_iter_init(reply, &arg_i);
     bluez5_init_finalize();
 
     dbus_message_iter_recurse(&arg_i, &element_i);
@@ -651,18 +675,20 @@ static void get_bluez_objects_reply(DBusPendingCall *pending, void *user_data)
         dbus_message_iter_next(&element_i);
     }
 
-    state_reply = BLUEZ_IMPLEMENTATION_OK;
+    g_hash_table_iter_init(&cards, deferred_cards);
+    while (g_hash_table_iter_next(&cards, NULL, &card))
+        card_added_cb(connection, card, NULL);
+    g_hash_table_remove_all(deferred_cards);
 
-done:
-    if (pending)
-        dbus_pending_call_unref(pending);
+    dbus_message_unref(reply);
+    BT_INFO("BlueZ5 init done.");
+    return;
 
+retry:
     if (reply)
         dbus_message_unref(reply);
 
-    bluetooth_bluez_init_result(state_reply);
-
-    return;
+    objects_retry_id = g_timeout_add_seconds(BLUEZ_RETRY_SECONDS, retry_bluez_objects, NULL);
 }
 
 static DBusHandlerResult properties_changed_cb(DBusConnection *c, DBusMessage *msg, void *data)
@@ -674,6 +700,9 @@ static DBusHandlerResult properties_changed_cb(DBusConnection *c, DBusMessage *m
 
     (void) c;
     (void) data;
+
+    if (!bt_devices || !dbus_message_has_sender(msg, bluez_owner))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     if (!dbus_message_iter_init(msg, &iter) || strcmp(dbus_message_get_signature(msg), "sa{sv}as")) {
         BT_ERROR("Invalid signature in PropertiesChanged.");
@@ -707,6 +736,9 @@ static DBusHandlerResult interfaces_added_cb(DBusConnection *c, DBusMessage *msg
     (void) c;
     (void) data;
 
+    if (!bt_devices || !dbus_message_has_sender(msg, bluez_owner))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
     if (!dbus_message_iter_init(msg, &iter) || strcmp(dbus_message_get_signature(msg), "oa{sa{sv}}") != 0) {
         BT_ERROR("Invalid signature found in InterfacesAdded");
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -726,6 +758,9 @@ static DBusHandlerResult interfaces_removed_cb(DBusConnection *c, DBusMessage *m
 
     (void) c;
     (void) data;
+
+    if (!bt_devices || !dbus_message_has_sender(msg, bluez_owner))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     if (!dbus_message_iter_init(msg, &iter) || strcmp(dbus_message_get_signature(msg), "oas") != 0) {
         BT_ERROR("Invalid signature found in InterfacesRemoved");
@@ -775,6 +810,12 @@ static DBusHandlerResult card_added_cb(DBusConnection *c, DBusMessage *msg, void
     BT_ASSERT_ITER(&iter, DBUS_TYPE_ARRAY);
 
     dbus_message_iter_recurse(&iter, &properties);
+
+    if (!bt_devices) {
+        if (bluez_owner)
+            g_hash_table_replace(deferred_cards, g_strdup(card_path), dbus_message_ref(msg));
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
 
     BT_DEBUG("New HF %s", card_path);
 
@@ -848,6 +889,11 @@ static DBusHandlerResult card_removed_cb(DBusConnection *c, DBusMessage *msg, vo
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
 
+    if (!bt_hf_cards) {
+        g_hash_table_remove(deferred_cards, path);
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
     if (!(card = g_hash_table_lookup(bt_hf_cards, path))) {
         BT_ERROR("Card with path %s doesn't exist.", path);
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -890,6 +936,10 @@ static DBusHandlerResult ofono_changed_cb(DBusConnection *c, DBusMessage *msg, v
             struct bt_hf_card *card;
 
             BT_INFO("oFono daemon disappeared.");
+
+            g_hash_table_remove_all(deferred_cards);
+            if (!bt_hf_cards)
+                return DBUS_HANDLER_RESULT_HANDLED;
 
             g_hash_table_iter_init(&i, bt_hf_cards);
 
