@@ -54,12 +54,17 @@ static gboolean bluetooth_init_later(gpointer data)
 
 static void plugin_init(OhmPlugin *plugin)
 {
+    const char *wired_enabled = NULL;
     plugin_is_real = TRUE;
 
     if (!OHM_DEBUG_INIT(accessories))
         g_warning("Failed to initialize accessories plugin debugging.");
 
-    wired_init(plugin, DBG_WIRED);
+    wired_enabled = ohm_plugin_get_param(plugin, "wired");
+
+    if (!wired_enabled || (strcmp(wired_enabled, "false") && strcmp(wired_enabled, "0")))
+        wired_init(plugin, DBG_WIRED);
+
     gconf_triggers_init(plugin, DBG_GCONF);
 
     /* bluetooth*/
